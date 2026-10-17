@@ -154,10 +154,12 @@ resolved hybrid:
 2. Otherwise an auto-generated key file at `<data_dir>/secret.key`
    (created with mode `0600` on first start).
 
-If no key can be resolved or written, the daemon refuses to store a
-secret it cannot encrypt (for example a CCU password) instead of writing
-it in the clear; `security.allow_plaintext_secrets: true` lifts that
-refusal (ADR 0027).
+If no key can be resolved or written, the two kinds of secret behave
+differently. A CCU password is refused rather than written in the clear;
+`security.allow_plaintext_secrets: true` lifts that refusal (ADR 0027).
+Secret fields in the configuration sections (for example the MQTT
+password or the OIDC client secret) are stored unencrypted instead, so
+keep a master key in place.
 
 !!! warning "Back up `secret.key` with your database"
     Without the master key, encrypted secrets in a restored database

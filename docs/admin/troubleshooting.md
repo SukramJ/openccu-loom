@@ -192,6 +192,35 @@ first boot. See
 [`discovery_bundles` in the configuration reference](configuration.md#discovery_bundles--and-what-turning-it-back-off-costs)
 for the two-restart sequence and for clearing the stale documents by hand.
 
+## Matter: new controllers cannot pair, existing ones work
+
+**Symptom.** Apple Home, Google Home or Alexa fail to add the bridge,
+or opening a commissioning window in the **Matter** view fails, while
+every controller paired earlier keeps controlling its devices.
+
+**Cause.** You configured your own attestation files
+(`north.matter.attestation.*`) and they do not load. The bridge still
+starts and serves every controller already paired, but it refuses
+every new pairing — through the web UI, the REST API and a paired
+controller's own "share" function alike — until the files load.
+
+**How to see it.**
+
+- The **Diagnostics** view (and `GET /api/v1/health`) lists the
+  component `matter.bridge` as unhealthy with the note *commissioning
+  disabled: the configured attestation chain does not load
+  (north.matter.attestation)*.
+- `POST /api/v1/matter/commissioning/window` answers `409 Conflict`
+  with the same reason.
+- The daemon log carries an error `matter.bridge.attestation` naming
+  the cause.
+
+**Fix.** Correct the files the `north.matter.attestation.*` keys point
+to (see the [configuration reference](../reference/configuration.md)),
+or clear all of those keys to fall back to the built-in test chain,
+then restart the daemon. The block is evaluated at start-up, so a
+restart is required.
+
 ## First run: setting the admin password
 
 **Symptom.** Fresh install — you cannot log in because no user exists.

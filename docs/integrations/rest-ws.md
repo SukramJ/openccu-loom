@@ -26,6 +26,23 @@ Both surfaces are spec-driven. The published files in the repository are authori
 
 When a field, status code, or schema differs between this page and those files, the files win.
 
+## Versions
+
+The REST and WebSocket contracts carry their own version numbers,
+independent of the daemon's release version:
+
+- **REST** — `GET /api/v1/info` answers with `api_version` (the same
+  value as `info.version` in `assets/openapi.yaml`) and a
+  `capabilities` list. Read both at runtime instead of assuming a
+  daemon release; optional features announce themselves as capability
+  tokens.
+- **WebSocket** — the top-level `version` field of `assets/wsapi.json`.
+  The WebSocket command `system.commands` lists the commands a running
+  daemon registers.
+
+The full, generated lists are in the [REST reference](../reference/rest.md)
+and the [WebSocket reference](../reference/websocket.md).
+
 ## Authentication
 
 Most endpoints require authentication. A handful of routes are
@@ -163,9 +180,27 @@ Send `{"op":"subscribe", "topics":[...]}` to start receiving broadcasts. The dae
 To resume after a reconnect, append `since: N` (your last seen `seq`). The daemon replays buffered events with `seq > N` matching your topics, then sends one control frame:
 
 - `{"op":"replay_done", "seq":N}` — replay finished; `seq` is the last replayed value.
-- `{"op":"replay_lost", "oldest_seq":M}` — `since` precedes the oldest buffered event; take a fresh `GET /api/v1/snapshot` to resync.
+- `{"op":"replay_lost", "oldest_seq":M}` — the stream cannot bring you to the current state; take a fresh `GET /api/v1/snapshot` to resync.
 
-The replay buffer holds up to ~1024 events. Resume cursor and `kind` semantics are specified in [ADR 0022](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0022-ws-resume-and-kind.md).
+`replay_lost` is also sent outside a resume. Its causes:
+
+- `since` precedes the oldest buffered event.
+- `since` is above the daemon's current sequence — a cursor from before a daemon restart, since the counter restarts at 0.
+- Your connection fell behind and the daemon dropped queued events to keep it open (one frame per overflow episode).
+- The daemon has just published a CCU's whole model once that CCU finished coming up; instead of one frame per data point, every connection gets a single `replay_lost`.
+
+The replay buffer holds 1024 events by default (`north.rest.ws.replay_capacity`).
+
+Send `{"op":"unsubscribe", "topics":[...]}` to drop topics; the daemon answers `{"op":"unsubscribed", "topics":[...]}`. Both acknowledgements are sent unconditionally, also for an empty topic list.
+
+### Limits
+
+- A connection keeps at most 1024 subscribed topics. Further topics in a `subscribe` are ignored without an error; the subscriptions you already have keep working.
+- The outbound queue per connection holds 1000 frames. A client that reads too slowly loses the oldest queued events, not its connection, and receives `replay_lost`.
+
+### Credentials on a long-lived connection
+
+A connection is authenticated once, at the upgrade, and the daemon closes it when that credential expires. To switch to a fresh API token without reconnecting, send `{"op":"reauth", "token":"<token>"}`. The daemon answers `{"op":"reauth_ok"}` — with `expires_at` when the new token has a server-side deadline — or `{"op":"reauth_failed"}` and closes the connection, after which you reconnect with valid credentials. `GET /api/v1/auth/me` reports the same deadline as `expires_at`. Resume cursor and `kind` semantics are specified in [ADR 0022](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0022-ws-resume-and-kind.md).
 
 ### Heartbeat and round-trip time
 

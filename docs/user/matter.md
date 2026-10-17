@@ -34,7 +34,7 @@ north:
 
 The bridge listens on UDP port **5540** by default. With a **passcode** under `north.matter.commissioning.passcode`, the pairing codes are fixed and always available. Left at `0`, the bridge runs on a random passcode nobody holds: there are no fixed pairing codes (`GET /api/v1/matter/setup-payload` answers 503), and you pair by opening a commissioning window in the web UI, which shows one-time codes for that window.
 
-If you configured your own attestation files (`north.matter.attestation.*`) and they do not load, the bridge keeps serving every controller already paired but refuses every new pairing, and the web UI's diagnostics show why. Without own attestation files this does not apply.
+If you configured your own attestation files (`north.matter.attestation.*`) and they do not load, the bridge keeps serving every controller already paired but refuses every new pairing until the files are fixed and the daemon restarts. You see it in three places: the **Diagnostics** view lists the health component `matter.bridge` as unhealthy with the note *commissioning disabled: the configured attestation chain does not load*, opening a commissioning window answers `409 Conflict` with the same reason, and the daemon log names the cause (message `matter.bridge.attestation`). Without own attestation files this does not apply.
 
 For the full set of keys (vendor/product IDs, discriminator, attestation, CASE), see [Configuration](../admin/configuration.md). Restart the daemon after changing the config — see [Getting started](../getting-started.md).
 
@@ -52,6 +52,17 @@ To pair, your phone app needs either the **setup QR code** or the **11-digit man
 
 !!! tip
     Keep the passcode private — anyone with the code can add your bridge to their own home.
+
+## The Matter view
+
+The **Matter** view (shown only while the bridge is enabled) has four tabs:
+
+- **Expose** — pick which devices the bridge advertises (see [Choosing which devices are exposed](#choosing-which-devices-are-exposed)).
+- **Fabrics** — every controller ecosystem the bridge is paired with, by vendor, label, fabric number and node ID. **Remove** unpairs one controller; the others keep working. Under **Maintenance**, **Re-sync topology** rebuilds the exposed endpoints from the current devices while every controller keeps its pairing, and **Remove all pairings** returns the bridge to its unpaired state — every controller then has to add it again. **Share bridge with another controller** leads to the **Pair** tab.
+- **Pair** — open a commissioning window with its QR code, manual code and countdown, and close it again early.
+- **Diagnostics** — whether the bridge advertises correctly on the network, the connected controllers, the exposed endpoints, how each paired ecosystem treats the exposed device types, and recent bridge events.
+
+Removing a fabric, removing all pairings, re-syncing and opening or closing a commissioning window need an administrator account. The same actions are available over the REST API under `/api/v1/matter/` — see the [REST reference](../reference/rest.md).
 
 ## Pairing step by step
 
@@ -91,6 +102,7 @@ OpenCCU-Loom maps Homematic devices to these Matter device types. Anything it ca
 | Color Temperature Light | Tunable-white light |
 | Extended Color Light | Color (RGB) light |
 | On/Off Plug-in Unit | Switch / plug actuator |
+| On/Off Plug-in Unit | Alarm siren (HmIP-ASIR) — On/Off switches the alarm; tone and light selection are not carried over |
 | Window Covering | Blind / shutter / cover |
 | Thermostat | Heating thermostat |
 | Door Lock | Door lock / keymatic |
@@ -101,7 +113,7 @@ OpenCCU-Loom maps Homematic devices to these Matter device types. Anything it ca
 | Light Sensor | Illuminance measurement |
 | Pressure Sensor | Air-pressure measurement |
 | Generic Switch | Button / momentary switch |
-| Smoke / CO Alarm | Smoke detector |
+| Smoke / CO Alarm | Smoke detector with siren (HmIP-SWSD) — reports the smoke state |
 | Air Quality Sensor | CO₂ / particulate sensor |
 
 ### Power and energy measurement
