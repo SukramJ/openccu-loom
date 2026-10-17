@@ -14,5 +14,5 @@
 # weeks on 16 phantom `group_no` drifts. Bump promptly, and when a bump
 # does surface real drift, fix the drift or record it in
 # docs/parity/by_design.md — do not pin backwards to hide it.
-aiohomematic==2026.10.3
+aiohomematic==2026.10.4
 openccu-data==2026.9.1
