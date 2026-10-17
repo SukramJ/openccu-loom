@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **CCU programs: the WebUI editor's working copy is no longer imported.**
+  Opening a program in the CCU's program editor makes the CCU create a
+  copy (new ID, same name, inactive). The program scan imported it as a
+  program of its own, and it stayed when the editor was left through
+  another menu. The scan now skips copies and drops one imported earlier
+  (#981).
+
 ## [0.92.0] - 2026-10-16
 
 ### Release summary

@@ -103,12 +103,21 @@ openccu-loom backup restore --config /etc/openccu-loom/config.yaml backup-host-2
 |---|---|---|
 | `--config` | — | path to `config.yaml`; also receives an extracted `config.yaml` if present |
 | `--data-dir` | from `--config` or `./var` | override the restore target |
-| `--force` | off | overwrite an existing `openccu-loom.db` |
+| `--force` | off | overwrite an existing `openccu-loom.db`, and accept a backup whose database schema is newer than this binary supports |
 
 Restore validates every file's SHA-256 against the manifest, writes to
 a staging directory, then atomically renames the database into place.
 If `openccu-loom.db` already exists it refuses unless `--force` is
 given. Start the daemon again after a successful restore.
+
+Restore also compares the schema version stamped in the backup's
+manifest with the newest schema this binary knows. A backup taken by a
+newer daemon is refused with *backup schema version N is newer than
+this binary supports (M)*; restore it with a daemon at least as new as
+the one that took it. `--force` overrides this check too — the
+restored database then carries a schema this binary was not built for,
+so use it only when you know why. A backup without a schema stamp is
+accepted as before.
 
 !!! info "Restore also clears the old WAL/SHM sidecars"
     A database restored next to the previous database's

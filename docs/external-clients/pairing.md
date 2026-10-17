@@ -56,6 +56,36 @@ other implementation.
    your (address, app) pair is then muted for ten minutes) and
    `expired` (five minutes without a decision).
 
+## The administrator's half
+
+Pairing is on by default; `north.rest.auth.pairing.enabled: false`
+switches the unauthenticated `/api/v1/pairing` routes off (clients then
+get `503 pairing_off`). The switch is read at start-up, so changing it
+needs a restart. The admin side stays available either way and simply
+has nothing to show.
+
+- **In the web UI:** **Settings → API Tokens** shows a **Pairing
+  requests** card with every pending request — its name, app, role and
+  address. Type the six digits the client displays into **Code**, then
+  **Approve** — typing the code is the approval. **Reject** turns the request
+  down.
+- **Over REST (admin only):** `GET /api/v1/pairing-requests` lists the
+  pending requests; `POST /api/v1/pairing-requests/{id}/approve` with
+  the typed code approves one, `POST /api/v1/pairing-requests/{id}/reject`
+  rejects it. Both answer `204`. A request is listed only once its
+  client has revealed its half of the code (its first poll); approving
+  one before that answers `409`.
+- **Live updates:** the WebSocket broadcast `pairing.requests_changed`
+  on topic `system.pairing` fires whenever a request arrives, is
+  decided, expires or is withdrawn. It carries only the pending count;
+  fetch the list for the details. Pending requests also appear as an
+  operator warning.
+
+A wrong code rejects the request (`409`), and so does **Reject**; both
+mute the client's (address, app) pair for ten minutes. A request marked
+as a look-alike (`look_alike`) shares its address, or its app and
+instance, with another pending request — compare the code with care.
+
 ## Error codes to branch on
 
 | HTTP | `code` | Meaning |

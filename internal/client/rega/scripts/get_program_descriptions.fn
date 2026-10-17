@@ -1,7 +1,7 @@
 !# openccu-loom — get_program_descriptions
 !# Output: [{"id":"<program-id>","description":"<uri-encoded info>",
 !#          "condition_summary":"<uri-encoded>","activity_summary":"<uri-encoded>",
-!#          "last_execute_seconds":<unix-seconds>}...]
+!#          "last_execute_seconds":<unix-seconds>,"is_copy":<true|false>}...]
 !#
 !# last_execute_seconds is when the CCU last ran the program, in Unix
 !# seconds (UTC), 0 when it never ran. Program.getAll carries the same
@@ -20,6 +20,13 @@
 !# names and info strings may contain quotes, backslashes, or newlines
 !# that would otherwise break the JSON framing.
 !#
+!# is_copy is true for the copy the WebUI program editor creates when a
+!# program is opened (same name, new ID, inactive): ProgramCopyID() names
+!# the original for a copy and is ID_ERROR for a real program — the test
+!# the WebUI's own program list applies (www/rega/pages/tabs/control/
+!# programs.htm). Both values are read into typed locals first; an accessor
+!# inline in a Write() concatenation drops the enclosing condition.
+!#
 !# sName and oLV are shared between the condition and the activity pass.
 !# The two passes run in sequence, never nested, and each pass assigns
 !# both before reading them.
@@ -29,17 +36,21 @@ string sCondIdx; string sSingleIdx; string sDestIdx; string sName;
 object oProgram; object oRule; object oC; object oSC; object oCC; object oLV;
 object oDest; object oSD; object oCH;
 integer iCondCount; integer iSingleCount; integer iLVT; integer iCT;
-integer iLastExec;
+integer iLastExec; integer iCopyId; integer iNoCopy; string sIsCopy;
 integer iRV1; integer iRV2; integer iDestCount; integer iP; integer iV;
 boolean bValue;
 boolean bFirst = true;
 
+iNoCopy = ID_ERROR;
 Write('[');
 foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
     oProgram = dom.GetObject(sProgramId);
     if (oProgram) {
         sDescription = oProgram.PrgInfo().UriEncode();
         iLastExec = oProgram.ProgramLastExecuteTimeSeconds();
+        iCopyId = oProgram.ProgramCopyID();
+        sIsCopy = "false";
+        if (iCopyId != iNoCopy) { sIsCopy = "true"; }
         sCond = "";
         sAct = "";
 
@@ -137,7 +148,7 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
             WriteLine(',');
         }
 
-        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '","condition_summary":"' # sCond.UriEncode() # '","activity_summary":"' # sAct.UriEncode() # '","last_execute_seconds":' # iLastExec # '}');
+        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '","condition_summary":"' # sCond.UriEncode() # '","activity_summary":"' # sAct.UriEncode() # '","last_execute_seconds":' # iLastExec # ',"is_copy":' # sIsCopy # '}');
     }
 }
 Write(']');

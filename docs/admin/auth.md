@@ -73,7 +73,7 @@ With that set, `GET /api/v1/setup/status` reports `required: false` and
 
 ## Basic auth
 
-Username/password over HTTP Basic, also backing the HTML login form.
+Username/password over HTTP Basic; the same accounts back the web UI's login screen.
 Passwords are compared in constant time.
 
 ```yaml
