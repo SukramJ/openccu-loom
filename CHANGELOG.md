@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Matter: go-fabric v0.6.0.** The Matter stack's hardening release: a
+  flood of datagrams with forged session IDs can no longer open unbounded
+  queues; shutting the bridge down waits for running handlers; a bridge
+  whose stored pairings fail to load no longer advertises itself as
+  pairable; after the last controller is removed the bridge reopens its
+  own pairing window once it is idle. Controllers see smaller integer
+  encodings on the wire (as matter.js sends them) and an accepted-command
+  list that names only commands with a handler. The debug switch for
+  subscription dumps is now `GOFABRIC_DUMP_SUBSCRIBE`; the old
+  `OPENCCU_LOOM_MATTER_DUMP_SUBSCRIBE` still works and is deprecated.
+
 ### Fixed
 
 - **CCU programs: the WebUI editor's working copy is no longer imported.**
