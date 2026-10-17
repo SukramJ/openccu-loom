@@ -35,7 +35,7 @@ summary.
 
 | Scheme | How a client presents it | Backed by |
 |---|---|---|
-| Basic | `Authorization: Basic …` (or the HTML login form) | `north.rest.auth.users` map, constant-time password compare |
+| Basic | `Authorization: Basic …` (the same accounts back the web UI login) | `north.rest.auth.users` map, constant-time password compare |
 | Bearer / API token | `Authorization: Bearer <token>` | in-memory token store; token ID = first 16 hex of the token's SHA-256 |
 | Session | `openccu_loom_session` cookie issued after a successful login | SQLite-backed save-through session store (survives restart), 12-hour TTL |
 | OIDC | browser redirect to the IdP, authorization-code + PKCE | `north.rest.auth.oidc.*` |
@@ -62,6 +62,16 @@ to the SQLite store.
   daemon logs a warning and stores secret values **in plaintext** rather
   than refusing to start. Encryption is a hardening layer, not a boot
   dependency.
+- **CCU passwords are refused, not downgraded.** Without a master key, a
+  CCU password saved with a CCU connection (the CCU settings, the
+  first-run wizard, a CCU added at runtime, or the YAML seed) would land
+  in the database in the clear. The daemon refuses that write instead;
+  over the REST API it answers `400` *Password cannot be stored*. Setting
+  `security.allow_plaintext_secrets: true` (default `false`) accepts the
+  cleartext write. The flag is read on every save, so changing it needs
+  no restart, and it changes nothing while a master key is available —
+  the password is encrypted either way. See
+  [Configuration](admin/configuration.md#security).
 
 !!! warning "A malformed `OPENCCU_LOOM_SECRET_KEY` is fatal"
     A present-but-invalid env key (wrong length or not base64) stops the
@@ -73,6 +83,27 @@ to the SQLite store.
     private key, IPK) are persisted unencrypted so commissioned
     controllers survive a daemon restart. Protecting the data directory
     is the operator's responsibility.
+
+## Login throttling and session lifetime
+
+- **Login throttling is always on.** Password attempts are limited per
+  client IP address: a burst of 5, then one attempt per second. Every
+  `POST /api/v1/auth/login` counts, as do the first-run wizard's CCU
+  probe and pairing calls and the start of a client pairing request
+  (`POST /api/v1/pairing`). HTTP Basic credentials are throttled on
+  every route from the same budget; there a credential that verifies
+  costs nothing. A source over its budget gets `429` with a
+  `Retry-After` header — for a Basic credential even when it is
+  correct, so a guess cannot be confirmed by the status code. There is
+  no setting for it.
+  The address is the direct peer of the connection; behind a reverse
+  proxy every client therefore shares the proxy's budget.
+- **Session lifetime.** A login session lasts at most 12 hours.
+  `north.rest.auth.session_idle_timeout` additionally ends a session
+  that has not been used for that long, even while its 12 hours are
+  still running — it caps how long a stolen but unused cookie stays
+  usable. The default `0` disables the idle check. A change takes
+  effect after a restart.
 
 ## CSRF
 

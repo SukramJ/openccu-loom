@@ -38,10 +38,13 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 |------|-------------------|
 | **Overview** | Landing dashboard: at-a-glance daemon and CCU status. |
 | **Favorites** | Quick access to the devices you pin as favorites. |
+| **Alarm system** | The built-in alarm system: arming, zones, sensors and sirens. See the [Alarm and Security & Safety guide](../alarm-user-guide.md). |
+| **Security & Safety** | Smoke, water, tamper and power reporting with its fault state — always on, whether or not the alarm system is configured. See [Security & Safety](../alarm-user-guide.md#12-security-safety). |
 | **Devices** | Browse all devices across your CCUs, drill into channels and parameters. **Add device** starts pairing: pick the interface, open the pairing window, and accept and name a device as it joins. |
 | **Device detail** | Inspect one device, read and change its data points, and configure it. |
 | **Fleet** | Fleet-wide view across every configured CCU. |
 | **Energy** | Monitor power and energy readings from measuring devices. |
+| **Diagrams** | Recorded measurement curves for any data point (see [Charts and measurement history](#charts-and-measurement-history)). |
 | **Radio & battery** | Review per-device radio signal strength (RSSI), battery level and reachability. |
 | **Matter** | Enable exposure of devices to Apple Home / Google Home / Alexa and pair. |
 | **Diagnostics** | Check health and troubleshooting information. |
@@ -50,11 +53,24 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **New devices** | Newly paired devices waiting to be accepted or released — on every system, with or without a CCU inbox. |
 | **Messages** | Pending notices from your CCUs. |
 | **Programs / System variables** | Browse CCU programs and system variables. |
+| **Groups** | HmIP groups on the CCU and their member devices. |
+| **Schedules** | Every device that has a week schedule, with a link to its schedule editor. |
 | **Audit log** | Review what changes were made and by whom. |
 | **Log viewer** | Follow the daemon's live log stream (see [Installation & First Steps](../user-guide.md#log-viewer-logs)). |
 | **Settings** | Adjust daemon and UI settings, including the interface theme (light / dark / system — the same preference the sidebar toggle cycles), users and API tokens, and the hidden parameters to reveal. |
+| **About** | Version, build, add-on stamp and licence information. |
+| **Licenses** | Every shipped component with its license, taken from the build's software bill of materials. |
 
 ![The OpenCCU-Loom web UI: the navigation sidebar on the left and the Devices view listing discovered devices grouped by interface.](img/web-ui-device-list.png)
+
+Not every view appears on every system:
+
+- **Log viewer** and **Backups** are shown to administrators only.
+- **Programs**, **System variables**, **Groups** and **Backups** appear only while at least one connected system offers the feature — an openccu-lite system, for example, has no programs or system variables.
+- **Energy** and **Diagrams** appear only when measurement history is enabled.
+- **Matter** appears only when the Matter bridge is enabled.
+
+An administrator can also hide views under **Settings → Navigation & views**. **Devices**, **Settings** and **About** can never be hidden.
 
 The sections below cover the tasks most users do.
 

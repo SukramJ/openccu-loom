@@ -135,6 +135,17 @@ daemon's alarm system is configured. Entity names are localized by the
 daemon (`de` / `en`). `north.mqtt.sub_devices_enabled` additionally
 groups channels as HA sub-devices.
 
+By default every entity gets its own retained discovery config.
+`north.mqtt.discovery_bundles` (expert, off by default) publishes one
+document per device on `homeassistant/device/<node_id>/config` instead;
+your entities keep their IDs either way, but switching migrates every
+retained config, so decide once — see
+[Configuration](../admin/configuration.md#discovery_bundles-and-what-turning-it-back-off-costs).
+When Home Assistant restarts and announces `online` on
+`homeassistant/status`, the daemon re-publishes all discovery configs,
+because Home Assistant does not reliably re-read the retained ones after
+every update or reload.
+
 **Why people choose it:**
 
 - **One connection to the CCU.** HA restarts, updates and reloads no

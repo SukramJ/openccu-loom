@@ -272,6 +272,8 @@ is ever wired, and so the shape stays pinned rather than drifting.
 | Topic class | Topic |
 |---|---|
 | Discovery config | `homeassistant/<component>/<node_id>/<object_id>/config` |
+| Device-bundle config (with `north.mqtt.discovery_bundles`) | `homeassistant/device/<node_id>/config` |
+| Home Assistant birth (subscribed) | `homeassistant/status` |
 
 Go builder method: `TopicBuilder.DiscoveryConfig`.
 
@@ -298,6 +300,23 @@ daemon's retained configs apart from another's. It is composed:
 
 The base scope is built by `TopicBuilder.DiscoveryNodeScope`, which renders
 part of this segment and no topic of its own.
+
+**Device bundles.** With `north.mqtt.discovery_bundles: true` (expert,
+off by default, needs `north.mqtt.discovery_enabled`) the daemon
+publishes one retained document per node on
+`homeassistant/device/<node_id>/config` instead of one retained config
+per entity. The `<node_id>` is composed as above, and the entities'
+`unique_id`s do not change. Switching the mode migrates the retained
+configs on the broker in either direction — read
+[what turning it back off costs](admin/configuration.md#discovery_bundles-and-what-turning-it-back-off-costs)
+before you change it.
+
+**Home Assistant restarts.** The daemon subscribes to
+`homeassistant/status`, where Home Assistant announces itself. Each
+time it publishes `online`, the daemon re-publishes every discovery
+config it currently declares. The retained configs stay on the broker
+anyway; the re-publish covers the cases where Home Assistant does not
+read them again after a restart or reload.
 
 What the discovery payloads read:
 
