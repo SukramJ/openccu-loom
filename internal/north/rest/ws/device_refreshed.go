@@ -13,7 +13,8 @@ import (
 
 // DeviceRefreshedPayload is the WebSocket payload published on the
 // `device.<addr>.lifecycle` topic when a device's VALUES data was observed
-// from the CCU — a pushed event or an active read, changed or not.
+// from the CCU — a pushed event or a targeted read, changed or not; the
+// bulk reseed does not fire it.
 // Mirrors [hmevent.DeviceRefreshedEvent]. The daemon throttles it to one
 // frame per device per short window, so `refreshed_at` may trail the
 // device's exact latest observation by up to that window; the REST

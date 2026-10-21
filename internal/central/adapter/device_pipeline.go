@@ -1308,8 +1308,9 @@ func (p *DevicePipeline) applyChannelOperationModeGating(interfaceID string) {
 }
 
 // Reseed asks seeder for iface's current values and applies them to the
-// matching data points on this central through [generic.DataPoint.OnWireValue]
-// for typed coercion. Values of edge-trigger parameters are dropped: a button
+// matching data points on this central through [generic.DataPoint.OnSeedValue]
+// for typed coercion — the seed path that leaves RefreshedAt alone, so a
+// sweep does not stamp every device with the same "last refreshed" time. Values of edge-trigger parameters are dropped: a button
 // acquires a value on its first press and keeps it forever, and seeding it
 // would mark the data point observed and hand the boot-time snapshot a
 // keypress to replay — see the edge-trigger exclusion in the values cache for
@@ -1344,7 +1345,7 @@ func (p *DevicePipeline) Reseed(
 			if dp == nil {
 				continue
 			}
-			if setter, ok := dp.(interface{ OnWireValue(any) bool }); ok && setter.OnWireValue(v) {
+			if setter, ok := dp.(interface{ OnSeedValue(any) bool }); ok && setter.OnSeedValue(v) {
 				applied++
 			}
 		}

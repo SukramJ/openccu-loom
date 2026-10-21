@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -136,6 +137,65 @@ func TestReseedAppliesAnySeederAndFiltersEdgeTriggers(t *testing.T) {
 	}
 	if len(seeder.depths) != 1 || seeder.depths[0] != SeedCheap {
 		t.Errorf("seeder saw depths %v, want [SeedCheap]", seeder.depths)
+	}
+}
+
+// TestReseedDoesNotMoveTheRefreshedTimestamp pins that a reseed — the boot
+// seed and the periodic reconciliation sweep alike — is not an observation of
+// the device: it reads the CCU's value store, so a data point that already
+// has a RefreshedAt keeps it (and with it the device's "last refreshed"
+// time), while the value and ModifiedAt still follow the seed. A data point
+// the seed is the first to fill does get a RefreshedAt, or it would never
+// count as valid.
+func TestReseedDoesNotMoveTheRefreshedTimestamp(t *testing.T) {
+	t.Parallel()
+	f := buildBoost7Fixture(t)
+	p := NewDevicePipeline(f.unit)
+	ch := f.dev.Channel("DEV002:0")
+	if ch == nil {
+		t.Fatal("fixture channel DEV002:0 missing")
+	}
+	newBool := func(param string) *generic.DataPoint[bool] {
+		dp := generic.NewDataPoint[bool](generic.Spec{
+			Key: hmtypes.DataPointKey{
+				InterfaceID: "HmIP-RF", ChannelAddress: "DEV002:0",
+				ParamsetKey: hmenum.ParamsetKeyValues, Parameter: param,
+			},
+			Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeBool, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+		})
+		ch.Put(dp)
+		return dp
+	}
+	pushed := newBool("STATE")
+	unseen := newBool("WORKING")
+
+	pushedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	pushed.OnEventAt(false, pushedAt)
+
+	reseed := func(values map[string]any) {
+		t.Helper()
+		seeder := &fixedSeeder{values: map[string]map[string]any{"DEV002:0": values}}
+		if err := p.Reseed(context.Background(), "HmIP-RF", seeder, SeedCheap, slog.New(slog.DiscardHandler)); err != nil {
+			t.Fatalf("Reseed: %v", err)
+		}
+	}
+	reseed(map[string]any{"STATE": true})
+
+	if got := pushed.RefreshedAt(); !got.Equal(pushedAt) {
+		t.Errorf("STATE RefreshedAt = %v after the reseed, want the push time %v — a reseed is not a device observation", got, pushedAt)
+	}
+	if got := f.dev.LastRefreshed(); !got.Equal(pushedAt) {
+		t.Errorf("device LastRefreshed = %v, want the push time %v", got, pushedAt)
+	}
+	if v, _ := pushed.Value(); !v {
+		t.Error("STATE = false, want the seeded true — the reseed must still reconcile the value")
+	}
+	if !pushed.ModifiedAt().After(pushedAt) {
+		t.Errorf("STATE ModifiedAt = %v, want it moved by the seeded value change", pushed.ModifiedAt())
+	}
+	reseed(map[string]any{"WORKING": true})
+	if unseen.RefreshedAt().IsZero() || !unseen.IsValid() {
+		t.Errorf("WORKING RefreshedAt = %v valid=%v, want a first-observation stamp so the data point counts as valid", unseen.RefreshedAt(), unseen.IsValid())
 	}
 }
 

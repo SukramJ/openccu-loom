@@ -854,9 +854,12 @@ func (d *Device) LastUpdated() time.Time {
 
 // LastRefreshed is the most recent RefreshedAt across every VALUES data
 // point on every channel — the last time any value of this device was
-// observed from the CCU, whether through a pushed event or an active read
-// (boot seed, periodic sweep, operator refresh), and whether or not the
-// value changed. Returns zero time when nothing has been observed.
+// observed from the CCU, whether through a pushed event or a targeted read,
+// and whether or not the value changed. The bulk reseed (boot seed,
+// periodic sweep) does not count: it reads the CCU's value store, not the
+// device, and moves the time only for a data point it is the first to
+// fill ([generic.DataPoint.OnSeedValue]). Returns zero time when nothing
+// has been observed.
 func (d *Device) LastRefreshed() time.Time {
 	return d.latestAcrossDataPoints(ParameterDataPoint.RefreshedAt)
 }

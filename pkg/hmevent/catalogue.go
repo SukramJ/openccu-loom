@@ -50,8 +50,8 @@ const (
 	// NodeLabel).
 	EventTypeDeviceMetadataChanged EventType = "device.metadata_changed"
 	// EventTypeDeviceRefreshed fires when a device's VALUES data was
-	// observed from the CCU — a pushed event or an active read, changed or
-	// not — throttled to one event per device per short window. It is the
+	// observed from the CCU — a pushed event or a targeted read, changed
+	// or not, never the bulk reseed — throttled to one event per device per short window. It is the
 	// live signal behind the device-level "last refreshed" time; the exact
 	// aggregate is [Device.LastRefreshed] on the model.
 	EventTypeDeviceRefreshed            EventType = "device.refreshed"

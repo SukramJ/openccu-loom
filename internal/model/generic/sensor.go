@@ -184,6 +184,18 @@ func (s *Sensor[T]) OnWireValue(v any) bool {
 	return s.DataPoint.OnWireValue(v)
 }
 
+// OnSeedValue is the reseed entry point ([DataPoint.OnSeedValue]) with the
+// same RSSI normalisation as [Sensor.OnWireValue].
+func (s *Sensor[T]) OnSeedValue(v any) bool {
+	if fixed, handled, valid := s.normalizeRSSIWire(v); handled {
+		if !valid {
+			return true
+		}
+		return s.DataPoint.OnSeedValue(fixed)
+	}
+	return s.DataPoint.OnSeedValue(v)
+}
+
 // RestoreCachedValue applies a persisted values-cache snapshot. RSSI
 // parameters are re-normalised through [FixRSSI] before restore, so a raw
 // sentinel (e.g. 128) persisted by an older build — before the ingestion

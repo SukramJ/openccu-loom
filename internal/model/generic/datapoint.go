@@ -1006,6 +1006,29 @@ func (d *DataPoint[T]) OnWireValue(v any) bool {
 	return false
 }
 
+// OnSeedValue is the bulk-reconciliation counterpart of [OnWireValue]: the
+// value is applied exactly like a pushed event, but [RefreshedAt] only moves
+// when the data point has never been observed. A reseed reads the CCU's own
+// value store (the ReGa `fetch_all_device_data` script, occulited's snapshot),
+// not the device, so it is no evidence the device reported anything; stamping
+// it would give every device on the interface the same "last refreshed" time
+// after each sweep. The first-observation exception keeps [IsValid] true for a
+// data point that has neither a cached row nor a push yet.
+func (d *DataPoint[T]) OnSeedValue(v any) bool {
+	if v == nil {
+		return false
+	}
+	if typed, ok := v.(T); ok {
+		d.applyConfirmed(typed, time.Now(), false)
+		return true
+	}
+	if conv, ok := coerceWire[T](v); ok {
+		d.applyConfirmed(conv, time.Now(), false)
+		return true
+	}
+	return false
+}
+
 // OnEvent is the entry point for CCU-driven updates. The event
 // coordinator calls this after decoding a wire event into T. A
 // subscriber callback is invoked after the value has been stored.
@@ -1032,6 +1055,14 @@ func (d *DataPoint[T]) OnEvent(v T) {
 // optimistic one) and observers are notified that the value
 // changed from the optimistic guess to v. This.
 func (d *DataPoint[T]) OnEventAt(v T, at time.Time) {
+	d.applyConfirmed(v, at, true)
+}
+
+// applyConfirmed records v as a CCU-confirmed value. observation reports
+// whether v is evidence of the device itself (a push) rather than a read of
+// the CCU's value store; only an observation moves [RefreshedAt] on a data
+// point that already has one — see [OnSeedValue].
+func (d *DataPoint[T]) applyConfirmed(v T, at time.Time, observation bool) {
 	// reset the unconfirmed value slot — a CCU-confirmed value supersedes any
 	// pending unconfirmed write.
 	d.resetUnconfirmedValue()
@@ -1041,7 +1072,10 @@ func (d *DataPoint[T]) OnEventAt(v T, at time.Time) {
 	hadValue := d.observed
 	d.value = v
 	d.observed = true
-	d.refreshedAt = at
+	refreshed := observation || d.refreshedAt.IsZero()
+	if refreshed {
+		d.refreshedAt = at
+	}
 	prevSource := d.source
 	d.source = hmenum.ValueSourceLive
 	// clear the initial-uncertain flag on first confirmed value.
@@ -1074,8 +1108,11 @@ func (d *DataPoint[T]) OnEventAt(v T, at time.Time) {
 		confirmedCallbacks = make([]func(old, next T), len(d.confirmedUpdateCallbacks))
 		copy(confirmedCallbacks, d.confirmedUpdateCallbacks)
 	}
-	refreshedCallbacks := make([]func(at time.Time), len(d.refreshedCallbacks))
-	copy(refreshedCallbacks, d.refreshedCallbacks)
+	var refreshedCallbacks []func(at time.Time)
+	if refreshed {
+		refreshedCallbacks = make([]func(at time.Time), len(d.refreshedCallbacks))
+		copy(refreshedCallbacks, d.refreshedCallbacks)
+	}
 	d.mu.Unlock()
 
 	if d.optimistic.IsActive() {
@@ -1119,7 +1156,8 @@ func (d *DataPoint[T]) OnEventAt(v T, at time.Time) {
 
 // OnRefreshed registers a handler that fires whenever [RefreshedAt]
 // moves — every CCU-confirmed observation, changed or not, plus the
-// CUxD post-send bump. It receives the observation timestamp. Returns an
+// CUxD post-send bump; a reseed ([OnSeedValue]) fires it only on a first
+// observation. It receives the observation timestamp. Returns an
 // idempotent unsubscribe closure. Optimistic writes, rollbacks and
 // [TriggerUpdate] do not fire it: none of them is a reading from the CCU.
 func (d *DataPoint[T]) OnRefreshed(fn func(at time.Time)) func() {

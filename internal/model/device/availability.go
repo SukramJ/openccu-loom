@@ -27,7 +27,7 @@ type AvailabilityInfo struct {
 
 	// LastRefreshed is the most recent *observation* across every VALUES
 	// data point on every channel ([Device.LastRefreshed]): a pushed
-	// event or an active read, changed or not. It is what the SPA shows
+	// event or a targeted read, changed or not — never the bulk reseed. It is what the SPA shows
 	// as the device's "last refreshed" time. Zero when nothing has been
 	// observed yet.
 	LastRefreshed time.Time `json:"LastRefreshed"`
