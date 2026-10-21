@@ -21,6 +21,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Devices: "Last refreshed" shows the device's last report again.** The
+  periodic value reconciliation (every 5 minutes) and the boot seed
+  stamped every data point they read with the current time, so the device
+  list showed the same "last refreshed" time for almost every device. Both
+  read the CCU's value store, not the device, and now leave the timestamp
+  alone; it moves on a pushed event or a targeted read. A data point the
+  seed is the first to fill still gets a timestamp, so it stays valid. The
+  `device.refreshed` WebSocket event no longer fires for every device after
+  each sweep.
+
 - **CCU programs: the WebUI editor's working copy is no longer imported.**
   Opening a program in the CCU's program editor makes the CCU create a
   copy (new ID, same name, inactive). The program scan imported it as a
