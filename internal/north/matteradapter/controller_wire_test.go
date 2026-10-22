@@ -24,8 +24,8 @@ import (
 // TestGoldenFleetAnswersAControllerOverCASE commissions an in-process node
 // that serves the assembler's golden topology as its host Snapshotter and
 // reads both endpoint shapes over CASE with go-fabric's own controller: a
-// profile server declared as its cluster's HostServer (the plug's OnOff)
-// and a sensor built from endpoint.Spec.Measurement (the climate sensor's
+// profile server declared with device.HostServer (the plug's OnOff) and a
+// sensor declared with device.Measurement (the climate sensor's
 // MeasuredValue). Reading OnOff on the sensor endpoint must fail with
 // UnsupportedCluster, so a read that answers anything for any path would
 // not pass.

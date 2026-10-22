@@ -372,32 +372,29 @@ go-fabric v0.5.0 ships them, and this daemon now uses them:
   volume — and takes the "with On/Off" commands through `NativeSwitcher`
   (#131), so "play at this volume" and "stop" stay one device write each.
 
-## Amendment — go-fabric v0.10.0
+## Amendment — go-fabric v0.10
 
 go-fabric v0.10.0 removes the device kit's per-cluster options and the
 facade's deprecated surface instead of deprecating them; its migration
 guide ("Migrating to the facade") names a route for every removed symbol
 and is what this daemon follows. Where the guide says a package stays
 below the facade for a host with its own assembler, it stays here too.
+v0.10.1 added the two routes this daemon's migration found missing
+(go-fabric #220, #221), and the daemon is pinned to it.
 
 - **Profile servers are declarations.** `device.WithServer` takes only a
-  cluster without a generated package now. The assembler declares each
-  profile server as its cluster's `<cluster>def.Declare{HostServer}`
-  (`internal/north/matteradapter/host_server_declaration.go`); a server
-  for a cluster missing from that table falls back to the hand-built spec,
-  which the device-layer guard reports.
-- **Sensor endpoints leave the device layer.** Phase 1 built a measurement
-  endpoint with `device.WithMeasurement`; the device kit has no
-  measurement-source form any more. The guide's route for that option —
-  declare the sensor's cluster and `Set` it on every reading — is written
-  for a host with per-type code, and two built-in classes (the momentary
-  switch and the battery) need the endpoint number when their server is
-  built. The assembler therefore builds sensor endpoints as
-  `endpoint.Spec{Measurement}`, which the endpoint assembler a host keeps
-  beside the device kit materialises itself (go-fabric guides "Advanced
-  seams", endpoint, and "Host ports", measurements). The golden topology
-  is unchanged; the device-layer guard accepts exactly the two shapes, and
-  an in-process controller (`fabrictest`) reads both over CASE.
+  cluster without a generated package now; the assembler declares each
+  profile server with `device.HostServer`, which resolves the cluster's
+  generated `<cluster>def.Declare{HostServer}`.
+- **Sensor endpoints stay on the device layer.** Phase 1 built a
+  measurement endpoint with `device.WithMeasurement`, which v0.10.0
+  removed; v0.10.1's `device.Measurement` is its successor for a host
+  whose sensors are classified data, and the endpoint assembler
+  materialises the measurement once the endpoint number is known (the
+  momentary switch and the battery need it). Every bridged endpoint is a
+  device-layer device, as phase 1 decided; the golden topology is
+  unchanged, and an in-process controller (`fabrictest`) reads both
+  shapes over CASE.
 - **Facade routes.** The health probe is `node.Config.Health`; the
   attestation files are `node.Attestation.Files` with
   `BlockCommissioningOnError`, so the block above is the node's
@@ -410,8 +407,9 @@ below the facade for a host with its own assembler, it stays here too.
   reassembly, reachability forward, controller RTT), the shared store
   handle, the group manager the assembler is built over, the endpoint
   store and assembler, the profiles' `cluster/…` servers, and
-  `secure/setup` in the REST handler that encodes a payload without a
-  node.
+  `secure/setup` / `secure/spake2` where a payload is encoded or a value
+  validated without a node (the REST handler, the configuration
+  validator).
 
 ## Consequences
 
