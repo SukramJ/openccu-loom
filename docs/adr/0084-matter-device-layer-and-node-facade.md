@@ -372,6 +372,45 @@ go-fabric v0.5.0 ships them, and this daemon now uses them:
   volume — and takes the "with On/Off" commands through `NativeSwitcher`
   (#131), so "play at this volume" and "stop" stay one device write each.
 
+## Amendment — go-fabric v0.10
+
+go-fabric v0.10.0 removes the device kit's per-cluster options and the
+facade's deprecated surface instead of deprecating them; its migration
+guide ("Migrating to the facade") names a route for every removed symbol
+and is what this daemon follows. Where the guide says a package stays
+below the facade for a host with its own assembler, it stays here too.
+v0.10.1 added the two routes this daemon's migration found missing
+(go-fabric #220, #221), and the daemon is pinned to it.
+
+- **Profile servers are declarations.** `device.WithServer` takes only a
+  cluster without a generated package now; the assembler declares each
+  profile server with `device.HostServer`, which resolves the cluster's
+  generated `<cluster>def.Declare{HostServer}`.
+- **Sensor endpoints stay on the device layer.** Phase 1 built a
+  measurement endpoint with `device.WithMeasurement`, which v0.10.0
+  removed; v0.10.1's `device.Measurement` is its successor for a host
+  whose sensors are classified data, and the endpoint assembler
+  materialises the measurement once the endpoint number is known (the
+  momentary switch and the battery need it). Every bridged endpoint is a
+  device-layer device, as phase 1 decided; the golden topology is
+  unchanged, and an in-process controller (`fabrictest`) reads both
+  shapes over CASE.
+- **Facade routes.** The health probe is `node.Config.Health`; the
+  attestation files are `node.Attestation.Files` with
+  `BlockCommissioningOnError`, so the block above is the node's
+  (`Node.AttestationError`); DNS-SD is `node.Network.MDNS`, the node owns
+  the subtype responder; fabrics are `Node.FabricInfos`; credentials are
+  `node.NewCommissioningCredentials`, `Commissioning.WindowCredentials`
+  and `Node.PairingCodesFor`; the status and window adapters read
+  `Node.LocalAddr` and `Node.Topology`.
+- **What stays below the facade:** the bridge (endpoint inspector,
+  reassembly, reachability forward, controller RTT), the shared store
+  handle, the group manager the assembler is built over, the endpoint
+  store and assembler, the profiles' `cluster/…` servers, and
+  `secure/setup` / `secure/spake2` where a payload is encoded or a value
+  validated without a node (the REST handler, the configuration
+  validator).
+
 ## Consequences
 
 - `internal/north/matteradapter` loses the implicit "which clusters does a

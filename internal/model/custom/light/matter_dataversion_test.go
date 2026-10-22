@@ -9,6 +9,8 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/spec"
+	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
@@ -84,7 +86,7 @@ func TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke(t *testing.T) {
 	before := l.MatterDataVersion()
 
 	srv := levelServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 190}); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 190, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MatterInvoke(MoveToLevel): %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {

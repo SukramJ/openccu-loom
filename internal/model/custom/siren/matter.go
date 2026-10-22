@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/alarm"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	smokecoalarmdef "github.com/SukramJ/go-fabric/cluster/spec/smokecoalarm"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -89,7 +90,7 @@ func (s *SmokeSiren) OnMatterValueChanged(cb func()) func() {
 }
 
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
-func (s *Siren) MatterDeviceType() uint16 { return fabricdevice.OnOffPlugInUnitID }
+func (s *Siren) MatterDeviceType() uint16 { return uint16(fabricdevice.OnOffPlugInUnitID) }
 
 // MatterEligibility marks Siren as partially mappable: OnOff covers the
 // alarm on/off command surface; BooleanState is not mounted because it
@@ -99,7 +100,7 @@ func (s *Siren) MatterDeviceType() uint16 { return fabricdevice.OnOffPlugInUnitI
 func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 	return interfaces.MatterEligibilityVerdict{
 		State:      interfaces.MatterEligibilityPartial,
-		DeviceType: fabricdevice.OnOffPlugInUnitID,
+		DeviceType: uint16(fabricdevice.OnOffPlugInUnitID),
 		Clusters:   []uint32{onoff.ClusterID},
 		Reason:     "Siren tone / optical selection is MQTT-only — OnOff covers alarm on/off; BooleanState omitted (non-conformant on OnOffPlugInUnit 0x010A per matter.js).",
 	}
@@ -165,7 +166,9 @@ func (s *Siren) matterOnOffServer() *onoff.Server {
 }
 
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
-func (s *SmokeSiren) MatterDeviceType() uint16 { return fabricdevice.SmokeCoAlarmID }
+func (s *SmokeSiren) MatterDeviceType() uint16 {
+	return uint16(fabricdevice.SmokeCoAlarmID)
+}
 
 // MatterClusterServers returns the SmokeCOAlarm cluster: go-fabric's
 // alarm.Server over this siren's status, built once so the stack's event
@@ -208,8 +211,8 @@ func (s *SmokeSiren) refreshMatterAlarm() {
 type smokeAlarmSource struct{ s *SmokeSiren }
 
 // SmokeCOState implements alarm.StateSource.
-func (src smokeAlarmSource) SmokeCOState() alarm.State {
-	var st alarm.State
+func (src smokeAlarmSource) SmokeCOState() smokecoalarmdef.State {
+	var st smokecoalarmdef.State
 	if status, ok := src.s.Status(); ok {
 		st.SmokeState = smokeStatusToAlarmState(status)
 	}

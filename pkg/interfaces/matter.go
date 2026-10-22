@@ -199,7 +199,7 @@ func MatterDeviceTypeName(id uint16) string {
 	// class advertises; go-fabric v0.4.0 generates it); the schema
 	// carries every device type matter.js models, so it answers before
 	// the hex fallback.
-	if name, ok := schema.DeviceTypeName(uint32(id)); ok {
+	if name, ok := schema.DeviceTypeName(schema.DeviceTypeID(id)); ok {
 		return name
 	}
 	return contract.DeviceTypeName(id)

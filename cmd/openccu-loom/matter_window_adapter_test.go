@@ -74,11 +74,8 @@ func openerBundle(t *testing.T, central string, mutate func(*config.Config)) (*m
 	mcfg := cfg.North.Matter.WithDefaults()
 	return bundle, &matterCommissioningOpenerAdapter{
 		node:               bundle.node,
-		bridge:             bundle.bridge,
 		commissioning:      mcfg.Commissioning,
 		discriminator:      mcfg.Discriminator,
-		vendorID:           mcfg.VendorID,
-		productID:          mcfg.ProductID,
 		configured:         bundle.configuredCommissioning,
 		allowEmptyTopology: true, // the test registry carries no CCU devices
 	}

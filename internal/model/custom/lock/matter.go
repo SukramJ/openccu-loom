@@ -73,6 +73,7 @@ func (l *Lock) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{
 		doorlockcluster.NewDoorLockServer(doorlockcluster.DoorLockConfig{
 			Source:      l,
+			Features:    doorlockcluster.FeatureUBOLT,
 			DataVersion: &l.dataVersion,
 		}),
 	}

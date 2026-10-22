@@ -17,7 +17,7 @@ import (
 // RevokeFabric returns an error (not a panic) when the store is nil.
 func TestMatterFabricRevokerAdapter_NilStore_Errors(t *testing.T) {
 	t.Parallel()
-	a := &matterFabricRevokerAdapter{store: nil}
+	a := &matterFabricRevokerAdapter{node: nil}
 	err := a.RevokeFabric(context.Background(), 1)
 	if err == nil {
 		t.Fatal("expected error when store is nil, got nil")

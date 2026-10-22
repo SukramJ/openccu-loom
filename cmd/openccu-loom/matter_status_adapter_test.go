@@ -24,8 +24,7 @@ func TestMatterStatusAdapter_NilBridge_Returns_Disabled(t *testing.T) {
 	t.Parallel()
 	adapter := &matterStatusReaderAdapter{
 		enabled: false,
-		bridge:  nil,
-		store:   nil,
+		node:    nil,
 		window:  nil,
 		cfg:     nil,
 	}
@@ -57,8 +56,7 @@ func TestMatterStatusAdapter_EnabledTrue_BridgeNil_ReturnsOnlyEnabled(t *testing
 	t.Parallel()
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
-		bridge:  nil,
-		store:   nil,
+		node:    nil,
 		window:  nil,
 		cfg:     nil,
 	}
@@ -92,7 +90,7 @@ func TestRevokeFabric_NilReceiver_ReturnsError(t *testing.T) {
 
 func TestRevokeFabric_NilStore_ReturnsError(t *testing.T) {
 	t.Parallel()
-	a := &matterFabricRevokerAdapter{store: nil}
+	a := &matterFabricRevokerAdapter{node: nil}
 	err := a.RevokeFabric(context.Background(), 1)
 	if err == nil {
 		t.Fatal("expected error for nil store")
@@ -175,8 +173,7 @@ func TestMatterStatusAdapter_Advertising_Propagated(t *testing.T) {
 	t.Parallel()
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
-		bridge:  nil, // bridge nil → early return, cfg.advertising is NOT read
-		store:   nil,
+		node:    nil, // bridge nil → early return, cfg.advertising is NOT read
 		window:  nil,
 		cfg:     &matterStatusConfig{advertising: true},
 	}
@@ -217,7 +214,7 @@ func revokerBundle(t *testing.T, central string) (*matterBridgeBundle, *matterFa
 		removed = append(removed, fabricIndex)
 		mu.Unlock()
 	})
-	return bundle, &matterFabricRevokerAdapter{node: bundle.node, store: bundle.store}, &removed
+	return bundle, &matterFabricRevokerAdapter{node: bundle.node}, &removed
 }
 
 // TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes: the REST revoke

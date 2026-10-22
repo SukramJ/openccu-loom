@@ -120,20 +120,19 @@ func TestMatterTCPModeReachesTheRunningBridge(t *testing.T) {
 			// (ii) The operational record. AnnounceFabric is what the
 			// daemon calls once a fabric is installed; the record is read
 			// back from the advertiser the daemon built.
-			noop, ok := bundle.advertiser.(*mdns.Noop)
-			if !ok {
-				t.Fatalf("advertiser is %T, want *mdns.Noop for mdns_advertise=noop", bundle.advertiser)
+			if bundle.node.MDNSEnabled() {
+				t.Fatal("the node publishes on the network, want its no-op advertiser for mdns_advertise=noop")
 			}
 			bundle.bridge.AnnounceFabric(ctx, [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, 0x1122)
 			var op *mdns.Service
-			for _, svc := range noop.Active() {
+			for _, svc := range bundle.node.MDNSServices() {
 				if svc.ServiceType == mdns.ServiceTypeOperational {
 					op = &svc
 					break
 				}
 			}
 			if op == nil {
-				t.Fatalf("no operational _matter._tcp record published; active = %+v", noop.Active())
+				t.Fatalf("no operational _matter._tcp record published; active = %+v", bundle.node.MDNSServices())
 			}
 			gotT, present := "", false
 			for _, r := range op.TXT {

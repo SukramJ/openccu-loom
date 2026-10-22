@@ -15,7 +15,7 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/SukramJ/go-fabric/store"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 )
@@ -25,11 +25,11 @@ import (
 // ---------------------------------------------------------------------------
 
 type fakeFabricStore struct {
-	recs []store.FabricRecord
+	recs []node.FabricInfo
 	err  error
 }
 
-func (f *fakeFabricStore) ListFabrics(_ context.Context) ([]store.FabricRecord, error) {
+func (f *fakeFabricStore) FabricInfos(_ context.Context) ([]node.FabricInfo, error) {
 	return f.recs, f.err
 }
 
@@ -76,7 +76,7 @@ func TestMatterFabrics_StoreError_Returns500(t *testing.T) {
 
 func TestMatterFabrics_EmptyList_Returns200(t *testing.T) {
 	t.Parallel()
-	s := &fakeFabricStore{recs: []store.FabricRecord{}}
+	s := &fakeFabricStore{recs: []node.FabricInfo{}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matter/fabrics", http.NoBody)
 	w := httptest.NewRecorder()
 	MatterFabrics(s).ServeHTTP(w, req)
@@ -97,16 +97,16 @@ func TestMatterFabrics_SingleRecord_Returns200(t *testing.T) {
 	t.Parallel()
 	compID := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	rootPK := []byte{0x04, 0xAB, 0xCD}
-	rec := store.FabricRecord{
-		FabricIndex:   1,
-		FabricID:      0xDEADBEEFCAFEBABE,
-		NodeID:        0x0000000000000001,
-		VendorID:      0x1234,
-		Label:         "home",
-		CompressedID:  compID,
-		RootPublicKey: rootPK,
+	rec := node.FabricInfo{
+		FabricIndex:        1,
+		FabricID:           0xDEADBEEFCAFEBABE,
+		NodeID:             0x0000000000000001,
+		VendorID:           0x1234,
+		Label:              "home",
+		CompressedFabricID: compID,
+		RootPublicKey:      rootPK,
 	}
-	s := &fakeFabricStore{recs: []store.FabricRecord{rec}}
+	s := &fakeFabricStore{recs: []node.FabricInfo{rec}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matter/fabrics", http.NoBody)
 	w := httptest.NewRecorder()
 	MatterFabrics(s).ServeHTTP(w, req)
@@ -147,10 +147,10 @@ func TestMatterFabrics_SingleRecord_Returns200(t *testing.T) {
 
 func TestMatterFabrics_MultipleRecords_Returns200(t *testing.T) {
 	t.Parallel()
-	recs := []store.FabricRecord{
-		{FabricIndex: 1, FabricID: 100, NodeID: 1, VendorID: 0x1111, Label: "alpha", CompressedID: [8]byte{1}, RootPublicKey: []byte{0x04, 0x01}},
-		{FabricIndex: 2, FabricID: 200, NodeID: 2, VendorID: 0x2222, Label: "beta", CompressedID: [8]byte{2}, RootPublicKey: []byte{0x04, 0x02}},
-		{FabricIndex: 3, FabricID: 300, NodeID: 3, VendorID: 0x3333, Label: "", CompressedID: [8]byte{3}, RootPublicKey: []byte{0x04, 0x03}},
+	recs := []node.FabricInfo{
+		{FabricIndex: 1, FabricID: 100, NodeID: 1, VendorID: 0x1111, Label: "alpha", CompressedFabricID: [8]byte{1}, RootPublicKey: []byte{0x04, 0x01}},
+		{FabricIndex: 2, FabricID: 200, NodeID: 2, VendorID: 0x2222, Label: "beta", CompressedFabricID: [8]byte{2}, RootPublicKey: []byte{0x04, 0x02}},
+		{FabricIndex: 3, FabricID: 300, NodeID: 3, VendorID: 0x3333, Label: "", CompressedFabricID: [8]byte{3}, RootPublicKey: []byte{0x04, 0x03}},
 	}
 	s := &fakeFabricStore{recs: recs}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matter/fabrics", http.NoBody)
@@ -182,13 +182,13 @@ func TestMatterFabrics_LargeIDsSurviveAsHexOnTheWire(t *testing.T) {
 		fabricID = uint64(0x1B2C3D4E5F607182)
 		nodeID   = uint64(0xFEDCBA9876543210)
 	)
-	s := &fakeFabricStore{recs: []store.FabricRecord{{
-		FabricIndex:   1,
-		FabricID:      fabricID,
-		NodeID:        nodeID,
-		VendorID:      0x1349,
-		CompressedID:  [8]byte{1},
-		RootPublicKey: []byte{0x04},
+	s := &fakeFabricStore{recs: []node.FabricInfo{{
+		FabricIndex:        1,
+		FabricID:           fabricID,
+		NodeID:             nodeID,
+		VendorID:           0x1349,
+		CompressedFabricID: [8]byte{1},
+		RootPublicKey:      []byte{0x04},
 	}}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matter/fabrics", http.NoBody)
 	w := httptest.NewRecorder()

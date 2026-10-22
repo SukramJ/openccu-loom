@@ -13,6 +13,7 @@ import (
 	"testing/synctest"
 
 	mattercluster "github.com/SukramJ/go-fabric/cluster"
+	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 
 	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
@@ -1205,12 +1206,12 @@ func TestGarageMatterInvokeAllCommands(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
 	srv := g.MatterClusterServers()[0]
 
-	for _, target := range []clusterwire.ClosureTargetPosition{
-		clusterwire.ClosureTargetPositionMoveToFullyOpen,
-		clusterwire.ClosureTargetPositionMoveToFullyClosed,
-		clusterwire.ClosureTargetPositionMoveToVentilationPosition,
+	for _, target := range []closuredef.TargetPositionEnum{
+		closuredef.TargetPositionMoveToFullyOpen,
+		closuredef.TargetPositionMoveToFullyClosed,
+		closuredef.TargetPositionMoveToVentilationPosition,
 	} {
-		req := clusterwire.MoveToRequest{Position: &target}
+		req := closuredef.MoveToRequest{Position: &target}
 		if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
 			req); err != nil {
 			t.Errorf("Garage MoveTo(%d): %v", target, err)

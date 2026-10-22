@@ -109,7 +109,7 @@ func TestMeasurementClassProjectsOntoAConformantDeviceType(t *testing.T) {
 
 	checked := 0
 	for _, class := range measurementClasses {
-		deviceType := uint32(contract.MeasurementClassDeviceType(class))
+		deviceType := schema.DeviceTypeID(contract.MeasurementClassDeviceType(class))
 		clusterID := contract.MeasurementClassClusterID(class)
 
 		if clusterID == 0 {
@@ -229,7 +229,7 @@ func clusterName(id uint32) string {
 }
 
 // deviceTypeName renders a device-type id for a failure message.
-func deviceTypeName(id uint32) string {
+func deviceTypeName(id schema.DeviceTypeID) string {
 	if name, ok := schema.DeviceTypeName(id); ok {
 		return name
 	}
@@ -239,7 +239,7 @@ func deviceTypeName(id uint32) string {
 // serverClusterList renders a device type's permitted server clusters for a
 // failure message, so the reader sees the alternative without opening the
 // generated table.
-func serverClusterList(deviceType uint32) string {
+func serverClusterList(deviceType schema.DeviceTypeID) string {
 	ids, ok := schema.DeviceTypeServerClusters[deviceType]
 	if !ok || len(ids) == 0 {
 		return "(none)"

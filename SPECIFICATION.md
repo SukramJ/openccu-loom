@@ -916,7 +916,7 @@ Coverage producers in place:
 - **MQTT broker** — `internal/north/mqtt.StartHealthProbe`
   (30 s cadence; healthy when the broker session is up + the
   bridge has acknowledged at least one publish since reconnect).
-- **Matter bridge** — `go-fabric/bridge.StartHealthProbe`
+- **Matter bridge** — go-fabric's node probe (`node.Config.Health`)
   (30 s cadence; healthy when the UDP listener is bound).
 - **Scheduler + REST/WS** — surfaced via gauges
   (`scheduler.jobs`, `scheduler.failures`, `rest.5xx`,

@@ -112,7 +112,7 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fabricLookupTimeout)
 	defer cancel()
-	recs, err := p.fabrics.ListFabrics(ctx)
+	recs, err := p.fabrics.FabricInfos(ctx)
 	if err != nil {
 		return zeroFabricPayload(fabricIndex)
 	}
@@ -132,7 +132,7 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 			VendorID:      r.VendorID,
 			VendorName:    eligibility.VendorName(r.VendorID),
 			Label:         r.Label,
-			CompressedID:  hex.EncodeToString(r.CompressedID[:]),
+			CompressedID:  hex.EncodeToString(r.CompressedFabricID[:]),
 			RootPublicKey: hex.EncodeToString(r.RootPublicKey),
 		}
 	}

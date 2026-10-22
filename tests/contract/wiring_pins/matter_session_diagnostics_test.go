@@ -65,16 +65,16 @@ func TestMatterDiagnosticsSurfacesAreWired(t *testing.T) {
 		}
 	}
 
-	// The mDNS reporter must read the live advertiser rather than the
-	// config: the two diverge exactly when discovery fails, which is the
-	// only situation the endpoint exists for.
-	if !strings.Contains(matter, "adv: bundle.advertiser") {
+	// The mDNS reporter must read the node's live advertiser rather than
+	// the config: the two diverge exactly when discovery fails, which is
+	// the only situation the endpoint exists for.
+	if !strings.Contains(matter, "matterMdnsReporter{node: bundle.node}") {
 		t.Error("the mDNS reporter is not fed from the live advertiser — reporting the configured " +
 			"advertisement would agree with itself in precisely the case that is broken")
 	}
 	// Compatibility needs both halves: fabrics say which ecosystems are
 	// commissioned, the topology says what they are being shown.
-	for _, half := range []string{"fabrics: mfs", "inspector: wiring.endpointInspector"} {
+	for _, half := range []string{"fabrics: bundle.node", "inspector: wiring.endpointInspector"} {
 		if !strings.Contains(matter, half) {
 			t.Errorf("the compatibility reporter is missing its %q source; with one half absent it "+
 				"reports 'no problems' for a combination it cannot see", half)

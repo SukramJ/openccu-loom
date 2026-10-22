@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	gosql "database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -16,20 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/go-fabric/bootid"
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	mattercore "github.com/SukramJ/go-fabric/cluster/core"
 	"github.com/SukramJ/go-fabric/eligibility"
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
 	mattergroups "github.com/SukramJ/go-fabric/groups"
-	"github.com/SukramJ/go-fabric/im/subscription"
-	"github.com/SukramJ/go-fabric/mdns"
 	"github.com/SukramJ/go-fabric/node"
 	matterschema "github.com/SukramJ/go-fabric/schema"
-	"github.com/SukramJ/go-fabric/secure/attestation"
-	"github.com/SukramJ/go-fabric/secure/operational"
-	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
-	"github.com/SukramJ/go-fabric/secure/spake2"
 	matterstore "github.com/SukramJ/go-fabric/store"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
@@ -53,72 +44,40 @@ import (
 // matterTCPConfig maps config.NorthMatter.TCP onto the bridge's TCP
 // roles. The validator restricts the value to the four words; the zero
 // value (off) is what an unset key means.
-func matterTCPConfig(mode string) matterbridge.TCPConfig {
+func matterTCPConfig(mode string) node.TCPConfig {
 	switch mode {
 	case config.MatterTCPIncoming:
-		return matterbridge.TCPConfig{Incoming: true}
+		return node.TCPConfig{Incoming: true}
 	case config.MatterTCPOutgoing:
-		return matterbridge.TCPConfig{Outgoing: true}
+		return node.TCPConfig{Outgoing: true}
 	case config.MatterTCPBoth:
-		return matterbridge.TCPConfig{Incoming: true, Outgoing: true}
+		return node.TCPConfig{Incoming: true, Outgoing: true}
 	}
-	return matterbridge.TCPConfig{}
+	return node.TCPConfig{}
 }
 
-// buildMatterAdvertiser selects the mDNS advertiser from mc.MDNSAdvertise and
-// returns it together with the closer that releases what it owns beyond the
-// Advertiser interface. "noop" is an explicit opt-out; empty or "zeroconf"
-// yields the default multicast advertiser.
-//
-// The closer exists for the subtype responder: it holds two multicast sockets
-// and a receive goroutine per address family. Closing the Zeroconf advertiser
-// closes the responder attached to it, and the node facade's Stop closes the
-// advertiser — but on an early return before the facade exists nothing does.
-// Every caller therefore releases it explicitly on those paths, or a bridge
-// that failed to bind its UDP port leaves both sockets and both goroutines
-// alive for the process lifetime; on the normal path the call is a harmless
-// second close.
-func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) (adv mdns.Advertiser, closeAdv func()) {
-	noClose := func() {}
+// matterMDNS selects the node's DNS-SD from mc.MDNSAdvertise. "noop" is an
+// explicit opt-out; empty or "zeroconf" leaves the advertiser to the node
+// facade, which builds Zeroconf with the subtype responder — the side-car
+// that answers the `_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub` and
+// `_CM._sub` browses Apple Home and Google Home filter by — and closes both
+// at Stop. An unknown value falls back to the opt-out and says so.
+func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 	switch mc.MDNSAdvertise {
 	case "noop":
 		// Explicit opt-out only. A commissioner can never discover a
 		// bridge that does not advertise, so "quiet" must be a conscious
 		// choice, not the unset default.
-		return mdns.NewNoop(), noClose
+		return node.MDNS{Disabled: true}
 	case "", "zeroconf":
-		z := mdns.NewZeroconf()
-		closeAdv = noClose
-		// Side-car responder so service-subtype browses
-		// (`_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub`,
-		// `_CM._sub`) hit a PTR pointing at the primary instance —
-		// Apple Home and Google Home filter the mDNS browse via
-		// these subtypes and `grandcat/zeroconf` v1.0.0 has no
-		// first-class subtype API.
-		if r, err := mdns.NewSubtypeResponder(logger); err != nil {
-			logger.Warn("matter.bridge.mdns.subtype_init_failed",
-				slog.String("err", err.Error()),
-				slog.String("hint", "primary records will publish, but Apple Home / Google Home subtype-filtered discovery may fail"))
-		} else {
-			r.Start(context.Background()) //nolint:contextcheck // the responder serves for the advertiser's lifetime, which is longer than any caller ctx; closeAdv ends it
-			z.AttachSubtypeResponder(r)
-			closeAdv = func() {
-				if err := r.Close(); err != nil {
-					logger.Debug("matter.bridge.mdns.subtype_close",
-						slog.String("err", err.Error()))
-				}
-			}
-			logger.Info("matter.bridge.mdns.subtype_responder_started",
-				slog.String("hint", "PTR responder for `_L*._sub`, `_S*._sub`, `_V*._sub`, `_CM._sub` queries active"))
-		}
 		logger.Info("matter.bridge.mdns.zeroconf",
-			slog.String("hint", "primary record via grandcat/zeroconf, subtypes via side-car responder"))
-		return z, closeAdv
+			slog.String("hint", "primary record via grandcat/zeroconf, subtypes via the facade's side-car responder"))
+		return node.MDNS{}
 	default:
 		logger.Warn("matter.bridge.mdns.unknown",
 			slog.String("value", mc.MDNSAdvertise),
 			slog.String("hint", "falling back to noop; valid: noop|zeroconf"))
-		return mdns.NewNoop(), noClose
+		return node.MDNS{Disabled: true}
 	}
 }
 
@@ -150,19 +109,15 @@ type matterBridgeBundle struct {
 	// REST diagnostics surface reports which peers hold a session and how
 	// many subscriptions ride on each — a commissioned controller holding
 	// none looks identical to a healthy one from every other angle.
-	opMgr  *operational.Manager
-	subMgr *subscription.Manager
-	// advertiser is the live mDNS advertiser. Carried so the diagnostics
-	// surface can report what is actually announced rather than what the
-	// config asked for — the two diverge exactly when discovery fails.
-	advertiser mdns.Advertiser
-	opCreds    *mattercore.OperationalCredentials
-	root       *node.RootClusters
+	opMgr   *node.SessionManager
+	subMgr  *node.SubscriptionManager
+	opCreds *mattercore.OperationalCredentials
+	root    *node.RootClusters
 	// groups is the one group-state manager both sides share: the
 	// assembler's endpoint Groups / ScenesManagement servers and, through
 	// node.Config.Groups, the facade's root GroupKeyManagement and the
 	// bridge's group-message routing.
-	groups *mattergroups.Manager
+	groups *node.Groups
 	// fabricEvents is where the facade's fabric observers deliver. The
 	// WebSocket publisher attaches in wireMatterRuntime, once the hub
 	// exists; startMatterBridge runs before it.
@@ -174,7 +129,7 @@ type matterBridgeBundle struct {
 	configuredCommissioning bool
 	// commissioningBlocked is why the bridge admits no new controller, nil
 	// when it does. A configured attestation chain that does not load sets
-	// it, and the node carries the same block (Node.SetCommissioningBlocked):
+	// it (Node.AttestationError), and the node carries the same block:
 	// the bridge keeps serving every controller already paired — the chain
 	// is checked only while commissioning — but must not pair a new one as
 	// the CSA test vendor while the operator believes the production chain
@@ -263,77 +218,79 @@ func matterLocales(locale string) []string {
 
 // matterCommissioningCredentials resolves the PASE credentials the node is
 // built with. The facade refuses to build without a valid passcode and a
-// salt of spake2's size, whereas the daemon runs without a configured
+// salt of the PBKDF size, whereas the daemon runs without a configured
 // passcode — the operator pairs through the ephemeral window, or not at
 // all. A missing or invalid passcode becomes a random one for this
 // process: the node's own window at first boot then runs on credentials
 // nobody holds, and the REST opener refuses the configured-credentials
-// window as it did before (configured is false). A salt outside spake2's
+// window as it did before (configured is false). A salt outside the PBKDF
 // bounds becomes a random one, which changes nothing a commissioner sees:
 // the salt travels in PBKDFParamResponse, and the verifier is recomputed
 // from passcode and salt at every boot.
 func matterCommissioningCredentials(cm config.NorthMatterCommissioning, logger *slog.Logger) (passcode uint32, salt []byte, iterations int, configured bool, err error) {
 	passcode, configured = cm.Passcode, true
-	if passcode == 0 || passcode > matterSetupPasscodeMax || !mattersetup.IsValidSetupPIN(passcode) {
+	salt = []byte(cm.Salt)
+	validPasscode := passcode != 0 && passcode <= matterSetupPasscodeMax && node.ValidateSetupPIN(passcode) == nil
+	validSalt := len(salt) >= node.PBKDFSaltMin && len(salt) <= node.PBKDFSaltMax
+	if validPasscode && validSalt {
+		return passcode, salt, cm.Iterations, configured, nil
+	}
+	fresh, err := node.NewCommissioningCredentials()
+	if err != nil {
+		return 0, nil, 0, false, fmt.Errorf("random credentials: %w", err)
+	}
+	if !validPasscode {
 		if cm.Passcode != 0 {
 			logger.Warn("matter.bridge.pase.passcode_invalid",
 				slog.String("hint", "north.matter.commissioning.passcode is out of range or on the trivially-guessable list; the configured-credentials window is disabled until it is fixed"))
 		}
-		passcode, err = matterbridge.RandomPasscode()
-		if err != nil {
-			return 0, nil, 0, false, fmt.Errorf("random passcode: %w", err)
-		}
-		configured = false
+		passcode, configured = fresh.Passcode, false
 	}
-	salt = []byte(cm.Salt)
-	if len(salt) < spake2.PBKDFMinSaltSize || len(salt) > spake2.PBKDFMaxSaltSize {
+	if !validSalt {
 		if cm.Salt != "" {
 			logger.Warn("matter.bridge.pase.salt_invalid",
 				slog.Int("len", len(salt)),
-				slog.Int("min", spake2.PBKDFMinSaltSize),
-				slog.Int("max", spake2.PBKDFMaxSaltSize),
+				slog.Int("min", node.PBKDFSaltMin),
+				slog.Int("max", node.PBKDFSaltMax),
 				slog.String("hint", "a random salt is used for this process; the commissioner receives it in PBKDFParamResponse"))
 		}
-		salt, err = matterbridge.RandomSalt()
-		if err != nil {
-			return 0, nil, 0, false, fmt.Errorf("random salt: %w", err)
-		}
+		salt = fresh.Salt
 	}
 	return passcode, salt, cm.Iterations, configured, nil
 }
 
-// matterAttestation is the device attestation material: the operator's
-// DAC / PAI / CD when configured, else the facade's CSA test chain for the
-// vendor and product — pairable with every commissioner's test PAA (Apple
-// Home, Google Home and chip-tool accept it without
-// --bypass-attestation-verifier), and not shippable.
+// matterAttestation is the device attestation the node is built with:
+// the operator's DAC / PAI / CD files when configured, else the facade's
+// CSA test chain for the vendor and product — pairable with every
+// commissioner's test PAA (Apple Home, Google Home and chip-tool accept it
+// without --bypass-attestation-verifier), and not shippable.
 //
-// A configured chain that does not load — a path missing, a file
-// unreadable, a key that is not the DAC's — is an error; only a
-// configuration naming no file at all selects the test chain
-// (attestation.ErrNoChainConfigured). The caller decides what the error
-// costs: see [matterBridgeBundle.commissioningBlocked].
-func matterAttestation(mc config.NorthMatter, logger *slog.Logger) (node.Attestation, error) {
+// The node loads the files (node.Attestation.Files). A configured chain
+// that does not load — a path missing, a file unreadable, a key that is
+// not the DAC's — keeps the node running on the test chain with every
+// commissioning refused (BlockCommissioningOnError), and the error is
+// Node.AttestationError: attestation is checked only while a controller
+// commissions, so every controller already paired keeps working, and no
+// new one is paired as the CSA test vendor while the operator believes the
+// production chain is served. Files that name nothing select the test
+// chain.
+func matterAttestation(mc config.NorthMatter, logger *slog.Logger) node.Attestation {
 	a := mc.Attestation
-	chain, cd, err := attestation.LoadChainFiles(attestation.ChainFiles{
-		DACPath:    a.DACPath,
-		DACKeyPath: a.DACKeyPath,
-		PAIPath:    a.PAIPath,
-		CDPath:     a.CDPath,
-	})
-	switch {
-	case err == nil:
-		logger.Info("matter.bridge.attestation.vendor",
-			slog.String("hint", "production DAC/PAI/CD loaded from config — chip-tool can validate without --bypass-attestation-verifier"))
-		return node.Attestation{Chain: chain, CertificationDeclaration: cd}, nil
-	case errors.Is(err, attestation.ErrNoChainConfigured):
+	if a.DACPath == "" && a.DACKeyPath == "" && a.PAIPath == "" && a.CDPath == "" {
 		logger.Info("matter.bridge.attestation.csa_test",
 			slog.String("hint", "CSA Test PAA chain (PAA→PAI→DAC) + signed CD — Apple Home / Google Home / chip-tool accept this without --bypass-attestation-verifier"),
 			slog.String("vendor_id", fmt.Sprintf("0x%04X", mc.VendorID)),
 			slog.String("product_id", fmt.Sprintf("0x%04X", mc.ProductID)))
-		return node.Attestation{}, nil
-	default:
-		return node.Attestation{}, fmt.Errorf("north.matter.attestation: %w", err)
+		return node.Attestation{}
+	}
+	return node.Attestation{
+		Files: &node.AttestationFiles{
+			DACPath:    a.DACPath,
+			DACKeyPath: a.DACKeyPath,
+			PAIPath:    a.PAIPath,
+			CDPath:     a.CDPath,
+		},
+		BlockCommissioningOnError: true,
 	}
 }
 
@@ -405,8 +362,9 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// pair iteration cycles (chip-tool brief T11, Apple HMHome cache
 		// recovery) see a fresh identity each daemon start. Disabled by
 		// default — production Apple Home / Google Home accessory
-		// recognition expects a stable UniqueID across restarts.
-		bootid.EnableRotation()
+		// recognition expects a stable UniqueID across restarts. The node
+		// enables the rotation (node.Config.BootID) before anything
+		// derives a UniqueID.
 		logger.Info("matter.bridge.bootid_rotation_enabled",
 			slog.String("hint", "per-boot UniqueID salt active — accessory recognition will fail across restarts; toggle north.matter.dev_rotate_unique_ids=false for production"))
 	}
@@ -422,11 +380,9 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
 	walk := matterSnapshotter(reg, readiness)
 
-	advertiser, closeAdvertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; the subtype responder runs for the advertiser's lifetime and is released through closeAdvertiser
 	fail := func(event string, err error) *matterBridgeBundle {
 		logger.Warn(event, slog.String("err", err.Error()))
 		unwireReadiness()
-		closeAdvertiser()
 		return nil
 	}
 
@@ -477,33 +433,21 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if err != nil {
 		return fail("matter.bridge.pase.credentials", err)
 	}
-	attest, attestErr := matterAttestation(mc, logger)
-	if attestErr != nil {
-		// The bridge still starts: attestation is checked only while a
-		// controller commissions, so every controller already paired keeps
-		// working. New commissioning is shut below, before Start, through
-		// the facade's commissioning block, which refuses every window —
-		// the node's own, the REST opener's and a paired controller's
-		// AdministratorCommissioning (multi-admin). The node holds the test
-		// chain meanwhile, which no commissioner can reach.
-		logger.Error("matter.bridge.attestation",
-			slog.String("err", attestErr.Error()),
-			slog.String("hint", "the configured north.matter.attestation chain does not load; paired controllers keep working, new commissioning is disabled until the files are fixed and the daemon restarts"))
-		attest = node.Attestation{}
-	}
+	attest := matterAttestation(mc, logger)
 	fabricEvents := &matterFabricEvents{}
 	n, err := node.New(node.Config{
 		Network: node.Network{
 			Listen:     mc.Listen,
 			PreferIPv4: mc.PreferIPv4,
 			TCP:        matterTCPConfig(mc.TCP),
+			MDNS:       matterMDNS(mc, logger),
 		},
 		Commissioning: node.Commissioning{
 			Passcode:           passcode,
 			Discriminator:      mc.Discriminator,
 			PBKDFIterations:    iterations,
 			Salt:               salt,
-			LocationCapability: mattercore.RegulatoryIndoorOutdoor,
+			LocationCapability: node.RegulatoryIndoorOutdoor,
 		},
 		ProductDescription: node.ProductDescription{
 			Name:       mc.NodeLabel,
@@ -516,21 +460,22 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			ProductName:  "openccu-loom Matter Bridge",
 			NodeLabel:    mc.NodeLabel,
 			SerialNumber: rootSerial,
-			// UniqueID stays empty: the facade pins it (quality F) under
-			// store.SettingUniqueID on the first boot of the store and
-			// serves the stored value on every later one, so a node_label
-			// edit never re-identifies the bridge under a paired
-			// controller's cache; under dev_rotate_unique_ids it serves a
-			// per-boot value and pins nothing.
+			// UniqueID stays empty: the facade pins it (quality F) on the
+			// first boot of the store and serves the stored value on every
+			// later one (Node.UniqueID), so a node_label edit never
+			// re-identifies the bridge under a paired controller's cache;
+			// under dev_rotate_unique_ids it serves a per-boot value and
+			// pins nothing.
 			HardwareVersion:       1,
 			HardwareVersionString: "1.0",
-			SoftwareVersion:       mattercore.SoftwareVersionFromString(build.Version),
+			SoftwareVersion:       node.SoftwareVersionFromString(build.Version),
 			SoftwareVersionString: build.Version,
 		},
 		Store:                      node.Store{Credentials: store, Endpoints: identity},
 		EndpointPersistence:        persistence,
-		Advertiser:                 advertiser,
 		Attestation:                attest,
+		BootID:                     node.BootID{RotateUniqueIDs: mc.DevRotateUniqueIDs},
+		Health:                     matterHealth(healthTracker),
 		Groups:                     groupMgr,
 		Topology:                   matterTopologySnapshotter(assembler, walk),
 		Locales:                    matterLocales(cfg.Locale),
@@ -549,8 +494,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")
 	}
 	bridge := n.Bridge()
+	attestErr := n.AttestationError()
 	if attestErr != nil {
-		n.SetCommissioningBlocked(ctx, attestErr)
+		// The bridge still starts on the test chain with commissioning
+		// refused — every window: the node's own, the REST opener's and a
+		// paired controller's AdministratorCommissioning (multi-admin).
+		logger.Error("matter.bridge.attestation",
+			slog.String("err", attestErr.Error()),
+			slog.String("hint", "the configured north.matter.attestation chain does not load; paired controllers keep working, new commissioning is disabled until the files are fixed and the daemon restarts"))
+	} else if attest.Files != nil {
+		logger.Info("matter.bridge.attestation.vendor",
+			slog.String("hint", "production DAC/PAI/CD loaded from config — chip-tool can validate without --bypass-attestation-verifier"))
 	}
 	if err := n.Start(ctx); err != nil {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -559,16 +513,15 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return fail("matter.bridge.start", err)
 	}
 	logger.Info("matter.bridge.up",
-		slog.String("addr", bridge.LocalAddr()),
+		slog.String("addr", n.LocalAddr()),
 		slog.Bool("ipv4_only", mc.PreferIPv4),
 		slog.Bool("configured_passcode", configured))
 
-	// Wire the bridge into the health tracker. The probe reports the
-	// `matter` component alongside `mqtt` and `sqlite` so the
-	// Diagnostics surface shows every long-running subsystem on one
-	// row each. Best-effort: a nil tracker disables the probe.
+	// The node's health probe (node.Config.Health, matterHealth) reports
+	// the `matter` component alongside `mqtt` and `sqlite` so the
+	// Diagnostics surface shows every long-running subsystem on one row
+	// each. Best-effort: a nil tracker runs no probe and no gauges.
 	if healthTracker != nil {
-		_ = matterbridge.StartHealthProbe(ctx, bridge, matterHealthRecorder{healthTracker}, matterbridge.DefaultProbeInterval)
 		// Controller round-trip: how long a paired Apple/Google hub takes to
 		// ACK a reliable message this bridge sent. It separates a controller
 		// that has gone unreachable from one that is merely slow — both look
@@ -596,16 +549,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// operational time stored once more, BasicInformation ShutDown,
 		// the PASE providers, the CASE reaper, the subscription engine,
 		// the DNS-SD re-announce loop, the bridge (mDNS goodbyes on the
-		// wire) and the advertiser.
+		// wire) and the advertiser with its subtype responder.
 		if err := n.Stop(stopCtx); err != nil {
 			logger.Warn("matter.bridge.stop", slog.String("err", err.Error()))
 		}
-		// Closing the Zeroconf advertiser closes the subtype responder
-		// attached to it, so this is an idempotent second close on the
-		// normal path. It stays because it is the ONLY responder cleanup
-		// on the New / Start failure early returns above, where the
-		// facade's Stop never runs; running it here too is harmless.
-		closeAdvertiser()
 	}
 	return &matterBridgeBundle{
 		node:                    n,
@@ -616,7 +563,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		assembler:               assembler,
 		opMgr:                   n.Sessions(),
 		subMgr:                  n.Subscriptions(),
-		advertiser:              advertiser,
 		opCreds:                 n.Root().OperationalCredentials,
 		root:                    n.Root(),
 		groups:                  groupMgr,
@@ -912,8 +858,8 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 // sequence — so a snapshot and the topology built from it stay one
 // atomic step from the bridge's point of view, and a reassembly still
 // reads the model as late as possible rather than at wiring time.
-func matterTopologySnapshotter(asm *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) matterbridge.Snapshotter {
-	return func(ctx context.Context) (*fabricendpoint.Topology, error) {
+func matterTopologySnapshotter(asm *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) node.Snapshotter {
+	return func(ctx context.Context) (*node.Topology, error) {
 		return asm.AssembleDevices(ctx, walk(ctx))
 	}
 }
@@ -1060,15 +1006,14 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// 0xF00 default.
 	mcfg := cfg.North.Matter.WithDefaults()
 	mb := bundle.bridge
-	mfs := bundle.store
 	mids := bundle.identity
 	teardown = bundle.stop
-	wiring.fabricStore = mfs
+	wiring.fabricStore = bundle.node
 	wiring.sessionLister = matterSessionLister{op: bundle.opMgr, sub: bundle.subMgr}
-	wiring.mdnsReporter = matterMdnsReporter{adv: bundle.advertiser}
+	wiring.mdnsReporter = matterMdnsReporter{node: bundle.node}
 	wiring.endpointInspector = matterEndpointInspector{bridge: mb}
 	wiring.compatReporter = matterCompatibilityReporter{
-		fabrics:   mfs,
+		fabrics:   bundle.node,
 		inspector: wiring.endpointInspector,
 	}
 	// The pairing trace ring is attached by the facade before the bridge
@@ -1127,11 +1072,8 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	window := bundle.node.CommissioningWindow()
 	wiring.opener = &matterCommissioningOpenerAdapter{
 		node:          bundle.node,
-		bridge:        mb,
 		commissioning: mcfg.Commissioning,
 		discriminator: mcfg.Discriminator,
-		vendorID:      mcfg.VendorID,
-		productID:     mcfg.ProductID,
 		configured:    bundle.configuredCommissioning,
 		blocked:       bundle.commissioningBlocked,
 	}
@@ -1151,8 +1093,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	wiring.bi = bundle.root.BasicInformation
 	wiring.statusReader = &matterStatusReaderAdapter{
 		enabled:   mcfg.Enabled,
-		bridge:    mb,
-		store:     mfs,
+		node:      bundle.node,
 		exposures: mids,
 		window:    window,
 		cfg: &matterStatusConfig{
@@ -1170,7 +1111,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// observer above. Deleting the row alone left the removed
 	// controller's session and subscription alive and the next pair
 	// retry colliding on the same session id.
-	revoker := &matterFabricRevokerAdapter{node: bundle.node, store: mfs}
+	revoker := &matterFabricRevokerAdapter{node: bundle.node}
 	wiring.fabricRevoker = revoker
 	wiring.fabricPurger = revoker
 	wiring.reassembler = mb
@@ -1190,8 +1131,8 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 // receiving nothing. Both states are invisible from the ecosystem side,
 // where they look like entities that quietly stop updating.
 type matterSessionLister struct {
-	op  *operational.Manager
-	sub *subscription.Manager
+	op  *node.SessionManager
+	sub *node.SubscriptionManager
 }
 
 // MatterSessions implements [handlers.MatterSessionLister].
@@ -1246,7 +1187,15 @@ func (l matterSessionLister) MatterSessionOccupancy() handlers.MatterSessionOccu
 // the host resolved differently, a subtype responder that failed to
 // start, a publish that errored after boot — each leaves the config
 // looking correct and the announcement wrong.
-type matterMdnsReporter struct{ adv mdns.Advertiser }
+type matterMdnsReporter struct{ node matterMdnsSource }
+
+// matterMdnsSource is what the mDNS diagnostics read from the node facade
+// (node.Node.MDNSEnabled, MDNSServices, DiagnoseMDNS).
+type matterMdnsSource interface {
+	MDNSEnabled() bool
+	MDNSServices() []node.MDNSService
+	DiagnoseMDNS() []node.MDNSFinding
+}
 
 // MatterMdns implements [handlers.MatterMdnsReporter].
 func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
@@ -1254,15 +1203,15 @@ func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
 		Services: []handlers.MatterMdnsService{},
 		Findings: []handlers.MatterMdnsFinding{},
 	}
-	if r.adv == nil {
+	if r.node == nil {
 		return out
 	}
 	// A no-op advertiser is the explicit "stay quiet" opt-in, not a
 	// fault: reporting it as advertising=false lets the surface say so
 	// instead of listing an empty announcement as a defect.
-	out.Advertising = mdns.IsEnabled(r.adv)
+	out.Advertising = r.node.MDNSEnabled()
 
-	services := r.adv.Active()
+	services := r.node.MDNSServices()
 	for i := range services {
 		svc := &services[i]
 		addrs := make([]string, 0, len(svc.Addresses))
@@ -1286,7 +1235,7 @@ func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
 	if !out.Advertising {
 		return out
 	}
-	for _, f := range mdns.Diagnose(services) {
+	for _, f := range r.node.DiagnoseMDNS() {
 		out.Findings = append(out.Findings, handlers.MatterMdnsFinding{
 			Severity: string(f.Severity),
 			Code:     f.Code,
@@ -1329,10 +1278,10 @@ func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo
 			FriendlyName:     ep.FriendlyName,
 			Clusters:         []handlers.MatterEndpointCluster{},
 		}
-		if name, ok := matterschema.DeviceTypeName(uint32(ep.DeviceType)); ok {
+		if name, ok := matterschema.DeviceTypeName(matterschema.DeviceTypeID(ep.DeviceType)); ok {
 			info.DeviceTypeName = name
 		}
-		if rev, ok := matterschema.DeviceTypeRevision(uint32(ep.DeviceType)); ok {
+		if rev, ok := matterschema.DeviceTypeRevision(matterschema.DeviceTypeID(ep.DeviceType)); ok {
 			info.DeviceTypeRevision = rev
 		}
 		info.DeviceAddress = ep.DeviceAddress
@@ -1384,7 +1333,7 @@ func (r matterCompatibilityReporter) MatterCompatibility() handlers.MatterCompat
 
 	var vendorIDs []uint16
 	if r.fabrics != nil {
-		if recs, err := r.fabrics.ListFabrics(context.Background()); err == nil {
+		if recs, err := r.fabrics.FabricInfos(context.Background()); err == nil {
 			for _, rec := range recs {
 				vendorIDs = append(vendorIDs, rec.VendorID)
 				out.Ecosystems = append(out.Ecosystems, handlers.MatterEcosystem{
@@ -1430,10 +1379,36 @@ func (r matterCompatibilityReporter) MatterCompatibility() handlers.MatterCompat
 // so the Matter subtree needs no dependency on the tracker package.
 type matterHealthRecorder struct{ t *health.Tracker }
 
-func (r matterHealthRecorder) Record(name string, s matterbridge.HealthSample) {
+func (r matterHealthRecorder) Record(name string, s node.HealthSample) {
 	r.t.Record(name, health.Sample{Healthy: s.Healthy, Note: s.Note})
 }
 
-func (r matterHealthRecorder) RecordUnhealthy(name string, s matterbridge.HealthSample) {
+func (r matterHealthRecorder) RecordUnhealthy(name string, s node.HealthSample) {
 	r.t.RecordUnhealthy(name, health.Sample{Healthy: s.Healthy, Note: s.Note})
+}
+
+// matterHealthComponent is the tracker component the probe reports under,
+// the name the bridge's own probe uses (go-fabric
+// bridge/health_probe.go:17, HealthComponentName).
+const matterHealthComponent = "matter"
+
+// onSample routes one verdict of the node's probe: an unhealthy one is a
+// condition the probe states rather than a sample, recorded at once past
+// the tracker's flap damping, as the bridge's probe recorded it
+// (bridge/health_probe.go:113-129).
+func (r matterHealthRecorder) onSample(s node.HealthSample) {
+	if s.Healthy {
+		r.Record(matterHealthComponent, s)
+		return
+	}
+	r.RecordUnhealthy(matterHealthComponent, s)
+}
+
+// matterHealth configures the node's health probe at the default cadence
+// over t; a nil tracker runs none.
+func matterHealth(t *health.Tracker) node.Health {
+	if t == nil {
+		return node.Health{}
+	}
+	return node.Health{OnSample: matterHealthRecorder{t}.onSample}
 }

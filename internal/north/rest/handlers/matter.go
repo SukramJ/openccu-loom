@@ -11,10 +11,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/SukramJ/go-fabric/diagevent"
 	"github.com/SukramJ/go-fabric/eligibility"
+	"github.com/SukramJ/go-fabric/node"
 	"github.com/SukramJ/go-fabric/secure/setup"
-	"github.com/SukramJ/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -226,9 +225,10 @@ func matterOpenCommissioningWindow(opener MatterCommissioningOpener, publisher M
 }
 
 // MatterFabricStore is the narrow facade GET /api/v1/matter/fabrics
-// needs. Implemented by *matter/store.Store; tests use a fake.
+// needs. Implemented by the node facade (node.Node.FabricInfos); tests
+// use a fake.
 type MatterFabricStore interface {
-	ListFabrics(ctx context.Context) ([]store.FabricRecord, error)
+	FabricInfos(ctx context.Context) ([]node.FabricInfo, error)
 }
 
 // MatterFabricResponse is one entry in GET /api/v1/matter/fabrics.
@@ -272,7 +272,7 @@ func MatterFabrics(s MatterFabricStore) http.HandlerFunc {
 					"north.matter.enabled is false in the daemon config"))
 			return
 		}
-		recs, err := s.ListFabrics(req.Context())
+		recs, err := s.FabricInfos(req.Context())
 		if err != nil {
 			problem.WriteFromError(w, req, err)
 			return
@@ -288,7 +288,7 @@ func MatterFabrics(s MatterFabricStore) http.HandlerFunc {
 				VendorID:      r.VendorID,
 				VendorName:    eligibility.VendorName(r.VendorID),
 				Label:         r.Label,
-				CompressedID:  hex.EncodeToString(r.CompressedID[:]),
+				CompressedID:  hex.EncodeToString(r.CompressedFabricID[:]),
 				RootPublicKey: hex.EncodeToString(r.RootPublicKey),
 			})
 		}
@@ -553,7 +553,7 @@ func MatterCompatibilityHandler(r MatterCompatibilityReporter) http.HandlerFunc 
 // MatterDiagnosticEventReporter is the narrow facade
 // GET /api/v1/matter/events needs. Implemented by the bridge.
 type MatterDiagnosticEventReporter interface {
-	DiagnosticEvents() []diagevent.Event
+	DiagnosticEvents() []node.DiagnosticEvent
 }
 
 // MatterDiagnosticEventResponse is one entry in GET /api/v1/matter/events.

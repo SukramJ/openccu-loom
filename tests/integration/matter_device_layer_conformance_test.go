@@ -11,6 +11,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -20,7 +21,11 @@ import (
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // acceptedCategoryDeviceTypeViolations declares known device-type conformance
@@ -31,20 +36,54 @@ var acceptedCategoryDeviceTypeViolations = map[string]string{
 	"SmokeCoAlarm|device:PowerSource|instanceCount": "finding: the smoke siren endpoint has no PowerSource composition in the smoke fleet, see report",
 }
 
+// makeTemperatureSensorDevice returns a device whose temperature channel
+// carries the shape CCU hydration produces for an analog parameter: a
+// read-only float VALUES data point, which the assembler builds as a
+// sensor endpoint from its measurement class.
+func makeTemperatureSensorDevice(addr, name string) *device.Device {
+	dev := device.New(device.Config{Address: addr, Name: name})
+	ch := dev.AddChannel(addr+":1", 1, "SENSOR", hmenum.ParamsetKeyValues)
+	ch.Put(generic.NewFloatSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "iface",
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterActualTemperature),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			Min:        json.RawMessage("-40.0"),
+			Max:        json.RawMessage("80.0"),
+		},
+	}))
+	return dev
+}
+
 func buildCategoryFleetTopology(t *testing.T) *endpoint.Topology {
 	t.Helper()
 	devs := []*device.Device{
 		makeSmokeOnOffDevice("DLAYER_ONOFF", "OnOff"),
-		makeSmokeTempDevice("DLAYER_TEMP", "Temp"),
+		makeTemperatureSensorDevice("DLAYER_TEMP", "Temp"),
 		makeSmokeClimateDevice("DLAYER_CLIM", "Climate"),
 		makeSmokeLockDevice("DLAYER_LOCK", "Lock"),
 		makeSmokeCoverDevice("DLAYER_COVR", "Cover"),
 		makeSmokeColorLightDevice("DLAYER_COLR", "ColorLight"),
 		makeSmokeSmokeSirenDevice("DLAYER_SMOK", "SmokeSiren"),
 	}
-	return buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
+	cfg := smokeValidConfig(t)
+	cfg.IncludeMeasurements = true
+	a, err := matteradapter.New(newSmokeFakeStore(), cfg, nil)
+	if err != nil {
+		t.Fatalf("matteradapter.New: %v", err)
+	}
+	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: devs, ModelComplete: true},
 	})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	return top
 }
 
 func TestMatterDeviceLayerBuildsEveryCategoryEndpoint(t *testing.T) {
@@ -53,11 +92,23 @@ func TestMatterDeviceLayerBuildsEveryCategoryEndpoint(t *testing.T) {
 	if len(bridged) == 0 {
 		t.Fatal("no bridged endpoints assembled")
 	}
+	// Both shapes go through the device layer: cluster-serving endpoints
+	// and sensor endpoints built from their measurement.
+	var servers, sensors int
 	for _, ep := range bridged {
 		if _, ok := ep.Source.(interface{ Spec() endpoint.Spec }); !ok {
 			t.Errorf("endpoint %d (device type 0x%04X) source %T is not built through the device layer",
 				ep.ID, ep.DeviceType, ep.Source)
+			continue
 		}
+		if ep.Measurement != nil {
+			sensors++
+		} else {
+			servers++
+		}
+	}
+	if servers == 0 || sensors == 0 {
+		t.Errorf("cluster-serving endpoints = %d, sensor endpoints = %d; the category fleet must exercise both", servers, sensors)
 	}
 }
 

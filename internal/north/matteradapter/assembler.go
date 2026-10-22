@@ -15,6 +15,7 @@ import (
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/groups"
+	"github.com/SukramJ/go-fabric/schema"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -54,7 +55,7 @@ type Config struct {
 	// NodeLabels persists the BridgedDeviceBasicInformation NodeLabel a
 	// controller writes on a bridged endpoint and hands it back on the
 	// next assembly ([endpoint.Config.OnNodeLabelWritten],
-	// [fabricdevice.Options.NodeLabel]) — matter.js keeps a written
+	// [endpoint.Spec.NodeLabel]) — matter.js keeps a written
 	// nodeLabel in the endpoint's persisted state. nil keeps a written
 	// label for the life of the process only.
 	NodeLabels NodeLabelStore
@@ -167,8 +168,8 @@ type Assembler struct {
 // renamed. go-fabric's node.EndpointPersistence is the production
 // implementation, the same one the daemon hands the facade.
 type NodeLabelStore interface {
-	OnNodeLabelWritten(key endpoint.SourceKey, label string)
-	NodeLabel(ctx context.Context, key endpoint.SourceKey) string
+	OnNodeLabelWritten(key fabricdevice.SourceKey, label string)
+	NodeLabel(ctx context.Context, key fabricdevice.SourceKey) string
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -194,7 +195,7 @@ func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) 
 		VendorName: bridgedVendorName,
 		Groups:     cfg.Groups,
 		Scenes:     cfg.Scenes,
-		OnNodeLabelWritten: func(key endpoint.SourceKey, label string) {
+		OnNodeLabelWritten: func(key fabricdevice.SourceKey, label string) {
 			if cfg.NodeLabels != nil {
 				cfg.NodeLabels.OnNodeLabelWritten(key, label)
 			}
@@ -822,15 +823,17 @@ type specInput struct {
 // deviceSpec builds the endpoint through go-fabric's device layer: the
 // generated type for the advertised device type id carries what
 // matter.js's devices/*.ts state (mandatory clusters, mandated features,
-// constraints), the source's own cluster servers are supplied with
-// [fabricdevice.WithServer] exactly as they were served before, a
-// measurement with [fabricdevice.WithMeasurement], and the source's
+// constraints). A source's own cluster servers are declared with
+// [fabricdevice.HostServer] exactly as they were served before, and its
 // change notifier with [fabricdevice.WithChangeNotifier] so the bridge
-// keeps hearing the model's confirmed updates. The assembler path is the
-// same for both shapes (go-fabric endpoint/materialize.go
-// ClusterServers): the cluster set, revisions, FeatureMaps and the
-// UniqueID input are unchanged; what the device adds is device-type
-// validation, the persisted NodeLabel and the type's client clusters.
+// keeps hearing the model's confirmed updates; a measurement is declared
+// with [fabricdevice.Measurement], whose clusters the endpoint assembler
+// materialises once the endpoint number is known. The cluster set,
+// revisions, FeatureMaps and the UniqueID input are unchanged; what the
+// device adds is device-type validation and the type's client clusters.
+//
+// The persisted NodeLabel is set on the spec the way go-fabric's own
+// Aggregator restores it (node/aggregator.go:366-367).
 //
 // A device type the generated layer does not carry, or a composition it
 // refuses, falls back to the hand-built Spec and is logged once per
@@ -838,17 +841,22 @@ type specInput struct {
 // finding — the finding is reported through the bridge's device-type
 // validator, which judges the hand-built Spec too.
 func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec {
+	var label string
+	if a.cfg.NodeLabels != nil {
+		label = a.cfg.NodeLabels.NodeLabel(ctx, in.key)
+	}
 	handBuilt := endpoint.Spec{
 		StableKey:      in.key,
 		DeviceAddress:  in.dev.Address,
 		DeviceType:     in.deviceType,
 		FriendlyName:   in.friendlyName,
+		NodeLabel:      label,
 		ChannelAddress: in.ch.Address,
 		Availability:   in.dev.Available,
 		Source:         in.source,
 		Measurement:    in.measurement,
 	}
-	t, ok := fabricdevice.TypeByID(in.deviceType)
+	t, ok := fabricdevice.TypeByID(schema.DeviceTypeID(in.deviceType))
 	if !ok {
 		a.logFallback(in.deviceType, "device type not in the generated device layer", nil)
 		return handBuilt
@@ -860,30 +868,29 @@ func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec 
 		ChannelAddress: in.ch.Address,
 		Reachable:      in.dev.Available,
 	}
-	if a.cfg.NodeLabels != nil {
-		opts.NodeLabel = a.cfg.NodeLabels.NodeLabel(ctx, in.key)
-	}
-	var with []fabricdevice.Option
+	var decls []fabricdevice.Declaration
 	if in.source != nil {
 		for _, srv := range in.source.MatterClusterServers() {
 			if srv == nil {
 				continue
 			}
-			with = append(with, fabricdevice.WithServer(srv))
+			decls = append(decls, fabricdevice.HostServer(srv))
 		}
 		if n, ok := in.source.(contract.ChangeNotifier); ok {
-			with = append(with, fabricdevice.WithChangeNotifier(n))
+			decls = append(decls, fabricdevice.WithChangeNotifier(n))
 		}
 	}
 	if in.measurement != nil {
-		with = append(with, fabricdevice.WithMeasurement(in.measurement))
+		decls = append(decls, fabricdevice.Measurement(in.measurement))
 	}
-	d, err := fabricdevice.New(t, opts, with...)
+	d, err := fabricdevice.New(t, opts, decls...)
 	if err != nil {
 		a.logFallback(in.deviceType, "device layer refused the composition", err)
 		return handBuilt
 	}
-	return d.Spec()
+	spec := d.Spec()
+	spec.NodeLabel = label
+	return spec
 }
 
 // logFallback reports a hand-built Spec once per device type.

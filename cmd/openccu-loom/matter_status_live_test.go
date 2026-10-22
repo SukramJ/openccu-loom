@@ -37,8 +37,7 @@ func TestMatterStatusAdapter_WithLiveBridge_Enabled(t *testing.T) {
 
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
-		bridge:  bundle.bridge,
-		store:   bundle.store,
+		node:    bundle.node,
 		window:  nil,
 		cfg:     &matterStatusConfig{advertising: true},
 	}
@@ -90,8 +89,7 @@ func TestMatterStatusAdapter_WithStore_EmptyFabrics(t *testing.T) {
 
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
-		bridge:  bundle.bridge,
-		store:   bundle.store,
+		node:    bundle.node,
 		window:  nil,
 		cfg:     nil,
 	}

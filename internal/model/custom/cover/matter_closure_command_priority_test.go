@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -53,18 +54,18 @@ func (w *closurePriorityWriter) priorities() []hmenum.CommandPriority {
 // it.
 func TestClosureCommandsReachTheWriterAtHighPriority(t *testing.T) {
 	t.Parallel()
-	open := clusterwire.ClosureTargetPositionMoveToFullyOpen
-	closed := clusterwire.ClosureTargetPositionMoveToFullyClosed
-	vent := clusterwire.ClosureTargetPositionMoveToVentilationPosition
+	open := closuredef.TargetPositionMoveToFullyOpen
+	closed := closuredef.TargetPositionMoveToFullyClosed
+	vent := closuredef.TargetPositionMoveToVentilationPosition
 
 	for _, c := range []struct {
 		what   string
 		cmdID  uint32
 		fields any
 	}{
-		{"MoveTo fully open", clusterwire.ClosureControlCmdMoveTo, clusterwire.MoveToRequest{Position: &open}},
-		{"MoveTo fully closed", clusterwire.ClosureControlCmdMoveTo, clusterwire.MoveToRequest{Position: &closed}},
-		{"MoveTo ventilation", clusterwire.ClosureControlCmdMoveTo, clusterwire.MoveToRequest{Position: &vent}},
+		{"MoveTo fully open", clusterwire.ClosureControlCmdMoveTo, closuredef.MoveToRequest{Position: &open}},
+		{"MoveTo fully closed", clusterwire.ClosureControlCmdMoveTo, closuredef.MoveToRequest{Position: &closed}},
+		{"MoveTo ventilation", clusterwire.ClosureControlCmdMoveTo, closuredef.MoveToRequest{Position: &vent}},
 		{"Stop", clusterwire.ClosureControlCmdStop, nil},
 	} {
 		w := &closurePriorityWriter{}

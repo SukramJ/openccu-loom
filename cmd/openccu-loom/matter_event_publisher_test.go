@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/store"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -95,11 +95,11 @@ func TestMatterEventPublisher_WithHub_PublishDoesNotPanic(t *testing.T) {
 // stubFabricStore serves one persisted fabric, the way the Matter store does
 // once AddNOC has written it — which is before OnFabricInstalled fires.
 type stubFabricStore struct {
-	recs []store.FabricRecord
+	recs []node.FabricInfo
 	err  error
 }
 
-func (s stubFabricStore) ListFabrics(context.Context) ([]store.FabricRecord, error) {
+func (s stubFabricStore) FabricInfos(context.Context) ([]node.FabricInfo, error) {
 	return s.recs, s.err
 }
 
@@ -112,10 +112,10 @@ func TestPublishFabricAddedCarriesTheDeclaredFabricIdentity(t *testing.T) {
 	t.Parallel()
 	hub := ws.NewHub()
 	hub.SetReplayCapacity(4)
-	recs := []store.FabricRecord{
+	recs := []node.FabricInfo{
 		{
 			FabricIndex: 7, FabricID: 0xAABB, NodeID: 0xCCDD, VendorID: 0x1349, Label: "Apple Home",
-			CompressedID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, RootPublicKey: []byte{4, 9, 9},
+			CompressedFabricID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, RootPublicKey: []byte{4, 9, 9},
 		},
 		{FabricIndex: 2, FabricID: 1, NodeID: 1},
 	}
@@ -159,10 +159,10 @@ func TestPublishFabricAddedCarriesTheHexIdentifiers(t *testing.T) {
 	t.Parallel()
 	hub := ws.NewHub()
 	hub.SetReplayCapacity(4)
-	recs := []store.FabricRecord{
+	recs := []node.FabricInfo{
 		{
 			FabricIndex: 7, FabricID: 0xAABB, NodeID: 0xCCDD, VendorID: 0x1349, Label: "Apple Home",
-			CompressedID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, RootPublicKey: []byte{4, 9, 9},
+			CompressedFabricID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, RootPublicKey: []byte{4, 9, 9},
 		},
 	}
 	pub := &matterEventPublisher{hub: hub, fabrics: stubFabricStore{recs: recs}}
@@ -250,7 +250,7 @@ func TestPublishFabricAddedStillEmitsWhenTheFabricIsNotInTheList(t *testing.T) {
 	hub := ws.NewHub()
 	hub.SetReplayCapacity(4)
 	pub := &matterEventPublisher{hub: hub, fabrics: stubFabricStore{
-		recs: []store.FabricRecord{{FabricIndex: 9}}, // a different fabric
+		recs: []node.FabricInfo{{FabricIndex: 9}}, // a different fabric
 	}}
 
 	pub.publishFabricAdded(3)

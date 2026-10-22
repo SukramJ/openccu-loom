@@ -4,7 +4,7 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -19,9 +19,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric/node"
 	"github.com/SukramJ/go-fabric/secure/attestation"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
 // writePEMCert writes an ECDSA cert (self-signed) and returns the DER bytes +
@@ -86,17 +88,36 @@ func newP256Key(t *testing.T) *ecdsa.PrivateKey {
 	return k
 }
 
+// startWithAttestation boots the bridge with mutate's attestation files,
+// the path a configured chain travels: matterAttestation hands the files to
+// the node facade, which loads them (node.Attestation.Files).
+func startWithAttestation(t *testing.T, mutate func(a *config.NorthMatterAttestation)) *matterBridgeBundle {
+	t.Helper()
+	cfg := matterTestConfig(t, "ccu-attestation")
+	mutate(&cfg.North.Matter.Attestation)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-attestation"), openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Fatal("startMatterBridge returned nil; a chain that does not load must leave the bridge running")
+	}
+	t.Cleanup(bundle.stop)
+	return bundle
+}
+
 // TestMatterAttestationRefusesAPartialChain: a configuration naming only
-// some of the attestation files is an error, not a silent switch to the
-// test chain.
+// some of the attestation files is an error that blocks commissioning, not
+// a silent switch to the test chain.
 func TestMatterAttestationRefusesAPartialChain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	_, dacPath := writePEMCert(t, dir, newP256Key(t), "dac")
-	mc := config.NorthMatter{}
-	mc.Attestation.DACPath = dacPath
-	if _, err := matterAttestation(mc, slog.New(slog.DiscardHandler)); err == nil {
-		t.Fatal("matterAttestation with only a DAC path returned no error, want a refusal")
+	bundle := startWithAttestation(t, func(a *config.NorthMatterAttestation) { a.DACPath = dacPath })
+	if bundle.commissioningBlocked == nil {
+		t.Fatal("a chain with only a DAC path left commissioning open, want it blocked")
+	}
+	if bundle.node.AttestationError() == nil {
+		t.Fatal("node.AttestationError is nil for a chain with only a DAC path")
 	}
 }
 
@@ -112,45 +133,38 @@ func TestMatterAttestationRefusesAKeyThatIsNotTheDACs(t *testing.T) {
 	keyPath := writePEMKey(t, dir, newP256Key(t), "other-key")
 	cdPath := filepath.Join(dir, "cd.der")
 	mustWrite(t, cdPath, []byte{0x30, 0x03, 0x02, 0x01, 0x01})
-	mc := config.NorthMatter{}
-	mc.Attestation.DACPath = dacPath
-	mc.Attestation.DACKeyPath = keyPath
-	mc.Attestation.PAIPath = paiPath
-	mc.Attestation.CDPath = cdPath
-	_, err := matterAttestation(mc, slog.New(slog.DiscardHandler))
-	if !errors.Is(err, attestation.ErrKeyMismatch) {
-		t.Fatalf("matterAttestation with a foreign key = %v, want attestation.ErrKeyMismatch", err)
+	bundle := startWithAttestation(t, func(a *config.NorthMatterAttestation) {
+		a.DACPath, a.DACKeyPath, a.PAIPath, a.CDPath = dacPath, keyPath, paiPath, cdPath
+	})
+	if !errors.Is(bundle.commissioningBlocked, attestation.ErrKeyMismatch) {
+		t.Fatalf("commissioning blocked by %v, want attestation.ErrKeyMismatch", bundle.commissioningBlocked)
 	}
 }
 
 // TestMatterAttestationServesAConfiguredChain: a consistent DAC / key /
-// PAI / CD reaches the node verbatim.
+// PAI / CD reaches the node verbatim and leaves commissioning open.
 func TestMatterAttestationServesAConfiguredChain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	dacKey := newP256Key(t)
-	dacDER, dacPath := writePEMCert(t, dir, dacKey, "dac")
-	paiDER, paiPath := writePEMCert(t, dir, newP256Key(t), "pai")
+	_, dacPath := writePEMCert(t, dir, dacKey, "dac")
+	_, paiPath := writePEMCert(t, dir, newP256Key(t), "pai")
 	keyPath := writePEMKey(t, dir, dacKey, "dac-key")
-	cd := []byte{0x30, 0x03, 0x02, 0x01, 0x01}
 	cdPath := filepath.Join(dir, "cd.der")
-	mustWrite(t, cdPath, cd)
+	mustWrite(t, cdPath, []byte{0x30, 0x03, 0x02, 0x01, 0x01})
+	set := func(a *config.NorthMatterAttestation) {
+		a.DACPath, a.DACKeyPath, a.PAIPath, a.CDPath = dacPath, keyPath, paiPath, cdPath
+	}
 	mc := config.NorthMatter{}
-	mc.Attestation.DACPath = dacPath
-	mc.Attestation.DACKeyPath = keyPath
-	mc.Attestation.PAIPath = paiPath
-	mc.Attestation.CDPath = cdPath
-	got, err := matterAttestation(mc, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("matterAttestation: %v", err)
+	set(&mc.Attestation)
+	got := matterAttestation(mc, slog.New(slog.DiscardHandler))
+	if got.Files == nil || *got.Files != (node.AttestationFiles{DACPath: dacPath, DACKeyPath: keyPath, PAIPath: paiPath, CDPath: cdPath}) {
+		t.Fatalf("attestation files = %+v, want the configured paths verbatim", got.Files)
 	}
-	if got.Chain == nil {
-		t.Fatal("matterAttestation returned no chain for a configured one")
+	if !got.BlockCommissioningOnError {
+		t.Fatal("BlockCommissioningOnError is false: a chain that does not load would fail node.New and take the bridge down")
 	}
-	if !bytes.Equal(got.Chain.DAC, dacDER) || !bytes.Equal(got.Chain.PAI, paiDER) {
-		t.Fatal("the served DAC / PAI are not the configured certificates")
-	}
-	if !bytes.Equal(got.CertificationDeclaration, cd) {
-		t.Fatalf("CertificationDeclaration = %x, want %x", got.CertificationDeclaration, cd)
+	if bundle := startWithAttestation(t, set); bundle.commissioningBlocked != nil {
+		t.Fatalf("a consistent chain blocked commissioning: %v", bundle.commissioningBlocked)
 	}
 }

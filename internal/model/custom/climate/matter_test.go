@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/go-fabric/cluster"
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 	"github.com/SukramJ/go-fabric/cluster/thermo"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -191,7 +192,7 @@ func TestThermostatConfirmedSetpointReachesTheServer(t *testing.T) {
 	})
 	srv := thermostatServer(t, r.climate)
 	reported := make(chan []uint32, 4)
-	unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+	unsub := srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })
 	defer unsub()
 
 	r.setpoint.OnEvent(19.5)
@@ -243,7 +244,7 @@ func TestThermostatModeRecordersReachTheServer(t *testing.T) {
 		r.setpoint.OnEvent(20.0)
 		srv := thermostatServer(t, r.climate)
 		reported := make(chan []uint32, 4)
-		unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+		unsub := srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })
 		defer unsub()
 		r.climate.OnSetPointMode(1) // MANU → ModeHeat
 		if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeHeat {

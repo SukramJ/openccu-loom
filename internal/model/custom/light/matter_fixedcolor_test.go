@@ -64,7 +64,7 @@ func TestFixedColorLightMoveToHueAndSaturationSnapsToTheSlot(t *testing.T) {
 	srv := colorServer(t, l)
 
 	// 100° (Matter 71) is in the GREEN band.
-	req := wire.MoveToHueAndSaturationRequest{Hue: hueToMatter(100), Saturation: 254}
+	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: hueToMatter(100), Saturation: 254}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestFixedColorLightLowSaturationWritesWhite(t *testing.T) {
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
 
-	req := wire.MoveToHueAndSaturationRequest{Hue: hueToMatter(240), Saturation: 5}
+	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: hueToMatter(240), Saturation: 5}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestFixedColorLightGatedWhileOff(t *testing.T) {
 	l.OnLevel(offLevel)
 	srv := colorServer(t, l)
 
-	req := wire.MoveToHueAndSaturationRequest{Hue: 0, Saturation: 254}
+	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 0, Saturation: 254}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("gated MoveToHueAndSaturation returned error: %v", err)
 	}

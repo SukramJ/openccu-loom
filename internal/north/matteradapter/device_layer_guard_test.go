@@ -48,18 +48,34 @@ func assembleGolden(t *testing.T) *endpoint.Topology {
 
 // TestEveryBridgedEndpointIsBuiltThroughTheDeviceLayer pins that the
 // assembler hands every bridged endpoint the go-fabric device layer's spec
-// source, not a hand-built loom profile.
+// source, not a hand-built loom profile: the cluster-serving endpoints
+// (their servers declared with device.HostServer) and the sensor endpoints
+// (their measurement declared with device.Measurement) alike. A hand-built
+// endpoint is a composition the device layer refused, which the assembler
+// only logs.
 func TestEveryBridgedEndpointIsBuiltThroughTheDeviceLayer(t *testing.T) {
 	top := assembleGolden(t)
 	bridged := top.Bridged()
 	if len(bridged) != goldenBridgedEndpointCount {
 		t.Errorf("bridged endpoints = %d, want %d (an endpoint was lost or added)", len(bridged), goldenBridgedEndpointCount)
 	}
+	var servers, sensors int
 	for _, ep := range bridged {
 		if _, ok := ep.Source.(interface{ Spec() endpoint.Spec }); !ok {
 			t.Errorf("endpoint %d (device type 0x%04X) source %T is not built through the device layer",
 				ep.ID, ep.DeviceType, ep.Source)
+			continue
 		}
+		if ep.Measurement != nil {
+			sensors++
+		} else {
+			servers++
+		}
+	}
+	// The golden fleet has both shapes; a fleet where one of them vanished
+	// would let this guard pass without judging that shape at all.
+	if servers == 0 || sensors == 0 {
+		t.Errorf("cluster-serving endpoints = %d, sensor endpoints = %d; the golden fleet must exercise both", servers, sensors)
 	}
 }
 

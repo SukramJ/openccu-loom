@@ -11,6 +11,7 @@ import (
 	fabriclight "github.com/SukramJ/go-fabric/cluster/light"
 	colorcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
 	"github.com/SukramJ/go-fabric/cluster/wire"
+	"github.com/SukramJ/go-fabric/contract"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -225,7 +226,7 @@ func TestColorTempServerMoveToColorTemperatureReachesTheCCU(t *testing.T) {
 	l := newCTLight(t, w)
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
-	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
+	req := colorcontrolspec.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("MoveToColorTemperature: %v", err)
 	}
@@ -251,7 +252,7 @@ func TestColorTempServerMoveToColorTemperatureGatedWhileOff(t *testing.T) {
 	l.OnLevel(offLevel)
 	srv := colorServer(t, l)
 
-	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
+	req := colorcontrolspec.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("gated MoveToColorTemperature returned error: %v", err)
 	}
@@ -277,7 +278,7 @@ func TestColorTempServerConfirmedKelvinReachesTheServer(t *testing.T) {
 	l := newCTLight(t, w)
 	srv := colorServer(t, l)
 	reported := make(chan []uint32, 4)
-	unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+	unsub := srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })
 	defer unsub()
 
 	l.kelvin.OnEvent(int32(4000))
@@ -367,7 +368,7 @@ func TestColorLightMoveToHueAndSaturationReachesTheCCU(t *testing.T) {
 	l := newHSLight(t, w)
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
-	req := wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
+	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
@@ -391,7 +392,7 @@ func TestColorLightMoveToHueAndSaturationGatedWhileOff(t *testing.T) {
 	l.OnLevel(offLevel)
 	srv := colorServer(t, l)
 
-	req := wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
+	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("gated MoveToHueAndSaturation returned error: %v", err)
 	}
@@ -598,7 +599,7 @@ func TestRGBWLightMoveToColorTemperatureWritesOnlyTheColourTemperature(t *testin
 	l.recordMode("RGBW")
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
-	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
+	req := colorcontrolspec.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("MoveToColorTemperature: %v", err)
 	}
@@ -624,7 +625,7 @@ func TestRGBWLightMoveToHueWritesTheColour(t *testing.T) {
 	l.recordMode("RGBW")
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
-	req := wire.MoveToHueRequest{Hue: 127}
+	req := colorcontrolspec.MoveToHueRequest{Hue: 127}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHue, req); err != nil {
 		t.Fatalf("MoveToHue: %v", err)
 	}
@@ -681,7 +682,7 @@ func TestRGBWLightOperatingModeChangeMovesTheServer(t *testing.T) {
 	l.kelvin.OnEvent(int32(4000))
 	srv := colorServer(t, l)
 	reported := make(chan []uint32, 8)
-	unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+	unsub := srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })
 	defer unsub()
 
 	l.recordMode("2_TUNABLE_WHITE")
@@ -751,7 +752,7 @@ func TestRGBWCombinedLightColorModeFollowsTheConfirmedAxis(t *testing.T) {
 		t.Fatalf("ColorMode with the CT axis active = %d, want 2 (CT)", m)
 	}
 
-	req := wire.MoveToHueAndSaturationRequest{Hue: 20, Saturation: 254}
+	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 20, Saturation: 254}
 	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}

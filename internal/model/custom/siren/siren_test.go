@@ -793,7 +793,7 @@ func TestSmokeSirenMatterDeviceType(t *testing.T) {
 	t.Parallel()
 
 	s, _, _ := newSmokeSirenRig(t)
-	if got := s.MatterDeviceType(); got != fabricdevice.SmokeCoAlarmID {
+	if got := s.MatterDeviceType(); got != uint16(fabricdevice.SmokeCoAlarmID) {
 		t.Errorf("SmokeSiren.MatterDeviceType() = 0x%04X, want 0x%04X", got, fabricdevice.SmokeCoAlarmID)
 	}
 }

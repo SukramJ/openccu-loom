@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/go-fabric/cluster/closure"
+	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -69,16 +70,16 @@ func closureStateFor(state DoorState) *clusterwire.ClosureCurrentPosition {
 //
 // Only the three the advertised feature set carries appear; the cluster
 // server refuses the rest before a request reaches this far.
-func closureCommandFor(target clusterwire.ClosureTargetPosition) (DoorCommand, bool) {
+func closureCommandFor(target closuredef.TargetPositionEnum) (DoorCommand, bool) {
 	switch target {
-	case clusterwire.ClosureTargetPositionMoveToFullyClosed:
+	case closuredef.TargetPositionMoveToFullyClosed:
 		return DoorCommandClose, true
-	case clusterwire.ClosureTargetPositionMoveToFullyOpen:
+	case closuredef.TargetPositionMoveToFullyOpen:
 		return DoorCommandOpen, true
-	case clusterwire.ClosureTargetPositionMoveToVentilationPosition:
+	case closuredef.TargetPositionMoveToVentilationPosition:
 		return DoorCommandPartialOpen, true
-	case clusterwire.ClosureTargetPositionMoveToPedestrianPosition,
-		clusterwire.ClosureTargetPositionMoveToSignaturePosition:
+	case closuredef.TargetPositionMoveToPedestrianPosition,
+		closuredef.TargetPositionMoveToSignaturePosition:
 		return "", false
 	default:
 		return "", false
@@ -89,24 +90,31 @@ func closureCommandFor(target clusterwire.ClosureTargetPosition) (DoorCommand, b
 // seeds it with whatever the drive has already reported.
 func newGarageClosureServer(g *Garage) *garageClosureServer {
 	p := &garageClosureServer{g: g}
-	p.srv = closure.NewControlServer(closure.Config{
-		// The handlers name matterDispatchPriority themselves: the cluster
-		// contract carries no priority, and Critical is the zero value of
-		// the command-priority enum, so a value left to travel implicitly
-		// would escalate rather than degrade.
-		Move: func(ctx context.Context, target clusterwire.ClosureTargetPosition) error {
-			command, ok := closureCommandFor(target)
-			if !ok {
-				return errMatterUnknownCommand
-			}
-			return g.command(ctx, command, matterDispatchPriority)
-		},
-		Stop: func(ctx context.Context) error {
-			return g.Stop(ctx, matterDispatchPriority)
-		},
-	})
+	p.srv = closure.NewControlServer(closure.Config{Mover: garageMover{g: g}})
 	p.publish()
 	return p
+}
+
+// garageMover is the ClosureControl server's drive port over a Garage.
+//
+// Both methods name matterDispatchPriority themselves: the cluster
+// contract carries no priority, and Critical is the zero value of the
+// command-priority enum, so a value left to travel implicitly would
+// escalate rather than degrade.
+type garageMover struct{ g *Garage }
+
+// MoveTo implements [closure.Mover].
+func (m garageMover) MoveTo(ctx context.Context, target closuredef.TargetPositionEnum) error {
+	command, ok := closureCommandFor(target)
+	if !ok {
+		return errMatterUnknownCommand
+	}
+	return m.g.command(ctx, command, matterDispatchPriority)
+}
+
+// Stop implements [closure.Mover].
+func (m garageMover) Stop(ctx context.Context) error {
+	return m.g.Stop(ctx, matterDispatchPriority)
 }
 
 // publish pushes the drive's current state into the cluster server.
