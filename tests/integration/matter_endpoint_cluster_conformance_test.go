@@ -72,7 +72,7 @@ var bridgeMountedClusters = map[uint32]string{
 // endpointAllowsServerCluster reports whether a bridged endpoint whose primary
 // device type is deviceType may serve clusterID, taking the BridgedNode
 // secondary type into account.
-func endpointAllowsServerCluster(deviceType, clusterID uint32) bool {
+func endpointAllowsServerCluster(deviceType schema.DeviceTypeID, clusterID uint32) bool {
 	if allowed, _ := schema.DeviceTypeAllowsServerCluster(deviceType, clusterID); allowed {
 		return true
 	}
@@ -102,7 +102,7 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 	devices := hydrateFleetForMatterConformance(t)
 
 	type finding struct {
-		deviceType uint32
+		deviceType schema.DeviceTypeID
 		clusterID  uint32
 		witness    string // a concrete model/channel to look at
 	}
@@ -127,7 +127,7 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 			}
 			sourcesSeen++
 
-			deviceType := uint32(src.MatterDeviceType())
+			deviceType := schema.DeviceTypeID(src.MatterDeviceType())
 			if deviceType == 0 {
 				t.Errorf("%s channel %d (%T) is a MatterEndpointSource declaring device type 0: its "+
 					"endpoint would advertise DeviceTypeList=[BridgedNode] with no primary type",
@@ -255,7 +255,7 @@ func hydrateFleetForMatterConformance(t *testing.T) []*device.Device {
 
 // conformanceKey renders the (device type, cluster) pair used to key
 // nonConformantEndpointClusters.
-func conformanceKey(deviceType, clusterID uint32) string {
+func conformanceKey(deviceType schema.DeviceTypeID, clusterID uint32) string {
 	return fmt.Sprintf("0x%04X/0x%04X", deviceType, clusterID)
 }
 
@@ -266,7 +266,7 @@ func clusterNameOrUnknown(id uint32) string {
 	return "unknown cluster"
 }
 
-func deviceTypeNameOrUnknown(id uint32) string {
+func deviceTypeNameOrUnknown(id schema.DeviceTypeID) string {
 	if name, ok := schema.DeviceTypeName(id); ok {
 		return name
 	}
@@ -275,7 +275,7 @@ func deviceTypeNameOrUnknown(id uint32) string {
 
 // serverClustersOf renders a device type's permitted server clusters so a
 // failure names the alternative without the reader opening the generated table.
-func serverClustersOf(deviceType uint32) string {
+func serverClustersOf(deviceType schema.DeviceTypeID) string {
 	ids, ok := schema.DeviceTypeServerClusters[deviceType]
 	if !ok || len(ids) == 0 {
 		return "(none)"
