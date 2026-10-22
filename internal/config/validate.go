@@ -15,7 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SukramJ/go-fabric/node"
+	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
+	"github.com/SukramJ/go-fabric/secure/spake2"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 )
@@ -134,8 +135,8 @@ func validateMCP(m *NorthMCP) error {
 // validateMatter checks the bridge's bind address and the commissioning
 // parameters a commissioner verifies against the spec.
 //
-// The passcode check calls [node.ValidateSetupPIN] rather than
-// re-deriving the legal set, because the helper behind it mirrors chip's
+// The passcode check calls [mattersetup.IsValidSetupPIN] rather than
+// re-deriving the legal set, because that helper mirrors chip's
 // src/crypto/CHIPCryptoPAL.cpp IsValidSetupPIN — the same authority the
 // PASE builder consults at boot. Without the check here the two ends
 // disagreed: a save of a trivial code such as 12345678 answered 200 and
@@ -147,23 +148,23 @@ func validateMatter(m *NorthMatter) error {
 	if err := validateHostPort("north.matter.listen", m.Listen); err != nil {
 		return err
 	}
-	// The bounds are the node facade's own declarations, not copies:
+	// The bounds are the owning packages' own declarations, not copies:
 	// the config field is a uint16, so an over-wide discriminator is
 	// representable here and would be truncated on the wire —
 	// commissioners then browse an mDNS subtype nobody advertises — and
 	// an iteration count outside the PBKDF window is rejected by a
 	// certified commissioner during PASE, which reaches the operator as
 	// a pairing that aborts for no stated reason.
-	if m.Discriminator > node.MaxDiscriminator {
+	if m.Discriminator > mattersetup.MaxDiscriminator {
 		return fmt.Errorf("config: north.matter.discriminator: out of range 0-%d (12-bit): %d",
-			node.MaxDiscriminator, m.Discriminator)
+			mattersetup.MaxDiscriminator, m.Discriminator)
 	}
 	if it := m.Commissioning.Iterations; it != 0 &&
-		(it < node.PBKDFIterationsMin || it > node.PBKDFIterationsMax) {
+		(it < spake2.IterationsMin || it > spake2.IterationsMax) {
 		return fmt.Errorf("config: north.matter.commissioning.iterations: out of range %d-%d (0 selects the default): %d",
-			node.PBKDFIterationsMin, node.PBKDFIterationsMax, it)
+			spake2.IterationsMin, spake2.IterationsMax, it)
 	}
-	if pc := m.Commissioning.Passcode; pc != 0 && node.ValidateSetupPIN(pc) != nil {
+	if pc := m.Commissioning.Passcode; pc != 0 && !mattersetup.IsValidSetupPIN(pc) {
 		return fmt.Errorf(
 			"config: north.matter.commissioning.passcode: %d is not a usable Matter setup code — it must be in 1-99999998 and must not be a trivially guessable code such as 11111111 or 12345678 (0 disables PASE)", pc,
 		)
