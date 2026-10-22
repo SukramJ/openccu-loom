@@ -335,7 +335,7 @@ func newSmokeRig(t *testing.T) *smokeRig {
 // device type.
 func TestSmokeSirenMatterDeviceTypeIsSmokeCOAlarm(t *testing.T) {
 	r := newSmokeRig(t)
-	if got := r.siren.MatterDeviceType(); got != fabricdevice.SmokeCoAlarmID {
+	if got := r.siren.MatterDeviceType(); got != uint16(fabricdevice.SmokeCoAlarmID) {
 		t.Fatalf("MatterDeviceType = 0x%04X, want 0x%04X", got, fabricdevice.SmokeCoAlarmID)
 	}
 }

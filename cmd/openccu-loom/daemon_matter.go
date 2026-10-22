@@ -1329,10 +1329,10 @@ func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo
 			FriendlyName:     ep.FriendlyName,
 			Clusters:         []handlers.MatterEndpointCluster{},
 		}
-		if name, ok := matterschema.DeviceTypeName(uint32(ep.DeviceType)); ok {
+		if name, ok := matterschema.DeviceTypeName(matterschema.DeviceTypeID(ep.DeviceType)); ok {
 			info.DeviceTypeName = name
 		}
-		if rev, ok := matterschema.DeviceTypeRevision(uint32(ep.DeviceType)); ok {
+		if rev, ok := matterschema.DeviceTypeRevision(matterschema.DeviceTypeID(ep.DeviceType)); ok {
 			info.DeviceTypeRevision = rev
 		}
 		info.DeviceAddress = ep.DeviceAddress

@@ -13,6 +13,8 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/spec"
+	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -169,10 +171,10 @@ func TestLevelPlainCommandsWhileOffAreSilentSuccess(t *testing.T) {
 		cmd    uint32
 		fields any
 	}{
-		{"MoveToLevel", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 100}},
-		{"Move", levelcontrol.CmdMove, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, Rate: u8(10)}},
-		{"Step", levelcontrol.CmdStep, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20}},
-		{"Stop", levelcontrol.CmdStop, levelcontrol.StopRequest{}},
+		{"MoveToLevel", levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 100, TransitionTime: spec.Nullable[uint16]{Null: true}}},
+		{"Move", levelcontrol.CmdMove, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 10}}},
+		{"Step", levelcontrol.CmdStep, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 20, TransitionTime: spec.Nullable[uint16]{Null: true}}},
+		{"Stop", levelcontrol.CmdStop, levelcontroldef.StopRequest{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -198,10 +200,10 @@ func TestLevelPlainCommandsWhileOffExecuteWithExecuteIfOff(t *testing.T) {
 		fields any
 		want   hmenum.Parameter
 	}{
-		{"MoveToLevel", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 100, OptionsMask: eio, OptionsOverride: eio}, hmenum.ParameterLevel},
-		{"Move", levelcontrol.CmdMove, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, OptionsMask: eio, OptionsOverride: eio}, hmenum.ParameterLevel},
-		{"Step", levelcontrol.CmdStep, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20, OptionsMask: eio, OptionsOverride: eio}, hmenum.ParameterLevel},
-		{"Stop", levelcontrol.CmdStop, levelcontrol.StopRequest{OptionsMask: eio, OptionsOverride: eio}, hmenum.ParameterRampStop},
+		{"MoveToLevel", levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 100, OptionsMask: levelcontroldef.OptionsBitmap(eio), OptionsOverride: levelcontroldef.OptionsBitmap(eio), TransitionTime: spec.Nullable[uint16]{Null: true}}, hmenum.ParameterLevel},
+		{"Move", levelcontrol.CmdMove, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, OptionsMask: levelcontroldef.OptionsBitmap(eio), OptionsOverride: levelcontroldef.OptionsBitmap(eio), Rate: spec.Nullable[uint8]{Null: true}}, hmenum.ParameterLevel},
+		{"Step", levelcontrol.CmdStep, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 20, OptionsMask: levelcontroldef.OptionsBitmap(eio), OptionsOverride: levelcontroldef.OptionsBitmap(eio), TransitionTime: spec.Nullable[uint16]{Null: true}}, hmenum.ParameterLevel},
+		{"Stop", levelcontrol.CmdStop, levelcontroldef.StopRequest{OptionsMask: levelcontroldef.OptionsBitmap(eio), OptionsOverride: levelcontroldef.OptionsBitmap(eio)}, hmenum.ParameterRampStop},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name+"/request override", func(t *testing.T) {
@@ -221,7 +223,7 @@ func TestLevelPlainCommandsWhileOffExecuteWithExecuteIfOff(t *testing.T) {
 		if err := levelServer(t, l).MatterWrite(context.Background(), levelcontrol.AttrOptions, uint64(eio)); err != nil {
 			t.Fatalf("MatterWrite(Options=ExecuteIfOff): %v", err)
 		}
-		invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 100})
+		invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 100, TransitionTime: spec.Nullable[uint16]{Null: true}})
 		if got := singleLevelSet(t, w.snapshot()); !near(got, matterLevelToHM(100)) {
 			t.Fatalf("MoveToLevel(100) under stored ExecuteIfOff wrote %v, want %v", got, matterLevelToHM(100))
 		}
@@ -233,7 +235,7 @@ func TestLevelPlainCommandsWhileOffExecuteWithExecuteIfOff(t *testing.T) {
 		if err := levelServer(t, l).MatterWrite(context.Background(), levelcontrol.AttrOptions, uint64(eio)); err != nil {
 			t.Fatalf("MatterWrite(Options=ExecuteIfOff): %v", err)
 		}
-		invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 100, OptionsMask: eio, OptionsOverride: 0})
+		invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 100, OptionsMask: levelcontroldef.OptionsBitmap(eio), OptionsOverride: levelcontroldef.OptionsBitmap(0), TransitionTime: spec.Nullable[uint16]{Null: true}})
 		if calls := w.snapshot(); len(calls) != 0 {
 			t.Fatalf("a mask that overrides ExecuteIfOff to 0 still reached the CCU: %+v", calls)
 		}
@@ -252,10 +254,10 @@ func TestLevelWithOnOffToMinLevelTurnsOffInOneWrite(t *testing.T) {
 		cmd    uint32
 		fields any
 	}{
-		{"MoveToLevelWithOnOff MinLevel", levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: matterLevelMinDefault}},
-		{"MoveToLevelWithOnOff 0 crops to MinLevel", levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: 0}},
-		{"MoveWithOnOff down", levelcontrol.CmdMoveWithOnOff, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeDown}},
-		{"StepWithOnOff down clamps to MinLevel", levelcontrol.CmdStepWithOnOff, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeDown, StepSize: 200}},
+		{"MoveToLevelWithOnOff MinLevel", levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: matterLevelMinDefault, TransitionTime: spec.Nullable[uint16]{Null: true}}},
+		{"MoveToLevelWithOnOff 0 crops to MinLevel", levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: 0, TransitionTime: spec.Nullable[uint16]{Null: true}}},
+		{"MoveWithOnOff down", levelcontrol.CmdMoveWithOnOff, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeDown, Rate: spec.Nullable[uint8]{Null: true}}},
+		{"StepWithOnOff down clamps to MinLevel", levelcontrol.CmdStepWithOnOff, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeDown, StepSize: 200, TransitionTime: spec.Nullable[uint16]{Null: true}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -286,9 +288,9 @@ func TestLevelWithOnOffWhileOffTurnsOnInOneWrite(t *testing.T) {
 		fields any
 		want   float64
 	}{
-		{"MoveToLevelWithOnOff", levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: 100}, matterLevelToHM(100)},
-		{"MoveWithOnOff up", levelcontrol.CmdMoveWithOnOff, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp}, 1.0},
-		{"StepWithOnOff up", levelcontrol.CmdStepWithOnOff, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20}, matterLevelToHM(20)},
+		{"MoveToLevelWithOnOff", levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: 100, TransitionTime: spec.Nullable[uint16]{Null: true}}, matterLevelToHM(100)},
+		{"MoveWithOnOff up", levelcontrol.CmdMoveWithOnOff, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Null: true}}, 1.0},
+		{"StepWithOnOff up", levelcontrol.CmdStepWithOnOff, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 20, TransitionTime: spec.Nullable[uint16]{Null: true}}, matterLevelToHM(20)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -313,7 +315,7 @@ func TestLevelPlainCommandsLeaveTheOnOffAttributeAlone(t *testing.T) {
 	l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 	l.OnLevel(0.5)
 	oo := onOffServer(t, l)
-	invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 0})
+	invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 0, TransitionTime: spec.Nullable[uint16]{Null: true}})
 	if got := singleLevelSet(t, w.snapshot()); !near(got, matterLevelToHM(matterLevelMinDefault)) {
 		t.Fatalf("plain MoveToLevel(0) wrote %v, want MinLevel %v (still on)", got, matterLevelToHM(matterLevelMinDefault))
 	}
@@ -338,17 +340,17 @@ func TestLevelTransitionTimeRampsOnlyWhenTheDeviceRamps(t *testing.T) {
 		wantLvl  float64
 		wantRamp float64
 	}{
-		{"MoveToLevel 25 tenths", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200, TransitionTime: u16(25)}, true, matterLevelToHM(200), 2.5},
-		{"MoveToLevelWithOnOff MinLevel 30 tenths", levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: 1, TransitionTime: u16(30)}, true, 0, 3.0},
-		{"Step up 15 tenths", levelcontrol.CmdStep, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20, TransitionTime: u16(15)}, true, matterLevelToHM(147), 1.5},
+		{"MoveToLevel 25 tenths", levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 200, TransitionTime: spec.Nullable[uint16]{Value: 25}}, true, matterLevelToHM(200), 2.5},
+		{"MoveToLevelWithOnOff MinLevel 30 tenths", levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: 1, TransitionTime: spec.Nullable[uint16]{Value: 30}}, true, 0, 3.0},
+		{"Step up 15 tenths", levelcontrol.CmdStep, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 20, TransitionTime: spec.Nullable[uint16]{Value: 15}}, true, matterLevelToHM(147), 1.5},
 		// A Step cropped at a bound runs the cropped distance at the rate
 		// the full step gives: matter.js stepLogic
 		// (packages/node/src/behaviors/level-control/LevelControlServer.ts:464-479)
 		// derives rate = stepSize / transitionTime * 10 = 250 levels/s, so
 		// 127 -> MinLevel 1 is 126 levels, 0.504 s, carried as 0.5 s.
-		{"StepWithOnOff down to off 10 tenths", levelcontrol.CmdStepWithOnOff, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeDown, StepSize: 250, TransitionTime: u16(10)}, true, 0, 0.5},
-		{"MoveToLevel null TransitionTime", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200}, false, matterLevelToHM(200), 0},
-		{"MoveToLevel zero TransitionTime", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200, TransitionTime: u16(0)}, false, matterLevelToHM(200), 0},
+		{"StepWithOnOff down to off 10 tenths", levelcontrol.CmdStepWithOnOff, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeDown, StepSize: 250, TransitionTime: spec.Nullable[uint16]{Value: 10}}, true, 0, 0.5},
+		{"MoveToLevel null TransitionTime", levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 200, TransitionTime: spec.Nullable[uint16]{Null: true}}, false, matterLevelToHM(200), 0},
+		{"MoveToLevel zero TransitionTime", levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 200, TransitionTime: spec.Nullable[uint16]{Value: 0}}, false, matterLevelToHM(200), 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -372,7 +374,7 @@ func TestLevelTransitionTimeRampsOnlyWhenTheDeviceRamps(t *testing.T) {
 	t.Run("no Transition capability", func(t *testing.T) {
 		l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 		l.OnLevel(0.5)
-		invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200, TransitionTime: u16(25)})
+		invokeLevel(t, l, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 200, TransitionTime: spec.Nullable[uint16]{Value: 25}})
 		if got := singleLevelSet(t, w.snapshot()); !near(got, matterLevelToHM(200)) {
 			t.Fatalf("instant LEVEL=%v, want %v", got, matterLevelToHM(200))
 		}
@@ -389,36 +391,36 @@ func TestLevelMoveRunsToTheEndOfTheRange(t *testing.T) {
 	cases := []struct {
 		name     string
 		cmd      uint32
-		req      levelcontrol.MoveRequest
+		req      levelcontroldef.MoveRequest
 		caps     custom.LightCapabilities
 		wantLvl  float64
 		ramps    bool
 		wantRamp func(current uint8) float64
 	}{
-		{"up without rate is instant", levelcontrol.CmdMove, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp}, custom.LightCapabilities{Dimmable: true, Transition: true}, 1.0, false, nil},
-		{"down without rate is instant", levelcontrol.CmdMove, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeDown}, custom.LightCapabilities{Dimmable: true, Transition: true}, matterLevelToHM(1), false, nil},
+		{"up without rate is instant", levelcontrol.CmdMove, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Null: true}}, custom.LightCapabilities{Dimmable: true, Transition: true}, 1.0, false, nil},
+		{"down without rate is instant", levelcontrol.CmdMove, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeDown, Rate: spec.Nullable[uint8]{Null: true}}, custom.LightCapabilities{Dimmable: true, Transition: true}, matterLevelToHM(1), false, nil},
 		{
 			"up with rate ramps", levelcontrol.CmdMove,
-			levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, Rate: u8(10)},
+			levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 10}},
 			custom.LightCapabilities{Dimmable: true, Transition: true},
 			1.0, true,
 			func(c uint8) float64 { return math.Round(float64(254-int(c))/10*10) / 10 },
 		},
 		{
 			"down with rate ramps", levelcontrol.CmdMove,
-			levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeDown, Rate: u8(40)},
+			levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeDown, Rate: spec.Nullable[uint8]{Value: 40}},
 			custom.LightCapabilities{Dimmable: true, Transition: true},
 			matterLevelToHM(1), true,
 			func(c uint8) float64 { return math.Round(float64(int(c)-1)/40*10) / 10 },
 		},
 		{
 			"WithOnOff down with rate ramps off", levelcontrol.CmdMoveWithOnOff,
-			levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeDown, Rate: u8(40)},
+			levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeDown, Rate: spec.Nullable[uint8]{Value: 40}},
 			custom.LightCapabilities{Dimmable: true, Transition: true},
 			0, true,
 			func(c uint8) float64 { return math.Round(float64(int(c)-1)/40*10) / 10 },
 		},
-		{"rate without Transition capability is instant", levelcontrol.CmdMove, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, Rate: u8(10)}, custom.LightCapabilities{Dimmable: true}, 1.0, false, nil},
+		{"rate without Transition capability is instant", levelcontrol.CmdMove, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 10}}, custom.LightCapabilities{Dimmable: true}, 1.0, false, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -450,7 +452,7 @@ func TestLevelMoveRateFromHalfIsDistanceOverRate(t *testing.T) {
 	if c := currentMatterLevel(t, l); c != 127 {
 		t.Fatalf("precondition: CurrentLevel = %d, want 127", c)
 	}
-	invokeLevel(t, l, levelcontrol.CmdMove, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, Rate: u8(10)})
+	invokeLevel(t, l, levelcontrol.CmdMove, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 10}})
 	if lvl, ramp := singleRampPut(t, w.snapshot()); lvl != 1.0 || !near(ramp, 12.7) {
 		t.Fatalf("Move up at 10/s from 127: LEVEL=%v RAMP_TIME=%v, want 1.0 / 12.7", lvl, ramp)
 	}
@@ -461,7 +463,7 @@ func TestLevelMoveRateFromHalfIsDistanceOverRate(t *testing.T) {
 // once instead of inventing a ramp.
 func TestLevelRatedMoveWithUnknownLevelAppliesWithoutRamp(t *testing.T) {
 	l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true, Transition: true}, false)
-	invokeLevel(t, l, levelcontrol.CmdMoveWithOnOff, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, Rate: u8(10)})
+	invokeLevel(t, l, levelcontrol.CmdMoveWithOnOff, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 10}})
 	if got := singleLevelSet(t, w.snapshot()); got != 1.0 {
 		t.Fatalf("rated MoveWithOnOff with unknown level wrote %v, want an instant 1.0", got)
 	}
@@ -477,7 +479,7 @@ func TestLevelMoveZeroRateIsInvalidCommand(t *testing.T) {
 		l.OnLevel(0.5)
 		srv := levelServer(t, l)
 		before := l.MatterDataVersion()
-		_, err := srv.MatterInvoke(context.Background(), cmd, levelcontrol.MoveRequest{MoveMode: levelcontrol.MoveModeUp, Rate: u8(0)})
+		_, err := srv.MatterInvoke(context.Background(), cmd, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 0}})
 		var sc im.StatusCodeError
 		if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusInvalidCommand {
 			t.Fatalf("cmd 0x%02X Rate=0: err = %v, want InvalidCommand", cmd, err)
@@ -500,12 +502,12 @@ func TestLevelStepClampsToTheLevelRange(t *testing.T) {
 	cases := []struct {
 		name  string
 		start float64
-		req   levelcontrol.StepRequest
+		req   levelcontroldef.StepRequest
 		want  float64
 	}{
-		{"down floors at MinLevel", 0.1, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeDown, StepSize: 200}, matterLevelToHM(1)},
-		{"up saturates at MaxLevel", 0.9, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 200}, 1.0},
-		{"up inside the range", 0.5, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20}, matterLevelToHM(147)},
+		{"down floors at MinLevel", 0.1, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeDown, StepSize: 200, TransitionTime: spec.Nullable[uint16]{Null: true}}, matterLevelToHM(1)},
+		{"up saturates at MaxLevel", 0.9, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 200, TransitionTime: spec.Nullable[uint16]{Null: true}}, 1.0},
+		{"up inside the range", 0.5, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 20, TransitionTime: spec.Nullable[uint16]{Null: true}}, matterLevelToHM(147)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -528,7 +530,7 @@ func TestLevelStepWithUnknownLevelFails(t *testing.T) {
 	for _, cmd := range []uint32{levelcontrol.CmdStep, levelcontrol.CmdStepWithOnOff} {
 		l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 		eio := levelcontrol.OptionExecuteIfOff
-		_, err := levelServer(t, l).MatterInvoke(context.Background(), cmd, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20, OptionsMask: eio, OptionsOverride: eio})
+		_, err := levelServer(t, l).MatterInvoke(context.Background(), cmd, levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 20, OptionsMask: levelcontroldef.OptionsBitmap(eio), OptionsOverride: levelcontroldef.OptionsBitmap(eio), TransitionTime: spec.Nullable[uint16]{Null: true}})
 		var sc im.StatusCodeError
 		if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusFailure {
 			t.Fatalf("cmd 0x%02X with unknown level: err = %v, want status Failure", cmd, err)
@@ -550,7 +552,7 @@ func TestLevelStopWritesRampStopOnlyWhereTheChannelCarriesIt(t *testing.T) {
 		for _, rampStop := range []bool{true, false} {
 			l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true, Transition: true}, rampStop)
 			l.OnLevel(0.5)
-			invokeLevel(t, l, cmd, levelcontrol.StopRequest{})
+			invokeLevel(t, l, cmd, levelcontroldef.StopRequest{})
 			calls := w.snapshot()
 			if !rampStop {
 				if len(calls) != 0 {
@@ -571,7 +573,7 @@ func TestLevelStopWritesRampStopOnlyWhereTheChannelCarriesIt(t *testing.T) {
 func TestLevelStopWithOnOffIsNotGatedWhileOff(t *testing.T) {
 	l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, true)
 	l.OnLevel(0)
-	invokeLevel(t, l, levelcontrol.CmdStopWithOnOff, levelcontrol.StopRequest{})
+	invokeLevel(t, l, levelcontrol.CmdStopWithOnOff, levelcontroldef.StopRequest{})
 	if calls := w.snapshot(); len(calls) != 1 || calls[0].param != hmenum.ParameterRampStop {
 		t.Fatalf("StopWithOnOff while off wrote %+v, want one RAMP_STOP", calls)
 	}
@@ -684,7 +686,7 @@ func TestLevelAttributeStateSurvivesAServerLookup(t *testing.T) {
 func TestLevelMoveToLevelAboveMaxIsAConstraintError(t *testing.T) {
 	l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 	l.OnLevel(0.5)
-	_, err := levelServer(t, l).MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 255})
+	_, err := levelServer(t, l).MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 255, TransitionTime: spec.Nullable[uint16]{Null: true}})
 	var sc im.StatusCodeError
 	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusConstraintError {
 		t.Fatalf("MoveToLevel(255): err = %v, want ConstraintError", err)

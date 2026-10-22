@@ -11,6 +11,8 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/spec"
+	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -255,7 +257,7 @@ func TestSoundPlayerMoveToLevelIsGatedWhileSilent(t *testing.T) {
 	_, lvl := speakerServers(t, sp)
 	ctx := context.Background()
 
-	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 127}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 127, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevel while silent: %v", err)
 	}
 	if _, ok := w.has(hmenum.ParameterLevel); ok {
@@ -263,7 +265,7 @@ func TestSoundPlayerMoveToLevelIsGatedWhileSilent(t *testing.T) {
 	}
 
 	fireDirection(t, direction, "UP")
-	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMax}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMax, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevel while playing: %v", err)
 	}
 	if v, ok := w.has(hmenum.ParameterLevel); !ok || v != 1.0 {
@@ -280,7 +282,7 @@ func TestSoundPlayerMoveToLevelWithOnOffCouplesSilence(t *testing.T) {
 	_, lvl := speakerServers(t, sp)
 	ctx := context.Background()
 
-	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMin}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMin, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(0): %v", err)
 	}
 	if v, ok := w.has(hmenum.ParameterLevel); !ok || v != float64(0) {
@@ -303,7 +305,7 @@ func TestSoundPlayerMoveToLevelWithOnOffStartsAtVolume(t *testing.T) {
 	level.OnEvent(0.2)
 
 	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff,
-		levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMax}); err != nil {
+		levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMax, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(max): %v", err)
 	}
 	w.mu.Lock()
@@ -326,7 +328,7 @@ func TestSoundPlayerStepOnUnknownVolumeFails(t *testing.T) {
 	fireDirection(t, direction, "UP")
 
 	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdStepWithOnOff,
-		levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 10}); err == nil {
+		levelcontroldef.StepRequest{StepMode: levelcontroldef.StepModeUp, StepSize: 10, TransitionTime: spec.Nullable[uint16]{Null: true}}); err == nil {
 		t.Fatal("StepWithOnOff on an unreported volume succeeded, want Failure")
 	}
 	if _, ok := w.has(hmenum.ParameterLevel); ok {
@@ -349,7 +351,7 @@ func TestSoundPlayerSilenceOnSilentUnknownPlayerSendsNoStop(t *testing.T) {
 	level.OnEvent(0.0)
 
 	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff,
-		levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMin}); err != nil {
+		levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMin, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(0): %v", err)
 	}
 	w.mu.Lock()

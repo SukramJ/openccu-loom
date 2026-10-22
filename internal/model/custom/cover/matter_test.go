@@ -12,7 +12,9 @@ import (
 	"time"
 
 	mattercluster "github.com/SukramJ/go-fabric/cluster"
+	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
+	"github.com/SukramJ/go-fabric/contract"
 
 	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
 
@@ -272,12 +274,12 @@ func TestGarageAdvertisesVentilationFeature(t *testing.T) {
 func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
 	cases := []struct {
 		name   string
-		target clusterwire.ClosureTargetPosition
+		target closuredef.TargetPositionEnum
 		want   string
 	}{
-		{"close", clusterwire.ClosureTargetPositionMoveToFullyClosed, "CLOSE"},
-		{"open", clusterwire.ClosureTargetPositionMoveToFullyOpen, "OPEN"},
-		{"ventilate", clusterwire.ClosureTargetPositionMoveToVentilationPosition, "PARTIAL_OPEN"},
+		{"close", closuredef.TargetPositionMoveToFullyClosed, "CLOSE"},
+		{"open", closuredef.TargetPositionMoveToFullyOpen, "OPEN"},
+		{"ventilate", closuredef.TargetPositionMoveToVentilationPosition, "PARTIAL_OPEN"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -286,7 +288,7 @@ func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
 			srv := g.MatterClusterServers()[0]
 			target := tc.target
 			if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-				clusterwire.MoveToRequest{Position: &target}); err != nil {
+				closuredef.MoveToRequest{Position: &target}); err != nil {
 				t.Fatalf("MoveTo: %v", err)
 			}
 			if w.last != tc.want {
@@ -653,7 +655,7 @@ func TestConfirmedPositionReachesTheServerAndReports(t *testing.T) {
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		srv := windowCoveringServer(t, c)
 		reported := make(chan []uint32, 8)
-		defer srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })()
+		defer srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })()
 
 		c.OnLevel(0.3) // Matter 7000
 		if got := readU16(t, srv, windowcoveringspec.AttrCurrentPositionLiftPercent100ths); got != 7000 {
@@ -667,7 +669,7 @@ func TestConfirmedPositionReachesTheServerAndReports(t *testing.T) {
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		srv := windowCoveringServer(t, b)
 		reported := make(chan []uint32, 8)
-		defer srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })()
+		defer srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })()
 
 		b.level2.OnEvent(0.4) // Matter 6000
 		if got := readU16(t, srv, windowcoveringspec.AttrCurrentPositionTiltPercent100ths); got != 6000 {
@@ -681,7 +683,7 @@ func TestConfirmedPositionReachesTheServerAndReports(t *testing.T) {
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		srv := windowCoveringServer(t, c)
 		reported := make(chan []uint32, 8)
-		defer srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })()
+		defer srv.OnAttributeChange(func(c contract.Change) { reported <- c.Attributes })()
 
 		c.OnDirection(DirectionUp)
 		awaitReported(t, reported, windowcoveringspec.AttrOperationalStatus)

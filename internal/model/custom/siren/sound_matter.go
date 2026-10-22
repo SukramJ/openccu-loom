@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -244,7 +245,7 @@ func (soundRamp) Stop(context.Context) error { return nil }
 // the bound at once; matter.js lets an implementation replace that
 // default, moveLogic (LevelControlServer.ts:378-403), and a continuous
 // move has no reading on this player.
-func (soundRamp) MoveLevel(context.Context, levelcontrol.MoveRequest, bool) error { return nil }
+func (soundRamp) MoveLevel(context.Context, clusterwire.MoveRequest, bool) error { return nil }
 
 // OnMatterValueChanged forwards [SoundPlayer.OnMatterValueChanged], so the
 // LevelControl server dirty-marks on a volume or playback change at the
