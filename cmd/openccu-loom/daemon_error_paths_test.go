@@ -197,7 +197,7 @@ func TestMatterStatusReaderAdapter_WindowNonNil_SetsWindowOpenFalse(t *testing.T
 	w := matterbridge.NewCommissioningWindow()
 	r := &matterStatusReaderAdapter{
 		enabled: true,
-		bridge:  bundle.bridge,
+		node:    bundle.node,
 		window:  w,
 	}
 	status := r.MatterStatus(context.Background())
@@ -249,7 +249,7 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 
 	before := bundle.opCreds.MatterDataVersion()
 
-	a := &matterFabricRevokerAdapter{node: bundle.node, store: bundle.store}
+	a := &matterFabricRevokerAdapter{node: bundle.node}
 	if err := a.RevokeFabric(ctx, idx); err != nil {
 		t.Fatalf("RevokeFabric: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration(t *testin
 	}
 	r := &matterStatusReaderAdapter{
 		enabled: true,
-		bridge:  bundle.bridge,
+		node:    bundle.node,
 		window:  w,
 	}
 	status := r.MatterStatus(context.Background())

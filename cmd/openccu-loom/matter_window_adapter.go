@@ -11,9 +11,7 @@ import (
 	"sync"
 	"time"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/node"
-	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -22,7 +20,7 @@ import (
 // matterCommissioningOpenerAdapter serves the operator's
 // open-commissioning-window request over the node facade's window. With
 // the configured credentials it opens the node's own window
-// (bridge.CommissioningWindow.OpenOwnWindow): the facade runs PASE
+// (node.CommissioningWindow.OpenOwnWindow): the facade runs PASE
 // against the configured passcode and publishes the commissionable
 // record (CM=1) under the configured discriminator. In ephemeral-window
 // mode it opens a basic window with credentials generated for this
@@ -37,14 +35,11 @@ import (
 // unpair before the first exposure takes effect.
 type matterCommissioningOpenerAdapter struct {
 	node          *node.Node
-	bridge        *matterbridge.Bridge
 	commissioning config.NorthMatterCommissioning
 	discriminator uint16
-	vendorID      uint16
-	productID     uint16
 	// configured reports a valid operator-configured passcode; without
 	// one the configured-credentials window is refused with
-	// [matterbridge.ErrCommissioningWindowNotConfigured], as before the
+	// [node.ErrCommissioningWindowNotConfigured], as before the
 	// facade (the node itself runs on credentials nobody holds, see
 	// matterCommissioningCredentials).
 	configured bool
@@ -68,7 +63,7 @@ type matterCommissioningOpenerAdapter struct {
 
 // windowBusy reports whether an open window must not be replaced: an
 // administrator's, or one this adapter opened that has not expired.
-func (a *matterCommissioningOpenerAdapter) windowBusy(window *matterbridge.CommissioningWindow) bool {
+func (a *matterCommissioningOpenerAdapter) windowBusy(window *node.CommissioningWindow) bool {
 	if !window.IsOpen() {
 		return false
 	}
@@ -81,7 +76,7 @@ func (a *matterCommissioningOpenerAdapter) windowBusy(window *matterbridge.Commi
 }
 
 // opened records the window this adapter just opened.
-func (a *matterCommissioningOpenerAdapter) opened(window *matterbridge.CommissioningWindow) {
+func (a *matterCommissioningOpenerAdapter) opened(window *node.CommissioningWindow) {
 	a.mu.Lock()
 	a.restUntil = time.Now().Add(time.Duration(window.RequestedDurationSeconds()) * time.Second)
 	a.mu.Unlock()
@@ -89,27 +84,15 @@ func (a *matterCommissioningOpenerAdapter) opened(window *matterbridge.Commissio
 
 func (a *matterCommissioningOpenerAdapter) OpenCommissioningWindow(ctx context.Context, durationSeconds uint16) (handlers.MatterCommissioningWindowResult, error) {
 	if a == nil || a.node == nil {
-		return handlers.MatterCommissioningWindowResult{}, matterbridge.ErrCommissioningWindowNotConfigured
+		return handlers.MatterCommissioningWindowResult{}, node.ErrCommissioningWindowNotConfigured
 	}
 	if a.blocked != nil {
 		return handlers.MatterCommissioningWindowResult{}, fmt.Errorf("%w: %w", handlers.ErrCommissioningBlocked, a.blocked)
 	}
-	if a.bridge != nil && !a.allowEmptyTopology {
-		if topo := a.bridge.Topology(); topo != nil {
-			bridged := 0
-			for _, ep := range topo.Endpoints {
-				if ep == nil || ep.IsRoot() || ep.IsAggregator() {
-					continue
-				}
-				bridged++
-			}
-			if bridged == 0 {
-				slog.Default().Warn("matter.window_adapter.refused_open",
-					slog.String("reason", "topology_no_bridged_endpoints"),
-					slog.Int("topology_endpoints", len(topo.Endpoints)))
-				return handlers.MatterCommissioningWindowResult{}, handlers.ErrBridgeTopologyNotReady
-			}
-		}
+	if !a.allowEmptyTopology && len(a.node.Topology().Devices) == 0 {
+		slog.Default().Warn("matter.window_adapter.refused_open",
+			slog.String("reason", "topology_no_bridged_endpoints"))
+		return handlers.MatterCommissioningWindowResult{}, handlers.ErrBridgeTopologyNotReady
 	}
 	window := a.node.CommissioningWindow()
 	if a.windowBusy(window) {
@@ -121,7 +104,7 @@ func (a *matterCommissioningOpenerAdapter) OpenCommissioningWindow(ctx context.C
 		return a.openEphemeral(ctx, window, timeout, durationSeconds)
 	}
 	if !a.configured {
-		return handlers.MatterCommissioningWindowResult{}, matterbridge.ErrCommissioningWindowNotConfigured
+		return handlers.MatterCommissioningWindowResult{}, node.ErrCommissioningWindowNotConfigured
 	}
 	if err := window.OpenOwnWindow(ctx, timeout); err != nil {
 		return handlers.MatterCommissioningWindowResult{}, mapWindowOpenError(err)
@@ -142,60 +125,35 @@ func (a *matterCommissioningOpenerAdapter) OpenCommissioningWindow(ctx context.C
 }
 
 // openEphemeral opens the node's own window on credentials generated for
-// this window: a fresh discriminator, passcode and salt, the configured
-// PBKDF iteration count. The passcode never leaves this process except
-// through the pairing codes returned to the operator.
-func (a *matterCommissioningOpenerAdapter) openEphemeral(ctx context.Context, window *matterbridge.CommissioningWindow, timeout time.Duration, durationSeconds uint16) (handlers.MatterCommissioningWindowResult, error) {
-	disc, err := matterbridge.RandomDiscriminator()
+// this window: a fresh discriminator, passcode and salt
+// (node.NewCommissioningCredentials), the configured PBKDF iteration
+// count. The passcode never leaves this process except through the
+// pairing codes returned to the operator.
+func (a *matterCommissioningOpenerAdapter) openEphemeral(ctx context.Context, window *node.CommissioningWindow, timeout time.Duration, durationSeconds uint16) (handlers.MatterCommissioningWindowResult, error) {
+	fresh, err := node.NewCommissioningCredentials()
 	if err != nil {
 		return handlers.MatterCommissioningWindowResult{}, err
 	}
-	pass, err := matterbridge.RandomPasscode()
-	if err != nil {
-		return handlers.MatterCommissioningWindowResult{}, err
+	if a.commissioning.Iterations > 0 {
+		fresh.PBKDFIterations = a.commissioning.Iterations
 	}
-	salt, err := matterbridge.RandomSalt()
-	if err != nil {
-		return handlers.MatterCommissioningWindowResult{}, err
-	}
-	iterations := a.commissioning.Iterations
-	if iterations <= 0 {
-		iterations = 1000
-	}
-	creds := node.WindowCredentials{
-		Discriminator: disc,
-		Passcode:      pass,
-		Iterations:    uint32(iterations), //nolint:gosec // bounded by the config validator
-		Salt:          salt,
-		Timeout:       timeout,
-	}
+	creds := fresh.WindowCredentials(timeout)
 	if err := a.node.OpenBasicWindow(ctx, creds); err != nil {
 		return handlers.MatterCommissioningWindowResult{}, mapWindowOpenError(err)
 	}
 	a.opened(window)
-	qr, err := mattersetup.QRCode(mattersetup.Payload{
-		VendorID:      a.vendorID,
-		ProductID:     a.productID,
-		Discriminator: disc,
-		Passcode:      pass,
-		DiscoveryCaps: mattersetup.DiscoveryOnIP,
-	})
-	if err != nil {
-		_ = window.RevokeWindow(ctx)
-		return handlers.MatterCommissioningWindowResult{}, err
-	}
-	manual, err := mattersetup.ManualCode(disc, pass)
+	qr, manual, err := a.node.PairingCodesFor(creds)
 	if err != nil {
 		_ = window.RevokeWindow(ctx)
 		return handlers.MatterCommissioningWindowResult{}, err
 	}
 	slog.Default().Info("matter.bridge.pase.ephemeral_window",
-		slog.Int("iterations", iterations),
-		slog.Int("discriminator", int(disc)),
+		slog.Int("iterations", fresh.PBKDFIterations),
+		slog.Int("discriminator", int(creds.Discriminator)),
 		slog.Int("duration_seconds", int(durationSeconds)))
 	return handlers.MatterCommissioningWindowResult{
-		Discriminator:   disc,
-		Passcode:        pass,
+		Discriminator:   creds.Discriminator,
+		Passcode:        creds.Passcode,
 		DurationSeconds: window.RequestedDurationSeconds(),
 		QRCode:          qr,
 		ManualCode:      manual,
@@ -205,7 +163,7 @@ func (a *matterCommissioningOpenerAdapter) openEphemeral(ctx context.Context, wi
 // mapWindowOpenError translates the facade's refusal of a second window
 // into the REST contract's conflict.
 func mapWindowOpenError(err error) error {
-	if errors.Is(err, matterbridge.ErrAdministratorWindowOpen) || errors.Is(err, matterbridge.ErrCommissioningWindowAlreadyOpen) {
+	if errors.Is(err, node.ErrAdministratorWindowOpen) || errors.Is(err, node.ErrCommissioningWindowAlreadyOpen) {
 		return handlers.ErrCommissioningInProgress
 	}
 	return err

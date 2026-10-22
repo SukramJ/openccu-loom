@@ -15,7 +15,6 @@ import (
 	"time"
 
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	"github.com/SukramJ/go-fabric/mdns"
 	"github.com/SukramJ/go-fabric/node"
 	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 	"github.com/SukramJ/go-fabric/secure/spake2"
@@ -83,11 +82,8 @@ func TestMatterLocales(t *testing.T) {
 // (a zero node.Attestation); the dev self-signed fallback is gone.
 func TestMatterAttestationWithoutVendorMaterialIsTheFacadesTestChain(t *testing.T) {
 	t.Parallel()
-	got, err := matterAttestation(config.NorthMatter{VendorID: 0xFFF1, ProductID: 0x8000}, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("matterAttestation without vendor material: %v", err)
-	}
-	if got.Chain != nil || got.CertificationDeclaration != nil {
+	got := matterAttestation(config.NorthMatter{VendorID: 0xFFF1, ProductID: 0x8000}, slog.New(slog.DiscardHandler))
+	if got.Files != nil || got.Chain != nil || got.CertificationDeclaration != nil || got.BlockCommissioningOnError {
 		t.Fatalf("matterAttestation without vendor material = %+v, want the zero value", got)
 	}
 }
@@ -317,17 +313,53 @@ func TestStartMatterBridgeServesAUniqueIDTheDaemonPinnedBefore(t *testing.T) {
 	}
 }
 
+// fakeMdnsSource is a node's DNS-SD as the diagnostics read it.
+type fakeMdnsSource struct {
+	enabled  bool
+	services []node.MDNSService
+	findings []node.MDNSFinding
+}
+
+func (f fakeMdnsSource) MDNSEnabled() bool                { return f.enabled }
+func (f fakeMdnsSource) MDNSServices() []node.MDNSService { return f.services }
+func (f fakeMdnsSource) DiagnoseMDNS() []node.MDNSFinding { return f.findings }
+
 // TestMatterMdnsReporterAdvertisingFollowsTheAdvertiser: the no-op
 // advertiser is the explicit "stay quiet" opt-in and reports not
-// advertising; a real advertiser reports advertising.
+// advertising, without findings; a publishing advertiser reports
+// advertising and its findings.
 func TestMatterMdnsReporterAdvertisingFollowsTheAdvertiser(t *testing.T) {
 	t.Parallel()
-	if got := (matterMdnsReporter{adv: mdns.NewNoop()}).MatterMdns().Advertising; got {
-		t.Fatal("noop advertiser reported Advertising = true")
+	finding := node.MDNSFinding{Code: "probe", Message: "m"}
+	quiet := (matterMdnsReporter{node: fakeMdnsSource{findings: []node.MDNSFinding{finding}}}).MatterMdns()
+	if quiet.Advertising || len(quiet.Findings) != 0 {
+		t.Fatalf("noop advertiser: Advertising=%v findings=%d, want false and none", quiet.Advertising, len(quiet.Findings))
 	}
-	z := mdns.NewZeroconf()
-	t.Cleanup(func() { _ = z.Close() })
-	if got := (matterMdnsReporter{adv: z}).MatterMdns().Advertising; !got {
-		t.Fatal("zeroconf advertiser reported Advertising = false")
+	loud := (matterMdnsReporter{node: fakeMdnsSource{enabled: true, findings: []node.MDNSFinding{finding}}}).MatterMdns()
+	if !loud.Advertising || len(loud.Findings) != 1 || loud.Findings[0].Code != "probe" {
+		t.Fatalf("publishing advertiser: Advertising=%v findings=%+v, want true and the probe finding", loud.Advertising, loud.Findings)
+	}
+}
+
+// TestMatterMdnsReporterReadsTheNodesAdvertiser pins the wiring: the
+// reporter wired by wireMatterRuntime reads the node facade's advertiser,
+// which mdns_advertise=noop leaves quiet.
+func TestMatterMdnsReporterReadsTheNodesAdvertiser(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cfg := matterTestConfig(t, "ccu-mdns-report")
+	wiring, closers, teardown := wireMatterRuntime(ctx, cfg, buildTestRegistry(t, "ccu-mdns-report"), openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	t.Cleanup(func() {
+		for _, c := range closers {
+			c()
+		}
+		teardown()
+	})
+	if wiring.mdnsReporter == nil {
+		t.Fatal("wireMatterRuntime wired no mDNS reporter")
+	}
+	if got := wiring.mdnsReporter.MatterMdns(); got.Advertising {
+		t.Fatal("mdns_advertise=noop reported Advertising = true")
 	}
 }

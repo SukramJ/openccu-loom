@@ -318,7 +318,7 @@ func TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric(t *testing.T) 
 	}
 	t.Cleanup(bundle.stop)
 
-	a := &matterFabricRevokerAdapter{store: bundle.store}
+	a := &matterFabricRevokerAdapter{node: bundle.node}
 	// Revoke fabric 255 (non-existent) — must not panic; error acceptable.
 	err := a.RevokeFabric(context.Background(), 255)
 	_ = err // may be nil or "not found"

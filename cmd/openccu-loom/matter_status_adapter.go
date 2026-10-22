@@ -6,9 +6,7 @@ package main
 import (
 	"context"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/node"
-	matterstore "github.com/SukramJ/go-fabric/store"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
@@ -19,18 +17,17 @@ import (
 )
 
 // matterStatusReaderAdapter implements [handlers.MatterStatusReader]
-// against the live bridge + store. The bridge knows endpoint count
-// and listen address; the store knows fabric count and exposure
-// count.
+// against the node facade and the exposure store. The node knows the
+// listen address, the served topology and the fabrics; the exposure store
+// knows the operator's allowlist.
 type matterStatusReaderAdapter struct {
 	enabled bool
-	bridge  *matterbridge.Bridge
-	store   *matterstore.Store
+	node    *node.Node
 	// exposures counts the operator's enabled allowlist rows. Separate
 	// from store because the allowlist is keyed by this daemon's source
 	// 5-tuple and therefore lives host-side; see [matterendpoint].
 	exposures *matterendpoint.Store
-	window    *matterbridge.CommissioningWindow
+	window    *node.CommissioningWindow
 	cfg       *matterStatusConfig
 }
 
@@ -41,19 +38,14 @@ type matterStatusConfig struct {
 // MatterStatus implements [handlers.MatterStatusReader].
 func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.MatterStatusResponse {
 	res := handlers.MatterStatusResponse{Enabled: r.enabled}
-	if !r.enabled || r.bridge == nil {
+	if !r.enabled || r.node == nil {
 		return res
 	}
-	res.ListenAddr = r.bridge.LocalAddr()
+	res.ListenAddr = r.node.LocalAddr()
 	res.Listening = res.ListenAddr != ""
-	if topo := r.bridge.Topology(); topo != nil {
-		// Topology.Endpoints carries the two structural endpoints (root
-		// EP 0 + Aggregator EP 1) on top of the bridged devices;
-		// Bridged() is the only authoritative source for the
-		// caller-facing count, and the SPA renders it as "bridged Matter
-		// devices".
-		res.EndpointCount = len(topo.Bridged())
-	}
+	// The served topology's bridged devices, without the root and the
+	// Aggregator: the SPA renders the count as "bridged Matter devices".
+	res.EndpointCount = len(r.node.Topology().Devices)
 	if r.cfg != nil {
 		res.Advertising = r.cfg.advertising
 	}
@@ -69,11 +61,8 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 			res.WindowDuration = r.window.RequestedDurationSeconds()
 		}
 	}
-	if r.store != nil {
-		fabrics, err := r.store.ListFabrics(ctx)
-		if err == nil {
-			res.FabricCount = len(fabrics)
-		}
+	if fabrics, err := r.node.FabricInfos(ctx); err == nil {
+		res.FabricCount = len(fabrics)
 	}
 	if r.exposures != nil {
 		enabled, err := r.exposures.CountEnabled(ctx, "")
@@ -95,23 +84,22 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 // alive, and the next pair retry collided on the same session id with
 // `aesccm: authentication failed`.
 type matterFabricRevokerAdapter struct {
-	node  *node.Node
-	store *matterstore.Store
+	node *node.Node
 }
 
 // RevokeFabric implements [handlers.MatterFabricRevoker].
 func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricIndex uint8) error {
 	if a == nil || a.node == nil {
-		return matterbridge.ErrCommissioningWindowNotConfigured
+		return node.ErrCommissioningWindowNotConfigured
 	}
 	return a.node.RemoveFabric(ctx, fabricIndex)
 }
 
 func (a *matterFabricRevokerAdapter) ListFabricIndexes(ctx context.Context) ([]uint8, error) {
-	if a == nil || a.store == nil {
-		return nil, matterbridge.ErrCommissioningWindowNotConfigured
+	if a == nil || a.node == nil {
+		return nil, node.ErrCommissioningWindowNotConfigured
 	}
-	records, err := a.store.ListFabrics(ctx)
+	records, err := a.node.FabricInfos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -125,14 +113,14 @@ func (a *matterFabricRevokerAdapter) ListFabricIndexes(ctx context.Context) ([]u
 // matterCommissioningCloserAdapter implements
 // [handlers.MatterCommissioningCloser].
 type matterCommissioningCloserAdapter struct {
-	window *matterbridge.CommissioningWindow
+	window *node.CommissioningWindow
 }
 
 // CloseCommissioningWindow implements
 // [handlers.MatterCommissioningCloser].
 func (a *matterCommissioningCloserAdapter) CloseCommissioningWindow(ctx context.Context) error {
 	if a == nil || a.window == nil {
-		return matterbridge.ErrCommissioningWindowNotConfigured
+		return node.ErrCommissioningWindowNotConfigured
 	}
 	return a.window.RevokeWindow(ctx)
 }
