@@ -168,8 +168,8 @@ type Assembler struct {
 // renamed. go-fabric's node.EndpointPersistence is the production
 // implementation, the same one the daemon hands the facade.
 type NodeLabelStore interface {
-	OnNodeLabelWritten(key endpoint.SourceKey, label string)
-	NodeLabel(ctx context.Context, key endpoint.SourceKey) string
+	OnNodeLabelWritten(key fabricdevice.SourceKey, label string)
+	NodeLabel(ctx context.Context, key fabricdevice.SourceKey) string
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -195,7 +195,7 @@ func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) 
 		VendorName: bridgedVendorName,
 		Groups:     cfg.Groups,
 		Scenes:     cfg.Scenes,
-		OnNodeLabelWritten: func(key endpoint.SourceKey, label string) {
+		OnNodeLabelWritten: func(key fabricdevice.SourceKey, label string) {
 			if cfg.NodeLabels != nil {
 				cfg.NodeLabels.OnNodeLabelWritten(key, label)
 			}

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -65,7 +66,7 @@ func (k SourceKey) String() string {
 // Ensure the module's contract is satisfied by the value type — the
 // assembler uses the key as a map key, so it must stay comparable and
 // must not need a pointer to render.
-var _ fabricendpoint.SourceKey = SourceKey{}
+var _ fabricdevice.SourceKey = SourceKey{}
 
 // keyOf recovers this package's key from the opaque one the module
 // carries. It returns an error rather than an empty key so a store wired
