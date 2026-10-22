@@ -1,6 +1,6 @@
 module github.com/SukramJ/openccu-loom
 
-go 1.27.2
+go 1.27.3
 
 require (
 	filippo.io/nistec v0.0.4 // indirect
@@ -33,7 +33,7 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.6.0
+	github.com/SukramJ/go-fabric v0.7.0
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.38.0
 	github.com/SukramJ/go-mqtt v1.6.0

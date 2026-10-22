@@ -1,5 +1,18 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.92.1
+
+- **"Last refreshed" shows each device's last report again.** The
+  periodic value check no longer stamps every device with the same time.
+- The CCU WebUI's temporary copy of a program you edit no longer shows
+  up as a program of its own.
+- Built with Go 1.27.3, which no longer trusts known-compromised
+  intermediate certificates on TLS connections (e.g. to an MQTT broker).
+- **Matter library update (go-fabric v0.7.0).** A flood of forged
+  packets can no longer exhaust the bridge, shutdown waits for running
+  requests, and after the last controller is removed the bridge reopens
+  pairing on its own. Nothing needs to be re-paired.
+
 ## 0.92.0
 
 - **Matter bridge on go-fabric v0.5.4.** More of the bridge now runs in

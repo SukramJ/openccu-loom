@@ -6,8 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.92.1] - 2026-10-22
+
+### Release summary
+
+**The device list shows each device's last report again, and the Matter
+stack moves to go-fabric v0.7.0** (through v0.6.0, the hardening release).
+REST API 13.9.1, unchanged.
+
 ### Changed
 
+- **Built with Go 1.27.3.** The release picks up the standard library's
+  distrust of compromised intermediate certificates in `crypto/x509`
+  (GO-2026-6809), which the MQTT client's TLS handshake reaches.
+- **Matter: go-fabric v0.7.0.** v0.7.0 adds controller-side features only
+  (commissioning over Bluetooth LE, network commissioning, hardware-held
+  controller keys); the bridge, the wire and the stored pairings are
+  unchanged by it. It includes v0.6.0:
 - **Matter: go-fabric v0.6.0.** The Matter stack's hardening release: a
   flood of datagrams with forged session IDs can no longer open unbounded
   queues; shutting the bridge down waits for running handlers; a bridge
