@@ -1272,7 +1272,7 @@ PowerSource part would be a second endpoint per smoke alarm and a
 controller re-learn. The validator runs in warn mode in production; the
 conformance guard carries the finding as a declared entry.
 
-**Resolution path:** `device.AddPart(device.NewPowerSource(…, WithMeasurement(battery)))`
+**Resolution path:** `device.AddPart(device.NewPowerSource(…, psdef.Declare{Features: psdef.FeatureBattery, …}))`, set from the battery reading (go-fabric `examples/reference-bridge/fleet_sensors.go`, `batteryDeclaration`),
 for the device types whose composition mandates it, in its own change with
 the re-learn named in the changelog; decided per type, not for the fleet.
 

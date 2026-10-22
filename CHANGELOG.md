@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Matter: go-fabric v0.10.0, on its node facade.** The bridge is built
+  through the facade's own routes: health probe, attestation files,
+  DNS-SD, fabric list, commissioning credentials. Nothing changes on the
+  wire and nothing needs to be re-paired. A Matter commissioning window is
+  now also refused while the bridge has not assembled its topology yet,
+  with the same "no bridged devices" answer.
+- **Database:** migration 050 adds the tables go-fabric keeps for
+  Thermostat presets and DoorLock users, credentials and schedules.
+- **hmcli** grows from about 18 MB to about 32 MB: the configuration
+  validator now checks Matter values against the node facade.
+
 ## [0.92.2] - 2026-10-22
 
 ### Release summary
