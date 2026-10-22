@@ -47,40 +47,35 @@ func assembleGolden(t *testing.T) *endpoint.Topology {
 }
 
 // TestEveryBridgedEndpointIsBuiltThroughTheDeviceLayer pins that the
-// assembler hands every cluster-serving bridged endpoint the go-fabric
-// device layer's spec source, not a hand-built loom profile, and every
-// sensor endpoint its measurement source.
-//
-// A sensor endpoint is the one hand-built shape left: the device layer has
-// no measurement-source form since go-fabric v0.10.0, and the endpoint
-// assembler a host keeps beside the device kit materialises
-// endpoint.Spec.Measurement itself (go-fabric guides "Advanced seams",
-// section endpoint, and "Host ports", Measurements and classification).
-// An endpoint with neither a device-layer source nor a measurement is a
-// composition the device layer refused, which the assembler only logs.
+// assembler hands every bridged endpoint the go-fabric device layer's spec
+// source, not a hand-built loom profile: the cluster-serving endpoints
+// (their servers declared with device.HostServer) and the sensor endpoints
+// (their measurement declared with device.Measurement) alike. A hand-built
+// endpoint is a composition the device layer refused, which the assembler
+// only logs.
 func TestEveryBridgedEndpointIsBuiltThroughTheDeviceLayer(t *testing.T) {
 	top := assembleGolden(t)
 	bridged := top.Bridged()
 	if len(bridged) != goldenBridgedEndpointCount {
 		t.Errorf("bridged endpoints = %d, want %d (an endpoint was lost or added)", len(bridged), goldenBridgedEndpointCount)
 	}
-	var deviceLayer, sensors int
+	var servers, sensors int
 	for _, ep := range bridged {
-		_, built := ep.Source.(interface{ Spec() endpoint.Spec })
-		switch {
-		case built && ep.Measurement == nil:
-			deviceLayer++
-		case ep.Source == nil && ep.Measurement != nil:
+		if _, ok := ep.Source.(interface{ Spec() endpoint.Spec }); !ok {
+			t.Errorf("endpoint %d (device type 0x%04X) source %T is not built through the device layer",
+				ep.ID, ep.DeviceType, ep.Source)
+			continue
+		}
+		if ep.Measurement != nil {
 			sensors++
-		default:
-			t.Errorf("endpoint %d (device type 0x%04X) source %T, measurement %T: neither built through the device layer nor a sensor endpoint",
-				ep.ID, ep.DeviceType, ep.Source, ep.Measurement)
+		} else {
+			servers++
 		}
 	}
 	// The golden fleet has both shapes; a fleet where one of them vanished
 	// would let this guard pass without judging that shape at all.
-	if deviceLayer == 0 || sensors == 0 {
-		t.Errorf("device-layer endpoints = %d, sensor endpoints = %d; the golden fleet must exercise both", deviceLayer, sensors)
+	if servers == 0 || sensors == 0 {
+		t.Errorf("cluster-serving endpoints = %d, sensor endpoints = %d; the golden fleet must exercise both", servers, sensors)
 	}
 }
 

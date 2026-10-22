@@ -92,25 +92,23 @@ func TestMatterDeviceLayerBuildsEveryCategoryEndpoint(t *testing.T) {
 	if len(bridged) == 0 {
 		t.Fatal("no bridged endpoints assembled")
 	}
-	// Two shapes, as in the assembler's own guard: a cluster-serving
-	// endpoint built through the device layer, and a sensor endpoint built
-	// from its measurement, which the device layer has no form for since
-	// go-fabric v0.10.0 (ADR 0084, amendment for go-fabric v0.10.0).
-	var deviceLayer, sensors int
+	// Both shapes go through the device layer: cluster-serving endpoints
+	// and sensor endpoints built from their measurement.
+	var servers, sensors int
 	for _, ep := range bridged {
-		_, built := ep.Source.(interface{ Spec() endpoint.Spec })
-		switch {
-		case built && ep.Measurement == nil:
-			deviceLayer++
-		case ep.Source == nil && ep.Measurement != nil:
+		if _, ok := ep.Source.(interface{ Spec() endpoint.Spec }); !ok {
+			t.Errorf("endpoint %d (device type 0x%04X) source %T is not built through the device layer",
+				ep.ID, ep.DeviceType, ep.Source)
+			continue
+		}
+		if ep.Measurement != nil {
 			sensors++
-		default:
-			t.Errorf("endpoint %d (device type 0x%04X) source %T, measurement %T: neither built through the device layer nor a sensor endpoint",
-				ep.ID, ep.DeviceType, ep.Source, ep.Measurement)
+		} else {
+			servers++
 		}
 	}
-	if deviceLayer == 0 || sensors == 0 {
-		t.Errorf("device-layer endpoints = %d, sensor endpoints = %d; the category fleet must exercise both", deviceLayer, sensors)
+	if servers == 0 || sensors == 0 {
+		t.Errorf("cluster-serving endpoints = %d, sensor endpoints = %d; the category fleet must exercise both", servers, sensors)
 	}
 }
 

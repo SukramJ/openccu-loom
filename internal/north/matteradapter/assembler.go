@@ -823,18 +823,14 @@ type specInput struct {
 // deviceSpec builds the endpoint through go-fabric's device layer: the
 // generated type for the advertised device type id carries what
 // matter.js's devices/*.ts state (mandatory clusters, mandated features,
-// constraints), the source's own cluster servers are declared as their
-// cluster's HostServer ([hostServerDeclaration]) exactly as they were
-// served before, and the source's change notifier is supplied with
-// [fabricdevice.WithChangeNotifier] so the bridge keeps hearing the
-// model's confirmed updates. The cluster set, revisions, FeatureMaps and
-// the UniqueID input are unchanged; what the device adds is device-type
-// validation and the type's client clusters.
-//
-// A measurement endpoint is built as the hand-built Spec: the device
-// layer has no measurement-source form since go-fabric v0.10.0, and the
-// endpoint assembler still materialises [endpoint.Spec.Measurement]
-// (go-fabric endpoint/materialize.go:81-84).
+// constraints). A source's own cluster servers are declared with
+// [fabricdevice.HostServer] exactly as they were served before, and its
+// change notifier with [fabricdevice.WithChangeNotifier] so the bridge
+// keeps hearing the model's confirmed updates; a measurement is declared
+// with [fabricdevice.Measurement], whose clusters the endpoint assembler
+// materialises once the endpoint number is known. The cluster set,
+// revisions, FeatureMaps and the UniqueID input are unchanged; what the
+// device adds is device-type validation and the type's client clusters.
 //
 // The persisted NodeLabel is set on the spec the way go-fabric's own
 // Aggregator restores it (node/aggregator.go:366-367).
@@ -860,9 +856,6 @@ func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec 
 		Source:         in.source,
 		Measurement:    in.measurement,
 	}
-	if in.measurement != nil {
-		return handBuilt
-	}
 	t, ok := fabricdevice.TypeByID(schema.DeviceTypeID(in.deviceType))
 	if !ok {
 		a.logFallback(in.deviceType, "device type not in the generated device layer", nil)
@@ -881,16 +874,14 @@ func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec 
 			if srv == nil {
 				continue
 			}
-			decl, err := hostServerDeclaration(srv)
-			if err != nil {
-				a.logFallback(in.deviceType, "a cluster server has no declaration", err)
-				return handBuilt
-			}
-			decls = append(decls, decl)
+			decls = append(decls, fabricdevice.HostServer(srv))
 		}
 		if n, ok := in.source.(contract.ChangeNotifier); ok {
 			decls = append(decls, fabricdevice.WithChangeNotifier(n))
 		}
+	}
+	if in.measurement != nil {
+		decls = append(decls, fabricdevice.Measurement(in.measurement))
 	}
 	d, err := fabricdevice.New(t, opts, decls...)
 	if err != nil {
