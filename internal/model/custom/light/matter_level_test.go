@@ -154,9 +154,6 @@ func singleRampPut(t *testing.T, calls []levelCall) (level, ramp float64) {
 
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
-func u8(v uint8) *uint8    { return &v }
-func u16(v uint16) *uint16 { return &v }
-
 // ─── ExecuteIfOff gate on the plain commands ───────────────────────────────
 
 // TestLevelPlainCommandsWhileOffAreSilentSuccess pins the ExecuteIfOff
