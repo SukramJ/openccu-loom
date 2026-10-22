@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
   NODE_VERSION: "24"
   # Per-package ceiling for every `go test` invocation in this workflow,
   # stated rather than inherited from Go's 10-minute default. The Makefile

@@ -1,6 +1,6 @@
 module github.com/SukramJ/openccu-loom
 
-go 1.27.2
+go 1.27.3
 
 require (
 	filippo.io/nistec v0.0.4 // indirect

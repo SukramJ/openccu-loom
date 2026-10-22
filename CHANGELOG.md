@@ -16,6 +16,9 @@ REST API 13.9.1, unchanged.
 
 ### Changed
 
+- **Built with Go 1.27.3.** The release picks up the standard library's
+  distrust of compromised intermediate certificates in `crypto/x509`
+  (GO-2026-6809), which the MQTT client's TLS handshake reaches.
 - **Matter: go-fabric v0.7.0.** v0.7.0 adds controller-side features only
   (commissioning over Bluetooth LE, network commissioning, hardware-held
   controller keys); the bridge, the wire and the stored pairings are
