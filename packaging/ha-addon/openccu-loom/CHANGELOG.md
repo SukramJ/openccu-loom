@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.92.2
+
+- **Matter library update (go-fabric v0.7.3).** More robust connections
+  to Matter controllers: no lost messages when a TCP connection drops,
+  no evicted controller sessions, stable event numbering after a
+  restart and a stable network name. Nothing needs to be re-paired.
+
 ## 0.92.1
 
 - **"Last refreshed" shows each device's last report again.** The

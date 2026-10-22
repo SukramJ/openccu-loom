@@ -4,7 +4,7 @@
     "specificationVersion": 17170688,
     "interactionModelRevision": 12,
     "dataModelRevision": 21,
-    "sourceCommit": "0ceb202d28edc82f1ce131afde06e18a87c58a11"
+    "sourceCommit": "862ad75f4d3c7ab528b8a3954168146082cad8a6"
   },
   "deviceTypes": [
     {
@@ -718,7 +718,7 @@
         }
       ],
       "effective": {
-        "composition": "tree",
+        "composition": "full-family",
         "conditions": [
           "FabricSynchronizedNode"
         ],

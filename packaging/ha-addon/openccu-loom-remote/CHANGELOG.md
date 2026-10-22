@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.92.2
+
+No changes to the proxy. The daemon release updates the Matter library
+to go-fabric v0.7.3 (REST API 13.9.1, unchanged).
+
 # 0.92.1
 
 No changes to the proxy. The daemon release fixes the device list's

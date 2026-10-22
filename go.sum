@@ -1,7 +1,7 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
-github.com/SukramJ/go-fabric v0.7.0 h1:G9uPtxLdnxxK7rLxQGG5z2bd7BjOPs9B5Ff63eTBGH8=
-github.com/SukramJ/go-fabric v0.7.0/go.mod h1:owj8Et7UO+AdrkQu7HngNSmsTGHlfmP+Q0re3e3vOmY=
+github.com/SukramJ/go-fabric v0.7.3 h1:ZxCiVCBwuAeOV7XKqguFG6OwuvFGr8rEQw/KpPLtb3k=
+github.com/SukramJ/go-fabric v0.7.3/go.mod h1:owj8Et7UO+AdrkQu7HngNSmsTGHlfmP+Q0re3e3vOmY=
 github.com/SukramJ/go-ha-catalog v0.3.1 h1:wo8CN+r4QHFCIBftSJMCHzYzmnkbs2FjEbnfjjQRT0c=
 github.com/SukramJ/go-ha-catalog v0.3.1/go.mod h1:GWdkU683HaEB23e2RWabRZinYPIbWq6wyRQ+iBbMP5s=
 github.com/SukramJ/go-hamqtt v0.38.0 h1:iWP2ncZVCVxQN07aUKV3tQh4H3SGd4dZiyFHVBUjrFE=

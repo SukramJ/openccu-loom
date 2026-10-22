@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.92.2] - 2026-10-22
+
+### Release summary
+
+**The Matter stack moves to go-fabric v0.7.3.** REST API 13.9.1, unchanged.
+
+### Changed
+
+- **Matter: go-fabric v0.7.3.** Fixes that reach the bridge: a dropped
+  TCP connection no longer loses the messages that arrived before the
+  close; opening a session to a controller no longer evicts one of that
+  controller's own sessions; event numbering continues correctly after a
+  restart; a fail-safe re-arm can no longer extend past its overall
+  limit; the mDNS host name stays stable across re-announcements. A
+  bridged device's endpoint lists all its nested parts, following the
+  matter.js reference. Nothing needs to be re-paired.
+
 ## [0.92.1] - 2026-10-22
 
 ### Release summary
