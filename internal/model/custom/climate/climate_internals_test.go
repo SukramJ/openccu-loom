@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster"
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
-	"github.com/SukramJ/go-fabric/cluster/thermo"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -1093,14 +1092,14 @@ func TestSystemModeFromHmModeClampsToFeatureMap(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	c := r.climate
 
-	heatOnly := thermo.ThermostatFeatureHEAT
-	heatCool := thermo.ThermostatFeatureHEAT | thermo.ThermostatFeatureCOOL
-	withAuto := heatCool | thermo.ThermostatFeatureAUTO
+	heatOnly := thermostatspec.FeatureHeating
+	heatCool := thermostatspec.FeatureHeating | thermostatspec.FeatureCooling
+	withAuto := heatCool | thermostatspec.FeatureAutoMode
 
 	cases := []struct {
 		name string
 		mode Mode
-		fm   uint32
+		fm   thermostatspec.Feature
 		want uint8
 	}{
 		{"auto clamps to Heat without AUTO feature", ModeAuto, heatOnly, matterSysModeHeat},

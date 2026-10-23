@@ -156,15 +156,9 @@ type Climate struct {
 	// Service methods are registered in [New].
 	payload.ServiceRegistry
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Bumped on every successful MatterWrite / MatterInvoke
-	// so DataVersionFilter evaluation correctly detects cluster changes.
-	dataVersion hmtypes.DataVersionTracker
-
-	// matterThermo holds the Thermostat and
-	// ThermostatUserInterfaceConfiguration servers the Matter projection
+	// matterDevice holds the Thermostat device the Matter projection
 	// serves, built once per Climate (matter.go).
-	matterThermo matterThermoHolder
+	matterDevice generic.MatterDeviceHolder
 
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. It is keyed on the setpoint
@@ -338,25 +332,6 @@ func New(cfg Config) *Climate {
 		activityStateChannels: cfg.ActivityStateChannels,
 	}
 	c.registerServices()
-	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
-	if c.setpoint != nil {
-		_ = c.setpoint.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
-	}
-	if c.actualTemperature != nil {
-		_ = c.actualTemperature.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
-	}
-	if c.humidity != nil {
-		_ = c.humidity.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
-	}
-	if c.humidityInt != nil {
-		_ = c.humidityInt.OnConfirmedUpdate(func(_, _ int32) { c.dataVersion.Bump() })
-	}
-	if c.temperatureMinimum != nil {
-		_ = c.temperatureMinimum.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
-	}
-	if c.temperatureMaximum != nil {
-		_ = c.temperatureMaximum.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
-	}
 	return c
 }
 
