@@ -411,6 +411,44 @@ v0.10.1 added the two routes this daemon's migration found missing
   validated without a node (the REST handler, the configuration
   validator).
 
+## Amendment — profiles declare their clusters
+
+Owner decision on 2026-10-23 (SukramJ/openccu-loom#999, step 2 of the
+facade migration): a profile yields cluster declarations, not servers,
+and **the profile holds the device** built from them.
+
+- **The source is the device.** A profile implements
+  `interfaces.MatterDeviceSource`: `MatterDevice(opts)` builds a
+  `device.FromSpec` device from its `<cluster>def.Declare` values once
+  (`generic.MatterDeviceHolder`) and returns the same device on every
+  later assembly; the CCU's confirmed state reaches the kit's servers
+  through their typed Set, or through a server's inbound setters where
+  the typed Set would refuse what a device reports (the thermostat
+  clamps a setpoint to its limits on the inbound path and holds it to
+  them on Set). The assembler hands in the key, name, addresses and
+  availability as `device.Options` and applies this assembly's values on
+  the device's Spec, so the key and label rules stay the assembler's —
+  the reason phase 1 rejected `device.New` inside the profiles no longer
+  applies.
+- **DataVersion is the bridge's.** A bridged endpoint's DataVersion is
+  the one the endpoint hosts, advanced by the bridge when the source's
+  change notifier fires and a value moved (go-fabric
+  `endpoint/dispatcher.go` `clusterDataVersionFor`,
+  `bridge/subscribe.go` `wireMeasurementNotifier`); the per-profile
+  counters, which never reached the wire, are gone. What a profile must
+  get right is that every value its clusters read notifies.
+- **Eligibility reads the device.** go-fabric's derivation reads the
+  endpoint-source surface; the candidate list classifies a declaring
+  source by its device, which carries that surface.
+- **What waits on go-fabric.** The light and the sound player (the
+  native level ramp, go-fabric #228, and the colour and level value
+  helpers, #230), the garage drive's ClosureControl (a Stop the server
+  ignores while the drive's motion report lags, #232) and the move of
+  the assembler onto the node's Aggregator (completeness per CCU, #229,
+  and batched changes, #231) keep their current shape until those
+  routes exist. The credential store stays built on the shared handle,
+  since the daemon carries go-fabric's schema in its own migrations.
+
 ## Consequences
 
 - `internal/north/matteradapter` loses the implicit "which clusters does a
