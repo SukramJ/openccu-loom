@@ -7,12 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/SukramJ/go-fabric/cluster/measurement"
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 	tuidef "github.com/SukramJ/go-fabric/cluster/spec/thermostatuserinterfaceconfiguration"
-	"github.com/SukramJ/go-fabric/cluster/wire"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -121,139 +119,6 @@ func matterToHmMode(m uint8) (Mode, error) {
 // climate variants — IP, RF, SimpleRF — surface as Matter Thermostat
 // (0x0301); the cluster surface inside captures the differences.
 func (c *Climate) MatterDeviceType() uint16 { return matterDeviceTypeThermostat }
-
-// MatterScheduleEntries implements [wire.SchedulesSource]. It maps
-// the CCU week-program slots from the channel's MASTER paramset to
-// Matter ScheduleEntry tuples.
-//
-// HM week-program parameter naming convention:
-//
-//	P<N>_TEMPERATURE_<DAY>_<SLOT>  (FLOAT, °C)
-//	P<N>_ENDTIME_<DAY>_<SLOT>      (INTEGER, minutes since midnight)
-//
-// N selects the week program (1..6 typical), DAY is the full English
-// day name (MONDAY..SUNDAY), SLOT is 1..13. The currently-active week
-// program is derived from `Climate.Profile()`; when the climate is
-// in a non-week-program profile (BOOST, AWAY, ComfortEco, NONE), the
-// schedule is empty.
-//
-// Day-of-week conversion HM → Matter: the §11.20 ScheduleEntry uses
-// 0=Sunday..6=Saturday; HM has no canonical numbering but we map by
-// the full English name.
-//
-// Returns nil when the channel has no week-program parameters
-// populated (early-boot, MASTER paramset not yet ingested) — the
-// empty schedule is a valid Matter response.
-func (c *Climate) MatterScheduleEntries() []wire.ScheduleEntry {
-	if c == nil || c.channelRef == nil {
-		return nil
-	}
-	profile, ok := c.Profile()
-	if !ok {
-		return nil
-	}
-	idx, ok := profileWeekIndex(profile)
-	if !ok {
-		// BOOST / AWAY / NONE: no week-program transitions.
-		return nil
-	}
-	prefix := fmt.Sprintf("P%d_", idx+1)
-	out := make([]wire.ScheduleEntry, 0, 7*13)
-	for matterDayInt, hmDay := range matterDayOfWeekFromHMName {
-		matterDay := uint8(matterDayInt) //nolint:gosec // bounded by array size 7; see #20
-		for slot := 1; slot <= 13; slot++ {
-			endtimeKey := hmenum.Parameter(prefix + "ENDTIME_" + hmDay + "_" + strconv.Itoa(slot))
-			tempKey := hmenum.Parameter(prefix + "TEMPERATURE_" + hmDay + "_" + strconv.Itoa(slot))
-			endDP := c.channelRef.MasterParameter(endtimeKey)
-			tempDP := c.channelRef.MasterParameter(tempKey)
-			if endDP == nil || tempDP == nil {
-				continue
-			}
-			endRaw, ok := endDP.RawValue()
-			if !ok {
-				continue
-			}
-			tempRaw, ok := tempDP.RawValue()
-			if !ok {
-				continue
-			}
-			minutes, ok := toUint16Minutes(endRaw)
-			if !ok {
-				continue
-			}
-			temp, ok := toFloat64(tempRaw)
-			if !ok {
-				continue
-			}
-			out = append(out, wire.ScheduleEntry{
-				DayOfWeek:      matterDay,
-				TransitionTime: minutes,
-				Setpoint:       temp,
-			})
-		}
-	}
-	return out
-}
-
-// matterDayOfWeekFromHMName maps a Matter §11.20 day-of-week index
-// (0=Sunday..6=Saturday) to the HM full-English-name segment used in
-// the P<N>_TEMPERATURE_<DAY>_<SLOT> / P<N>_ENDTIME_<DAY>_<SLOT>
-// MASTER parameter names.
-var matterDayOfWeekFromHMName = [7]string{
-	"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY",
-}
-
-// toUint16Minutes coerces a raw MASTER value (the wire encoder
-// usually delivers it as an int64 or float64 depending on
-// transport) into the 0..1440 minutes-of-day range Matter
-// ScheduleEntry expects.
-func toUint16Minutes(raw any) (uint16, bool) {
-	switch v := raw.(type) {
-	case int:
-		if v < 0 || v > 1440 {
-			return 0, false
-		}
-		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
-	case int32:
-		if v < 0 || v > 1440 {
-			return 0, false
-		}
-		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
-	case int64:
-		if v < 0 || v > 1440 {
-			return 0, false
-		}
-		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
-	case float64:
-		if v < 0 || v > 1440 {
-			return 0, false
-		}
-		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
-	default:
-		return 0, false
-	}
-}
-
-// toFloat64 coerces a raw MASTER value to float64 for Setpoint.
-func toFloat64(raw any) (float64, bool) {
-	switch v := raw.(type) {
-	case float64:
-		return v, true
-	case float32:
-		return float64(v), true
-	case int:
-		return float64(v), true
-	case int32:
-		return float64(v), true
-	case int64:
-		return float64(v), true
-	default:
-		return 0, false
-	}
-}
-
-// Compile-time assertion: Climate implements [wire.SchedulesSource].
-var _ wire.SchedulesSource = (*Climate)(nil)
 
 // matterThermoFeatures is the Thermostat FeatureMap this Climate
 // advertises. HEAT is always set; COOL follows the profile's
