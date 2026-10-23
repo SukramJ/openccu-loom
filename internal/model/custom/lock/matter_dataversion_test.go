@@ -13,15 +13,15 @@ import (
 )
 
 // combinedSrv holds a single DoorLockServer instance for both invoke and
-// DataVersion checks. MatterClusterServers() constructs a new server on each
-// call, so tests must pin one instance to observe the bump.
+// DataVersion checks. The device is built once per lock; tests still pin the one
+// instance they read the counter from.
 type combinedSrv struct {
 	interfaces.MatterClusterServer
 	interfaces.MatterClusterDataVersion
 }
 
 func getCombinedSrv(l *Lock) combinedSrv {
-	servers := l.MatterClusterServers()
+	servers := matterServers(l)
 	s := servers[0]
 	dv := s.(interfaces.MatterClusterDataVersion)
 	return combinedSrv{s, dv}

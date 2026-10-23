@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -283,45 +284,63 @@ func TestLockButtonKindWritesBUTTONLOCK(t *testing.T) {
 	}
 }
 
-// TestLockDataVersionBumpsOnWireUpdate pins that physical operation at the CCU
-// — which fires OnConfirmedUpdate on the wire DPs — increments DataVersion.
-// Without this, Matter SubscribeUpdate filters stale state and HomeKit shows
-// the wrong lock state.
-func TestLockDataVersionBumpsOnWireUpdate(t *testing.T) {
+// notifications counts the lock's Matter change notifications. The bridge
+// advances the DoorLock cluster's DataVersion and reports LockState on
+// each one, so a physical change that does not notify never reaches a
+// subscribed controller.
+func notifications(l *Lock) *atomic.Int32 {
+	var n atomic.Int32
+	l.OnMatterValueChanged(func() { n.Add(1) })
+	return &n
+}
+
+// TestLockNotifiesOnWireUpdate pins that physical operation at the CCU —
+// a LOCK_STATE update on the wire — notifies the bridge, first observation
+// and value change alike. Without it a subscription carries stale state
+// and HomeKit shows the wrong lock state.
+func TestLockNotifiesOnWireUpdate(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	before := r.lock.MatterDataVersion()
+	n := notifications(r.lock)
 
-	// First CCU-confirmed value fires OnConfirmedUpdate (first observation).
 	fireLockEnum(t, r.stateDP, string(StateLocked))
-
-	after := r.lock.MatterDataVersion()
-	if after <= before {
-		t.Fatalf("DataVersion did not bump after wire LOCK_STATE update: before=%d after=%d", before, after)
+	if got := n.Load(); got == 0 {
+		t.Fatal("no change notification after the first wire LOCK_STATE update")
 	}
-
-	// A value change also fires confirmed callbacks.
-	mid := after
+	before := n.Load()
 	fireLockEnum(t, r.stateDP, string(StateUnlocked))
-	afterChange := r.lock.MatterDataVersion()
-	if afterChange <= mid {
-		t.Fatalf("DataVersion did not bump after LOCK_STATE value change: before=%d after=%d", mid, afterChange)
+	if got := n.Load(); got <= before {
+		t.Fatalf("no change notification after a LOCK_STATE value change (%d before, %d after)", before, got)
 	}
 }
 
-// TestLockDataVersionBumpsOnJammed pins that an ERROR_JAMMED wire update also
-// bumps DataVersion so the jamming state propagates to Matter subscribers.
-func TestLockDataVersionBumpsOnJammed(t *testing.T) {
+// TestLockNotifiesOnJammed pins that an ERROR_JAMMED wire update notifies
+// the bridge, so the jamming state propagates to Matter subscribers.
+func TestLockNotifiesOnJammed(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	before := r.lock.MatterDataVersion()
+	n := notifications(r.lock)
 
-	// First observation fires OnConfirmedUpdate.
 	r.jammedDP.OnEvent(true)
+	if n.Load() == 0 {
+		t.Fatal("no change notification after an ERROR_JAMMED update")
+	}
+}
 
-	after := r.lock.MatterDataVersion()
-	if after <= before {
-		t.Fatalf("DataVersion did not bump after ERROR_JAMMED update: before=%d after=%d", before, after)
+// TestRFLockNotifiesOnError pins that the RF lock's ERROR — the value
+// IsJammed reads for that kind — notifies the bridge: a clutch failure
+// at an HM-Sec-Key is a NotFullyLocked LockState a controller must see.
+func TestRFLockNotifiesOnError(t *testing.T) {
+	t.Parallel()
+	r := newRFErrorRig(t, "HmSecKey:9")
+	n := notifications(r.lock)
+
+	fireLockEnum(t, r.errorDP, string(LockErrorClutchFail))
+	if n.Load() == 0 {
+		t.Fatal("no change notification after the RF lock's ERROR changed")
+	}
+	if !r.lock.IsJammed() {
+		t.Fatalf("IsJammed() = false after ERROR = %s", LockErrorClutchFail)
 	}
 }
 

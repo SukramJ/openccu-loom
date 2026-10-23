@@ -106,11 +106,9 @@ type Lock struct {
 	// Service methods are registered in [New].
 	payload.ServiceRegistry
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Bumped on every CCU-confirmed wire-DP change so
-	// DataVersionFilter evaluation correctly detects cluster changes
-	// from physical operation at the device.
-	dataVersion hmtypes.DataVersionTracker
+	// matterDevice holds the device the Matter projection serves, built
+	// once per lock (matter.go).
+	matterDevice generic.MatterDeviceHolder
 
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on the primary write
@@ -247,32 +245,9 @@ func New(cfg Config) *Lock {
 			l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterButtonLock)
 		}
 	}
-	// Matter §10.6.5: DataVersion advances on every CCU-confirmed wire-DP
-	// change. Physical operation at the device updates LOCK_STATE / STATE /
-	// BUTTON_LOCK without going through LockInvoke, so each wire slot needs
-	// its own hook to guarantee DataVersionFilter sees the change.
-	if l.stateDp != nil {
-		_ = l.stateDp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
-	}
-	if l.directionDp != nil {
-		_ = l.directionDp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
-	}
-	if l.boolStateDp != nil {
-		_ = l.boolStateDp.OnConfirmedUpdate(func(_, _ bool) { l.dataVersion.Bump() })
-	}
-	if l.jammedDp != nil {
-		_ = l.jammedDp.OnConfirmedUpdate(func(_, _ bool) { l.dataVersion.Bump() })
-	}
-	if l.rfErrorDp != nil {
-		_ = l.rfErrorDp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
-	}
 	l.registerServices()
 	return l
 }
-
-// MatterDataVersion returns the current Matter cluster DataVersion counter.
-// Implements [contract.ClusterDataVersion] via [matter.go].
-func (l *Lock) MatterDataVersion() uint32 { return l.dataVersion.Current() }
 
 // DataPointKey returns the composite identifier used by the materializer
 // to attach this custom DP to its primary channel. Satisfies
