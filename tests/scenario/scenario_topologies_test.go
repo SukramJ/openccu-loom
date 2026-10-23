@@ -33,24 +33,34 @@ type scenarioTopology struct {
 }
 
 // newScenarioSnapshotter turns a fixed device fleet into the callback
-// the bridge holds. The assembler is the daemon's own model walk, so
-// the topology a scenario runs against is assembled by the same code
-// the daemon uses rather than by a harness-local approximation — the
-// endpoint ids the scenario JSON names (2, 3, …) are the ids that walk
-// allocates.
+// the bridge holds. The walk is the daemon's own, so the endpoints a
+// scenario runs against are described by the same code the daemon uses
+// rather than by a harness-local approximation; go-fabric's endpoint
+// assembler over the fake store numbers them, as the node's Aggregator
+// does in the daemon — the endpoint ids the scenario JSON names (2, 3,
+// …) are the ids that assembly allocates.
 func newScenarioSnapshotter(snapshots []matteradapter.DeviceSnapshot) (bridge.Snapshotter, *endpointtest.FakeStore, error) {
 	epStore := endpointtest.NewFakeStore()
-	asm, err := matteradapter.New(epStore, matteradapter.Config{
-		VendorID:            0x1234,
-		ProductID:           0x5678,
-		NodeLabel:           "scenario-harness",
-		IncludeMeasurements: true,
+	asm := matteradapter.New(matteradapter.Config{IncludeMeasurements: true}, slog.New(slog.DiscardHandler))
+	inner, err := matterendpoint.New(epStore, matterendpoint.Config{
+		VendorID:   0x1234,
+		ProductID:  0x5678,
+		NodeLabel:  "scenario-harness",
+		VendorName: "eQ-3",
 	}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		return nil, nil, fmt.Errorf("scenario assembler: %w", err)
 	}
 	return func(ctx context.Context) (*matterendpoint.Topology, error) {
-		return asm.AssembleDevices(ctx, snapshots)
+		described, err := asm.DescribeDevices(ctx, snapshots)
+		if err != nil {
+			return nil, err
+		}
+		snaps := make([]matterendpoint.Snapshot, 0, len(described))
+		for _, d := range described {
+			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+		}
+		return inner.Assemble(ctx, snaps)
 	}, epStore, nil
 }
 

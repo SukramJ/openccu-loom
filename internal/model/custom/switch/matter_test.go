@@ -12,6 +12,8 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
+	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -49,26 +51,44 @@ func (w *matterWriter) snapshot() []matterWriteCall {
 	return append([]matterWriteCall(nil), w.calls...)
 }
 
+// matterOnOffServer is what these tests read from the switch's OnOff
+// server: the cluster surface, its data version and its lists.
+type matterOnOffServer interface {
+	contract.ClusterServer
+	contract.ClusterDataVersion
+	contract.ClusterAttributeLister
+	contract.ClusterCommandLister
+}
+
 // matterSwitch builds a writable STATE switch and returns it with its
 // OnOff server and the writer behind the Sink.
-func matterSwitch(t *testing.T) (*Switch, *onoff.Server, *matterWriter) {
+func matterSwitch(t *testing.T) (*Switch, matterOnOffServer, *matterWriter) {
 	t.Helper()
 	w := &matterWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
 	return s, matterOnOffServerOf(t, s), w
 }
 
-// matterOnOffServerOf returns the one cluster server s contributes,
-// failing unless it is go-fabric's OnOff server.
-func matterOnOffServerOf(t *testing.T, s *Switch) *onoff.Server {
+// matterDeviceOf returns the device s projects.
+func matterDeviceOf(t *testing.T, s *Switch) *fabricdevice.Device {
 	t.Helper()
-	servers := s.MatterClusterServers()
-	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers = %d servers, want exactly the OnOff server", len(servers))
+	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey(s.Address()), Name: "switch"})
+	if err != nil {
+		t.Fatalf("MatterDevice: %v", err)
 	}
-	srv, ok := servers[0].(*onoff.Server)
+	if d == nil {
+		t.Fatal("MatterDevice returned no device")
+	}
+	return d
+}
+
+// matterOnOffServerOf returns the OnOff server of the device s projects.
+func matterOnOffServerOf(t *testing.T, s *Switch) matterOnOffServer {
+	t.Helper()
+	d := matterDeviceOf(t, s)
+	srv, ok := d.Server(onoff.ClusterID).(matterOnOffServer)
 	if !ok {
-		t.Fatalf("OnOff server is %T, want go-fabric's *onoff.Server", servers[0])
+		t.Fatalf("OnOff server is %T, want a server with data version and lists", d.Server(onoff.ClusterID))
 	}
 	return srv
 }
@@ -83,10 +103,10 @@ func TestMatterDeviceType(t *testing.T) {
 	}
 }
 
-// TestMatterClusterServersExposesOnOff confirms the Switch contributes
-// exactly the OnOff server. Groups and ScenesManagement are stack state
-// the endpoint assembler mounts from the node's group state.
-func TestMatterClusterServersExposesOnOff(t *testing.T) {
+// TestMatterDeviceServesOnOff confirms the Switch's device serves the
+// OnOff cluster. Groups and ScenesManagement are stack state the endpoint
+// assembler mounts from the node's group state.
+func TestMatterDeviceServesOnOff(t *testing.T) {
 	t.Parallel()
 	_, srv, _ := matterSwitch(t)
 	if id := srv.MatterClusterID(); id != onoff.ClusterID {
@@ -94,25 +114,32 @@ func TestMatterClusterServersExposesOnOff(t *testing.T) {
 	}
 }
 
-// TestMatterClusterServersBuiltOncePerSwitch pins that reassembly sees
-// the same server: a rebuilt one would lose its timers, its attribute
-// state and the subscription behind it.
-func TestMatterClusterServersBuiltOncePerSwitch(t *testing.T) {
+// TestMatterDeviceBuiltOncePerSwitch pins that reassembly sees the same
+// device: a rebuilt one would lose its servers' timers, attribute state
+// and the subscription behind them.
+func TestMatterDeviceBuiltOncePerSwitch(t *testing.T) {
 	t.Parallel()
-	s, srv, _ := matterSwitch(t)
-	if again := s.MatterClusterServers()[0]; again != srv {
-		t.Fatalf("a second MatterClusterServers call returned a different server (%p vs %p)", again, srv)
+	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
+	d := matterDeviceOf(t, s)
+	if again := matterDeviceOf(t, s); again != d {
+		t.Fatalf("a second MatterDevice call returned a different device (%p vs %p)", again, d)
 	}
 }
 
-// TestMatterClusterServerInterfaceSatisfaction reaches the server through
-// the source-surface interface the endpoint assembler uses.
-func TestMatterClusterServerInterfaceSatisfaction(t *testing.T) {
+// TestMatterDeviceShadowsTheEmbeddedGenericSwitch pins that the profile,
+// not the generic STATE data point it embeds, builds the device: the
+// promoted generic method would serve the bare data point's commands,
+// which bypass the profile's group-state handling.
+func TestMatterDeviceShadowsTheEmbeddedGenericSwitch(t *testing.T) {
 	t.Parallel()
-	var src interfaces.MatterEndpointSource = newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	servers := src.MatterClusterServers()
-	if len(servers) != 1 || servers[0].MatterClusterID() != onoff.ClusterID {
-		t.Fatalf("MatterClusterServers through the interface = %v, want the OnOff server", servers)
+	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
+	var src interfaces.MatterDeviceSource = s
+	d, err := src.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("k"), Name: "switch"})
+	if err != nil || d == nil {
+		t.Fatalf("MatterDevice through the interface = (%v, %v), want a device", d, err)
+	}
+	if held := s.matterDevice.Current(); held != d {
+		t.Fatalf("the device came from %p, the profile holds %p: the embedded generic switch built it", d, held)
 	}
 }
 
@@ -370,6 +397,14 @@ func TestMatterOnWithTimedOffSwitchesOffAfterOnTime(t *testing.T) {
 	}
 	if calls[1].priority != hmenum.CommandPriorityHigh {
 		t.Errorf("countdown Off priority = %v, want High", calls[1].priority)
+	}
+	// The attribute is stored once the Sink returned: wait for it as for
+	// the write, so a loaded runner does not read it in between.
+	for time.Now().Before(deadline) {
+		if v, _ := srv.MatterRead(onoff.AttrOnOff); v == false {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
 		t.Errorf("OnOff after the countdown: got %v, want false", v)

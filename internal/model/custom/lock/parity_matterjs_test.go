@@ -50,15 +50,15 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 }
 
 // TestParityMatterJS_DoorLockMandatoryAttributes asserts that the
-// DoorLockServer returned by Lock.MatterClusterServers() covers
+// DoorLock server of the Lock's device covers
 // OperatingMode (0x0025) and SupportedOperatingModes (0x0026),
 // both spec-mandatory.
 func TestParityMatterJS_DoorLockMandatoryAttributes(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	servers := r.lock.MatterClusterServers()
+	servers := matterServers(r.lock)
 	if len(servers) == 0 {
-		t.Fatal("MatterClusterServers returned empty slice")
+		t.Fatal("the lock's device carries no server")
 	}
 	lister, ok := servers[0].(interfaces.MatterClusterAttributeLister)
 	if !ok {
@@ -94,9 +94,9 @@ func TestParityMatterJS_LockClusterRevisions(t *testing.T) {
 
 	schema := loadMatterSchemaT(t)
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	servers := r.lock.MatterClusterServers()
+	servers := matterServers(r.lock)
 	if len(servers) == 0 {
-		t.Fatal("MatterClusterServers returned empty slice")
+		t.Fatal("the lock's device carries no server")
 	}
 
 	clusterID := servers[0].MatterClusterID()

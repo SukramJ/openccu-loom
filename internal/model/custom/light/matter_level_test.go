@@ -475,7 +475,7 @@ func TestLevelMoveZeroRateIsInvalidCommand(t *testing.T) {
 		l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 		l.OnLevel(0.5)
 		srv := levelServer(t, l)
-		before := l.MatterDataVersion()
+		before := srv.MatterDataVersion()
 		_, err := srv.MatterInvoke(context.Background(), cmd, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 0}})
 		var sc im.StatusCodeError
 		if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusInvalidCommand {
@@ -484,7 +484,7 @@ func TestLevelMoveZeroRateIsInvalidCommand(t *testing.T) {
 		if calls := w.snapshot(); len(calls) != 0 {
 			t.Fatalf("cmd 0x%02X Rate=0 reached the CCU: %+v", cmd, calls)
 		}
-		if l.MatterDataVersion() != before {
+		if srv.MatterDataVersion() != before {
 			t.Fatalf("cmd 0x%02X Rate=0 bumped the data version", cmd)
 		}
 	}
@@ -600,14 +600,14 @@ func TestLevelCurrentLevelIsNotWritable(t *testing.T) {
 	l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 	l.OnLevel(0.5)
 	srv := levelServer(t, l)
-	before := l.MatterDataVersion()
+	before := srv.MatterDataVersion()
 	if err := srv.MatterWrite(context.Background(), levelcontrol.AttrCurrentLevel, uint64(200)); err == nil {
 		t.Fatal("MatterWrite(CurrentLevel) succeeded, want a refusal")
 	}
 	if calls := w.snapshot(); len(calls) != 0 {
 		t.Fatalf("a refused CurrentLevel write reached the CCU: %+v", calls)
 	}
-	if l.MatterDataVersion() != before {
+	if srv.MatterDataVersion() != before {
 		t.Fatal("a refused CurrentLevel write bumped the data version")
 	}
 }

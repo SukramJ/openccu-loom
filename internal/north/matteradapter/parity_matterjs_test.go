@@ -103,11 +103,8 @@ func TestParityMatterJS_AggregatorTopology_ThreeTier(t *testing.T) {
 		Devices:     []*device.Device{dev1, dev2},
 	}
 
-	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
+	a := matteradapter.New(validConfig(), nil)
+	top, err := assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -186,9 +183,9 @@ func TestParityMatterJS_AggregatorTopology_ThreeTier(t *testing.T) {
 func TestParityMatterJS_AggregatorTopology_EmptySnapshotIsStillPresent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	a, _ := matteradapter.New(newFakeStore(), validConfig(), nil)
+	a := matteradapter.New(validConfig(), nil)
 
-	top, err := a.AssembleDevices(ctx, nil)
+	top, err := assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), nil)
 	if err != nil {
 		t.Fatalf("Assemble(nil): %v", err)
 	}
@@ -224,8 +221,8 @@ func TestParityMatterJS_AggregatorTopology_PartsListContainsBridgedIDs(t *testin
 		deviceType: 0x010A,
 	})
 
-	a, _ := matteradapter.New(newFakeStore(), validConfig(), nil)
-	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	a := matteradapter.New(validConfig(), nil)
+	top, err := assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -274,10 +271,10 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 	})
 
 	fs := newFakeStore()
-	a, _ := matteradapter.New(fs, validConfig(), nil)
+	a := matteradapter.New(validConfig(), nil)
 
 	full := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
-	top1, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{full})
+	top1, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{full})
 	if err != nil {
 		t.Fatalf("Assemble(full): %v", err)
 	}
@@ -286,7 +283,7 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 	// A model-incomplete assembly (the boot-time shape) keeps the number
 	// reserved even though the source is currently absent.
 	incomplete := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
-	if _, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{incomplete}); err != nil {
+	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{incomplete}); err != nil {
 		t.Fatalf("Assemble(incomplete): %v", err)
 	}
 	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 1 || rows[0].EndpointID != assigned {
@@ -296,7 +293,7 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 	// Only a model-complete assembly without the source (the explicit
 	// removal case) releases the number.
 	removed := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: true}
-	if _, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{removed}); err != nil {
+	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{removed}); err != nil {
 		t.Fatalf("Assemble(removed): %v", err)
 	}
 	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 0 {

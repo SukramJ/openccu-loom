@@ -56,11 +56,8 @@ func TestAssemble_LargeFleet600Endpoints(t *testing.T) {
 	}
 
 	snap := matteradapter.DeviceSnapshot{CentralName: centralName, Devices: devs}
-	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
-	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
+	a := matteradapter.New(validConfig(), nil)
+	top, err := assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -133,8 +130,8 @@ func TestAssemble_RejectEndpointIDOverflow(t *testing.T) {
 	fs := newFakeStore()
 	fs.nextID = 0xFFFE // next assignment would land on 0xFFFE; the one after that overflows.
 
-	a, _ := matteradapter.New(fs, validConfig(), nil)
-	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
+	a := matteradapter.New(validConfig(), nil)
+	top, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		// Acceptable: the assigner refused to mint near the boundary.
 		// The goal is "no silent wraparound" — log and move on.

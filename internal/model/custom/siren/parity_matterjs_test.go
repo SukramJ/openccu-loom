@@ -77,9 +77,9 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 func smokeAlarmServer(t *testing.T) *alarm.Server {
 	t.Helper()
 	s, _, _ := newSmokeSirenRig(t)
-	srv, ok := s.MatterClusterServers()[0].(*alarm.Server)
+	srv, ok := matterServers(t, s)[0].(*alarm.Server)
 	if !ok {
-		t.Fatalf("SmokeSiren assembles %T, want *alarm.Server", s.MatterClusterServers()[0])
+		t.Fatalf("SmokeSiren assembles %T, want *alarm.Server", matterServers(t, s)[0])
 	}
 	return srv
 }
@@ -202,7 +202,7 @@ func TestParityMatterJS_OnOffAdvertisedSets(t *testing.T) {
 	_, siren, _ := matterSiren(t)
 	cases := []struct {
 		name   string
-		srv    *onoff.Server
+		srv    matterOnOffServer
 		wantFM uint32
 	}{
 		{"Siren", siren, onoff.FeatureLighting},

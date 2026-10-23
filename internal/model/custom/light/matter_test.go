@@ -15,10 +15,12 @@ import (
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 	"github.com/SukramJ/go-fabric/cluster/wire"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestMatterDeviceTypeDimmable maps a dimmable Light to
@@ -46,7 +48,7 @@ func TestMatterDeviceTypeNonDimmable(t *testing.T) {
 // assembler mounts — the source supplies neither.
 func TestMatterClusterServersDimmable(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	servers := l.MatterClusterServers()
+	servers := matterServers(t, l)
 	got := map[uint32]bool{}
 	for _, s := range servers {
 		got[s.MatterClusterID()] = true
@@ -61,17 +63,33 @@ func TestMatterClusterServersDimmable(t *testing.T) {
 // the endpoint assembler, not supplied by the source.
 func TestMatterClusterServersNonDimmable(t *testing.T) {
 	l, _ := newLightRig(t, "HM-LC-Sw:1", &stubWriter{}, custom.LightCapabilities{})
-	servers := l.MatterClusterServers()
+	servers := matterServers(t, l)
 	if len(servers) != 1 || servers[0].MatterClusterID() != 0x0006 {
 		t.Fatalf("non-dimmable: %d cluster servers, want exactly [0x0006]", len(servers))
 	}
+}
+
+// matterDeviceOf returns the device src projects, built once per source.
+func matterDeviceOf(t *testing.T, src interfaces.MatterDeviceSource) *fabricdevice.Device {
+	t.Helper()
+	d, err := src.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("light-test"), Name: "light"})
+	if err != nil || d == nil {
+		t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
+	}
+	return d
+}
+
+// matterServers returns the cluster servers of the device src projects.
+func matterServers(t *testing.T, src interfaces.MatterDeviceSource) []interfaces.MatterClusterServer {
+	t.Helper()
+	return matterDeviceOf(t, src).Servers()
 }
 
 // onOffServer returns the light's OnOff cluster server — go-fabric's
 // [onoff.Server], built once per light.
 func onOffServer(t *testing.T, l *Light) *onoff.Server {
 	t.Helper()
-	for _, s := range l.MatterClusterServers() {
+	for _, s := range matterServers(t, l) {
 		if srv, ok := s.(*onoff.Server); ok {
 			return srv
 		}
@@ -112,7 +130,7 @@ func (w *recWriter) writes() ([]float64, []hmenum.CommandPriority) {
 // light — go-fabric's [levelcontrol.Server], built once per light.
 func levelServer(t *testing.T, l *Light) *levelcontrol.Server {
 	t.Helper()
-	for _, s := range l.MatterClusterServers() {
+	for _, s := range matterServers(t, l) {
 		if lvl, ok := s.(*levelcontrol.Server); ok {
 			return lvl
 		}
@@ -251,12 +269,12 @@ func TestOnOffCommandReachesTheCCUAtHighPriority(t *testing.T) {
 
 // TestOnOffSinkErrorFailsTheCommandAndKeepsTheAttribute pins that a CCU
 // write the CCU refuses answers the command with an error and leaves
-// OnOff — and the shared data version — where they were.
+// OnOff — and the OnOff server's data version — where they were.
 func TestOnOffSinkErrorFailsTheCommandAndKeepsTheAttribute(t *testing.T) {
 	w := &recWriter{err: errors.New("ccu unreachable")}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	srv := onOffServer(t, l)
-	before := l.MatterDataVersion()
+	before := srv.MatterDataVersion()
 
 	for _, cmd := range []struct {
 		id     uint32
@@ -276,7 +294,7 @@ func TestOnOffSinkErrorFailsTheCommandAndKeepsTheAttribute(t *testing.T) {
 	if v, _ := srv.MatterRead(onoff.AttrOnTime); v != uint16(0) {
 		t.Fatalf("OnTime after a refused OnWithTimedOff = %v, want 0", v)
 	}
-	if after := l.MatterDataVersion(); after != before {
+	if after := srv.MatterDataVersion(); after != before {
 		t.Fatalf("refused commands bumped the data version: %d -> %d", before, after)
 	}
 }
@@ -506,7 +524,7 @@ func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
 			l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true, Transition: true})
 			l.OnLevel(0.5) // the plain variant (0x00) is gated on the light being on
 			srv := levelServer(t, l)
-			versionBefore := l.MatterDataVersion()
+			versionBefore := srv.MatterDataVersion()
 			tt := uint16(30)
 			fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
 			if _, err := srv.MatterInvoke(context.Background(), cmdID, fields); err != nil {
@@ -528,7 +546,7 @@ func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
 			if on := got[string(hmenum.ParameterOnTime)].(float64); on != custom.TimerNotUsed {
 				t.Errorf("ON_TIME=%v, want TimerNotUsed (%v)", on, custom.TimerNotUsed)
 			}
-			if l.MatterDataVersion() == versionBefore {
+			if srv.MatterDataVersion() == versionBefore {
 				t.Error("ramped MoveToLevel must bump the cluster data version")
 			}
 		})
@@ -693,7 +711,7 @@ func TestLevelInvokeUnknownCommand(t *testing.T) {
 // without LevelControl.
 func TestLevelControlNotPresentOnNonDimmable(t *testing.T) {
 	l, _ := newLightRig(t, "HM-LC-Sw:1", &stubWriter{}, custom.LightCapabilities{})
-	for _, s := range l.MatterClusterServers() {
+	for _, s := range matterServers(t, l) {
 		if _, ok := s.(*levelcontrol.Server); ok {
 			t.Fatalf("non-dimmable light unexpectedly contributes LevelControl")
 		}

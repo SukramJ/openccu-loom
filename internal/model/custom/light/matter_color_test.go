@@ -91,14 +91,14 @@ func TestKelvinToMiredsConversionRange(t *testing.T) {
 
 // colorServer returns the ColorControl server a colour variant serves,
 // as the endpoint assembler sees it.
-func colorServer(t *testing.T, src interfaces.MatterEndpointSource) *fabriclight.ColorControlServer {
+func colorServer(t *testing.T, src interfaces.MatterDeviceSource) *fabriclight.ColorControlServer {
 	t.Helper()
-	for _, s := range src.MatterClusterServers() {
+	for _, s := range matterServers(t, src) {
 		if srv, ok := s.(*fabriclight.ColorControlServer); ok {
 			return srv
 		}
 	}
-	t.Fatal("no *fabriclight.ColorControlServer among MatterClusterServers()")
+	t.Fatal("no *fabriclight.ColorControlServer on the device")
 	return nil
 }
 
@@ -186,7 +186,7 @@ func TestColorTempLightDeviceTypeIsColorTemperatureLight(t *testing.T) {
 func TestColorTempLightExposesOnOffLevelAndColorControl(t *testing.T) {
 	l := newCTLight(t, &stubWriter{})
 	got := map[uint32]bool{}
-	for _, s := range l.MatterClusterServers() {
+	for _, s := range matterServers(t, l) {
 		got[s.MatterClusterID()] = true
 	}
 	for _, want := range []uint32{0x0006, 0x0008, 0x0300} {
@@ -343,15 +343,16 @@ func TestColorLightDeviceTypeIsExtendedColorLight(t *testing.T) {
 	}
 }
 
-// TestColorLightColorModeIsHS locks the feature set (HS and the XY
-// feature the ExtendedColorLight device type mandates) and the starting
-// mode, which is the device's: HS.
+// TestColorLightColorModeIsHS locks the feature set (HS, and the XY and
+// CT features the ExtendedColorLight device type mandates — CT mapped
+// onto the colour, see matter_color_temperature_test.go) and the
+// starting mode, which is the device's: HS.
 func TestColorLightColorModeIsHS(t *testing.T) {
 	l := newHSLight(t, &stubWriter{})
 	srv := colorServer(t, l)
 	fm, _ := srv.MatterRead(matterAttrFeatureMap)
-	if fm != uint32(fabriclight.ColorFeatureHueSaturation|fabriclight.ColorFeatureXY) {
-		t.Fatalf("FeatureMap = %v, want HS | XY", fm)
+	if fm != uint32(fabriclight.ColorFeatureHueSaturation|fabriclight.ColorFeatureXY|fabriclight.ColorFeatureColorTemperature) {
+		t.Fatalf("FeatureMap = %v, want HS | XY | CT", fm)
 	}
 	for _, attr := range []uint32{wire.ColorCtrlAttrColorMode, wire.ColorCtrlAttrEnhancedColorMode} {
 		if got := readU8(t, srv, attr); got != uint8(fabriclight.ColorModeHueSaturation) {

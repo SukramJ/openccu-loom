@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
-
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -71,23 +69,12 @@ type Light struct {
 
 	Capabilities custom.LightCapabilities
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Shared by all cluster servers that project this Light
-	// (OnOff, LevelControl, ColorControl). Bumped on every successful
-	// MatterWrite / MatterInvoke so DataVersionFilter evaluation
-	// correctly detects cluster changes.
-	dataVersion hmtypes.DataVersionTracker
-
-	// matterOnOff holds the OnOff cluster server the Matter projection
-	// serves, built once per light (matter.go); matterLevelSrv the
-	// LevelControl server (matter_level.go), whose native source keeps
-	// the cluster-state attributes Options and OnLevel.
-	matterOnOff     generic.MatterOnOffHolder
-	matterLevelOnce sync.Once
-	matterLevelSrv  *levelcontrol.Server
-	// matterColor holds the ColorControl server a colour variant builds
-	// (matter_color.go); the plain Light never fills it.
-	matterColor matterColorHolder
+	// matterDevice holds the device the Matter projection serves, built
+	// once per light (matter.go) — the OnOff and, on a dimmable light,
+	// the LevelControl cluster, plus the ColorControl a colour variant
+	// declares (matter_color.go). It lives on the embedded Light so
+	// [Light.Close] quiesces it whichever variant built it.
+	matterDevice generic.MatterDeviceHolder
 	// hasRampStop reports a RAMP_STOP action on the channel (the classic
 	// HM dimmers), which a LevelControl Stop writes.
 	hasRampStop bool
@@ -210,8 +197,6 @@ func New(cfg Config) *Light {
 	}
 	if level != nil {
 		l.registerLightServices()
-		// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
-		_ = level.OnConfirmedUpdate(func(_, _ float64) { l.dataVersion.Bump() })
 	}
 	return l
 }
@@ -255,8 +240,7 @@ func (l *Light) Close() {
 		l.unsubLevel()
 		l.unsubLevel = nil
 	}
-	l.matterOnOff.Quiesce()
-	l.matterColor.quiesce()
+	l.matterDevice.Quiesce()
 }
 
 // Subscribe satisfies [device.SubscribingDataPoint]. Light has no

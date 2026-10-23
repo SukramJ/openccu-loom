@@ -149,10 +149,10 @@ func TestStartMatterBridge_EnabledReturnsBridge(t *testing.T) {
 	}
 	t.Cleanup(bundle.stop)
 
-	if addr := bundle.bridge.LocalAddr(); addr == "" {
+	if addr := bundle.node.Bridge().LocalAddr(); addr == "" {
 		t.Error("expected non-empty LocalAddr after bridge start")
 	}
-	if topo := bundle.bridge.Topology(); topo == nil {
+	if topo := bundle.node.Bridge().Topology(); topo == nil {
 		t.Error("expected non-nil Topology after bridge start")
 	}
 }

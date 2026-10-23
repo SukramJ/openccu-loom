@@ -44,11 +44,8 @@ func TestAssemble_ChannelLabelReachesTheNodeLabel(t *testing.T) {
 
 			cfg := validConfig()
 			cfg.ChannelLabel = tc.label
-			a, err := matteradapter.New(newFakeStore(), cfg, nil)
-			if err != nil {
-				t.Fatalf("New: %v", err)
-			}
-			top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{
+			a := matteradapter.New(cfg, nil)
+			top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{
 				{CentralName: "ccu1", Devices: []*device.Device{dev}},
 			})
 			if err != nil {

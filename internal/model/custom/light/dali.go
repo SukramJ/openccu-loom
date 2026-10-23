@@ -50,12 +50,6 @@ func NewDRGDaliLight(cfg Config, minK, maxK int32) *DRGDaliLight {
 		hue:            custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldHue, hmenum.ParameterHue)),
 		saturation:     custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSaturation, hmenum.ParameterSaturation)),
 	}
-	if l.hue != nil {
-		_ = l.hue.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
-	}
-	if l.saturation != nil {
-		_ = l.saturation.OnConfirmedUpdate(func(_, _ float64) { l.dataVersion.Bump() })
-	}
 	return l
 }
 

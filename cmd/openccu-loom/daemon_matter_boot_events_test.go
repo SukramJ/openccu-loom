@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"testing"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -81,10 +80,11 @@ func TestMatterBootEventsAreReadableAfterWiring(t *testing.T) {
 		}
 	})
 
-	bridge, ok := wiring.reassembler.(*matterbridge.Bridge)
-	if !ok || bridge == nil {
-		t.Fatalf("matter runtime did not produce a bridge (reassembler=%T); without it this pin asserts nothing", wiring.reassembler)
+	inspector, ok := wiring.endpointInspector.(matterEndpointInspector)
+	if !ok || inspector.node == nil {
+		t.Fatalf("matter runtime did not produce a node (inspector=%T); without it this pin asserts nothing", wiring.endpointInspector)
 	}
+	bridge := inspector.node.Bridge()
 
 	for _, tc := range []struct {
 		name    string

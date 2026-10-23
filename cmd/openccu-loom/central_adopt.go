@@ -106,6 +106,14 @@ type centralOrchestrator struct {
 	// GET /api/v1/matter/status's enabled_count for endpoints that can no
 	// longer exist.
 	matterExposureStore *matterendpoint.Store
+	// matterRetire collects a removed central's Matter endpoint numbers:
+	// the central's partition of the node's Aggregator is retired, so the
+	// numbers its endpoints held are released once and the scope is
+	// forgotten. Set via [centralOrchestrator.setMatterPartitionRetirer]
+	// after the Matter runtime is stood up; nil while the bridge is
+	// disabled. Only removeCentral calls it: a daemon shutdown stops every
+	// central too, and their numbers must survive it.
+	matterRetire func(ctx context.Context, centralName string) error
 	// alarmHook subscribes an adopted central onto the alarm service's
 	// event routing and detaches it again by name. Set via
 	// [centralOrchestrator.setAlarmCentralHook]; zero while the alarm
@@ -338,6 +346,18 @@ func (o *centralOrchestrator) setMatterCentralHook(hook matterCentralHook) {
 	}
 	o.mu.Lock()
 	o.matterHook = hook
+	o.mu.Unlock()
+}
+
+// setMatterPartitionRetirer installs the retirement of a removed central's
+// Matter partition. Nil-safe / idempotent, mirroring
+// [centralOrchestrator.setMatterExposureStore].
+func (o *centralOrchestrator) setMatterPartitionRetirer(retire func(ctx context.Context, centralName string) error) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.matterRetire = retire
 	o.mu.Unlock()
 }
 
@@ -716,6 +736,15 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	if o.matterExposureStore != nil {
 		if err := o.matterExposureStore.DeleteForCentral(ctx, name); err != nil {
 			o.logger.Warn("central.remove.purge_matter_exposures",
+				slog.String("central", name), slog.String("err", err.Error()))
+		}
+	}
+	o.mu.Lock()
+	retire := o.matterRetire
+	o.mu.Unlock()
+	if retire != nil {
+		if err := retire(ctx, name); err != nil {
+			o.logger.Warn("central.remove.retire_matter_partition",
 				slog.String("central", name), slog.String("err", err.Error()))
 		}
 	}

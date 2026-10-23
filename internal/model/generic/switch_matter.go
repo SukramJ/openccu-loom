@@ -6,7 +6,7 @@ package generic
 import (
 	"context"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -19,17 +19,17 @@ import (
 const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // Compile-time assertions: a generic STATE switch participates in the
-// Matter source surface (ADR 0012) as an OnOffPlugInUnit endpoint whose
-// OnOff cluster is go-fabric's [onoff.Server] (ADR 0084 phase 2).
+// Matter source surface (ADR 0012) as an OnOffPlugInUnit device whose
+// OnOff cluster is a declaration for go-fabric's device kit (ADR 0084).
 var (
-	_ interfaces.MatterEndpointSource = (*Switch)(nil)
+	_ interfaces.MatterDeviceSource   = (*Switch)(nil)
 	_ interfaces.MatterChangeNotifier = (*Switch)(nil)
 )
 
 // matterGenericSwitchDeviceType is OnOffPlugInUnit (0x010A): the nearest
 // Device Library type for a bare writable STATE channel with no profile.
 // It mandates the LT feature on OnOff, which the server advertises.
-const matterGenericSwitchDeviceType uint16 = onoff.DeviceTypeOnOffPlugInUnit
+const matterGenericSwitchDeviceType = uint16(fabricdevice.OnOffPlugInUnitID)
 
 // matterGenericSwitchEligible reports whether a generic Switch projects to
 // Matter at all. Only STATE does: every other writable bool parameter a
@@ -41,50 +41,43 @@ func matterGenericSwitchEligible(p hmenum.Parameter) bool {
 	return p == hmenum.ParameterState
 }
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource].
+// MatterDeviceType implements [interfaces.MatterDeviceSource].
 func (s *Switch) MatterDeviceType() uint16 { return matterGenericSwitchDeviceType }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource]: the
-// OnOff cluster, served by one [onoff.Server] per switch. Returns nil
-// for a switch whose parameter is not STATE, so the assembler skips the
-// channel. The Groups and ScenesManagement clusters the device type
-// mandates are stack state the endpoint assembler mounts.
-func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
-	if s == nil || !matterGenericSwitchEligible(s.Parameter()) {
-		return nil
-	}
-	return []interfaces.MatterClusterServer{s.matterOnOffServer()}
-}
-
-// matterOnOffServer builds the switch's OnOff server once. The Sink is
-// the STATE write at [matterDispatchPriority] — On through
+// MatterDevice implements [interfaces.MatterDeviceSource]: an
+// OnOffPlugInUnit with the OnOff cluster declared, built once per
+// switch. A switch whose parameter is not STATE projects nothing, so the
+// assembler skips the channel. The Groups and ScenesManagement clusters
+// the device type mandates are stack state the endpoint assembler
+// mounts.
+//
+// The Sink is the STATE write at [matterDispatchPriority] — On through
 // [Switch.TurnOn] so a configured ON_TIME companion applies, Off through
 // [Switch.Set] — and the data point's confirmed-update hook feeds the
-// CCU's state back through [onoff.Server.Set], the one path that stores
-// without asking the Sink, so a physical button press or a CCU program
-// reaches a subscribed controller and a confirmed command does not echo
-// into a second write.
-func (s *Switch) matterOnOffServer() *onoff.Server {
-	return s.matterOnOff.Server(func() *onoff.Server {
+// CCU's state back through [SetMatterOnOff].
+func (s *Switch) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	if s == nil || !matterGenericSwitchEligible(s.Parameter()) {
+		return nil, nil //nolint:nilnil // a switch that is not STATE projects no device
+	}
+	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		on, _ := s.Value()
-		srv := MustMatterOnOffServer(MatterOnOffConfig{
-			Lighting:    true,
-			DataVersion: &s.matterVersion,
-			Initial:     on,
-			Sink: func(ctx context.Context, on bool) error {
+		d, err := NewMatterDevice(s, matterGenericSwitchDeviceType, opts,
+			MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
 				if on {
 					return s.TurnOn(ctx, matterDispatchPriority)
 				}
 				return s.Set(ctx, false, matterDispatchPriority)
-			},
-		})
-		_ = s.OnConfirmedUpdate(func(_, on bool) { srv.Set(on) })
+			}))
+		if err != nil {
+			return nil, err
+		}
+		_ = s.OnConfirmedUpdate(func(_, on bool) { SetMatterOnOff(d, on) })
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current value is stored
 		// again, which is a no-op when nothing changed.
 		if on, observed := s.Value(); observed {
-			srv.Set(on)
+			SetMatterOnOff(d, on)
 		}
-		return srv
+		return d, nil
 	})
 }

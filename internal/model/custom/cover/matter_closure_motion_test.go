@@ -6,6 +6,7 @@ package cover
 import (
 	"testing"
 
+	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 )
 
@@ -26,11 +27,11 @@ func TestClosureMainStateFollowsTheModelsMotion(t *testing.T) {
 	for _, c := range []struct {
 		what             string
 		opening, closing bool
-		want             clusterwire.ClosureMainState
+		want             closuredef.MainStateEnum
 	}{
-		{"opening", true, false, clusterwire.ClosureMainStateMoving},
-		{"closing", false, true, clusterwire.ClosureMainStateMoving},
-		{"stationary", false, false, clusterwire.ClosureMainStateStopped},
+		{"opening", true, false, closuredef.MainStateMoving},
+		{"closing", false, true, closuredef.MainStateMoving},
+		{"stationary", false, false, closuredef.MainStateStopped},
 	} {
 		if got := closureMainStateFor(c.opening, c.closing); got != c.want {
 			t.Errorf("%s: MainState = %v, want %v", c.what, got, c.want)
@@ -56,18 +57,18 @@ func TestGarageSectionReachesTheClusterServer(t *testing.T) {
 	// The projection reads DoorState first and returns early when nothing has
 	// been observed, so the drive has to have reported once.
 	g.OnState(DoorStateClosed)
-	srv := g.closure.get(g)
+	srv := closureServer(t, g)
 	if srv == nil {
 		t.Fatal("no closure projection was built — the guard lost its subject")
 	}
 
 	g.OnSection(sectionOpening)
-	if got, _ := srv.srv.MatterRead(clusterwire.ClosureControlAttrMainState); got != uint8(clusterwire.ClosureMainStateMoving) {
+	if got, _ := srv.MatterRead(clusterwire.ClosureControlAttrMainState); got != uint8(clusterwire.ClosureMainStateMoving) {
 		t.Errorf("MainState = %v after SECTION reported opening, want Moving", got)
 	}
 
 	g.OnSection(0) // any code that is neither opening (2) nor closing (5)
-	if got, _ := srv.srv.MatterRead(clusterwire.ClosureControlAttrMainState); got != uint8(clusterwire.ClosureMainStateStopped) {
+	if got, _ := srv.MatterRead(clusterwire.ClosureControlAttrMainState); got != uint8(clusterwire.ClosureMainStateStopped) {
 		t.Errorf("MainState = %v after SECTION reported a stop, want Stopped", got)
 	}
 }

@@ -45,14 +45,9 @@ type Siren struct {
 	// Service methods are registered in [New].
 	payload.ServiceRegistry
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Bumped on every successful MatterWrite / MatterInvoke
-	// so DataVersionFilter evaluation correctly detects cluster changes.
-	dataVersion hmtypes.DataVersionTracker
-
-	// matterOnOff holds the OnOff cluster server the Matter projection
-	// serves, built once per siren (matter.go).
-	matterOnOff generic.MatterOnOffHolder
+	// matterDevice holds the device the Matter projection serves, built
+	// once per siren (matter.go).
+	matterDevice generic.MatterDeviceHolder
 
 	key    hmtypes.DataPointKey
 	writer Writer
@@ -156,19 +151,6 @@ func New(cfg Config) *Siren {
 		}
 	}
 	s.registerSirenServices()
-	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
-	if s.acousticActive != nil {
-		_ = s.acousticActive.OnConfirmedUpdate(func(_, _ bool) { s.dataVersion.Bump() })
-	}
-	if s.acousticIdx != nil {
-		_ = s.acousticIdx.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
-	}
-	if s.opticalActive != nil {
-		_ = s.opticalActive.OnConfirmedUpdate(func(_, _ bool) { s.dataVersion.Bump() })
-	}
-	if s.opticalIdx != nil {
-		_ = s.opticalIdx.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
-	}
 	return s
 }
 

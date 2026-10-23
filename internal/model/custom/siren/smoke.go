@@ -38,14 +38,9 @@ type SmokeSiren struct {
 	// Service methods are registered in [NewSmokeSiren].
 	payload.ServiceRegistry
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). It is the SmokeCOAlarm server's tracker too
-	// (alarm.Config.DataVersion), so a status change and the server's own
-	// bookkeeping advance one counter.
-	dataVersion hmtypes.DataVersionTracker
-
-	// matterAlarm holds the SmokeCOAlarm server built on first assembly.
-	matterAlarm matterAlarmHolder
+	// matterDevice holds the SmokeCoAlarm device built on first assembly
+	// (matter.go).
+	matterDevice generic.MatterDeviceHolder
 
 	key    hmtypes.DataPointKey
 	writer custom.Writer
@@ -131,15 +126,10 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 		command: custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSmokeDetectorCommand, hmenum.ParameterSmokeDetectorCommand)),
 	}
 	s.registerSmokeSirenServices()
-	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
+	// A confirmed status change lets the SmokeCOAlarm server emit the
+	// SmokeAlarm / AllClear events it calls for.
 	if s.status != nil {
-		_ = s.status.OnConfirmedUpdate(func(_, _ int32) {
-			s.dataVersion.Bump()
-			s.refreshMatterAlarm()
-		})
-	}
-	if s.command != nil {
-		_ = s.command.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
+		_ = s.status.OnConfirmedUpdate(func(_, _ int32) { s.refreshMatterAlarm() })
 	}
 	return s
 }

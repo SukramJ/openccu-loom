@@ -411,6 +411,71 @@ v0.10.1 added the two routes this daemon's migration found missing
   validated without a node (the REST handler, the configuration
   validator).
 
+## Amendment — profiles declare their clusters
+
+Owner decision on 2026-10-23 (SukramJ/openccu-loom#999, step 2 of the
+facade migration): a profile yields cluster declarations, not servers,
+and **the profile holds the device** built from them.
+
+- **The source is the device.** A profile implements
+  `interfaces.MatterDeviceSource`: `MatterDevice(opts)` builds a
+  `device.FromSpec` device from its `<cluster>def.Declare` values once
+  (`generic.MatterDeviceHolder`) and returns the same device on every
+  later assembly; the CCU's confirmed state reaches the kit's servers
+  through their typed Set, or through a server's inbound setters where
+  the typed Set would refuse what a device reports (the thermostat
+  clamps a setpoint to its limits on the inbound path and holds it to
+  them on Set). The assembler hands in the key, name, addresses and
+  availability as `device.Options` and applies this assembly's values on
+  the device's Spec, so the key and label rules stay the assembler's —
+  the reason phase 1 rejected `device.New` inside the profiles no longer
+  applies.
+- **DataVersion is the bridge's.** A bridged endpoint's DataVersion is
+  the one the endpoint hosts, advanced by the bridge when the source's
+  change notifier fires and a value moved (go-fabric
+  `endpoint/dispatcher.go` `clusterDataVersionFor`,
+  `bridge/subscribe.go` `wireMeasurementNotifier`); the per-profile
+  counters, which never reached the wire, are gone. What a profile must
+  get right is that every value its clusters read notifies.
+- **Eligibility reads the device.** go-fabric's derivation reads the
+  endpoint-source surface; the candidate list classifies a declaring
+  source by its device, which carries that surface.
+- **Every profile declares.** go-fabric v0.10.2 answered the routes
+  this step found missing: the light and the sound player declare the
+  dimmer's own ramp (`levelcontroldef.Declare{Ramp}`, go-fabric #228;
+  the kit couples it to the endpoint's OnOff server itself), the garage
+  drive hears of a Stop the server would ignore through the declared
+  Mover's `StopIgnored` (#232), and the value helpers the profiles need
+  live in the generated packages (#230). The device kit checks a
+  declaration against the device type's feature conformance, which
+  surfaced the HS-only colour lights' missing CT feature; they serve it
+  now, mapped onto their colour (by_design
+  BD-Matter-ExtendedColorLight-HSOnly). No profile builds a server of
+  its own any more, and the per-profile DataVersion counters are gone.
+- **The node assembles.** The daemon's assembler no longer builds a
+  topology: the walk describes each central's endpoints
+  (`Assembler.DescribeDevices`), and a reconciler
+  (`matteradapter.Reconciler`) keeps the node's Aggregator in step with
+  the model — one partition per central, the central's own
+  completeness from the readiness latch (so a central still loading
+  keeps its stored endpoint numbers while a loaded one collects its
+  vanished ones), one batch per changed central, and a retirement when a
+  central leaves the configuration (`removeCentral`; a shutdown retires
+  nothing). The scopes are the central names the endpoint store already
+  filed its numbers under, so no endpoint is renumbered. Group state,
+  scene tables and controller-written NodeLabels are the node's; the
+  bridged vendor name is stated per device. The Aggregator takes each
+  endpoint as a type with a `Spec` method rather than the device itself,
+  because the walk's name, addresses and availability change with the
+  model and `Device.Rename` persists a name as a controller's write
+  (go-fabric #238); the label composition still comes from `endpoint`
+  (#239).
+- **What remains below the facade.** The endpoint store's interface
+  (`endpoint.Store`, the daemon's own keyed by its source 5-tuple),
+  `endpoint.Spec` and `ComposeNodeLabel` in the walk, and the credential
+  store built on the shared handle, since the daemon carries go-fabric's
+  schema in its own migrations.
+
 ## Consequences
 
 - `internal/north/matteradapter` loses the implicit "which clusters does a

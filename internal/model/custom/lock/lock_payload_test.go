@@ -185,9 +185,9 @@ func TestSend_UnknownKindReturnsError(t *testing.T) {
 func TestMatterWrite_AlwaysReturnsError(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	servers := r.lock.MatterClusterServers()
+	servers := matterServers(r.lock)
 	if len(servers) == 0 {
-		t.Fatal("MatterClusterServers returned empty slice")
+		t.Fatal("the lock's device carries no server")
 	}
 	err := servers[0].MatterWrite(context.Background(), 0x0000, nil)
 	if err == nil {

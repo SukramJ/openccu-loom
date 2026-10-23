@@ -14,6 +14,8 @@ import (
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/cluster/modeselect"
 	"github.com/SukramJ/go-fabric/cluster/spec"
+	msdef "github.com/SukramJ/go-fabric/cluster/spec/modeselect"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/im"
 	"github.com/SukramJ/go-fabric/tlv"
 
@@ -54,15 +56,43 @@ func newModeSelect(t *testing.T, ops hmenum.Operations, values []string) (*Selec
 	return NewSelect(cfg), w
 }
 
-// modeSelectServer returns the single cluster server a Select projects,
-// failing when the projection produced anything else.
+// modeSelectDevice returns the device a Select projects, nil for one that
+// projects nothing.
+func modeSelectDevice(t *testing.T, s *Select) *fabricdevice.Device {
+	t.Helper()
+	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("select"), Name: "select"})
+	if err != nil {
+		t.Fatalf("MatterDevice: %v", err)
+	}
+	return d
+}
+
+// modeSelectServer returns the single cluster server a Select's device
+// carries, failing when the projection produced anything else.
 func modeSelectServer(t *testing.T, s *Select) interfaces.MatterClusterServer {
 	t.Helper()
-	servers := s.MatterClusterServers()
+	d := modeSelectDevice(t, s)
+	if d == nil {
+		t.Fatal("MatterDevice returned no device")
+	}
+	servers := d.Servers()
 	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers() returned %d servers, want exactly 1", len(servers))
+		t.Fatalf("the device carries %d servers, want exactly 1", len(servers))
 	}
 	return servers[0]
+}
+
+// TestSelectMatter_BoundsAreTheGeneratedDefinitions pins the two bounds the
+// projection reads from the generated ModeSelect definition to the values
+// the cluster package states for them.
+func TestSelectMatter_BoundsAreTheGeneratedDefinitions(t *testing.T) {
+	t.Parallel()
+	if matterSelectMaxModes != msdef.SupportedModesMaxEntries {
+		t.Errorf("SupportedModes bound = %d, want %d", matterSelectMaxModes, msdef.SupportedModesMaxEntries)
+	}
+	if matterModeLabelMaxBytes != msdef.LabelMaxBytes {
+		t.Errorf("Label bound = %d, want %d", matterModeLabelMaxBytes, msdef.LabelMaxBytes)
+	}
 }
 
 // TestSelectMatter_WritableEnumMountsOneModeSelectServer pins the cluster set
@@ -445,32 +475,32 @@ func TestSelectMatter_IneligibleDataPointsMountNoServer(t *testing.T) {
 	t.Run("not writable", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, hmenum.OperationsRead|hmenum.OperationsEvent, modeSelectValueList)
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("a read-only ENUM mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("a read-only ENUM projected a device, want none")
 		}
 	})
 
 	t.Run("empty value list", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent, nil)
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("an ENUM with no VALUE_LIST mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("an ENUM with no VALUE_LIST projected a device, want none")
 		}
 	})
 
 	t.Run("neither readable nor an event source", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, hmenum.OperationsWrite, modeSelectValueList)
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("a write-only ENUM mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("a write-only ENUM projected a device, want none")
 		}
 	})
 
 	t.Run("nil select", func(t *testing.T) {
 		t.Parallel()
 		var s *Select
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("a nil Select mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("a nil Select projected a device, want none")
 		}
 	})
 }
@@ -494,7 +524,7 @@ func TestSelectMatter_SupportedModesStayWithinTheListBound(t *testing.T) {
 
 	t.Run("at the bound", func(t *testing.T) {
 		t.Parallel()
-		s, _ := newModeSelect(t, ops, valueList(modeselect.SupportedModesMaxEntries))
+		s, _ := newModeSelect(t, ops, valueList(msdef.SupportedModesMaxEntries))
 		raw, ok := modeSelectServer(t, s).MatterRead(modeselect.AttrSupportedModes)
 		if !ok {
 			t.Fatal("SupportedModes must answer; it is conformance M")
@@ -503,17 +533,17 @@ func TestSelectMatter_SupportedModesStayWithinTheListBound(t *testing.T) {
 		if !isList {
 			t.Fatalf("SupportedModes read as %T, want spec.List[modeselect.ModeOptionStruct]", raw)
 		}
-		if len(modes) != modeselect.SupportedModesMaxEntries {
-			t.Fatalf("SupportedModes has %d entries, want %d", len(modes), modeselect.SupportedModesMaxEntries)
+		if len(modes) != msdef.SupportedModesMaxEntries {
+			t.Fatalf("SupportedModes has %d entries, want %d", len(modes), msdef.SupportedModesMaxEntries)
 		}
 	})
 
 	t.Run("past the bound", func(t *testing.T) {
 		t.Parallel()
-		s, _ := newModeSelect(t, ops, valueList(modeselect.SupportedModesMaxEntries+1))
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Fatalf("a %d-entry VALUE_LIST mounted %d servers, want none",
-				modeselect.SupportedModesMaxEntries+1, len(servers))
+		s, _ := newModeSelect(t, ops, valueList(msdef.SupportedModesMaxEntries+1))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Fatalf("a %d-entry VALUE_LIST projected a device, want none",
+				msdef.SupportedModesMaxEntries+1)
 		}
 		if modes := s.SupportedModes(); len(modes) != 0 {
 			t.Fatalf("SupportedModes past the bound returned %d entries, want none", len(modes))
@@ -529,19 +559,19 @@ func TestSelectMatter_ModeLabelsStayWithinTheByteBound(t *testing.T) {
 	t.Parallel()
 	// 63 ASCII bytes followed by a two-byte rune: the 64-byte cut lands
 	// inside the rune and must step back to 63.
-	long := strings.Repeat("A", modeselect.LabelMaxBytes-1) + "ä" + "TAIL"
-	exact := strings.Repeat("B", modeselect.LabelMaxBytes)
+	long := strings.Repeat("A", msdef.LabelMaxBytes-1) + "ä" + "TAIL"
+	exact := strings.Repeat("B", msdef.LabelMaxBytes)
 	s, _ := newModeSelect(t, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent,
 		[]string{long, exact})
 	modes := s.SupportedModes()
 	if len(modes) != 2 {
 		t.Fatalf("SupportedModes has %d entries, want 2", len(modes))
 	}
-	if want := strings.Repeat("A", modeselect.LabelMaxBytes-1); modes[0].Label != want {
+	if want := strings.Repeat("A", msdef.LabelMaxBytes-1); modes[0].Label != want {
 		t.Errorf("long label = %q (%d bytes), want the %d-byte prefix ending before the split rune",
 			modes[0].Label, len(modes[0].Label), len(want))
 	}
 	if modes[1].Label != exact {
-		t.Errorf("a %d-byte label was altered to %q", modeselect.LabelMaxBytes, modes[1].Label)
+		t.Errorf("a %d-byte label was altered to %q", msdef.LabelMaxBytes, modes[1].Label)
 	}
 }

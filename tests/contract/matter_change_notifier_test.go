@@ -32,7 +32,7 @@ import (
 // a new device type reopens the gap.
 func TestMatterEndpointSourcesAreChangeNotifiers(t *testing.T) {
 	root := filepath.Join("..", "..", "internal")
-	endpointRe := regexp.MustCompile(`interfaces\.MatterEndpointSource\s*=\s*\(\*(\w+)\)\(nil\)`)
+	endpointRe := regexp.MustCompile(`interfaces\.Matter(?:Endpoint|Device)Source\s*=\s*\(\*(\w+)\)\(nil\)`)
 	notifierRe := regexp.MustCompile(`interfaces\.MatterChangeNotifier\s*=\s*\(\*(\w+)\)\(nil\)`)
 
 	type miss struct{ file, typ string }

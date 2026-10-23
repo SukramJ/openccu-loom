@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	contract "github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/schema"
 )
 
@@ -18,6 +19,25 @@ import (
 
 // MatterEndpointSource is a compatibility alias for [contract.EndpointSource].
 type MatterEndpointSource = contract.EndpointSource
+
+// MatterDeviceSource is a model source that is one bridged Matter device,
+// built by the source itself from its cluster declarations
+// (`<cluster>def.Declare`) through go-fabric's device kit. The source
+// builds the device once and keeps it for as long as it lives: the
+// device's servers hold the attribute values, the timers and the data
+// versions a subscribed controller relies on, and the source feeds the
+// CCU's state into them through their typed Set.
+//
+// MatterDevice returns the held device, building it with opts on the
+// first call; later calls return the same device whatever opts carry,
+// so the caller applies a changed name on the device's Spec. A source
+// that projects nothing returns a nil device and a nil error.
+type MatterDeviceSource interface {
+	// MatterDeviceType is the advertised Device Library type.
+	MatterDeviceType() uint16
+	// MatterDevice is the source's device.
+	MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error)
+}
 
 // MatterClusterServer is a compatibility alias for [contract.ClusterServer].
 type MatterClusterServer = contract.ClusterServer

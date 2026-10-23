@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"testing"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -57,10 +56,11 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 			teardown()
 		}
 	})
-	bridge, ok := wiring.reassembler.(*matterbridge.Bridge)
-	if !ok || bridge == nil || wiring.opener == nil {
-		t.Fatalf("matter runtime did not produce a bridge and an opener (reassembler=%T); without them this pin asserts nothing", wiring.reassembler)
+	inspector, ok := wiring.endpointInspector.(matterEndpointInspector)
+	if !ok || inspector.node == nil || wiring.opener == nil {
+		t.Fatalf("matter runtime did not produce a node and an opener (inspector=%T); without them this pin asserts nothing", wiring.endpointInspector)
 	}
+	bridge := inspector.node.Bridge()
 
 	const (
 		rootEndpoint     uint16 = 0

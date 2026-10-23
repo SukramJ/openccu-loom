@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster"
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
-	"github.com/SukramJ/go-fabric/cluster/thermo"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -1093,14 +1092,14 @@ func TestSystemModeFromHmModeClampsToFeatureMap(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	c := r.climate
 
-	heatOnly := thermo.ThermostatFeatureHEAT
-	heatCool := thermo.ThermostatFeatureHEAT | thermo.ThermostatFeatureCOOL
-	withAuto := heatCool | thermo.ThermostatFeatureAUTO
+	heatOnly := thermostatspec.FeatureHeating
+	heatCool := thermostatspec.FeatureHeating | thermostatspec.FeatureCooling
+	withAuto := heatCool | thermostatspec.FeatureAutoMode
 
 	cases := []struct {
 		name string
 		mode Mode
-		fm   uint32
+		fm   thermostatspec.Feature
 		want uint8
 	}{
 		{"auto clamps to Heat without AUTO feature", ModeAuto, heatOnly, matterSysModeHeat},
@@ -1516,121 +1515,6 @@ func TestParseFlatUnsupportedType(t *testing.T) {
 	if ok {
 		t.Error("parseFloat(string JSON) should return ok=false")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// toUint16Minutes / toFloat64
-// ---------------------------------------------------------------------------
-
-func TestToUint16MinutesVariants(t *testing.T) {
-	cases := []struct {
-		name  string
-		input any
-		want  uint16
-	}{
-		{"int", int(720), 720},
-		{"int32", int32(60), 60},
-		{"int64", int64(1440), 1440},
-		{"float64", float64(90), 90},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := toUint16Minutes(tc.input)
-			if !ok || got != tc.want {
-				t.Errorf("toUint16Minutes(%T(%v)) = (%d, %v), want (%d, true)", tc.input, tc.input, got, ok, tc.want)
-			}
-		})
-	}
-}
-
-func TestToUint16MinutesOutOfRange(t *testing.T) {
-	cases := []any{int(-1), int32(-1), int64(1441), float64(-10)}
-	for _, v := range cases {
-		_, ok := toUint16Minutes(v)
-		if ok {
-			t.Errorf("toUint16Minutes(%T(%v)) should return false for out-of-range", v, v)
-		}
-	}
-}
-
-func TestToUint16MinutesUnknownType(t *testing.T) {
-	_, ok := toUint16Minutes("invalid")
-	if ok {
-		t.Error("toUint16Minutes(string) should return false")
-	}
-}
-
-func TestToFloat64Variants(t *testing.T) {
-	cases := []struct {
-		name  string
-		input any
-		want  float64
-	}{
-		{"float64", float64(21.5), 21.5},
-		{"float32", float32(18.0), 18.0},
-		{"int", int(20), 20.0},
-		{"int32", int32(22), 22.0},
-		{"int64", int64(25), 25.0},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := toFloat64(tc.input)
-			if !ok || got != tc.want {
-				t.Errorf("toFloat64(%T(%v)) = (%v, %v), want (%v, true)", tc.input, tc.input, got, ok, tc.want)
-			}
-		})
-	}
-}
-
-func TestToFloat64UnknownType(t *testing.T) {
-	_, ok := toFloat64("not-a-float")
-	if ok {
-		t.Error("toFloat64(string) should return false")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// MatterScheduleEntries — nil / no-profile / non-week-program paths
-// ---------------------------------------------------------------------------
-
-func TestMatterScheduleEntriesNilClimate(t *testing.T) {
-	var c *Climate
-	if got := c.MatterScheduleEntries(); got != nil {
-		t.Errorf("nil Climate.MatterScheduleEntries() = %v, want nil", got)
-	}
-}
-
-func TestMatterScheduleEntriesNoChannelRef(t *testing.T) {
-	c := &Climate{}
-	if got := c.MatterScheduleEntries(); got != nil {
-		t.Errorf("no channelRef: MatterScheduleEntries() = %v, want nil", got)
-	}
-}
-
-func TestMatterScheduleEntriesNoProfile(t *testing.T) {
-	r := newRig(t, "x", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	// No profile observed → returns nil.
-	if got := r.climate.MatterScheduleEntries(); got != nil {
-		t.Errorf("no profile: MatterScheduleEntries() = %v, want nil", got)
-	}
-}
-
-func TestMatterScheduleEntriesBoostProfile(t *testing.T) {
-	r := newRig(t, "x", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.climate.OnProfile(ProfileBoost)
-	// BOOST has no week-program index → empty.
-	if got := r.climate.MatterScheduleEntries(); got != nil {
-		t.Errorf("boost profile: MatterScheduleEntries() = %v, want nil", got)
-	}
-}
-
-func TestMatterScheduleEntriesWeekProfile(t *testing.T) {
-	r := newRig(t, "x", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.climate.OnProfile(ProfileWeekProgram1)
-	// No MASTER params attached → empty (but non-panic, and returns a
-	// non-nil empty slice because the loop body finds no DPs).
-	// The function returns make([]...{}, 0, ...) so it may return empty or nil.
-	_ = r.climate.MatterScheduleEntries() // must not panic
 }
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Switch is a bool-typed writable data point with an optional ON_TIME
@@ -18,11 +17,9 @@ type Switch struct {
 	*DataPoint[bool]
 	TimerSlot
 
-	// matterOnOff holds the OnOff cluster server the Matter projection
-	// serves, built once per switch (switch_matter.go); matterVersion is
-	// its data-version tracker.
-	matterOnOff   MatterOnOffHolder
-	matterVersion hmtypes.DataVersionTracker
+	// matterDevice holds the device the Matter projection serves, built
+	// once per switch (switch_matter.go).
+	matterDevice MatterDeviceHolder
 }
 
 // NewSwitch constructs a Switch.

@@ -6,9 +6,12 @@ package lock
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/cluster/wire"
+	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -23,16 +26,26 @@ func requesterCtx() context.Context {
 	return im.WithFabricFilter(context.Background(), false, 1)
 }
 
-// srv returns the DoorLockServer mounted by the lock's MatterClusterServers.
+// matterServers returns the cluster servers of the device the lock
+// projects.
+func matterServers(l *Lock) []contract.ClusterServer {
+	d, err := l.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey(l.Address), Name: "lock"})
+	if err != nil || d == nil {
+		panic(fmt.Sprintf("MatterDevice = (%v, %v), want a device", d, err))
+	}
+	return d.Servers()
+}
+
+// srv returns the DoorLock server of the device the lock projects.
 func srv(l *Lock) interface {
 	MatterClusterID() uint32
 	MatterRead(uint32) (any, bool)
 	MatterInvoke(context.Context, uint32, any) (any, error)
 	MatterReportable() []uint32
 } {
-	servers := l.MatterClusterServers()
+	servers := matterServers(l)
 	if len(servers) == 0 {
-		panic("MatterClusterServers returned empty slice")
+		panic("the lock's device carries no server")
 	}
 	type fullServer interface {
 		MatterClusterID() uint32
@@ -52,11 +65,11 @@ func TestMatterDeviceTypeIsDoorLock(t *testing.T) {
 	}
 }
 
-// TestMatterClusterServersExposesDoorLock confirms the single-cluster
-// projection exposes DoorLock (0x0101).
-func TestMatterClusterServersExposesDoorLock(t *testing.T) {
+// TestMatterDeviceServesDoorLock confirms the single-cluster projection
+// serves DoorLock (0x0101).
+func TestMatterDeviceServesDoorLock(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	servers := r.lock.MatterClusterServers()
+	servers := matterServers(r.lock)
 	if len(servers) != 1 {
 		t.Fatalf("expected 1 cluster server, got %d", len(servers))
 	}

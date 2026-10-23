@@ -6,8 +6,10 @@ package light
 import (
 	"context"
 
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	ccdef "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
+	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
+	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -27,12 +29,6 @@ import (
 // command.
 const matterDispatchPriority = hmenum.CommandPriorityHigh
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
-// Shared across all cluster servers that project this Light (OnOff,
-// LevelControl, ColorControl). Bumped on every successful write /
-// invoke so DataVersionFilter evaluation correctly detects cluster changes.
-func (l *Light) MatterDataVersion() uint32 { return l.dataVersion.Current() }
-
 // Compile-time assertion: Light participates in the Matter source
 // surface (ADR 0012). Light contributes the OnOff cluster always and
 // the LevelControl cluster when [custom.LightCapabilities.Dimmable] is
@@ -40,8 +36,7 @@ func (l *Light) MatterDataVersion() uint32 { return l.dataVersion.Current() }
 // rather than the Light type implementing [interfaces.MatterClusterServer]
 // directly because two clusters cannot share a single MatterClusterID().
 var (
-	_ interfaces.MatterEndpointSource     = (*Light)(nil)
-	_ interfaces.MatterClusterDataVersion = (*Light)(nil)
+	_ interfaces.MatterDeviceSource = (*Light)(nil)
 	// Light inherits OnMatterValueChanged from the embedded *generic.Float
 	// (LEVEL / brightness), so an external CCU-confirmed level change
 	// dirty-marks the OnOff / LevelControl attributes for Apple's Subscribe.
@@ -55,8 +50,8 @@ var (
 // definitions carry them. The OnOff half is pinned against the matter.js
 // snapshot by TestHmLgtLightOnOffMatchesMatterJS.
 const (
-	matterDeviceTypeOnOffLight    uint16 = 0x0100
-	matterDeviceTypeDimmableLight uint16 = 0x0101
+	matterDeviceTypeOnOffLight    = uint16(fabricdevice.OnOffLightID)
+	matterDeviceTypeDimmableLight = uint16(fabricdevice.DimmableLightID)
 
 	// Groups cluster (0x0004) and ScenesManagement (0x0062) are
 	// mandatory on OnOffLight + DimmableLight (matter.js
@@ -106,7 +101,7 @@ const (
 	matterLevelMax uint8 = 0xFE
 )
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource]. Maps
+// MatterDeviceType implements [interfaces.MatterDeviceSource]. Maps
 // the dimmable / non-dimmable distinction onto Matter's two basic
 // light device types (0x0101 / 0x0100).
 func (l *Light) MatterDeviceType() uint16 {
@@ -116,82 +111,101 @@ func (l *Light) MatterDeviceType() uint16 {
 	return matterDeviceTypeOnOffLight
 }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource].
-// A non-dimmable light contributes OnOff; a dimmable light
-// additionally contributes LevelControl.
+// MatterDevice implements [interfaces.MatterDeviceSource]: an OnOffLight
+// or, dimmable, a DimmableLight built from the light's declarations.
+func (l *Light) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, l.MatterDeviceType(), opts, nil)
+}
+
+// matterLightDevice builds the device of a light once: the OnOff cluster
+// declared (Lighting; Sink [Light.TurnOn] / [Light.TurnOff] at
+// [matterDispatchPriority]; the observed brightness as the start, false
+// while nothing was observed — the OnOff attribute is mandatory and
+// non-nullable, on-off.element.ts:29, and Apple Home drops an accessory
+// whose first report carries no boolean); on a dimmable light the
+// LevelControl cluster declared on the dimmer's own ramp ([lightRamp]);
+// and the ColorControl a colour variant declares (color). source is the
+// variant that builds the device (any: Light or one of the types that
+// embed it), whose change notifier the device carries. A timed-on ends
+// through the kit server's countdown (OnOffServer.ts:216-232, whose off
+// reaches the Sink) — no CCU-side ON_TIME is written for it.
+//
+// The LEVEL data point's confirmed-update hook feeds the CCU's state back
+// through [generic.SetMatterOnOff], the one path that stores without
+// asking the Sink, so a wall switch or a CCU program reaches a subscribed
+// controller and a confirmed command does not echo into a second write.
+//
 // matter.js packages/node/src/devices/on-off-light.ts also lists Groups
 // (0x0004) and ScenesManagement (0x0062) as mandatory server clusters.
 // Those are stack state, not device state: the endpoint assembler mounts
-// both from the node's group state (go-fabric endpoint/materialize.go
-// mountGroups / mountScenes), so the source supplies neither.
-func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
-	if l.Capabilities.Dimmable {
-		return []interfaces.MatterClusterServer{
-			l.matterOnOffServer(),
-			l.matterLevelServer(),
-		}
-	}
-	return []interfaces.MatterClusterServer{
-		l.matterOnOffServer(),
-	}
-}
-
-// matterOnOffServer builds the light's OnOff server once (ADR 0084 phase
-// 2): go-fabric's [onoff.Server] owns the attributes, the six commands,
-// the OnTime / OffWaitTime countdowns and the scene paths. The Sink is
-// [Light.TurnOn] / [Light.TurnOff] at [matterDispatchPriority]; the LEVEL
-// data point's confirmed-update hook feeds the CCU's state back through
-// [onoff.Server.Set], the one path that stores without asking the Sink,
-// so a wall switch or a CCU program reaches a subscribed controller and a
-// confirmed command does not echo into a second write. A timed-on ends
-// through the stack's countdown (OnOffServer.ts:216-232, whose off reaches
-// the Sink) — no CCU-side ON_TIME is written for it.
-//
-// The server starts from the observed brightness, false while nothing was
-// observed: the OnOff attribute is mandatory and non-nullable
-// (on-off.element.ts:29), and Apple Home drops an accessory whose first
-// report carries no boolean.
-func (l *Light) matterOnOffServer() *onoff.Server {
-	return l.matterOnOff.Server(func() *onoff.Server {
+// both from the node's group state, so the light declares neither.
+func (l *Light) matterLightDevice(source any, deviceType uint16, opts fabricdevice.Options, color *colorPlan) (*fabricdevice.Device, error) {
+	return l.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		on, _ := l.IsOn()
-		srv := generic.MustMatterOnOffServer(generic.MatterOnOffConfig{
-			Lighting:    true,
-			DataVersion: &l.dataVersion,
-			Initial:     on,
-			Sink: func(ctx context.Context, on bool) error {
+		decls := []fabricdevice.Declaration{
+			generic.MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
 				if on {
 					return l.TurnOn(ctx, matterDispatchPriority)
 				}
 				return l.TurnOff(ctx, matterDispatchPriority)
-			},
-		})
+			}),
+		}
+		if l.Capabilities.Dimmable {
+			decls = append(decls, levelcontroldef.Declare{Ramp: lightRamp{l: l}})
+		}
+		if color != nil {
+			decls = append(decls, color.declare)
+		}
+		d, err := generic.NewMatterDevice(source, deviceType, opts, decls...)
+		if err != nil {
+			return nil, err
+		}
 		if l.Float != nil {
 			_ = l.OnConfirmedUpdate(func(_, _ float64) {
 				on, _ := l.IsOn()
-				srv.Set(on)
+				generic.SetMatterOnOff(d, on)
 			})
 		}
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current value is stored
 		// again, which is a no-op when nothing changed.
 		if on, observed := l.IsOn(); observed {
-			srv.Set(on)
+			generic.SetMatterOnOff(d, on)
 		}
-		return srv
+		if color != nil {
+			if srv := colorInboundOf(d); srv != nil {
+				color.bind(srv)
+			}
+		}
+		return d, nil
 	})
+}
+
+// matterClusterIDs lists the clusters the light's device serves, for an
+// eligibility verdict stated before any device is built: OnOff,
+// LevelControl on a dimmable light, and ColorControl on a colour variant.
+func (l *Light) matterClusterIDs(color bool) []uint32 {
+	ids := []uint32{onoffdef.ClusterID}
+	if l.Capabilities.Dimmable {
+		ids = append(ids, levelcontroldef.ClusterID)
+	}
+	if color {
+		ids = append(ids, ccdef.ClusterID)
+	}
+	return ids
 }
 
 // brightnessToMatter encodes an HM brightness (0.0–1.0 float) into
 // Matter LevelControl's CurrentLevel byte. The HM helper
 // [custom.Brightness.Byte] returns 0–255 for HM-internal byte
 // serialisation; that range collides with Matter's null-sentinel 255,
-// so go-fabric's [levelcontrol.LevelFromUnit] rounds onto 0..254 instead.
+// so go-fabric's [levelcontroldef.LevelFromUnit] rounds onto 0..254 instead.
 func brightnessToMatter(b custom.Brightness) uint8 {
-	return levelcontrol.LevelFromUnit(b.Level())
+	return levelcontroldef.LevelFromUnit(b.Level())
 }
 
 // matterLevelToHM decodes Matter LevelControl CurrentLevel (0..254) back
 // into the 0.0–1.0 HM float range.
 func matterLevelToHM(m uint8) float64 {
-	return levelcontrol.UnitFromLevel(m)
+	return levelcontroldef.UnitFromLevel(m)
 }

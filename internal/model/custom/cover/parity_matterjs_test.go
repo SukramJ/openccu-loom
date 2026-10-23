@@ -147,7 +147,7 @@ func TestParityMatterJS_WindowCoveringTypeAndEndProductType(t *testing.T) {
 		t.Run("cover/"+tc.name, func(t *testing.T) {
 			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 			c.Variant = tc.variant
-			srv := c.MatterClusterServers()[0]
+			srv := matterServers(t, c)[0]
 
 			if got := readAttrU8(t, srv, attrType, "Type"); got != tc.wantType {
 				t.Errorf("Type = %d, want %d (matter.js TypeEnum)", got, tc.wantType)
@@ -160,7 +160,7 @@ func TestParityMatterJS_WindowCoveringTypeAndEndProductType(t *testing.T) {
 
 	t.Run("blind", func(t *testing.T) {
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		if got := readAttrU8(t, srv, attrType, "Type"); got != jsTypeTiltBlindLift {
 			t.Errorf("Blind Type = %d, want %d (TiltBlindLift)", got, jsTypeTiltBlindLift)
@@ -218,7 +218,7 @@ func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
 				t.Helper()
 				c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{SupportsStop: true})
 
-				return c.MatterClusterServers()[0]
+				return matterServers(t, c)[0]
 			},
 			want: liftOnly,
 		},
@@ -228,7 +228,7 @@ func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
 				t.Helper()
 				b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
 
-				return b.MatterClusterServers()[0]
+				return matterServers(t, b)[0]
 			},
 			want: clusterCommands,
 		},
@@ -282,7 +282,7 @@ func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
 func servedWindowCoveringRevision(t *testing.T) uint16 {
 	t.Helper()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	v, ok := c.MatterClusterServers()[0].MatterRead(spec.AttrClusterRevision)
+	v, ok := matterServers(t, c)[0].MatterRead(spec.AttrClusterRevision)
 	if !ok {
 		t.Fatal("ClusterRevision not served")
 	}

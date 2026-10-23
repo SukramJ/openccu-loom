@@ -44,7 +44,7 @@ func TestGarageMatterStopReachesTheDriveInEveryClosureState(t *testing.T) {
 				Writer:       w,
 				Capabilities: custom.CoverCapabilities{SupportsVent: true, SupportsStop: true},
 			})
-			srv := g.closure.get(g)
+			srv := closureServer(t, g)
 			if srv == nil {
 				t.Fatal("no closure projection was built")
 			}

@@ -58,14 +58,9 @@ type Switch struct {
 	// resolved channel.
 	groupStateDP GroupStateDataPoint
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Bumped on every successful MatterWrite / MatterInvoke
-	// so DataVersionFilter evaluation correctly detects cluster changes.
-	hmtypes.DataVersionTracker
-
-	// matterOnOff holds the OnOff cluster server the Matter projection
-	// serves, built once per switch (matter.go).
-	matterOnOff generic.MatterOnOffHolder
+	// matterDevice holds the device the Matter projection serves, built
+	// once per switch (matter.go).
+	matterDevice generic.MatterDeviceHolder
 }
 
 // New constructs a Switch that wraps the channel's existing
@@ -94,15 +89,6 @@ func New(ch *device.Channel, group custom.RebasedChannelGroupConfig) *Switch {
 		groupState: custom.NewGroupState(),
 	}
 	s.registerSwitchServices()
-	// Bump the OnOff cluster's DataVersion on every CCU-confirmed STATE
-	// transition (Matter §10.6.5: DataVersion MUST monotonically advance
-	// whenever any cluster attribute changes). Without this, Apple
-	// HAP-Mapper dedupes ReportData with an unchanged DataVersion and
-	// the HMOutlet projection stops mirroring relay flips that
-	// originate outside Matter (wall switch, MQTT, REST, ReGa).
-	// Mirrors matter.js packages/node/src/behavior/Behavior.ts where
-	// `events.<attr>$Changed` auto-advances the cluster's dataVersion.
-	s.OnConfirmedUpdate(func(_, _ bool) { s.Bump() })
 	return s
 }
 

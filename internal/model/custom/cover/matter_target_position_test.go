@@ -44,7 +44,7 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 	t.Run("Cover", func(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-		attrs := matterAttrs(t, c.MatterClusterServers()[0])
+		attrs := matterAttrs(t, matterServers(t, c)[0])
 		if !slices.Contains(attrs, windowcoveringspec.AttrTargetPositionLiftPercent100ths) {
 			t.Errorf("Cover MatterAttributes missing 0x%04X (TargetPositionLiftPercent100ths); got %v",
 				windowcoveringspec.AttrTargetPositionLiftPercent100ths, attrs)
@@ -54,7 +54,7 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 	t.Run("Blind_Lift", func(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-		attrs := matterAttrs(t, b.MatterClusterServers()[0])
+		attrs := matterAttrs(t, matterServers(t, b)[0])
 		if !slices.Contains(attrs, windowcoveringspec.AttrTargetPositionLiftPercent100ths) {
 			t.Errorf("Blind MatterAttributes missing 0x%04X (TargetPositionLiftPercent100ths); got %v",
 				windowcoveringspec.AttrTargetPositionLiftPercent100ths, attrs)
@@ -64,7 +64,7 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 	t.Run("Blind_Tilt", func(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-		attrs := matterAttrs(t, b.MatterClusterServers()[0])
+		attrs := matterAttrs(t, matterServers(t, b)[0])
 		if !slices.Contains(attrs, windowcoveringspec.AttrTargetPositionTiltPercent100ths) {
 			t.Errorf("Blind MatterAttributes missing 0x%04X (TargetPositionTiltPercent100ths); got %v",
 				windowcoveringspec.AttrTargetPositionTiltPercent100ths, attrs)
@@ -84,7 +84,7 @@ func TestParityCover_TargetPositionMirrors_Current(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		c.OnLevel(0.7)
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 
 		current, ok := srv.MatterRead(windowcoveringspec.AttrCurrentPositionLiftPercent100ths)
 		if !ok || current == nil {
@@ -103,7 +103,7 @@ func TestParityCover_TargetPositionMirrors_Current(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		b.OnLevel(0.4)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		current, ok := srv.MatterRead(windowcoveringspec.AttrCurrentPositionLiftPercent100ths)
 		if !ok || current == nil {
@@ -122,7 +122,7 @@ func TestParityCover_TargetPositionMirrors_Current(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		b.level2.OnEvent(0.6)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		current, ok := srv.MatterRead(windowcoveringspec.AttrCurrentPositionTiltPercent100ths)
 		if !ok || current == nil {
@@ -172,7 +172,7 @@ func TestCoverTargetPosition_GoToLiftPercentage_TracksIndependentlyOfCurrent(t *
 		defer drainOptimisticRollbacks()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		c.OnLevel(0.4) // CCU-confirmed baseline: HM 0.4 → Matter 6000.
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 
 		if v, ok := srv.MatterRead(windowcoveringspec.AttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6000 {
 			t.Fatalf("baseline TargetPositionLift = (%v, %v), want (6000, true) — must mirror current", v, ok)
@@ -218,7 +218,7 @@ func TestCoverTargetPosition_UpOrOpenAndDownOrClose_SetExtremes(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	c.OnLevel(0.4)
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 
 	if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdUpOrOpen, nil); err != nil {
 		t.Fatalf("UpOrOpen: %v", err)
@@ -252,7 +252,7 @@ func TestCoverTargetPosition_StopMotionClearsTarget(t *testing.T) {
 			w := &stubWriter{}
 			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
 			c.OnLevel(0.4)
-			srv := c.MatterClusterServers()[0]
+			srv := matterServers(t, c)[0]
 			if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 				t.Fatalf("GoToLift: %v", err)
 			}
@@ -277,7 +277,7 @@ func TestCoverTargetPosition_StopMotionClearsTarget(t *testing.T) {
 			w := &stubWriter{}
 			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{}) // SupportsStop defaults false
 			c.OnLevel(0.4)
-			srv := c.MatterClusterServers()[0]
+			srv := matterServers(t, c)[0]
 			if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 				t.Fatalf("GoToLift: %v", err)
 			}
@@ -312,7 +312,7 @@ func TestCoverTargetPosition_DeferredWriteFailureKeepsCommandedTarget(t *testing
 		defer drainOptimisticRollbacks()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", failingWriter{}, custom.CoverCapabilities{})
 		c.OnLevel(0.4)
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("MatterInvoke err=%v, want acceptance before the deferred write", err)
@@ -344,7 +344,7 @@ func TestBlindTargetPosition_GoToLiftAndTilt_TrackAxesIndependently(t *testing.T
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		b.OnLevel(0.4)        // Matter lift 6000.
 		b.level2.OnEvent(0.6) // Matter tilt 4000.
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
@@ -384,7 +384,7 @@ func TestBlindTargetPosition_UpOrOpenAndDownOrClose_SetBothAxes(t *testing.T) {
 	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	b.OnLevel(0.4)
 	b.level2.OnEvent(0.6)
-	srv := b.MatterClusterServers()[0]
+	srv := matterServers(t, b)[0]
 
 	if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdUpOrOpen, nil); err != nil {
 		t.Fatalf("UpOrOpen: %v", err)
@@ -415,7 +415,7 @@ func TestBlindTargetPosition_StopMotionClearsBothAxes(t *testing.T) {
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
 		b.OnLevel(0.4)
 		b.level2.OnEvent(0.6)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
@@ -513,7 +513,7 @@ func TestCoverInferredTarget_ExternalMovementOverridesStaleTarget(t *testing.T) 
 	t.Run("OpeningAgainstCloseCommand", func(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdDownOrClose, nil); err != nil {
 			t.Fatalf("DownOrClose: %v", err)
 		}
@@ -528,7 +528,7 @@ func TestCoverInferredTarget_ExternalMovementOverridesStaleTarget(t *testing.T) 
 	t.Run("ClosingAgainstOpenCommand", func(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdUpOrOpen, nil); err != nil {
 			t.Fatalf("UpOrOpen: %v", err)
 		}
@@ -553,7 +553,7 @@ func TestCoverInferredTarget_CommandedTargetAheadPreserved(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			defer drainOptimisticRollbacks()
 			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-			srv := c.MatterClusterServers()[0]
+			srv := matterServers(t, c)[0]
 			if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 				t.Fatalf("GoToLiftPercentage: %v", err)
 			}
@@ -571,7 +571,7 @@ func TestCoverInferredTarget_CommandedTargetAheadPreserved(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			defer drainOptimisticRollbacks()
 			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-			srv := c.MatterClusterServers()[0]
+			srv := matterServers(t, c)[0]
 			if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(8000)); err != nil {
 				t.Fatalf("GoToLiftPercentage: %v", err)
 			}
@@ -591,7 +591,7 @@ func TestCoverInferredTarget_CommandedTargetAheadPreserved(t *testing.T) {
 func TestCoverInferredTarget_ExternalMovementWithoutCommandTargetsLimit(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	c.OnLevel(0.5)
 
 	c.OnDirection(DirectionUp)
@@ -614,7 +614,7 @@ func TestCoverInferredTarget_MotionStopSnapsTargetToCurrent(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		defer drainOptimisticRollbacks()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
 		}
@@ -644,7 +644,7 @@ func TestCoverInferredTarget_MotionStopSnapsTargetToCurrent(t *testing.T) {
 func TestCoverInferredTarget_UnobservedPositionReportsDirectionLimit(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 
 	c.OnDirection(DirectionUp)
 	if v := readTargetLift(t, srv); v.(uint16) != 0 {
@@ -673,7 +673,7 @@ func TestCoverCommandedTargetSurvivesAPositionEchoBeforeMotion(t *testing.T) {
 		defer drainOptimisticRollbacks()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		c.OnLevel(0.4) // Matter 6000
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
@@ -700,7 +700,7 @@ func TestCoverCommandedTargetSurvivesAPositionEchoBeforeMotion(t *testing.T) {
 func TestCoverInferredTarget_InvertedControlFollowsDomainMotion(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{InvertedControl: true})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	c.OnLevel(0.3) // inverted: domain position 0.7 → Matter 3000.
 
 	c.OnDirection(DirectionDown) // inverted: domain opening
@@ -729,7 +729,7 @@ func TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop(t *testing.T) {
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		b.OnLevel(0.5)        // Matter lift 5000.
 		b.level2.OnEvent(0.6) // Matter tilt 4000.
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToTiltPercentage, uint16(2500)); err != nil {
 			t.Fatalf("GoToTiltPercentage: %v", err)

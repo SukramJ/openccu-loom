@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/eligibility"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // Candidate identifies one row in the allowlist UI list. The
@@ -122,7 +125,14 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 			}
 		}()
 		key := candidateDPKey(source)
-		v := eligibility.Classify(source)
+		sourceKey := matterendpoint.SourceKey{
+			CentralName:   centralName,
+			DeviceAddress: dev.Address,
+			ChannelNo:     ch.Number,
+			DPKind:        kind,
+			DPKey:         key,
+		}
+		v := classifyCandidate(source, sourceKey, displayName)
 		// Skip entries that are unmappable AND have no Matter projection
 		// hint (i.e. truly opaque sources). Sources with a real reason
 		// surface as ⛔ rows in the UI so the operator understands why.
@@ -130,13 +140,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 			return
 		}
 		*out = append(*out, Candidate{
-			Key: matterendpoint.SourceKey{
-				CentralName:   centralName,
-				DeviceAddress: dev.Address,
-				ChannelNo:     ch.Number,
-				DPKind:        kind,
-				DPKey:         key,
-			},
+			Key:         sourceKey,
 			DisplayName: displayName,
 			ChannelType: ch.Type,
 			Verdict:     v,
@@ -165,6 +169,32 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 	for _, dp := range ch.DataPoints() {
 		emit(matterendpoint.DPKindGeneric, dp)
 	}
+}
+
+// classifyCandidate is the verdict for one candidate source. A source that
+// builds its Matter device from cluster declarations is classified by that
+// device: go-fabric's derivation reads the endpoint-source surface (device
+// type and cluster servers), which the device carries and the source no
+// longer does. A source that states its own verdict keeps it. One that
+// projects no device — a generic switch on a parameter other than STATE,
+// a select whose list cannot back ModeSelect — is not a candidate at all:
+// nothing could be exposed, so no row is shown (a row would name a
+// reason the operator can do nothing about). source is any because the
+// walk probes every data point of a channel, whatever its type.
+func classifyCandidate(source any, key matterendpoint.SourceKey, name string) eligibility.Verdict {
+	if _, own := source.(contract.EligibilitySource); !own {
+		if ds, ok := source.(interfaces.MatterDeviceSource); ok {
+			d, err := ds.MatterDevice(fabricdevice.Options{StableKey: key, Name: name})
+			if err != nil {
+				return eligibility.Verdict{State: eligibility.StateUnmappable, Reason: err.Error()}
+			}
+			if d == nil {
+				return eligibility.Verdict{State: eligibility.StateUnmappable, Reason: eligibility.ReasonNoProjection}
+			}
+			return eligibility.Classify(d)
+		}
+	}
+	return eligibility.Classify(source)
 }
 
 // The capability probes [candidateDPKey] performs on a candidate source. They

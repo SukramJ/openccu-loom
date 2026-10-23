@@ -8,14 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 )
 
 // TestMatterOnOffServerAcceptsASynchronousEcho pins the go-fabric contract
 // the profiles rely on: a CCU whose event for a write arrives before the
-// write's reply confirms through [onoff.Server.Set] from inside the Sink,
+// write's reply confirms through [SetMatterOnOff] from inside the Sink,
 // on the RPC callback goroutine that handles every event of the
 // interface. go-fabric 0.3.0 ran the Sink under the lock Set takes and
 // held that goroutine until the command timed out (the chip-tool suite
@@ -25,24 +24,26 @@ import (
 func TestMatterOnOffServerAcceptsASynchronousEcho(t *testing.T) {
 	t.Parallel()
 	var (
-		srv     *onoff.Server
-		tracker hmtypes.DataVersionTracker
-		echoed  = make(chan time.Duration, 1)
+		dev    *fabricdevice.Device
+		echoed = make(chan time.Duration, 1)
 	)
-	srv = MustMatterOnOffServer(MatterOnOffConfig{
-		Lighting:    true,
-		DataVersion: &tracker,
-		Sink: func(_ context.Context, on bool) error {
+	d, err := NewMatterDevice(nil, uint16(fabricdevice.OnOffPlugInUnitID),
+		fabricdevice.Options{StableKey: fabricdevice.StringKey("echo"), Name: "echo"},
+		MatterOnOffDeclaration(true, false, func(_ context.Context, on bool) error {
 			start := time.Now()
-			srv.Set(on) // the echo, from inside the Sink
+			SetMatterOnOff(dev, on) // the echo, from inside the Sink
 			echoed <- time.Since(start)
 			return nil
-		},
-	})
+		}))
+	if err != nil {
+		t.Fatalf("NewMatterDevice: %v", err)
+	}
+	dev = d
+	srv := d.Server(onoffdef.ClusterID)
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := srv.MatterInvoke(context.Background(), onoff.CmdOn, nil)
+		_, err := srv.MatterInvoke(context.Background(), onoffdef.CmdOn, nil)
 		done <- err
 	}()
 	select {
@@ -56,7 +57,7 @@ func TestMatterOnOffServerAcceptsASynchronousEcho(t *testing.T) {
 	if waited := <-echoed; waited > time.Second {
 		t.Fatalf("the confirming goroutine was held for %s inside the Sink", waited)
 	}
-	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
+	if v, _ := srv.MatterRead(onoffdef.AttrOnOff); v != true {
 		t.Fatalf("OnOff after On = %v, want true", v)
 	}
 }

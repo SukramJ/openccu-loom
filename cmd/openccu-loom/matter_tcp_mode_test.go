@@ -99,13 +99,13 @@ func TestMatterTCPModeReachesTheRunningBridge(t *testing.T) {
 			}
 			t.Cleanup(bundle.stop)
 
-			_, portStr, err := net.SplitHostPort(bundle.bridge.LocalAddr())
+			_, portStr, err := net.SplitHostPort(bundle.node.Bridge().LocalAddr())
 			if err != nil {
-				t.Fatalf("bridge LocalAddr %q: %v", bundle.bridge.LocalAddr(), err)
+				t.Fatalf("bridge LocalAddr %q: %v", bundle.node.Bridge().LocalAddr(), err)
 			}
 			port, err := strconv.Atoi(portStr)
 			if err != nil || port == 0 {
-				t.Fatalf("bridge bound no usable port: %q", bundle.bridge.LocalAddr())
+				t.Fatalf("bridge bound no usable port: %q", bundle.node.Bridge().LocalAddr())
 			}
 
 			// (i) A TCP connection to the UDP listener's port.
@@ -123,7 +123,7 @@ func TestMatterTCPModeReachesTheRunningBridge(t *testing.T) {
 			if bundle.node.MDNSEnabled() {
 				t.Fatal("the node publishes on the network, want its no-op advertiser for mdns_advertise=noop")
 			}
-			bundle.bridge.AnnounceFabric(ctx, [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, 0x1122)
+			bundle.node.Bridge().AnnounceFabric(ctx, [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, 0x1122)
 			var op *mdns.Service
 			for _, svc := range bundle.node.MDNSServices() {
 				if svc.ServiceType == mdns.ServiceTypeOperational {

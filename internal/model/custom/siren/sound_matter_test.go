@@ -52,9 +52,9 @@ func newSpeakerRig(t *testing.T) (*SoundPlayer, *generic.Sensor[int32], *generic
 
 func speakerServers(t *testing.T, sp *SoundPlayer) (onOff *onoff.Server, level interfaces.MatterClusterServer) {
 	t.Helper()
-	servers := sp.MatterClusterServers()
+	servers := matterServers(t, sp)
 	if len(servers) != 2 {
-		t.Fatalf("MatterClusterServers() returned %d servers, want 2 (OnOff + LevelControl)", len(servers))
+		t.Fatalf("the device carries %d servers, want 2 (OnOff + LevelControl)", len(servers))
 	}
 	var on *onoff.Server
 	var lvl interfaces.MatterClusterServer
@@ -151,11 +151,12 @@ func TestSoundPlayerOnOffServerIsBuiltOnce(t *testing.T) {
 	on, lvl := speakerServers(t, sp)
 	again, againLvl := speakerServers(t, sp)
 	if again != on || againLvl != lvl {
-		t.Fatal("a second MatterClusterServers call returned different servers; the bridge keeps the ones it serves")
+		t.Fatal("a second MatterDevice call returned different servers; the bridge keeps the ones it serves")
 	}
+	before := on.MatterDataVersion()
 	fireDirection(t, direction, "UP")
-	if got, want := on.MatterDataVersion(), sp.Current(); got != want {
-		t.Errorf("OnOff server data version = %d, player's tracker = %d; the tracker must be shared", got, want)
+	if after := on.MatterDataVersion(); after <= before {
+		t.Errorf("OnOff server data version did not advance on a confirmed DIRECTION: before=%d after=%d", before, after)
 	}
 }
 
@@ -242,8 +243,8 @@ func TestSoundPlayerLevelReadsVolume(t *testing.T) {
 		t.Fatalf("unobserved CurrentLevel = (%v, %v), want (nil, true)", v, ok)
 	}
 	level.OnEvent(1.0)
-	if v, ok := lvl.MatterRead(levelcontrol.AttrCurrentLevel); !ok || v != levelcontrol.LevelMax {
-		t.Fatalf("CurrentLevel at LEVEL=1.0 = (%v, %v), want (%d, true)", v, ok, levelcontrol.LevelMax)
+	if v, ok := lvl.MatterRead(levelcontrol.AttrCurrentLevel); !ok || v != levelcontroldef.LevelMax {
+		t.Fatalf("CurrentLevel at LEVEL=1.0 = (%v, %v), want (%d, true)", v, ok, levelcontroldef.LevelMax)
 	}
 }
 
@@ -265,7 +266,7 @@ func TestSoundPlayerMoveToLevelIsGatedWhileSilent(t *testing.T) {
 	}
 
 	fireDirection(t, direction, "UP")
-	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMax, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: levelcontroldef.LevelMax, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevel while playing: %v", err)
 	}
 	if v, ok := w.has(hmenum.ParameterLevel); !ok || v != 1.0 {
@@ -282,7 +283,7 @@ func TestSoundPlayerMoveToLevelWithOnOffCouplesSilence(t *testing.T) {
 	_, lvl := speakerServers(t, sp)
 	ctx := context.Background()
 
-	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMin, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevelWithOnOff, levelcontroldef.MoveToLevelRequest{Level: levelcontroldef.LevelMin, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(0): %v", err)
 	}
 	if v, ok := w.has(hmenum.ParameterLevel); !ok || v != float64(0) {
@@ -305,7 +306,7 @@ func TestSoundPlayerMoveToLevelWithOnOffStartsAtVolume(t *testing.T) {
 	level.OnEvent(0.2)
 
 	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff,
-		levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMax, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
+		levelcontroldef.MoveToLevelRequest{Level: levelcontroldef.LevelMax, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(max): %v", err)
 	}
 	w.mu.Lock()
@@ -351,7 +352,7 @@ func TestSoundPlayerSilenceOnSilentUnknownPlayerSendsNoStop(t *testing.T) {
 	level.OnEvent(0.0)
 
 	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff,
-		levelcontroldef.MoveToLevelRequest{Level: levelcontrol.LevelMin, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
+		levelcontroldef.MoveToLevelRequest{Level: levelcontroldef.LevelMin, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(0): %v", err)
 	}
 	w.mu.Lock()

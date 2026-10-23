@@ -64,7 +64,7 @@ func TestMatterLockCommandsReachTheWriterAtHighPriority(t *testing.T) {
 	} {
 		w := &priorityWriter{}
 		r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{SupportsOpen: true})
-		srv := r.lock.MatterClusterServers()[0]
+		srv := matterServers(r.lock)[0]
 
 		if _, err := srv.MatterInvoke(requesterCtx(), c.cmdID, nil); err != nil {
 			t.Fatalf("MatterInvoke(%s): %v", c.what, err)

@@ -88,7 +88,7 @@ var compositionRootSeams = []compositionRootSeam{
 		pkg: "matteradapter", typeName: "Config",
 		declDir:  "internal/north/matteradapter",
 		fillFile: "cmd/openccu-loom/daemon_matter.go",
-		minDecl:  8,
+		minDecl:  5,
 		notFilled: map[string]string{
 			"NameResolver": "nil selects the model-backed resolver the assembler builds from the walked devices (internal/north/matteradapter/assembler.go), which is the daemon's own naming path — the field exists for an owner substituting a different model",
 		},

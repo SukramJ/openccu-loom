@@ -233,7 +233,7 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 		t.Skip("bridge did not start")
 	}
 	t.Cleanup(bundle.stop)
-	if bundle.opCreds == nil {
+	if bundle.node.Root().OperationalCredentials == nil {
 		t.Fatal("startMatterBridge produced a nil OperationalCredentials cluster")
 	}
 
@@ -247,14 +247,14 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 		t.Fatalf("AddFabric: %v", err)
 	}
 
-	before := bundle.opCreds.MatterDataVersion()
+	before := bundle.node.Root().OperationalCredentials.MatterDataVersion()
 
 	a := &matterFabricRevokerAdapter{node: bundle.node}
 	if err := a.RevokeFabric(ctx, idx); err != nil {
 		t.Fatalf("RevokeFabric: %v", err)
 	}
 
-	after := bundle.opCreds.MatterDataVersion()
+	after := bundle.node.Root().OperationalCredentials.MatterDataVersion()
 	if after == before {
 		t.Errorf("DataVersion did not change after RevokeFabric: before=%d after=%d", before, after)
 	}

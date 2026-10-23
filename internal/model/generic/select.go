@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Select is an enum-typed data point whose values are integer indices
@@ -17,13 +16,9 @@ import (
 type Select struct {
 	*DataPoint[int32]
 
-	// matterModeVersion is the per-cluster DataVersion counter of the
-	// ModeSelect projection in `select_matter.go`. It lives on the data
-	// point rather than inside the cluster server because the server is
-	// rebuilt on every topology assembly and every eligibility query,
-	// and a counter that restarted with each rebuild would tell a
-	// subscribed controller its cached mode had changed when nothing did.
-	matterModeVersion hmtypes.DataVersionTracker
+	// matterDevice holds the ModeSelect device the Matter projection
+	// serves (select_matter.go), built once per select.
+	matterDevice MatterDeviceHolder
 }
 
 // NewSelect constructs a Select.

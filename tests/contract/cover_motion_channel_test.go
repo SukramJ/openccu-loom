@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
@@ -125,7 +126,11 @@ func coverMotionBrollDevice(t *testing.T) (cov *cover.Cover, transmitter, receiv
 // cover's Matter server serves (global bits 0-1, lift bits 2-3).
 func coverOperationalStatus(t *testing.T, cov *cover.Cover) uint8 {
 	t.Helper()
-	v, ok := cov.MatterClusterServers()[0].MatterRead(windowcoveringspec.AttrOperationalStatus)
+	d, err := cov.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("cover"), Name: "cover"})
+	if err != nil || d == nil {
+		t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
+	}
+	v, ok := d.Server(windowcoveringspec.ClusterID).MatterRead(windowcoveringspec.AttrOperationalStatus)
 	if !ok {
 		t.Fatal("OperationalStatus not served")
 	}

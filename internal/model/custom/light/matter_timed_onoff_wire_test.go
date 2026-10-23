@@ -82,7 +82,7 @@ func TestOnWithTimedOffFromWireReachesTheCCU(t *testing.T) {
 	const ep = 2
 	top := &endpoint.Topology{Endpoints: []*endpoint.Endpoint{
 		{ID: 0},
-		{ID: ep, DeviceType: l.MatterDeviceType(), Reachable: true, Source: l},
+		{ID: ep, DeviceType: l.MatterDeviceType(), Reachable: true, Source: matterDeviceOf(t, l)},
 	}}
 	dispatcher := endpoint.NewTopologyDispatcher(top)
 

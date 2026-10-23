@@ -1138,7 +1138,8 @@ existing OperationalStatus tilt limitation).
 ### BD-Matter-ClosureControl-StopForwarded — a garage Stop reaches the drive whatever the closure state
 
 **Where:** `internal/model/custom/cover/matter_closure.go`
-(`garageClosureServer.MatterInvoke`, `closureInMotion`).
+(`garageMover.StopIgnored`, the `closurecontroldef.StopObserver` of the
+declared Mover, since go-fabric v0.10.2 — go-fabric #232).
 
 **matter.js / go-fabric behaviour:** cluster §5.4.8.1, as matter.js carries
 it in `closure-control.resource.ts`: Stop acts only on a closure that is
@@ -1154,11 +1155,12 @@ HmIP-MOD-TM, the `IPGarage` profile), which lags the physical motion, is
 overwritten by every `DOOR_STATE` / `SECTION` push and is absent on a
 firmware that sends no `SECTION`. No measurement of that lag exists. Under
 the spec behaviour a Stop pressed in that window would answer SUCCESS and
-leave the door running. The projection therefore sends a Stop that the
-cluster would ignore to the drive itself (`DOOR_COMMAND=STOP`, as 0.88.0
-did), then lets the cluster server apply its own state machine unchanged;
-while the cluster considers the closure moving, its own Stop handler is the
-one path, so the drive receives exactly one STOP either way.
+leave the door running. The kit's server therefore tells the declared
+Mover of a Stop it answers without motion (`StopIgnored`), and the drive
+sends it (`DOOR_COMMAND=STOP`, as 0.88.0 did); the server's own state
+machine is unchanged. While the cluster considers the closure moving, its
+own Stop handler is the one path, so the drive receives exactly one STOP
+either way.
 
 **Caveat:** on a drive wired in impulse mode a single input steps through
 open / stop / close, so a STOP sent to a door that really is at rest may
@@ -1202,12 +1204,12 @@ change. The conformance exception map in
 `tests/integration/matter_cluster_conformance_test.go` and the chip-tool
 stub-rejection cells were removed with it.
 
-### BD-Matter-ExtendedColorLight-HSOnly — the HS-only lights advertise ExtendedColorLight without the CT feature
+### BD-Matter-ExtendedColorLight-HSOnly — the HS-only lights serve the CT feature their device type mandates, mapped onto hue and saturation
 
-**Where:** `internal/model/custom/light/matter_color.go` (go-fabric's
-`light.ColorControlServer` with the HS and XY features for `ColorLight`,
-HS+XY+CT for `RGBWLight`; device type 0x010D for both); the CT ratchet
-entry in `tests/integration/matter_device_layer_conformance_test.go`.
+**Where:** `internal/model/custom/light/matter_color.go` (`ctViaHS`, the
+colour-temperature writer of `ColorLight` and `FixedColorLight`;
+`confirmsCT`; `RGBWLight` has a colour-temperature axis of its own);
+device type 0x010D for all three.
 
 **matter.js behaviour:** `devices/extended-color-light.ts` mandates
 ColorControl with the XY and CT features and the RemainingTime attribute;
@@ -1216,12 +1218,22 @@ go-fabric's device-type validator (ADR 0016) reports three violations for
 such an endpoint: ColorControl.XY and ColorControl.CT missing, RemainingTime
 missing.
 
-**OpenCCU-Loom state (known limitation):** the HS-only RGB lights
-(HmIP-RGBW in HS mode, HM-LC-RGBW-WM) serve the HS commands and
-attributes; the RGBW light adds CT. 0x010D is the nearest type and Apple
-Home, Google Home and chip-tool drive the light through HS. The validator
-runs in warn mode in production; the conformance guard carries the
-findings as declared entries so a new one fails the suite.
+**OpenCCU-Loom state:** the HS-only RGB lights (HmIP-RGBW in HS mode,
+HM-LC-RGBW-WM) serve HS, XY and CT. The colour temperature a controller
+asks for becomes the hue and saturation of that white point through
+matter.js's `miredsToHsv` (`colorcontroldef.MiredsToHSV`) and reaches the
+device as one colour write, the light's nearest white — what a
+controller's white slider does with an RGB bulb in matter.js's own
+bridges; the physical range is the 2000 K – 6535 K window the other
+lights advertise. Owner decision on 2026-10-23: go-fabric's device kit
+checks a declaration against the device type's feature conformance and
+refuses an ExtendedColorLight without CT, and the mapping is the
+conformant answer rather than a hand-built server kept for the
+non-conformance. A confirmed HUE / SATURATION that is the white the
+server holds in the CT mode, within one attribute unit (`confirmsCT`),
+confirms that write and keeps the CT mode; the fixed-colour light snaps a
+white to its nearest slot, so its confirmation usually moves the server to
+HS.
 
 Since the ADR 0084 ColorControl follow-up the cluster is go-fabric's
 server: RemainingTime is served (the server keeps it, 0 on the hand-off
@@ -1242,9 +1254,8 @@ the late echo would count as the device's own colour and move the server
 to HS after every MoveToColor. A colour that differs reaches `Set` and is
 reported in HS. Measured on the chip-tool HmIP-LSC bridge:
 MoveToColor(45914, 19615) lands as HUE 0 / SATURATION 1.0 and the server
-stays in the XY mode. What stays declared is CT on the HS-only lights —
-the feature set is what the device carries — pinned by the one remaining
-ratchet entry.
+stays in the XY mode. The CT ratchet entry the conformance guard carried
+for these lights is gone with the feature.
 
 A second rule from the same work: on the HmIP-LSC, which runs both axes at
 once and has no operating mode, the colour mode follows the axis the CCU
@@ -1278,11 +1289,11 @@ the re-learn named in the changelog; decided per type, not for the fleet.
 
 ### BD-Matter-LevelControl-NativeRamp — the light's LevelControl runs on go-fabric's hand-off path, the dimmer ramps itself
 
-**Where:** `internal/model/custom/light/matter_level.go`
-(`Light.matterLevelServer` builds `levelcontrol.Server` with `Transitions`
-nil over go-fabric's `levelcontrol.NewNativeSource`; the host implements
-only `levelcontrol.NativeRamp` — `lightRamp` — and an attribute-only
-`levelcontrol.OnOff` — `lightOnOff`).
+**Where:** `internal/model/custom/light/matter_level.go` (the light
+declares `levelcontroldef.Declare{Ramp: lightRamp}`; go-fabric's device
+kit builds `levelcontrol.NewNativeSource` over the ramp and couples it to
+the endpoint's OnOff server itself, so the host implements only
+`levelcontroldef.NativeRamp`).
 
 **matter.js behaviour:** `LevelControlServer` with
 `managedTransitionTimeHandling` runs every transition itself on
@@ -1318,9 +1329,12 @@ ACTION, the HmIP dimmers none. On that basis:
 - RemainingTime reads 0: the CCU reports no ramp progress, so there is no
   countdown to report; the server's own rule on the hand-off path.
 - The ExecuteIfOff gate of the plain commands weighs the effective
-  Options against the light's own OnOff (the single LEVEL knob: LEVEL>0 is
-  on); the WithOnOff coupling to MinLevel is LEVEL=0, and the OnOff
-  attribute follows through the OnOff server's own `Set`.
+  Options against the endpoint's OnOff attribute, which the LEVEL
+  confirmation keeps (the single LEVEL knob: LEVEL>0 is on); the WithOnOff
+  coupling to MinLevel is LEVEL=0, and the source switches the OnOff
+  attribute off once the ramp to the minimum has arrived — on the LEVEL
+  confirmation the ramp notifies, or at the ramp's deadline — the order
+  matter.js keeps (ramp down, then switch off).
 - The Options bit CoupleColorTempToLevel (0x02) is conformant under LT,
   so the server accepts and stores it; nothing couples colour temperature
   to the level on the hand-off path (matter.js does that inside its
@@ -1335,9 +1349,9 @@ refuse or queue that write rate on a busy interface.
 **The native source:** go-fabric's `NativeSource` keeps Options and
 OnLevel, applies the ExecuteIfOff gate and turns each of the eight commands
 into one target level and one duration; `lightRamp.Ramp` writes them as
-LEVEL (with RAMP_TIME where the channel ramps), and `lightOnOff.SetOnOff`
-stores the OnOff attribute without a radio write, because the ramp already
-switches the dimmer. Two results follow matter.js rather than the earlier
+LEVEL (with RAMP_TIME where the channel ramps), and the kit stores the
+OnOff attribute through the OnOff server's own `Set` without a radio
+write, because the ramp already switches the dimmer. Two results follow matter.js rather than the earlier
 host arithmetic: a Step cropped at a bound runs the cropped distance at the
 rate the full step gives, `stepSize / transitionTime * 10` (matter.js
 `packages/node/src/behaviors/level-control/LevelControlServer.ts:464-479`

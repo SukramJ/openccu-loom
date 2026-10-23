@@ -10,10 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -95,13 +92,10 @@ type SoundPlayer struct {
 	// transition so DataVersionFilter evaluation correctly detects cluster
 	// changes. It is threaded into the library LevelControl server and read
 	// by the OnOff one, so both Speaker clusters share the counter.
-	hmtypes.DataVersionTracker
 
 	// matterOnOff and matterLevelSrv hold the two cluster servers the
 	// Matter projection serves, built once per player (sound_matter.go).
-	matterOnOff     generic.MatterOnOffHolder
-	matterLevelOnce sync.Once
-	matterLevelSrv  *levelcontrol.Server
+	matterDevice generic.MatterDeviceHolder
 
 	key    hmtypes.DataPointKey
 	writer custom.Writer
@@ -484,22 +478,13 @@ func (sp *SoundPlayer) Subscribe(ch *device.Channel) func() {
 		unsubs = append(unsubs, sp.level.OnAnyUpdate(func(_, _ any) {}))
 	}
 	if sp.soundfile != nil {
-		// Bump the DataVersion on every confirmed SOUNDFILE change so that
-		// Matter DataVersionFilter evaluation picks up playback-state transitions.
-		// Mirrors the OnConfirmedUpdate hook in switchdev.New (switch/switch.go).
-		unsubs = append(unsubs, sp.soundfile.OnConfirmedUpdate(func(_, _ int32) {
-			sp.Bump()
-		}))
+		unsubs = append(unsubs, sp.soundfile.OnAnyUpdate(func(_, _ any) {}))
 	}
 	if sp.repetitions != nil {
 		unsubs = append(unsubs, sp.repetitions.OnAnyUpdate(func(_, _ any) {}))
 	}
 	if sp.direction != nil {
-		// Also bump on DIRECTION changes — UP/DOWN encodes whether the player
-		// is currently active, which maps to the Matter LevelControl OnOff bit.
-		unsubs = append(unsubs, sp.direction.OnConfirmedUpdate(func(_, _ int32) {
-			sp.Bump()
-		}))
+		unsubs = append(unsubs, sp.direction.OnAnyUpdate(func(_, _ any) {}))
 	}
 	return func() {
 		for _, u := range unsubs {

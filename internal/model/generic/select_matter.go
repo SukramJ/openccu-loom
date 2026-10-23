@@ -7,14 +7,16 @@ import (
 	"context"
 	"unicode/utf8"
 
-	"github.com/SukramJ/go-fabric/cluster/modeselect"
+	msdef "github.com/SukramJ/go-fabric/cluster/spec/modeselect"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // Compile-time assertions: a read/write ENUM parameter is projected as a
-// ModeSelect (0x0027) endpoint whose single mandatory cluster is served by
-// the library's ModeSelect server over this data point as its narrow port.
+// ModeSelect (0x0027) device whose single mandatory cluster is declared
+// with this data point as its ModeSource, the narrow port the kit's
+// ModeSelect server reads.
 //
 // Only [Select] takes part. The two neighbouring ENUM shapes deliberately
 // do not:
@@ -30,9 +32,9 @@ import (
 //     conformance M on the cluster. Mounting the cluster over a parameter
 //     that cannot be written would advertise a command that always fails.
 var (
-	_ interfaces.MatterEndpointSource = (*Select)(nil)
+	_ interfaces.MatterDeviceSource   = (*Select)(nil)
 	_ interfaces.MatterChangeNotifier = (*Select)(nil)
-	_ modeselect.ModeSource           = (*Select)(nil)
+	_ msdef.ModeSource                = (*Select)(nil)
 )
 
 // matterSelectDeviceType is the Matter Device Type ID for ModeSelect.
@@ -40,19 +42,39 @@ var (
 // packages/model/src/standard/elements/mode-select-device.element.ts:12-19
 // lists Descriptor (supplied by the bridge) and that one requirement, so
 // unlike the OnOffPlugInUnit projection this endpoint mounts no stubs.
-const matterSelectDeviceType uint16 = 0x0027
+const matterSelectDeviceType = uint16(fabricdevice.ModeSelectID)
 
 // matterSelectMaxModes is the number of VALUE_LIST entries this projection
-// can carry. SupportedModes has constraint "max 255"
-// (mode-select-cluster.element.ts:37). Staying within it is the host's
-// part: go-fabric's ModeSelect server returns the list as given and the
-// generated codec writes it untrimmed (see [modeselect.ModeSource]), so a
-// longer list would go on the wire for a controller to reject. Trimming it
-// here instead would leave modes that CurrentMode can still name but
-// ChangeToMode would reject as unsupported, so a parameter with more
-// entries than that opts out of Matter entirely rather than being
-// half-projected.
-const matterSelectMaxModes = modeselect.SupportedModesMaxEntries
+// can carry: the SupportedModes constraint "max 255"
+// (mode-select-cluster.element.ts:37), read from the generated
+// definition. Staying within it is the host's part: go-fabric's ModeSelect
+// server returns the list as given and the generated codec writes it
+// untrimmed (see [msdef.ModeSource]), so a longer list would go on the
+// wire for a controller to reject. Trimming it here instead would leave
+// modes that CurrentMode can still name but ChangeToMode would reject as
+// unsupported, so a parameter with more entries than that opts out of
+// Matter entirely rather than being half-projected.
+var matterSelectMaxModes = int(msdef.Definition.Attribute(msdef.AttrSupportedModes).Constraint.Max.Int)
+
+// matterModeLabelMaxBytes is the ModeOptionStruct Label constraint
+// "max 64" (mode-select-cluster.element.ts:63), read from the generated
+// definition of the struct.
+var matterModeLabelMaxBytes = modeOptionFieldMax("Label")
+
+// modeOptionFieldMax is the upper bound of the ModeOptionStruct field
+// name, as the generated definition states it.
+//
+// invariant: the generated definition carries the field and its bound; a
+// definition without them is a defect in the generator, not a runtime
+// condition, and is caught at package initialisation.
+func modeOptionFieldMax(name string) int {
+	for i := range msdef.ModeOptionStructDef.Fields {
+		if f := &msdef.ModeOptionStructDef.Fields[i]; f.Name == name && f.Constraint.Max != nil {
+			return int(f.Constraint.Max.Int)
+		}
+	}
+	panic("generic: ModeOptionStruct." + name + " carries no upper bound in the generated definition")
+}
 
 // matterSelectEligible reports whether this data point can honestly carry
 // a ModeSelect cluster.
@@ -75,32 +97,27 @@ func matterSelectEligible(s *Select) bool {
 	return s.IsWritable() && (s.IsReadable() || s.HasEvents())
 }
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource].
+// MatterDeviceType implements [interfaces.MatterDeviceSource].
 func (s *Select) MatterDeviceType() uint16 { return matterSelectDeviceType }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource].
-// Returns nil for a parameter that cannot back the cluster honestly, so the
-// assembler skips the projection and eligibility reports it unmappable —
-// see [matterSelectEligible].
+// MatterDevice implements [interfaces.MatterDeviceSource]: a ModeSelect
+// device with the cluster declared on this data point as its ModeSource,
+// built once per select. A parameter that cannot back the cluster honestly
+// projects nothing, so the assembler skips it and eligibility reports it
+// unmappable — see [matterSelectEligible].
 //
 // The data point itself is the narrow port; the Matter shape of its values
-// belongs to the library server. Its persistent DataVersion tracker is
-// threaded in so a mode the device changed on its own keeps advancing the
-// same counter across the server reconstruction every topology assembly and
-// every eligibility query performs.
-func (s *Select) MatterClusterServers() []interfaces.MatterClusterServer {
+// belongs to the kit's server, which reads the port at every read.
+func (s *Select) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
 	if !matterSelectEligible(s) {
-		return nil
+		return nil, nil //nolint:nilnil // a parameter that cannot back ModeSelect projects no device
 	}
-	return []interfaces.MatterClusterServer{
-		modeselect.NewServer(modeselect.Config{
-			Source:      s,
-			DataVersion: &s.matterModeVersion,
-		}),
-	}
+	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
+		return NewMatterDevice(s, matterSelectDeviceType, opts, msdef.Declare{ModeSource: s})
+	})
 }
 
-// ModeDescription implements [modeselect.ModeSource]. The Description
+// ModeDescription implements [msdef.ModeSource]. The Description
 // attribute is meant to say what this cluster instance selects between,
 // which matters on a node carrying several of them. The CCU parameter name
 // is the only such text the data point owns — the human-readable device and
@@ -115,7 +132,7 @@ func (s *Select) ModeDescription() string {
 	return string(s.Parameter())
 }
 
-// ModeNamespace implements [modeselect.ModeSource] by reporting that there
+// ModeNamespace implements [msdef.ModeSource] by reporting that there
 // is none.
 //
 // StandardNamespace names a CSA-defined tag namespace whose semantic tags a
@@ -128,7 +145,7 @@ func (s *Select) ModeDescription() string {
 // meaning the CCU never supplied.
 func (s *Select) ModeNamespace() (namespace uint8, present bool) { return 0, false }
 
-// SupportedModes implements [modeselect.ModeSource]: one option per
+// SupportedModes implements [msdef.ModeSource]: one option per
 // VALUE_LIST entry, Label from the list and Mode from the index, which is
 // the value this data point's type already is.
 //
@@ -140,8 +157,8 @@ func (s *Select) ModeNamespace() (namespace uint8, present bool) { return 0, fal
 //
 // The list bound is [matterSelectMaxModes]; each Label is bounded by
 // [boundedModeLabel]. Both are the host's part of the
-// [modeselect.ModeSource] contract.
-func (s *Select) SupportedModes() []modeselect.ModeOptionStruct {
+// [msdef.ModeSource] contract.
+func (s *Select) SupportedModes() []msdef.ModeOptionStruct {
 	if s == nil || s.DataPoint == nil {
 		return nil
 	}
@@ -149,9 +166,9 @@ func (s *Select) SupportedModes() []modeselect.ModeOptionStruct {
 	if len(values) > matterSelectMaxModes {
 		return nil
 	}
-	out := make([]modeselect.ModeOptionStruct, 0, len(values))
+	out := make([]msdef.ModeOptionStruct, 0, len(values))
 	for i, label := range values {
-		out = append(out, modeselect.ModeOptionStruct{
+		out = append(out, msdef.ModeOptionStruct{
 			Label: boundedModeLabel(label),
 			Mode:  uint8(i), //nolint:gosec // the list is length-gated to matterSelectMaxModes (255) above
 		})
@@ -160,24 +177,24 @@ func (s *Select) SupportedModes() []modeselect.ModeOptionStruct {
 }
 
 // boundedModeLabel trims label to the ModeOptionStruct Label constraint
-// "max 64" (mode-select-cluster.element.ts:63, [modeselect.LabelMaxBytes]),
+// "max 64" (mode-select-cluster.element.ts:63, [matterModeLabelMaxBytes]),
 // counted in UTF-8 bytes, cutting back to the last whole rune. The
 // generated codec writes the label untrimmed, so this bound is the host's
 // part; the cut is the one the bridge's former Label encoder applied
 // (go-fabric tlv Encoder.PutUTF8Bounded), so a long CCU label keeps the
 // prefix it always had on the wire.
 func boundedModeLabel(label string) string {
-	if len(label) <= modeselect.LabelMaxBytes {
+	if len(label) <= matterModeLabelMaxBytes {
 		return label
 	}
-	trimmed := label[:modeselect.LabelMaxBytes]
+	trimmed := label[:matterModeLabelMaxBytes]
 	for !utf8.ValidString(trimmed) {
 		trimmed = trimmed[:len(trimmed)-1]
 	}
 	return trimmed
 }
 
-// CurrentMode implements [modeselect.ModeSource].
+// CurrentMode implements [msdef.ModeSource].
 //
 // The attribute has no "not observed yet" reading — conformance M, no X
 // quality (mode-select-cluster.element.ts:41-42) — so a value has to be
@@ -206,7 +223,7 @@ func (s *Select) modeInRange(idx int32) bool {
 	return idx >= 0 && int(idx) < n
 }
 
-// ChangeToMode implements [modeselect.ModeSource]. The server has already
+// ChangeToMode implements [msdef.ModeSource]. The server has already
 // checked newMode against [Select.SupportedModes], so the index is known to
 // address a VALUE_LIST entry; [Select.SetIndex] re-checks it against the live
 // descriptor and sends the index itself, whichever domain the descriptor
@@ -222,9 +239,9 @@ func (s *Select) ChangeToMode(ctx context.Context, newMode uint8) error {
 }
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier]. The
-// ModeSelect server forwards this to bump its DataVersion and wake the
-// bridge's dirty bucket, so a mode changed at the device — not through a
-// controller — reaches a Subscribe instead of waiting for the next read.
+// bridge advances the cluster's DataVersion and wakes its dirty bucket on
+// it, so a mode changed at the device — not through a controller —
+// reaches a Subscribe instead of waiting for the next read.
 // Wraps OnConfirmedUpdate for the same reason [Switch.OnMatterValueChanged]
 // does: an optimistic write and its rollback are this daemon's guesses, and
 // reporting them would make a controller show a mode the CCU never

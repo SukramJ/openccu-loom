@@ -82,7 +82,7 @@ func (w *countingWriter) recorded() []any {
 // invokeGoToLift is a small shortcut for the tests below.
 func invokeGoToLift(t *testing.T, c *Cover, pct uint16) {
 	t.Helper()
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, pct); err != nil {
 		t.Fatalf("GoToLiftPercentage(%d): %v", pct, err)
 	}
@@ -176,7 +176,7 @@ func TestGoToLiftPercentage_AtTargetAcknowledgedWithoutWrite(t *testing.T) {
 			w := &countingWriter{}
 			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 			c.OnLevel(0.4) // current = Matter 6000
-			srv := c.MatterClusterServers()[0]
+			srv := matterServers(t, c)[0]
 
 			invokeGoToLift(t, c, 6050) // |6050-6000| = 50 <= 100
 			settleGoToWrites()
@@ -234,7 +234,7 @@ func TestGoToDebounce_StopMotionCancelsPendingWrite(t *testing.T) {
 		w := &countingWriter{}
 		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
 		c.OnLevel(0.4)
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 
 		invokeGoToLift(t, c, 3000) // pending
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdStopMotion, nil); err != nil {
@@ -286,7 +286,7 @@ func TestGoToDebounce_BlindAxesDebounceIndependently(t *testing.T) {
 		defer drainOptimisticRollbacks()
 		w := &putWriter{}
 		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
@@ -344,7 +344,7 @@ func TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite(t *testing.T
 		w := &countingWriter{}
 		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 		c.OnLevel(0.4) // current = Matter 6000
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 
 		invokeGoToLift(t, c, 3000)
 		if v, ok := srv.MatterRead(windowcoveringspec.AttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {

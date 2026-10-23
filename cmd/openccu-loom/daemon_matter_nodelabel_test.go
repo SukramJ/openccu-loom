@@ -65,7 +65,7 @@ func TestStartMatterBridgePersistsBridgedNodeLabel(t *testing.T) {
 			"so a controller rename is lost on restart", key, got, label)
 	}
 
-	if err := bundle.bridge.Reassemble(ctx); err != nil {
+	if err := bundle.node.Bridge().Reassemble(ctx); err != nil {
 		t.Fatalf("Reassemble: %v", err)
 	}
 	rep, err := sess.Read(ctx, path)

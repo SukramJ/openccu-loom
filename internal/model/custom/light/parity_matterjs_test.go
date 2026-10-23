@@ -159,7 +159,7 @@ func TestParityMatterJS_StackOwnedClustersNotSupplied(t *testing.T) {
 		t.Run(map[bool]string{true: "dimmable", false: "non-dimmable"}[dimmable], func(t *testing.T) {
 			t.Parallel()
 			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: dimmable})
-			for _, s := range l.MatterClusterServers() {
+			for _, s := range matterServers(t, l) {
 				if id := s.MatterClusterID(); id == 0x0004 || id == 0x0062 {
 					t.Errorf("light (dimmable=%v) supplies stack-owned cluster 0x%04X", dimmable, id)
 				}

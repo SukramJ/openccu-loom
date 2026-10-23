@@ -192,7 +192,7 @@ func TestOpenerEphemeralWindowRunsOnFreshCredentials(t *testing.T) {
 	// passcode for this window.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmr := bridgetest.Dial(t, bundle.bridge.LocalAddr(), bridgetest.Options{
+	cmr := bridgetest.Dial(t, bundle.node.Bridge().LocalAddr(), bridgetest.Options{
 		Passcode:      res.Passcode,
 		Discriminator: res.Discriminator,
 		FabricID:      0x0FAB,

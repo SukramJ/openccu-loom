@@ -83,12 +83,6 @@ func newColorLightOn(cfg Config, colorChannel *device.Channel) *ColorLight {
 	if cl.Float != nil {
 		cl.registerColorLightServices()
 	}
-	if cl.saturation != nil {
-		_ = cl.saturation.OnConfirmedUpdate(func(_, _ float64) { cl.dataVersion.Bump() })
-	}
-	if cl.colorIndex != nil {
-		_ = cl.colorIndex.OnConfirmedUpdate(func(_, _ int32) { cl.dataVersion.Bump() })
-	}
 	// Attach an HSColor combined DP so the aggregate (hue + saturation) is
 	// surfaced on the event bus and visible via Channel.CombinedDataPoints.
 	// The write path remains ColorLight.SetColor; HSColor is read-side only.
@@ -324,12 +318,6 @@ func newColorTempLightOn(cfg Config, minK, maxK int32, whitePoint *device.Channe
 	if ct.Float != nil {
 		ct.registerColorTempLightServices()
 	}
-	if ct.kelvin != nil {
-		_ = ct.kelvin.OnConfirmedUpdate(func(_, _ int32) { ct.dataVersion.Bump() })
-	}
-	if ct.colorLevel != nil {
-		_ = ct.colorLevel.OnConfirmedUpdate(func(_, _ float64) { ct.dataVersion.Bump() })
-	}
 	return ct
 }
 
@@ -525,9 +513,6 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 	if fc.Float != nil {
 		fc.registerFixedColorLightServices()
 	}
-	if fc.colorBehaviour != nil {
-		_ = fc.colorBehaviour.OnConfirmedUpdate(func(_, _ int32) { fc.dataVersion.Bump() })
-	}
 	return fc
 }
 
@@ -564,7 +549,6 @@ func (l *FixedColorLight) bindChannelColor(ch *device.Channel, rebased custom.Re
 			continue
 		}
 		l.channelColor = dp
-		_ = dp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
 
 		return
 	}

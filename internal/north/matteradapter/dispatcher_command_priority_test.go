@@ -70,6 +70,28 @@ func buildSwitchDevice(addr string, w custom.Writer) *device.Device {
 	return dev
 }
 
+// buildGenericSwitchDevice returns a device whose single channel carries
+// only a generic STATE switch — no custom data point — so the assembler
+// materialises the device the switch builds from its OnOff declaration.
+func buildGenericSwitchDevice(addr string, w custom.Writer) *device.Device {
+	dev := newDevice(addr, "Generic switch")
+	chAddr := addr + ":1"
+	ch := dev.AddChannel(chAddr, 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	ch.Put(generic.NewSwitch(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: chAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterState),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+		Writer: w,
+	}))
+	return dev
+}
+
 // onOffCommandPath addresses OnOff (0x0006) command cmd on ep.
 func onOffCommandPath(ep uint16, cmd uint32) im.ConcreteCommandPath {
 	return im.ConcreteCommandPath{
@@ -130,11 +152,8 @@ func buildThermostatDevice(t *testing.T, addr string, w custom.Writer) *device.D
 // bridged endpoint ID together with the dispatcher.
 func assembleOne(t *testing.T, addr string, dev *device.Device) (dispatcher *endpoint.TopologyDispatcher, endpointID uint16) {
 	t.Helper()
-	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
+	a := matteradapter.New(validConfig(), nil)
+	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{{
 		CentralName: "ccu1",
 		Devices:     []*device.Device{dev},
 	}})
@@ -177,6 +196,17 @@ func TestMatterCommandsReachTheWriterAtHighPriority(t *testing.T) {
 			t.Fatalf("Invoke(OnOff.On) status = %v, want StatusSuccess", res.Status)
 		}
 		assertAllHigh(t, w.priorities(), "OnOff.On")
+	})
+
+	t.Run("invoke on a generic switch", func(t *testing.T) {
+		const addr = "VCU0000003"
+		w := &priorityRecordingWriter{}
+		d, epID := assembleOne(t, addr, buildGenericSwitchDevice(addr, w))
+
+		if res := d.Invoke(ctx, onOffCommandPath(epID, 0x01), nil); res.Status != im.StatusSuccess {
+			t.Fatalf("Invoke(OnOff.On) status = %v, want StatusSuccess", res.Status)
+		}
+		assertAllHigh(t, w.priorities(), "OnOff.On on a generic switch")
 	})
 
 	t.Run("write", func(t *testing.T) {

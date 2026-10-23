@@ -20,7 +20,7 @@ func alarmServerFor(t *testing.T, st SmokeAlarmStatus) interface {
 } {
 	t.Helper()
 	s, _, statusDP := newSmokeSirenRig(t)
-	srv := s.MatterClusterServers()[0]
+	srv := matterServers(t, s)[0]
 	fireSmokeStatus(t, statusDP, string(st))
 	return srv
 }

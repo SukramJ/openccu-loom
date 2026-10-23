@@ -6,7 +6,7 @@ package climate
 import (
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/measurement"
+	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 )
 
 // TestStMatCelsiusEncoderIsTheMeasurementOne pins that this profile encodes
@@ -23,8 +23,8 @@ func TestStMatCelsiusEncoderIsTheMeasurementOne(t *testing.T) {
 	for _, c := range []float64{
 		-300, -273.15, -40, -0.005, 0, 0.004, 21.375, 100, 327.66, 327.67, 1000,
 	} {
-		if got, want := celsiusToMatter(c), measurement.CelsiusToInt16(c); got != want {
-			t.Errorf("celsiusToMatter(%v) = %d, measurement.CelsiusToInt16 = %d", c, got, want)
+		if got, want := celsiusToMatter(c), thermostatspec.CelsiusToInt16(c); got != want {
+			t.Errorf("celsiusToMatter(%v) = %d, thermostatspec.CelsiusToInt16 = %d", c, got, want)
 		}
 	}
 	// The two sentinels the clamps exist for.

@@ -145,14 +145,14 @@ type Cover struct {
 	// reach the LEVEL DP through Channel.Parameter.
 	payload.ServiceRegistry
 
-	// matterWC holds the one WindowCovering server the cover serves
+	// matterDevice holds the one WindowCovering device the cover serves
 	// (shared with the Blind subtype via the embedded Cover), matterPorts
 	// the operations and the tilt axis the variant handed its builder,
 	// and matterCommanded whether a Matter command's target is in effect
 	// — set by the Mover, cleared by Stop and by the moving→stopped
 	// transition the CCU reports, so a confirmed position snaps the
 	// target only when no command is pursuing one.
-	matterWC        matterWCHolder
+	matterDevice    generic.MatterDeviceHolder
 	matterPorts     wcPorts
 	matterCommanded atomic.Bool
 

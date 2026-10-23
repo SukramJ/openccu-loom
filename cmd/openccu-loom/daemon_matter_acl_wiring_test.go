@@ -89,9 +89,9 @@ func TestMatterBridgeEnforcesStoredACLAfterBoot(t *testing.T) {
 		t.Fatalf("seed acl: %v", err)
 	}
 
-	checker, ok := bundle.bridge.Dispatcher().(im.ACLChecker)
+	checker, ok := bundle.node.Bridge().Dispatcher().(im.ACLChecker)
 	if !ok {
-		t.Fatalf("the bridge's dispatcher (%T) does not check ACLs at all", bundle.bridge.Dispatcher())
+		t.Fatalf("the bridge's dispatcher (%T) does not check ACLs at all", bundle.node.Bridge().Dispatcher())
 	}
 
 	if status := checker.CheckACL(ctx, fabric, granted, nil, bridgedEP, onOffID, privOperate); !status.IsSuccess() {

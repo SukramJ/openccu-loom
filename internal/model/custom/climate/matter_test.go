@@ -13,22 +13,44 @@ import (
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 	"github.com/SukramJ/go-fabric/cluster/thermo"
 	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterServers returns the cluster servers of the device c projects.
+func matterServers(t *testing.T, c *Climate) []interfaces.MatterClusterServer {
+	t.Helper()
+	d, err := c.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("climate-test"), Name: "climate"})
+	if err != nil || d == nil {
+		t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
+	}
+	return d.Servers()
+}
+
 // findCluster returns the cluster server with the given ID.
 func findCluster(t *testing.T, c *Climate, id uint32) interfaces.MatterClusterServer {
 	t.Helper()
-	for _, s := range c.MatterClusterServers() {
+	for _, s := range matterServers(t, c) {
 		if s.MatterClusterID() == id {
 			return s
 		}
 	}
 	t.Fatalf("cluster 0x%04X not present in projection", id)
 	return nil
+}
+
+// TestThermostatInboundSettersAreTheKitServers pins the setters the
+// Climate feeds the confirmed setpoint, room temperature and mode
+// through: the kit's Thermostat server must carry them, or a CCU value
+// would silently be stored nowhere.
+func TestThermostatInboundSettersAreTheKitServers(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	if _, ok := findCluster(t, r.climate, thermo.ThermostatClusterID).(thermostatInbound); !ok {
+		t.Fatalf("the Thermostat server %T has no inbound setters", findCluster(t, r.climate, thermo.ThermostatClusterID))
+	}
 }
 
 // thermostatServer returns the Thermostat server a Climate serves.
@@ -115,11 +137,11 @@ func TestThermostatServerIsOneInstanceAcrossReassemblies(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	first, second := thermostatServer(t, r.climate), thermostatServer(t, r.climate)
 	if first != second {
-		t.Fatal("MatterClusterServers built a second Thermostat server")
+		t.Fatal("MatterDevice built a second Thermostat server")
 	}
 	ui1, ui2 := findCluster(t, r.climate, 0x0204), findCluster(t, r.climate, 0x0204)
 	if ui1 != ui2 {
-		t.Fatal("MatterClusterServers built a second ThermostatUserInterfaceConfiguration server")
+		t.Fatal("MatterDevice built a second ThermostatUserInterfaceConfiguration server")
 	}
 }
 
@@ -694,7 +716,7 @@ func TestClimateClusterCompositionIsThermostatOnly(t *testing.T) {
 			}
 
 			got := map[uint32]bool{}
-			servers := r.climate.MatterClusterServers()
+			servers := matterServers(t, r.climate)
 			for _, s := range servers {
 				got[s.MatterClusterID()] = true
 			}

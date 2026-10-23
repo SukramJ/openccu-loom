@@ -6,7 +6,7 @@ package switchdev
 import (
 	"context"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -25,11 +25,10 @@ import (
 const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // Compile-time assertions: Switch participates in the Matter source
-// surface (ADR 0012) as an OnOffPlugInUnit endpoint whose OnOff cluster
-// is go-fabric's [onoff.Server] (ADR 0084 phase 2).
+// surface (ADR 0012) as an OnOffPlugInUnit device whose OnOff cluster is
+// a declaration for go-fabric's device kit (ADR 0084).
 var (
-	_ interfaces.MatterEndpointSource     = (*Switch)(nil)
-	_ interfaces.MatterClusterDataVersion = (*Switch)(nil)
+	_ interfaces.MatterDeviceSource = (*Switch)(nil)
 	// Inherited from the embedded *generic.Switch: an external STATE flip
 	// (physical button / CCU program) propagates to Apple's Subscribe.
 	_ interfaces.MatterChangeNotifier = (*Switch)(nil)
@@ -42,16 +41,19 @@ var (
 // advertises; the cluster's ids, revision and lists come from go-fabric's
 // generated definition and are pinned against the matter.js snapshot by
 // TestHmLgtSwitchOnOffMatchesMatterJS.
-const matterDeviceTypeOnOffPlugInUnit uint16 = onoff.DeviceTypeOnOffPlugInUnit
+const matterDeviceTypeOnOffPlugInUnit = uint16(fabricdevice.OnOffPlugInUnitID)
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource].
+// MatterDeviceType implements [interfaces.MatterDeviceSource].
 func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInUnit }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource].
-// Switch contributes OnOff. The Groups + ScenesManagement clusters the
-// Device Library makes mandatory for OnOffPlugInUnit (0x010A) are stack
-// state: the endpoint assembler mounts both from the node's group state
-// (go-fabric endpoint/materialize.go mountGroups / mountScenes).
+// MatterDevice implements [interfaces.MatterDeviceSource]: an
+// OnOffPlugInUnit with the OnOff cluster declared, built once per switch.
+// It shadows the embedded generic switch's device on purpose — the
+// profile's commands are group-state aware, the bare data point's are
+// not. The Groups + ScenesManagement clusters the Device Library makes
+// mandatory for OnOffPlugInUnit (0x010A) are stack state: the endpoint
+// assembler mounts both from the node's group state (go-fabric
+// endpoint/materialize.go mountGroups / mountScenes).
 //
 // Electrical measurement is deliberately absent. ElectricalPowerMeasurement
 // (0x0090) and ElectricalEnergyMeasurement (0x0091) used to be attached here
@@ -60,18 +62,14 @@ func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInU
 // PowerTopology mandatory alongside them. The metering channel now projects
 // its own consolidated ElectricalSensor endpoint; see
 // matteradapter.ElectricalGroupDPKey.
-func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{s.matterOnOffServer()}
-}
-
-// matterOnOffServer builds the switch's OnOff server once. The Sink is
-// the profile's own [Switch.TurnOn] / [Switch.TurnOff] at
+//
+// The Sink is the profile's own [Switch.TurnOn] / [Switch.TurnOff] at
 // [matterDispatchPriority] — group-state aware and gated on
 // [Switch.IsStateChange] like every other caller — and the STATE data
 // point's confirmed-update hook feeds the CCU's state back through
-// [onoff.Server.Set], the one path that stores without asking the Sink,
-// so a wall switch or a CCU program reaches a subscribed controller and a
-// confirmed command does not echo into a second write.
+// [generic.SetMatterOnOff], so a wall switch or a CCU program reaches a
+// subscribed controller and a confirmed command does not echo into a
+// second write.
 //
 // The server starts from the observed STATE, false while nothing was
 // observed: Apple Home's HAP mapper drops the whole OnOffPlugInUnit
@@ -79,34 +77,26 @@ func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 // empirically: bridge pair succeeds, sensors visible, the switch absent),
 // and the OnOff attribute is mandatory and non-nullable
 // (on-off.element.ts:29), so the server never reports null.
-func (s *Switch) matterOnOffServer() *onoff.Server {
-	return s.matterOnOff.Server(func() *onoff.Server {
+func (s *Switch) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		on, _ := s.IsOn()
-		srv := generic.MustMatterOnOffServer(generic.MatterOnOffConfig{
-			Lighting:    true,
-			DataVersion: &s.DataVersionTracker,
-			Initial:     on,
-			Sink: func(ctx context.Context, on bool) error {
+		d, err := generic.NewMatterDevice(s, matterDeviceTypeOnOffPlugInUnit, opts,
+			generic.MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
 				if on {
 					return s.TurnOn(ctx, matterDispatchPriority)
 				}
 				return s.TurnOff(ctx, matterDispatchPriority)
-			},
-		})
-		_ = s.OnConfirmedUpdate(func(_, on bool) { srv.Set(on) })
+			}))
+		if err != nil {
+			return nil, err
+		}
+		_ = s.OnConfirmedUpdate(func(_, on bool) { generic.SetMatterOnOff(d, on) })
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current value is stored
 		// again, which is a no-op when nothing changed.
 		if on, observed := s.IsOn(); observed {
-			srv.Set(on)
+			generic.SetMatterOnOff(d, on)
 		}
-		return srv
+		return d, nil
 	})
 }
-
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion]:
-// the OnOff cluster's counter, bumped by the server on every change it
-// stores and by the STATE confirmed-update hook in [New], so
-// DataVersionFilter evaluation detects both a command and a CCU-side
-// flip.
-func (s *Switch) MatterDataVersion() uint32 { return s.Current() }
