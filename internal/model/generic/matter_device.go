@@ -47,8 +47,10 @@ func (h *MatterDeviceHolder) Current() *fabricdevice.Device {
 	return h.dev
 }
 
-// Quiesce stops the timers of the held device's servers when the source
-// retires, so no countdown outlives the data point it would write to. A
+// Quiesce stops the timers of the held device's servers, so no countdown
+// outlives the data point it would write to. The Light calls it from its
+// Close; for every device, go-fabric's bridge quiesces the servers of a
+// topology it replaces (bridge/bridge.go:1079) or stops (:1820). A
 // source that never served Matter has nothing to stop.
 func (h *MatterDeviceHolder) Quiesce() {
 	h.mu.Lock()

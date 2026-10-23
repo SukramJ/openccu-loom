@@ -60,8 +60,10 @@ type centralHandle struct {
 // the primitives boot uses (central.New, Registry.Register/Unregister,
 // BringUpManager.AddCentral/RemoveCentral, wireCentralNorthbound,
 // registerStandardJobsFor) so a live-adopted central is wired identically to
-// a boot-time one. REST is the only caller today (the decorator in
-// central_adopt_admin.go); it is not itself an HTTP concern.
+// a boot-time one. Its callers are the REST decorator (liveCentralAdmin,
+// below) and the lite add-on onboarding (lite_addon_onboard.go), which
+// adopts the box it finds through the same Put; it is not itself an HTTP
+// concern.
 type centralOrchestrator struct {
 	reg          *central.Registry
 	bringUp      *adapter.BringUpManager

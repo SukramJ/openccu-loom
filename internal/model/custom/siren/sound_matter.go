@@ -45,7 +45,7 @@ func (sp *SoundPlayer) MatterDeviceType() uint16 { return matterDeviceTypeSpeake
 // with OnOff and LevelControl declared, built once per player.
 //
 // OnOff is go-fabric's server without the LT feature: the Speaker device
-// type (speaker.ts:20-22) reads OnOff as mute / unmute, mandates no
+// type (speaker.element.ts:18-19) reads OnOff as mute / unmute, mandates no
 // Lighting feature, and so the cluster carries OnOff, Off, On and Toggle
 // only. The HmIP-MP3P carries no mute parameter, and it does not need
 // one: the whole of its audio output is one LEVEL knob, and

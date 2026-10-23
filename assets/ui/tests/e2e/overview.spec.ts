@@ -58,7 +58,7 @@ test.describe('Overview', () => {
 
     // The CCU filter is the shared Select: a trigger button plus a
     // portalled role="option" listbox (see energy.spec.ts).
-    await page.getByRole('button', { name: 'Filter by CCU' }).click();
+    await page.getByRole('combobox', { name: 'Filter by CCU' }).click();
     await page.getByRole('option', { name: 'ccu1', exact: true }).click();
 
     await expect(page.getByText('Office · ccu2')).toHaveCount(0);
