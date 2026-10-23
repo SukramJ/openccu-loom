@@ -16,6 +16,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with the same "no bridged devices" answer.
 - **Database:** migration 050 adds the tables go-fabric keeps for
   Thermostat presets and DoorLock users, credentials and schedules.
+- **Matter: bridged devices are built from cluster declarations.**
+  Switches, locks, mode selects, sirens, smoke detectors, covers, blinds
+  and thermostats now describe their clusters to go-fabric's device kit
+  instead of building the cluster servers themselves. Nothing changes on
+  the wire and nothing needs to be re-paired.
+
+### Fixed
+
+- **Matter: an HM-Sec-Key reporting a jam reaches the controller.** The
+  RF lock's error state (clutch failure, motor aborted) is what marks it
+  jammed, but a change of it was not reported to subscribed controllers
+  until some other value of the lock changed.
 
 ## [0.92.2] - 2026-10-22
 
