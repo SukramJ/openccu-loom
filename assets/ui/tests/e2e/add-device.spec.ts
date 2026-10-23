@@ -152,7 +152,7 @@ test.describe('Add device dialog', () => {
     const dialog = await openFromDeviceList(page);
     // The second of two same-named interfaces is only reachable when the
     // request carries its central.
-    await dialog.getByRole('button', { name: 'Interface' }).click();
+    await dialog.getByRole('combobox', { name: 'Interface' }).click();
     await page.getByRole('option', { name: 'HmIP-RF · box' }).click();
     await dialog.getByRole('button', { name: 'Start pairing' }).click();
 
@@ -258,7 +258,7 @@ test.describe('Add device dialog', () => {
     await expect(dialog.getByRole('button', { name: 'Search wired bus' })).toHaveCount(0);
 
     // Wired bus: a bus search instead of a pairing window.
-    await dialog.getByRole('button', { name: 'Interface' }).click();
+    await dialog.getByRole('combobox', { name: 'Interface' }).click();
     await page.getByRole('option', { name: 'BidCos-Wired' }).click();
     await expect(dialog.getByRole('button', { name: 'Search wired bus' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Start pairing' })).toHaveCount(0);
