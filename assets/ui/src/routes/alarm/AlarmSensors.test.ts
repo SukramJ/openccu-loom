@@ -143,7 +143,7 @@ describe("AlarmSensors — zones-loading gate", () => {
     // trigger's accessible name — so the label key, not the selected zone
     // name, is what a screen reader (and this query) sees.
     expect(await findByText("alarm.sensors.zone")).toBeTruthy();
-    expect(getByRole("button", { name: "alarm.sensors.zone" })).toBeTruthy();
+    expect(getByRole("combobox", { name: "alarm.sensors.zone" })).toBeTruthy();
     expect(getByRole("button", { name: /alarm.sensors.add/ })).toBeTruthy();
   });
 });
