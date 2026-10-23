@@ -1,5 +1,28 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.93.0
+
+- **Matter bridge on go-fabric v0.10.2.** The bridge now runs on the
+  Matter library's node facade and device kit: every device profile
+  describes its clusters, the library builds and serves them. Nothing
+  changes on the wire and nothing needs to be re-paired.
+- **Colour lights get a white slider.** An HmIP-RGBW in colour mode and
+  the HM-LC-RGBW-WM now accept a colour temperature from Apple Home and
+  Google Home; the white asked for becomes the nearest hue and
+  saturation.
+- **Endpoint numbers per CCU.** A CCU still loading keeps its Matter
+  endpoint numbers while a loaded one releases the numbers of devices
+  that are gone; removing a CCU releases its numbers once.
+- **Exposable list.** Parameters that can never be a Matter device no
+  longer appear as blocked rows.
+- **Commissioning window.** Opening one is refused with "no bridged
+  devices" while the bridge has not assembled its devices yet.
+- **Database:** a migration adds the tables the Matter library keeps for
+  thermostat presets and door-lock users, credentials and schedules.
+- **Fixed: an HM-Sec-Key reporting a jam reaches the controller.** The
+  lock's error state is what marks it jammed, but a change of it was not
+  reported until some other value of the lock changed.
+
 ## 0.92.2
 
 - **Matter library update (go-fabric v0.7.3).** More robust connections

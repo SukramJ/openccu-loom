@@ -6,8 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.93.0] - 2026-10-23
+
+### Release summary
+
+**The Matter bridge moves onto go-fabric v0.10.2's node facade and device
+kit: every profile declares its clusters, the node assembles the
+endpoints.** Nothing needs to be re-paired. REST API 13.9.1, unchanged.
+
 ### Changed
 
+- **Dependencies.** `modernc.org/sqlite` 1.61.0 and `kin-openapi` 0.152.0;
+  the SPA toolchain moves to Vite 8.3.5, Vitest 5.0.5, svelte-check 4.7.7,
+  bits-ui 2.20.2, lucide 1.61.0, happy-dom 21 and Playwright 1.64.1.
 - **Matter: go-fabric v0.10.2, on its node facade.** The bridge is built
   through the facade's own routes: health probe, attestation files,
   DNS-SD, fabric list, commissioning credentials. Nothing changes on the
