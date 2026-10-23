@@ -139,12 +139,19 @@ func (s *smokeEndpointSource) MatterClusterServers() []interfaces.MatterClusterS
 
 // ─── builder helpers ──────────────────────────────────────────────────────────
 
-// smokeValidConfig returns a minimal assembler config. Groups carries a
-// real group manager over a migrated store, as the daemon does: with it
-// the assembler mounts the stack's Groups and ScenesManagement servers
-// wherever a device type mandates them, so the cluster surfaces asserted
-// here are the ones a commissioner reads in production.
+// smokeValidConfig returns a minimal walk config.
 func smokeValidConfig(t *testing.T) matteradapter.Config {
+	t.Helper()
+	return matteradapter.Config{}
+}
+
+// smokeEndpointConfig is the endpoint assembly the smoke fleet is run
+// through, as the node's Aggregator runs one: the bridge identity, the
+// bridged vendor name and a real group manager over a migrated store —
+// with it the assembler mounts the stack's Groups and ScenesManagement
+// servers wherever a device type mandates them, so the cluster surfaces
+// asserted here are the ones a commissioner reads in production.
+func smokeEndpointConfig(t *testing.T) endpoint.Config {
 	t.Helper()
 	db, err := sqlitestore.Open(context.Background(), sqlitestore.FileDSN(filepath.Join(t.TempDir(), "smoke.db")))
 	if err != nil {
@@ -155,27 +162,44 @@ func smokeValidConfig(t *testing.T) matteradapter.Config {
 	if err != nil {
 		t.Fatalf("groups.NewManager: %v", err)
 	}
-	return matteradapter.Config{
-		VendorID:  0xFFF1,
-		ProductID: 0x8001,
-		NodeLabel: "SmokeTestBridge",
-		Groups:    mgr,
+	return endpoint.Config{
+		VendorID:   0xFFF1,
+		ProductID:  0x8001,
+		NodeLabel:  "SmokeTestBridge",
+		VendorName: "eQ-3",
+		Groups:     mgr,
 	}
+}
+
+// assembleSmoke describes snaps with a and assembles them over store
+// with cfg, as the node assembles what the walk describes.
+func assembleSmoke(t *testing.T, a *matteradapter.Assembler, store endpoint.Store, cfg endpoint.Config, snaps []matteradapter.DeviceSnapshot) *endpoint.Topology {
+	t.Helper()
+	ctx := context.Background()
+	described, err := a.DescribeDevices(ctx, snaps)
+	if err != nil {
+		t.Fatalf("DescribeDevices: %v", err)
+	}
+	inner, err := endpoint.New(store, cfg, nil)
+	if err != nil {
+		t.Fatalf("endpoint.New: %v", err)
+	}
+	out := make([]endpoint.Snapshot, 0, len(described))
+	for _, d := range described {
+		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+	}
+	top, err := inner.Assemble(ctx, out)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	return top
 }
 
 // buildSmokeTopology assembles a fresh topology from the given snapshots using
 // an in-memory store. Helper shared by multiple test cases.
 func buildSmokeTopology(t *testing.T, snaps []matteradapter.DeviceSnapshot) *endpoint.Topology {
 	t.Helper()
-	a, err := matteradapter.New(newSmokeFakeStore(), smokeValidConfig(t), nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), snaps)
-	if err != nil {
-		t.Fatalf("Assemble: %v", err)
-	}
-	return top
+	return assembleSmoke(t, matteradapter.New(smokeValidConfig(t), nil), newSmokeFakeStore(), smokeEndpointConfig(t), snaps)
 }
 
 // makeSmokeOnOffDevice returns a device with one OnOff channel backed by a

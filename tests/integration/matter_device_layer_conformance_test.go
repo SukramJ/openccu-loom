@@ -72,17 +72,9 @@ func buildCategoryFleetTopology(t *testing.T) *endpoint.Topology {
 	}
 	cfg := smokeValidConfig(t)
 	cfg.IncludeMeasurements = true
-	a, err := matteradapter.New(newSmokeFakeStore(), cfg, nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{
+	return assembleSmoke(t, matteradapter.New(cfg, nil), newSmokeFakeStore(), smokeEndpointConfig(t), []matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: devs, ModelComplete: true},
 	})
-	if err != nil {
-		t.Fatalf("Assemble: %v", err)
-	}
-	return top
 }
 
 func TestMatterDeviceLayerBuildsEveryCategoryEndpoint(t *testing.T) {

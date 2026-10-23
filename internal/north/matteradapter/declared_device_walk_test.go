@@ -57,45 +57,6 @@ func TestCandidatesOfAGenericSwitch(t *testing.T) {
 	}
 }
 
-// countingLabels counts the persisted-label reads the assembler makes.
-type countingLabels struct{ reads int }
-
-func (c *countingLabels) OnNodeLabelWritten(fabricdevice.SourceKey, string) {}
-
-func (c *countingLabels) NodeLabel(context.Context, fabricdevice.SourceKey) string {
-	c.reads++
-	return ""
-}
-
-// TestANonExposedGenericSwitchReadsNoPersistedLabel pins the order of the
-// generic walk: the allowlist is asked before the endpoint is described,
-// so a switch the operator has not exposed costs no persisted-label read
-// — one store read per switch per assembly otherwise, on a fleet where
-// most switches are not exposed.
-func TestANonExposedGenericSwitchReadsNoPersistedLabel(t *testing.T) {
-	t.Parallel()
-	labels := &countingLabels{}
-	cfg := validConfig()
-	cfg.NodeLabels = labels
-	a, err := matteradapter.New(newFakeStore(), cfg, nil)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	a.SetExposureChecker(dpKeyAllowChecker{allowed: map[string]bool{}})
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
-		CentralName: "c", Devices: []*device.Device{genericSwitchDevice("VCU0000203", hmenum.ParameterState)},
-	}})
-	if err != nil {
-		t.Fatalf("Assemble: %v", err)
-	}
-	if n := len(top.Bridged()); n != 0 {
-		t.Fatalf("%d bridged endpoints with an empty allowlist, want none", n)
-	}
-	if labels.reads != 0 {
-		t.Fatalf("%d persisted-label read(s) for a switch the allowlist refused, want none", labels.reads)
-	}
-}
-
 // refusingSwitch is a custom data point whose device the kit refuses.
 type refusingSwitch struct {
 	key hmtypes.DataPointKey
@@ -121,13 +82,10 @@ func TestARefusedDeviceIsLoggedOncePerSource(t *testing.T) {
 	ch.SetCustomDataPoint(&refusingSwitch{key: hmtypes.DataPointKey{ChannelAddress: addr + ":1", Parameter: "STATE"}})
 
 	var log bytes.Buffer
-	a, err := matteradapter.New(newFakeStore(), validConfig(), slog.New(slog.NewTextHandler(&log, nil)))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
+	a := matteradapter.New(validConfig(), slog.New(slog.NewTextHandler(&log, nil)))
 	snap := []matteradapter.DeviceSnapshot{{CentralName: "c", Devices: []*device.Device{dev}}}
 	for range 3 {
-		if _, err := a.AssembleDevices(context.Background(), snap); err != nil {
+		if _, err := assembleDevicesWith(context.Background(), a, newFakeStore(), testEndpointConfig(), snap); err != nil {
 			t.Fatalf("Assemble: %v", err)
 		}
 	}

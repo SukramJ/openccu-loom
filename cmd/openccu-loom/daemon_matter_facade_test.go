@@ -133,8 +133,8 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	if bundle.node.Groups() == nil {
 		t.Fatal("the facade runs on no group manager")
 	}
-	if bundle.node.Aggregator() != nil {
-		t.Fatal("the facade built its own Aggregator although the daemon supplies the topology")
+	if bundle.node.Aggregator() == nil {
+		t.Fatal("the facade built no Aggregator although the daemon syncs its model into it")
 	}
 	if bundle.opMgr == nil || bundle.subMgr == nil || bundle.opMgr != bundle.node.Sessions() || bundle.subMgr != bundle.node.Subscriptions() {
 		t.Fatal("the diagnostics managers on the bundle are not the facade's")

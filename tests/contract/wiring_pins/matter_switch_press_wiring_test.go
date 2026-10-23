@@ -87,16 +87,26 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 			ModelComplete: true,
 		}}
 	}
-	assembler, err := matteradapter.New(identity, matteradapter.Config{
-		VendorID:  0x1234,
-		ProductID: 0x5678,
-		NodeLabel: "switch-press-wiring-pin",
+	assembler := matteradapter.New(matteradapter.Config{}, nil)
+	inner, err := matterendpoint.New(identity, matterendpoint.Config{
+		VendorID:   0x1234,
+		ProductID:  0x5678,
+		NodeLabel:  "switch-press-wiring-pin",
+		VendorName: "eQ-3",
 	}, nil)
 	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
+		t.Fatalf("endpoint.New: %v", err)
 	}
 	snapshotter := func(ctx context.Context) (*matterendpoint.Topology, error) {
-		return assembler.AssembleDevices(ctx, walk(ctx))
+		described, err := assembler.DescribeDevices(ctx, walk(ctx))
+		if err != nil {
+			return nil, err
+		}
+		snaps := make([]matterendpoint.Snapshot, 0, len(described))
+		for _, d := range described {
+			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+		}
+		return inner.Assemble(ctx, snaps)
 	}
 	bridge, err := matterbridge.New(
 		snapshotter,

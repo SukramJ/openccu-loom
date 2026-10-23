@@ -96,12 +96,15 @@ type matterBridgeBundle struct {
 	// tables keyed by this daemon's source 5-tuple rather than by anything
 	// Matter defines. See [matterendpoint].
 	identity *matterendpoint.Store
-	// assembler turns this daemon's device model into the endpoint
-	// topology the bridge serves. The facade consumes a topology through
-	// [node.Config.Topology] and never builds one, so the assembler and
-	// everything that configures it — the exposure allowlist above all —
-	// live on this side of the boundary and are reached through here.
+	// assembler describes this daemon's device model as the endpoints the
+	// node's Aggregator assembles; everything that configures the walk —
+	// the exposure allowlist above all — lives on this side of the
+	// boundary and is reached through here. sync describes the model and
+	// applies the changes to the Aggregator (matteradapter.Reconciler);
+	// retire collects a removed central's endpoint numbers.
 	assembler *matteradapter.Assembler
+	sync      func(context.Context) error
+	retire    func(ctx context.Context, centralName string) error
 	// opMgr and subMgr are the facade's session and subscription managers
 	// ([node.Node.Sessions], [node.Node.Subscriptions]). Carried so the
 	// REST diagnostics surface reports which peers hold a session and how
@@ -373,14 +376,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			channelLabel = w
 		}
 	}
-	// The daemon owns topology assembly: it knows the device model, the
-	// operator's exposure allowlist and the locale, none of which the
-	// Matter subtree may see. The facade is handed the finished topology
-	// through the snapshotter; the assembler is built once the node is,
-	// because it runs on the node's group state and endpoint persistence,
-	// and the snapshotter is first called at Start.
-	var assembler *matteradapter.Assembler
-
 	rootSerial := matterRootSerial(mc)
 	passcode, salt, iterations, configured, err := matterCommissioningCredentials(mc.Commissioning, logger)
 	if err != nil {
@@ -428,7 +423,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Attestation:                attest,
 		BootID:                     node.BootID{RotateUniqueIDs: mc.DevRotateUniqueIDs},
 		Health:                     matterHealth(healthTracker),
-		Topology:                   matterTopologySnapshotter(func() *matteradapter.Assembler { return assembler }, walk),
 		Locales:                    matterLocales(cfg.Locale),
 		SupportedFabrics:           matterSupportedFabrics,
 		DisableTimeSynchronization: !mc.TimeSyncEnabled(),
@@ -441,34 +435,22 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if err != nil {
 		return fail("matter.bridge.node", err)
 	}
-	// Group membership is stack state, as in matter.js where GroupsServer
-	// keeps it in the root's GroupKeyManagementServer (go-fabric ADR
-	// 0009): the node's one manager feeds the assembler (the bridged
-	// endpoints' Groups and ScenesManagement servers) as well as the root's
-	// GroupKeyManagement and Groupcast servers and the bridge's
-	// group-message routing; two managers over the same store would
-	// diverge in memory. Scene tables and commissioner-written bridged
-	// NodeLabels are the node's endpoint persistence (Node.Persistence).
-	persistence := n.Persistence()
-	assembler, err = matteradapter.New(identity, matteradapter.Config{
-		VendorID:                mc.VendorID,
-		ProductID:               mc.ProductID,
-		NodeLabel:               mc.NodeLabel,
+	// The daemon owns the device walk: it knows the device model, the
+	// operator's exposure allowlist and the locale, none of which the
+	// Matter subtree may see. The node assembles what the walk describes:
+	// its Aggregator holds the endpoints, one partition per central with
+	// the central's own completeness, and the reconciler keeps it in step
+	// with the model. Group membership, scene tables and
+	// commissioner-written NodeLabels are the node's own state there.
+	assembler := matteradapter.New(matteradapter.Config{
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
 		IncludeMeasurements:     mc.IncludeMeasurements,
 		Labels:                  labels,
 		ChannelLabel:            channelLabel,
-		Groups:                  n.Groups(),
-		Scenes:                  persistence,
-		NodeLabels:              persistence,
 	}, logger)
-	if err != nil {
-		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		_ = n.Stop(stopCtx)
-		cancel()
-		return fail("matter.bridge.assembler", err)
-	}
-	// The allowlist checker is wired before the first assembly, so the
+	reconciler := matteradapter.NewReconciler(n.Aggregator(), assembler, logger)
+	syncModel := func(ctx context.Context) error { return reconciler.Sync(ctx, walk(ctx)) }
+	// The allowlist checker is wired before the first sync, so the
 	// bridge only ever serves sources the operator has explicitly
 	// enabled. Default = empty allowlist = empty topology. The
 	// exposure-management REST endpoints (`/api/v1/matter/exposable`)
@@ -479,6 +461,13 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// the user would see a generic add-failed error even though the
 	// cryptographic handshake completed.
 	assembler.SetExposureChecker(identity)
+	// The boot-time set: every central the registry holds now, each one
+	// model-incomplete until its readiness latches, so no stored endpoint
+	// number is collected before the central's devices are loaded. Start
+	// assembles the set; later syncs ride the reassembly triggers.
+	if err := syncModel(ctx); err != nil {
+		logger.Warn("matter.bridge.sync.boot", slog.String("err", err.Error()))
+	}
 
 	if mc.TimeSyncEnabled() {
 		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")
@@ -550,6 +539,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		store:                   store,
 		identity:                identity,
 		assembler:               assembler,
+		sync:                    syncModel,
+		retire:                  reconciler.Retire,
 		opMgr:                   n.Sessions(),
 		subMgr:                  n.Subscriptions(),
 		fabricEvents:            fabricEvents,
@@ -579,9 +570,13 @@ type matterWiring struct {
 	// It still satisfies handlers.MatterExposureStore at every assignment
 	// site below.
 	exposureStore *matterendpoint.Store
-	candidates    handlers.MatterCandidateProvider
-	pub           *matterEventPublisher
-	reassembler   handlers.MatterTopologyReassembler
+	// retire collects a removed central's Matter endpoint numbers
+	// (matteradapter.Reconciler.Retire); the live-remove orchestrator
+	// calls it after the central's rows are purged.
+	retire      func(ctx context.Context, centralName string) error
+	candidates  handlers.MatterCandidateProvider
+	pub         *matterEventPublisher
+	reassembler handlers.MatterTopologyReassembler
 	// centralHook wires a runtime-adopted central into the running bridge
 	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Nil when
 	// the bridge is disabled; the live-adopt orchestrator skips it then. The
@@ -835,24 +830,17 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 	return unsub
 }
 
-// matterTopologySnapshotter composes the model walk with topology
-// assembly into the single callback the bridge holds.
-//
-// The bridge calls this at the top of each (re)assembly, off its own
-// lock, exactly where it previously called the walk and the assembler in
-// sequence — so a snapshot and the topology built from it stay one
-// atomic step from the bridge's point of view, and a reassembly still
-// reads the model as late as possible rather than at wiring time.
-func matterTopologySnapshotter(asm func() *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) node.Snapshotter {
-	return func(ctx context.Context) (*node.Topology, error) {
-		return asm().AssembleDevices(ctx, walk(ctx))
-	}
-}
+// matterReassembler is the REST surface's topology reassembly: a sync of
+// the Aggregator with the model, as every reassembly trigger runs.
+type matterReassembler func(context.Context) error
 
-// matterSnapshotter builds the model walk behind the bridge's
-// snapshotter: one [matteradapter.DeviceSnapshot] per registered central,
-// read live from the central registry so runtime-added centrals surface
-// on the next assembly. Each snapshot's ModelComplete flag is stamped
+// Reassemble implements [handlers.MatterTopologyReassembler].
+func (r matterReassembler) Reassemble(ctx context.Context) error { return r(ctx) }
+
+// matterSnapshotter builds the model walk behind the reconciler: one
+// [matteradapter.DeviceSnapshot] per registered central, read live from
+// the central registry so runtime-added centrals surface on the next
+// sync. Each snapshot's ModelComplete flag is stamped
 // from the readiness latch; a nil readiness marks every central
 // model-incomplete (the GC-off fail-safe).
 func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) func(context.Context) []matteradapter.DeviceSnapshot {
@@ -1006,6 +994,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// REST surface's reporter.
 	wiring.diagEvents = mb
 	wiring.exposureStore = mids
+	wiring.retire = bundle.retire
 
 	// Wire CCU device-availability → BridgedDeviceBasicInformation
 	// Reachable. WireDeviceAvailability (above) publishes a
@@ -1035,7 +1024,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			readyBuses = append(readyBuses, u.EventBus)
 		}
 	}
-	reassembleClosers, reassembleTrigger := wireMatterReassembleOnReady(ctx, readyBuses, mb.Reassemble, matterReassembleReadyDebounce, logger)
+	reassembleClosers, reassembleTrigger := wireMatterReassembleOnReady(ctx, readyBuses, bundle.sync, matterReassembleReadyDebounce, logger)
 	closers = append(closers, reassembleClosers...)
 	// Hot-plug: device create/remove events on a ready central feed the
 	// same debounced reassemble so runtime-paired (or deleted) CCU
@@ -1098,7 +1087,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	revoker := &matterFabricRevokerAdapter{node: bundle.node}
 	wiring.fabricRevoker = revoker
 	wiring.fabricPurger = revoker
-	wiring.reassembler = mb
+	wiring.reassembler = matterReassembler(bundle.sync)
 	wiring.closer = &matterCommissioningCloserAdapter{window: window}
 	wiring.candidates = &matterCandidateProviderAdapter{reg: reg, cfg: cfg}
 	return wiring, closers, teardown

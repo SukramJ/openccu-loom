@@ -452,11 +452,29 @@ and **the profile holds the device** built from them.
   now, mapped onto their colour (by_design
   BD-Matter-ExtendedColorLight-HSOnly). No profile builds a server of
   its own any more, and the per-profile DataVersion counters are gone.
-- **What remains below the facade.** The assembler and the endpoint
-  store (`endpoint`, `groups`; the move onto the node's Aggregator with
-  its partitions and batches, #229 and #231, is the next step) and the
-  credential store built on the shared handle, since the daemon carries
-  go-fabric's schema in its own migrations.
+- **The node assembles.** The daemon's assembler no longer builds a
+  topology: the walk describes each central's endpoints
+  (`Assembler.DescribeDevices`), and a reconciler
+  (`matteradapter.Reconciler`) keeps the node's Aggregator in step with
+  the model — one partition per central, the central's own
+  completeness from the readiness latch (so a central still loading
+  keeps its stored endpoint numbers while a loaded one collects its
+  vanished ones), one batch per changed central, and a retirement when a
+  central leaves the configuration (`removeCentral`; a shutdown retires
+  nothing). The scopes are the central names the endpoint store already
+  filed its numbers under, so no endpoint is renumbered. Group state,
+  scene tables and controller-written NodeLabels are the node's; the
+  bridged vendor name is stated per device. The Aggregator takes each
+  endpoint as a type with a `Spec` method rather than the device itself,
+  because the walk's name, addresses and availability change with the
+  model and `Device.Rename` persists a name as a controller's write
+  (go-fabric #238); the label composition still comes from `endpoint`
+  (#239).
+- **What remains below the facade.** The endpoint store's interface
+  (`endpoint.Store`, the daemon's own keyed by its source 5-tuple),
+  `endpoint.Spec` and `ComposeNodeLabel` in the walk, and the credential
+  store built on the shared handle, since the daemon carries go-fabric's
+  schema in its own migrations.
 
 ## Consequences
 

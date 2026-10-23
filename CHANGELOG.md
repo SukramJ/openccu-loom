@@ -28,6 +28,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   mandates: a white a controller asks for becomes the nearest hue and
   saturation, as matter.js's own bridges do for an RGB bulb. Apple Home
   and Google Home show a white slider on these lights now.
+- **Matter: the node holds the bridged endpoints.** The daemon no longer
+  assembles its own endpoint topology; go-fabric's node does, one
+  partition per CCU, so a CCU still loading keeps its endpoint numbers
+  while a loaded one releases the numbers of devices that are gone, and
+  removing a CCU releases its numbers once. Nothing changes on the wire
+  and nothing needs to be re-paired.
 - **Matter: the exposable list hides what cannot be exposed.** A
   writable parameter that can never be a Matter device (a switch
   parameter other than STATE, a mode list ModeSelect cannot carry) no

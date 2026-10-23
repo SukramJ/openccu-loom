@@ -91,15 +91,8 @@ func buildMeteringPlug(t *testing.T) *device.Device {
 // assembleTopology runs the real assembler over dev.
 func assembleTopology(t *testing.T, dev *device.Device) *endpoint.Topology {
 	t.Helper()
-	a, err := matteradapter.New(newFakeStore(), matteradapter.Config{
-		VendorID:  0xFFF1,
-		ProductID: 0x8000,
-		NodeLabel: "electrical-group-test",
-	}, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("assembler: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{
+	a := matteradapter.New(matteradapter.Config{}, slog.New(slog.DiscardHandler))
+	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{
 		{CentralName: "c", Devices: []*device.Device{dev}},
 	})
 	if err != nil {

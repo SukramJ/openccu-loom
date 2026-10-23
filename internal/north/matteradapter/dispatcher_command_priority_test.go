@@ -152,11 +152,8 @@ func buildThermostatDevice(t *testing.T, addr string, w custom.Writer) *device.D
 // bridged endpoint ID together with the dispatcher.
 func assembleOne(t *testing.T, addr string, dev *device.Device) (dispatcher *endpoint.TopologyDispatcher, endpointID uint16) {
 	t.Helper()
-	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
+	a := matteradapter.New(validConfig(), nil)
+	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{{
 		CentralName: "ccu1",
 		Devices:     []*device.Device{dev},
 	}})

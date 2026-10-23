@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/go-fabric/contract"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/groups"
 	"github.com/SukramJ/go-fabric/schema"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -25,41 +24,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// Config tunes the model walk and the topology assembly it feeds. The
-// zero value is *not* valid — at minimum, a non-zero VendorID +
-// ProductID + non-empty NodeLabel must be supplied (the root
-// BasicInformation cluster mandates them).
-//
-// The first three fields are handed straight to [endpoint.Config]; the
-// rest govern the walk and have no meaning on the Matter side.
+// Config tunes the model walk. The zero value walks every channel of
+// every device with the English channel word and the model's names.
 // loom:reachable:reason="constructed by the daemon when it builds the assembler (cmd/openccu-loom/daemon_matter.go, startMatterBridge)"
 type Config struct {
-	// VendorID is the bridge's IANA-assigned vendor identifier.
-	VendorID uint16
-	// ProductID is the bridge's vendor-assigned product identifier.
-	ProductID uint16
-	// NodeLabel is the user-visible bridge label.
-	NodeLabel string
-	// Groups is the node's group state, handed through to
-	// [endpoint.Config.Groups]: the assembler then mounts the stack's
-	// Groups and ScenesManagement servers on every bridged endpoint whose
-	// device type mandates them, in place of anything a source supplies —
-	// group membership and scene tables are stack state, as in matter.js
-	// (GroupsServer keeps them in the root's GroupKeyManagementServer).
-	// nil keeps whatever a source supplies; production wires the daemon's
-	// manager, tests may leave it unset.
-	Groups *groups.Manager
-	// Scenes persists the scene tables of the endpoints that serve
-	// ScenesManagement ([endpoint.Config.Scenes]); nil keeps them for the
-	// life of the process.
-	Scenes endpoint.ScenesStore
-	// NodeLabels persists the BridgedDeviceBasicInformation NodeLabel a
-	// controller writes on a bridged endpoint and hands it back on the
-	// next assembly ([endpoint.Config.OnNodeLabelWritten],
-	// [endpoint.Spec.NodeLabel]) — matter.js keeps a written
-	// nodeLabel in the endpoint's persisted state. nil keeps a written
-	// label for the life of the process only.
-	NodeLabels NodeLabelStore
 	// IncludeMeasurements toggles whether DPs that implement
 	// [contract.MeasurementSource] (but not EndpointSource)
 	// produce standalone sensor endpoints. Off by default; operators
@@ -147,14 +115,10 @@ func (allowAllExposureChecker) IsExposed(_ context.Context, _ matterendpoint.Sou
 	return true, nil
 }
 
-// Assembler walks one or more device fleets and produces an
-// [endpoint.Topology] from them. Multi-call-safe; concurrent calls
-// serialise through the underlying store transactions.
+// Assembler walks one or more device fleets and describes every endpoint
+// they project as an [endpoint.Spec]; the node's Aggregator assembles
+// them ([Reconciler]). Multi-call-safe.
 type Assembler struct {
-	// inner owns everything that is not model-shaped: endpoint-id
-	// allocation and persistence, the root/aggregator scaffolding, and
-	// the per-endpoint state that survives a reassembly.
-	inner     *endpoint.Assembler
 	exposures ExposureChecker
 	cfg       Config
 	logger    *slog.Logger
@@ -166,17 +130,11 @@ type Assembler struct {
 	refusedDevices sync.Map
 }
 
-// NodeLabelStore persists controller-written bridged NodeLabels per
-// endpoint key; NodeLabel answers "" for an endpoint no controller
-// renamed. go-fabric's node.EndpointPersistence is the production
-// implementation, the same one the daemon hands the facade.
-type NodeLabelStore interface {
-	OnNodeLabelWritten(key fabricdevice.SourceKey, label string)
-	NodeLabel(ctx context.Context, key fabricdevice.SourceKey) string
-}
-
 // bridgedVendorName is the manufacturer served as the
-// BridgedDeviceBasicInformation VendorName of every bridged endpoint.
+// BridgedDeviceBasicInformation VendorName of every bridged endpoint:
+// every one is a Homematic device, and Apple Home relies on the vendor
+// fields being filled. It is stated per endpoint, since the node's own
+// assembler would fall back to the bridge's vendor name.
 const bridgedVendorName = "eQ-3"
 
 // New returns an assembler. logger may be nil; the assembler then
@@ -184,43 +142,20 @@ const bridgedVendorName = "eQ-3"
 // checker the assembler permits every source (legacy / test default);
 // production callers wire a `matter/store.Store`-backed checker so the
 // allowlist is enforced.
-func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
-	inner, err := endpoint.New(s, endpoint.Config{
-		VendorID:  cfg.VendorID,
-		ProductID: cfg.ProductID,
-		NodeLabel: cfg.NodeLabel,
-		// VendorName here is only the fallback BridgedDeviceBasicInformation
-		// VendorName of every bridged endpoint (the root BasicInformation is
-		// built by the daemon). go-fabric served "eQ-3" itself up to
-		// v0.1.0 and leaves it to the host since v0.2.0; every bridged
-		// endpoint is a Homematic device, and Apple Home relies on the
-		// vendor fields being filled.
-		VendorName: bridgedVendorName,
-		Groups:     cfg.Groups,
-		Scenes:     cfg.Scenes,
-		OnNodeLabelWritten: func(key fabricdevice.SourceKey, label string) {
-			if cfg.NodeLabels != nil {
-				cfg.NodeLabels.OnNodeLabelWritten(key, label)
-			}
-		},
-	}, logger)
-	if err != nil {
-		return nil, err
-	}
+func New(cfg Config, logger *slog.Logger) *Assembler {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Assembler{
-		inner:     inner,
 		exposures: allowAllExposureChecker{},
 		cfg:       cfg,
 		logger:    logger,
-	}, nil
+	}
 }
 
 // SetExposureChecker wires the allowlist checker. Pass nil to revert
 // to the allow-all default (test convenience). Safe to call between
-// assemblies; not safe to call concurrently with [Assembler.AssembleDevices].
+// assemblies; not safe to call concurrently with [Assembler.DescribeDevices].
 func (a *Assembler) SetExposureChecker(c ExposureChecker) {
 	if c == nil {
 		a.exposures = allowAllExposureChecker{}
@@ -239,10 +174,9 @@ func (a *Assembler) channelLabel() string {
 	return a.cfg.ChannelLabel
 }
 
-// DeviceSnapshot is one central's device fleet as the daemon holds it.
-// It is the model-walking counterpart of [endpoint.Snapshot]: the walk in
-// [Assembler.AssembleDevices] turns it into the flat [endpoint.Spec]
-// values the assembly itself consumes.
+// DeviceSnapshot is one central's device fleet as the daemon holds it:
+// what [Assembler.DescribeDevices] turns into the flat [endpoint.Spec]
+// values the node's Aggregator assembles.
 // loom:reachable:reason="constructed per registered central by matterSnapshotter in cmd/openccu-loom/daemon_matter.go"
 type DeviceSnapshot struct {
 	// CentralName scopes every endpoint produced from Devices to this
@@ -252,36 +186,46 @@ type DeviceSnapshot struct {
 	// snapshot time. nil-safe — an empty slice produces zero endpoints.
 	Devices []*device.Device
 	// ModelComplete reports whether this central's initial device load
-	// has finished. Carried through to [endpoint.Snapshot.ModelComplete],
-	// which documents what it gates.
+	// has finished. A complete central's partition of the Aggregator is
+	// marked complete, so its stored endpoints absent from the walk are
+	// collected; before that they are retained.
 	ModelComplete bool
 }
 
-// AssembleDevices walks the model fleets in snapshots, describes every
-// endpoint they should project as an [endpoint.Spec], and assembles the
-// topology from those.
-func (a *Assembler) AssembleDevices(ctx context.Context, snapshots []DeviceSnapshot) (*endpoint.Topology, error) {
-	specs := make([]endpoint.Snapshot, 0, len(snapshots))
+// Described is one central's fleet as the walk describes it: the
+// endpoints the central projects, under the central's scope, and whether
+// its model is complete.
+type Described struct {
+	Scope         string
+	Endpoints     []endpoint.Spec
+	ModelComplete bool
+}
+
+// DescribeDevices walks the model fleets in snapshots and describes every
+// endpoint they project as an [endpoint.Spec], one [Described] per
+// snapshot in order.
+func (a *Assembler) DescribeDevices(ctx context.Context, snapshots []DeviceSnapshot) ([]Described, error) {
+	out := make([]Described, 0, len(snapshots))
 	for _, snap := range snapshots {
-		s, err := a.snapshotSpecs(ctx, snap)
+		d, err := a.snapshotSpecs(ctx, snap)
 		if err != nil {
 			return nil, err
 		}
-		specs = append(specs, s)
+		out = append(out, d)
 	}
-	return a.inner.Assemble(ctx, specs)
+	return out, nil
 }
 
 // snapshotSpecs describes one central's fleet as endpoint specs.
-func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (endpoint.Snapshot, error) {
+func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Described, error) {
 	if snap.CentralName == "" {
-		return endpoint.Snapshot{}, errors.New("matteradapter: snapshot CentralName is required")
+		return Described{}, errors.New("matteradapter: snapshot CentralName is required")
 	}
 	names := a.cfg.NameResolver
 	if names == nil {
 		names = newModelNameResolver(snap.Devices, a.cfg.Labels, a.channelLabel())
 	}
-	out := endpoint.Snapshot{Scope: snap.CentralName, ModelComplete: snap.ModelComplete}
+	out := Described{Scope: snap.CentralName, ModelComplete: snap.ModelComplete}
 	for _, dev := range snap.Devices {
 		if dev == nil {
 			continue
@@ -293,7 +237,7 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (end
 			}
 			specs, err := a.channelSpecs(ctx, snap.CentralName, names, dev, ch)
 			if err != nil {
-				return endpoint.Snapshot{}, err
+				return Described{}, err
 			}
 			deviceSpecs = append(deviceSpecs, specs...)
 		}
@@ -422,7 +366,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 				return nil, err
 			}
 			if ok {
-				if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src); built {
+				if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src); built {
 					out = append(out, spec)
 				}
 			}
@@ -440,7 +384,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			if !allowed {
 				continue
 			}
-			if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src); built {
+			if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src); built {
 				out = append(out, spec)
 			}
 			continue
@@ -465,7 +409,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeMeasurementSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas))
+		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas))
 	}
 
 	// Combined DPs.
@@ -481,7 +425,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src); built {
+		if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src); built {
 			out = append(out, spec)
 		}
 	}
@@ -540,7 +484,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 					if !allowed {
 						continue
 					}
-					if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
+					if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
 						out = append(out, spec)
 					}
 					continue
@@ -583,17 +527,17 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			continue
 		default:
 		}
-		out = append(out, a.makeMeasurementSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas))
+		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas))
 	}
 
 	if len(pressMembers) > 0 {
-		if spec, ok := a.makeButtonGroupSpec(ctx, centralName, names, dev, ch, pressMembers); ok {
+		if spec, ok := a.makeButtonGroupSpec(centralName, names, dev, ch, pressMembers); ok {
 			out = append(out, spec)
 		}
 	}
 
 	if len(electricalMembers) > 0 {
-		if spec, ok := a.makeElectricalGroupSpec(ctx, centralName, names, dev, ch, electricalMembers); ok {
+		if spec, ok := a.makeElectricalGroupSpec(centralName, names, dev, ch, electricalMembers); ok {
 			out = append(out, spec)
 		}
 	}
@@ -623,7 +567,6 @@ const ElectricalGroupDPKey = "ELECTRICAL"
 // one channel from its allowed electrical DPs. The second result is false
 // when no member survives the group's parameter filter.
 func (a *Assembler) makeElectricalGroupSpec(
-	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -649,7 +592,7 @@ func (a *Assembler) makeElectricalGroupSpec(
 		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ElectricalGroupDPKey,
 	}
-	return a.deviceSpec(ctx, specInput{
+	return a.deviceSpec(specInput{
 		key:          sourceKey,
 		dev:          dev,
 		ch:           ch,
@@ -683,7 +626,6 @@ const ButtonGroupDPKey = "BUTTON"
 // filter — defensive only, since the MomentarySwitch classification and
 // the group's press family enumerate the same parameters.
 func (a *Assembler) makeButtonGroupSpec(
-	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -705,7 +647,7 @@ func (a *Assembler) makeButtonGroupSpec(
 		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ButtonGroupDPKey,
 	}
-	return a.deviceSpec(ctx, specInput{
+	return a.deviceSpec(specInput{
 		key:        sourceKey,
 		dev:        dev,
 		ch:         ch,
@@ -809,7 +751,6 @@ func (p projection) deviceType() uint16 {
 // makeSpec describes one source-backed bridged endpoint. The second
 // result is false when the source projects nothing.
 func (a *Assembler) makeSpec(
-	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -833,13 +774,13 @@ func (a *Assembler) makeSpec(
 		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
 	}
 	if src.device != nil {
-		return a.declaredDeviceSpec(ctx, in, src.device)
+		return a.declaredDeviceSpec(in, src.device)
 	}
 	if len(src.source.MatterClusterServers()) == 0 && kind == matterendpoint.DPKindGeneric {
 		return endpoint.Spec{}, false
 	}
 	in.source = src.source
-	return a.deviceSpec(ctx, in), true
+	return a.deviceSpec(in), true
 }
 
 // sourceOptions are the device options of a source-backed endpoint: the
@@ -857,6 +798,7 @@ func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *d
 	return fabricdevice.Options{
 		StableKey:      sourceKey,
 		Name:           endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		Vendor:         bridgedVendorName,
 		DeviceAddress:  dev.Address,
 		ChannelAddress: ch.Address,
 		Reachable:      dev.Available,
@@ -866,15 +808,16 @@ func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *d
 // declaredDeviceSpec describes the endpoint of a source that builds its
 // device itself from its cluster declarations. The device is the
 // source's and lives as long as the source; the name, addresses and
-// availability are this assembly's, applied on the device's Spec, and the
-// persisted NodeLabel is set as in [Assembler.deviceSpec]. A source that
-// projects nothing, or whose device the kit refuses, yields no endpoint —
-// there is no hand-built fallback, because the servers exist only inside
-// the device.
-func (a *Assembler) declaredDeviceSpec(ctx context.Context, in specInput, src interfaces.MatterDeviceSource) (endpoint.Spec, bool) {
+// availability are this walk's, applied on the device's Spec (a
+// controller-written NodeLabel is the node's persistence and overrides
+// the name there). A source that projects nothing, or whose device the
+// kit refuses, yields no endpoint — there is no hand-built fallback,
+// because the servers exist only inside the device.
+func (a *Assembler) declaredDeviceSpec(in specInput, src interfaces.MatterDeviceSource) (endpoint.Spec, bool) {
 	d, err := src.MatterDevice(fabricdevice.Options{
 		StableKey:      in.key,
 		Name:           in.friendlyName,
+		Vendor:         bridgedVendorName,
 		DeviceAddress:  in.dev.Address,
 		ChannelAddress: in.ch.Address,
 		Reachable:      in.dev.Available,
@@ -897,12 +840,10 @@ func (a *Assembler) declaredDeviceSpec(ctx context.Context, in specInput, src in
 	spec := d.Spec()
 	spec.StableKey = in.key
 	spec.FriendlyName = in.friendlyName
+	spec.VendorName = bridgedVendorName
 	spec.DeviceAddress = in.dev.Address
 	spec.ChannelAddress = in.ch.Address
 	spec.Availability = in.dev.Available
-	if a.cfg.NodeLabels != nil {
-		spec.NodeLabel = a.cfg.NodeLabels.NodeLabel(ctx, in.key)
-	}
 	return spec, true
 }
 
@@ -910,7 +851,6 @@ func (a *Assembler) declaredDeviceSpec(ctx context.Context, in specInput, src in
 // label carries the parameter suffix, because several measurements of
 // one channel are otherwise indistinguishable in a controller's UI.
 func (a *Assembler) makeMeasurementSpec(
-	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -926,7 +866,7 @@ func (a *Assembler) makeMeasurementSpec(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	return a.deviceSpec(ctx, specInput{
+	return a.deviceSpec(specInput{
 		key:          sourceKey,
 		dev:          dev,
 		ch:           ch,
@@ -961,25 +901,18 @@ type specInput struct {
 // revisions, FeatureMaps and the UniqueID input are unchanged; what the
 // device adds is device-type validation and the type's client clusters.
 //
-// The persisted NodeLabel is set on the spec the way go-fabric's own
-// Aggregator restores it (node/aggregator.go:366-367).
-//
 // A device type the generated layer does not carry, or a composition it
 // refuses, falls back to the hand-built Spec and is logged once per
 // type, so the assembly never loses an endpoint over a conformance
 // finding — the finding is reported through the bridge's device-type
 // validator, which judges the hand-built Spec too.
-func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec {
-	var label string
-	if a.cfg.NodeLabels != nil {
-		label = a.cfg.NodeLabels.NodeLabel(ctx, in.key)
-	}
+func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
 	handBuilt := endpoint.Spec{
 		StableKey:      in.key,
 		DeviceAddress:  in.dev.Address,
 		DeviceType:     in.deviceType,
+		VendorName:     bridgedVendorName,
 		FriendlyName:   in.friendlyName,
-		NodeLabel:      label,
 		ChannelAddress: in.ch.Address,
 		Availability:   in.dev.Available,
 		Source:         in.source,
@@ -993,6 +926,7 @@ func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec 
 	opts := fabricdevice.Options{
 		StableKey:      in.key,
 		Name:           in.friendlyName,
+		Vendor:         bridgedVendorName,
 		DeviceAddress:  in.dev.Address,
 		ChannelAddress: in.ch.Address,
 		Reachable:      in.dev.Available,
@@ -1017,9 +951,7 @@ func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec 
 		a.logFallback(in.deviceType, "device layer refused the composition", err)
 		return handBuilt
 	}
-	spec := d.Spec()
-	spec.NodeLabel = label
-	return spec
+	return d.Spec()
 }
 
 // logFallback reports a hand-built Spec once per device type.

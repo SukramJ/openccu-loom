@@ -326,6 +326,17 @@ func goldenContactSensor(t *testing.T) *device.Device {
 // recorded ServerLists are the ones a commissioner reads in production.
 func goldenConfig(t *testing.T) matteradapter.Config {
 	t.Helper()
+	return matteradapter.Config{IncludeMeasurements: true}
+}
+
+// goldenEndpointConfig is the endpoint assembly the golden fleet is
+// recorded through: the bridge identity the golden carries and a real
+// group manager over a migrated store, as the node runs — with it the
+// assembler mounts the stack's Groups and ScenesManagement servers
+// wherever a device type mandates them, so the recorded ServerLists are
+// the ones a commissioner reads in production.
+func goldenEndpointConfig(t *testing.T) endpoint.Config {
+	t.Helper()
 	db, err := sqlitestore.Open(context.Background(), sqlitestore.FileDSN(filepath.Join(t.TempDir(), "golden.db")))
 	if err != nil {
 		t.Fatalf("open golden store: %v", err)
@@ -335,12 +346,12 @@ func goldenConfig(t *testing.T) matteradapter.Config {
 	if err != nil {
 		t.Fatalf("groups.NewManager: %v", err)
 	}
-	return matteradapter.Config{
-		VendorID:            0x1234,
-		ProductID:           0x5678,
-		NodeLabel:           "GoldenBridge",
-		IncludeMeasurements: true,
-		Groups:              mgr,
+	return endpoint.Config{
+		VendorID:   0x1234,
+		ProductID:  0x5678,
+		NodeLabel:  "GoldenBridge",
+		VendorName: "eQ-3",
+		Groups:     mgr,
 	}
 }
 
@@ -530,11 +541,8 @@ func TestAssembledTopologyMatchesGolden(t *testing.T) {
 			"at package scope — move that into its own binary before touching this fixture.", got)
 	}
 
-	a, err := matteradapter.New(newFakeStore(), goldenConfig(t), slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
+	a := matteradapter.New(goldenConfig(t), slog.New(slog.DiscardHandler))
+	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), goldenEndpointConfig(t), []matteradapter.DeviceSnapshot{{
 		CentralName:   goldenCentralName,
 		Devices:       goldenFleet(t),
 		ModelComplete: true,

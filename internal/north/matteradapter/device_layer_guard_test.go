@@ -31,11 +31,8 @@ var acceptedDeviceTypeViolations = map[string]string{}
 
 func assembleGolden(t *testing.T) *endpoint.Topology {
 	t.Helper()
-	a, err := matteradapter.New(newFakeStore(), goldenConfig(t), slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
+	a := matteradapter.New(goldenConfig(t), slog.New(slog.DiscardHandler))
+	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), goldenEndpointConfig(t), []matteradapter.DeviceSnapshot{{
 		CentralName:   goldenCentralName,
 		Devices:       goldenFleet(t),
 		ModelComplete: true,

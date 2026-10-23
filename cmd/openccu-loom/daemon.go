@@ -791,6 +791,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// unavailable).
 	centralOrch.setMatterCentralHook(matter.centralHook)
 	centralOrch.setMatterExposureStore(matter.exposureStore)
+	centralOrch.setMatterPartitionRetirer(matter.retire)
 	centralOrch.setAlarmCentralHook(alarmCentralHook(alarmSvc))
 	centralOrch.setSecurityCentralHook(securityCentralHook(securitySvc))
 	// Matter's ordered teardown is owned by the north-bound registry (it

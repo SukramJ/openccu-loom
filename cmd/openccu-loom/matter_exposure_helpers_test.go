@@ -32,7 +32,7 @@ func exposeEveryCandidate(ctx context.Context, t *testing.T, bundle *matterBridg
 			}
 		}
 	}
-	if err := bundle.node.Bridge().Reassemble(ctx); err != nil {
-		t.Fatalf("Reassemble after exposing every candidate: %v", err)
+	if err := bundle.sync(ctx); err != nil {
+		t.Fatalf("sync after exposing every candidate: %v", err)
 	}
 }

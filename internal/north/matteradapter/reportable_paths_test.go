@@ -56,12 +56,9 @@ func newTempMeasBridgedEndpoint(t *testing.T) *endpoint.Endpoint {
 
 	cfg := validConfig()
 	cfg.IncludeMeasurements = true
-	a, err := matteradapter.New(newFakeStore(), cfg, nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
+	a := matteradapter.New(cfg, nil)
 	snap := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
-	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
+	top, err := assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -134,11 +131,8 @@ func TestReportablePaths_AirQualityEndpoint_CoversBothDerivedClusters(t *testing
 
 	cfg := validConfig()
 	cfg.IncludeMeasurements = true
-	a, err := matteradapter.New(newFakeStore(), cfg, nil)
-	if err != nil {
-		t.Fatalf("matteradapter.New: %v", err)
-	}
-	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	a := matteradapter.New(cfg, nil)
+	top, err := assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}

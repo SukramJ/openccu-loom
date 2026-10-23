@@ -7,62 +7,48 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/go-fabric/client/interaction"
 	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 	temperaturedef "github.com/SukramJ/go-fabric/cluster/spec/temperaturemeasurement"
-	"github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/fabrictest"
 	"github.com/SukramJ/go-fabric/im"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
-// TestGoldenFleetAnswersAControllerOverCASE commissions an in-process node
-// that serves the assembler's golden topology as its host Snapshotter and
-// reads both endpoint shapes over CASE with go-fabric's own controller: a
-// profile server declared with device.HostServer (the plug's OnOff) and a
-// sensor declared with device.Measurement (the climate sensor's
-// MeasuredValue). Reading OnOff on the sensor endpoint must fail with
-// UnsupportedCluster, so a read that answers anything for any path would
-// not pass.
+// TestGoldenFleetAnswersAControllerOverCASE reads the golden fleet over
+// CASE as a controller does, the way the daemon serves it: the walk
+// describes the fleet, the reconciler syncs it into the node's
+// Aggregator under the central's partition, and the node assembles. One
+// endpoint of each shape is read: a profile server declared with the
+// device kit (the plug's OnOff) and a sensor declared with
+// device.Measurement (the climate sensor's MeasuredValue). A cluster the
+// sensor does not serve answers UnsupportedCluster, so the reads are
+// not vacuous.
 func TestGoldenFleetAnswersAControllerOverCASE(t *testing.T) {
 	t.Parallel()
-	asm, err := matteradapter.New(newFakeStore(), goldenConfig(t), slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	fleet := goldenFleet(t)
-	var (
-		mu   sync.Mutex
-		last *endpoint.Topology
-	)
-	snapshot := func(ctx context.Context) (*endpoint.Topology, error) {
-		top, err := asm.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{
-			CentralName:   goldenCentralName,
-			Devices:       fleet,
-			ModelComplete: true,
-		}})
-		mu.Lock()
-		last = top
-		mu.Unlock()
-		return top, err
-	}
+	asm := matteradapter.New(goldenConfig(t), slog.New(slog.DiscardHandler))
 	site := fabrictest.NewSite(t, fabrictest.Options{})
-	pair := site.CommissionedPair(fabrictest.PairOptions{
-		Device: fabrictest.Topology{Snapshotter: snapshot},
-	})
-	mu.Lock()
-	top := last
-	mu.Unlock()
-	plug := findByDeviceType(t, top, 0x010A).ID   // OnOffPlugInUnit
-	sensor := findByDeviceType(t, top, 0x0302).ID // TemperatureSensor
-
+	pair := site.CommissionedPair(fabrictest.PairOptions{})
+	n := pair.Device.Node()
+	reconciler := matteradapter.NewReconciler(n.Aggregator(), asm, slog.New(slog.DiscardHandler))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if err := reconciler.Sync(ctx, []matteradapter.DeviceSnapshot{{
+		CentralName:   goldenCentralName,
+		Devices:       goldenFleet(t),
+		ModelComplete: true,
+	}}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	topo := n.Topology()
+	plug := endpointOfType(t, topo, 0x010A)   // OnOffPlugInUnit
+	sensor := endpointOfType(t, topo, 0x0302) // TemperatureSensor
+
 	read := func(ep uint16, cluster, attr uint32) error {
 		_, err := fabrictest.Read(ctx, pair, im.ConcreteAttributePath{
 			Endpoint: ep, Cluster: cluster, Attribute: attr,
@@ -77,8 +63,21 @@ func TestGoldenFleetAnswersAControllerOverCASE(t *testing.T) {
 		t.Fatalf("read MeasuredValue on the temperature sensor (endpoint %d): %v", sensor, err)
 	}
 	var status *interaction.StatusError
-	err = read(sensor, onoffdef.ClusterID, onoffdef.AttrOnOff)
+	err := read(sensor, onoffdef.ClusterID, onoffdef.AttrOnOff)
 	if !errors.As(err, &status) || status.Status != im.StatusUnsupportedCluster {
 		t.Fatalf("read OnOff on the temperature sensor = %v, want UnsupportedCluster", err)
 	}
+}
+
+// endpointOfType returns the endpoint number of the first bridged device
+// of deviceType in the node's served topology.
+func endpointOfType(t *testing.T, topo node.BridgeTopology, deviceType uint16) uint16 {
+	t.Helper()
+	for _, d := range topo.Devices {
+		if d.DeviceType == deviceType {
+			return d.Endpoint
+		}
+	}
+	t.Fatalf("no bridged device of type 0x%04X among %d", deviceType, len(topo.Devices))
+	return 0
 }
