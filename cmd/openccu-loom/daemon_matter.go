@@ -15,10 +15,7 @@ import (
 	"sync"
 	"time"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	mattercore "github.com/SukramJ/go-fabric/cluster/core"
 	"github.com/SukramJ/go-fabric/eligibility"
-	mattergroups "github.com/SukramJ/go-fabric/groups"
 	"github.com/SukramJ/go-fabric/node"
 	matterschema "github.com/SukramJ/go-fabric/schema"
 	matterstore "github.com/SukramJ/go-fabric/store"
@@ -89,11 +86,12 @@ type matterBridgeBundle struct {
 	// stack-generic bring-up — stores, root and Aggregator servers,
 	// sessions, PASE, CASE, the commissioning window, the fabric hooks,
 	// the event-number persistence — and owns their lifecycle. What the
-	// daemon reaches through it is named by the fields below.
-	node   *node.Node
-	bridge *matterbridge.Bridge
-	stop   func()
-	store  *matterstore.Store
+	// daemon reaches through it is named by the fields below; the bridge
+	// it runs on (Node.Bridge), its root servers (Node.Root) and its group
+	// state (Node.Groups) are reached through it directly.
+	node  *node.Node
+	stop  func()
+	store *matterstore.Store
 	// identity persists endpoint ids and the exposure allowlist — the two
 	// tables keyed by this daemon's source 5-tuple rather than by anything
 	// Matter defines. See [matterendpoint].
@@ -109,15 +107,8 @@ type matterBridgeBundle struct {
 	// REST diagnostics surface reports which peers hold a session and how
 	// many subscriptions ride on each — a commissioned controller holding
 	// none looks identical to a healthy one from every other angle.
-	opMgr   *node.SessionManager
-	subMgr  *node.SubscriptionManager
-	opCreds *mattercore.OperationalCredentials
-	root    *node.RootClusters
-	// groups is the one group-state manager both sides share: the
-	// assembler's endpoint Groups / ScenesManagement servers and, through
-	// node.Config.Groups, the facade's root GroupKeyManagement and the
-	// bridge's group-message routing.
-	groups *node.Groups
+	opMgr  *node.SessionManager
+	subMgr *node.SubscriptionManager
 	// fabricEvents is where the facade's fabric observers deliver. The
 	// WebSocket publisher attaches in wireMatterRuntime, once the hub
 	// exists; startMatterBridge runs before it.
@@ -327,26 +318,11 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return nil
 	}
 
+	// The credential store is built on the daemon's shared handle: the
+	// daemon carries go-fabric's schema in its own migrations, so the node
+	// is handed the store rather than the handle it would apply the schema
+	// to (go-fabric guides "Advanced seams", store).
 	store := matterstore.New(db)
-	// Scene tables and commissioner-written bridged NodeLabels are stack
-	// state go-fabric persists (node.EndpointPersistence). The daemon
-	// assembles its own topology, so it builds the persistence before the
-	// assembler and hands the same value to the facade, which then serves
-	// it from Node.Persistence.
-	persistence := node.NewEndpointPersistence(store, logger)
-	// Group membership is stack state, as in matter.js where GroupsServer
-	// keeps it in the root's GroupKeyManagementServer (go-fabric ADR
-	// 0009): one manager over the store feeds the assembler (the bridged
-	// endpoints' Groups and ScenesManagement servers) and, through
-	// node.Config.Groups, the facade's root GroupKeyManagement and
-	// Groupcast servers and the bridge's group-message routing. Two
-	// managers over the same store would diverge in memory: an AddGroup
-	// on an endpoint would not be routed until the next load.
-	groupMgr, gErr := mattergroups.NewManager(store, logger)
-	if gErr != nil {
-		logger.Warn("matter.bridge.groups", slog.String("err", gErr.Error()))
-		return nil
-	}
 	// Endpoint identity and the exposure allowlist are keyed by this
 	// daemon's own 5-tuple, so they are persisted here rather than by the
 	// bridge module — which sees only an opaque key. Same database handle,
@@ -400,33 +376,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// The daemon owns topology assembly: it knows the device model, the
 	// operator's exposure allowlist and the locale, none of which the
 	// Matter subtree may see. The facade is handed the finished topology
-	// through the snapshotter below.
-	assembler, err := matteradapter.New(identity, matteradapter.Config{
-		VendorID:                mc.VendorID,
-		ProductID:               mc.ProductID,
-		NodeLabel:               mc.NodeLabel,
-		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
-		IncludeMeasurements:     mc.IncludeMeasurements,
-		Labels:                  labels,
-		ChannelLabel:            channelLabel,
-		Groups:                  groupMgr,
-		Scenes:                  persistence,
-		NodeLabels:              persistence,
-	}, logger)
-	if err != nil {
-		return fail("matter.bridge.assembler", err)
-	}
-	// The allowlist checker is wired before the first assembly, so the
-	// bridge only ever serves sources the operator has explicitly
-	// enabled. Default = empty allowlist = empty topology. The
-	// exposure-management REST endpoints (`/api/v1/matter/exposable`)
-	// drive the matter_exposures table the checker reads through.
-	// Without it Apple Home would see every CCU device as a Matter
-	// endpoint (1000+), the initial Subscribe would expand to 60+ KB,
-	// the post-CASE phase would exceed Apple's pairing-UI timeout and
-	// the user would see a generic add-failed error even though the
-	// cryptographic handshake completed.
-	assembler.SetExposureChecker(identity)
+	// through the snapshotter; the assembler is built once the node is,
+	// because it runs on the node's group state and endpoint persistence,
+	// and the snapshotter is first called at Start.
+	var assembler *matteradapter.Assembler
 
 	rootSerial := matterRootSerial(mc)
 	passcode, salt, iterations, configured, err := matterCommissioningCredentials(mc.Commissioning, logger)
@@ -472,12 +425,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			SoftwareVersionString: build.Version,
 		},
 		Store:                      node.Store{Credentials: store, Endpoints: identity},
-		EndpointPersistence:        persistence,
 		Attestation:                attest,
 		BootID:                     node.BootID{RotateUniqueIDs: mc.DevRotateUniqueIDs},
 		Health:                     matterHealth(healthTracker),
-		Groups:                     groupMgr,
-		Topology:                   matterTopologySnapshotter(assembler, walk),
+		Topology:                   matterTopologySnapshotter(func() *matteradapter.Assembler { return assembler }, walk),
 		Locales:                    matterLocales(cfg.Locale),
 		SupportedFabrics:           matterSupportedFabrics,
 		DisableTimeSynchronization: !mc.TimeSyncEnabled(),
@@ -490,6 +441,45 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if err != nil {
 		return fail("matter.bridge.node", err)
 	}
+	// Group membership is stack state, as in matter.js where GroupsServer
+	// keeps it in the root's GroupKeyManagementServer (go-fabric ADR
+	// 0009): the node's one manager feeds the assembler (the bridged
+	// endpoints' Groups and ScenesManagement servers) as well as the root's
+	// GroupKeyManagement and Groupcast servers and the bridge's
+	// group-message routing; two managers over the same store would
+	// diverge in memory. Scene tables and commissioner-written bridged
+	// NodeLabels are the node's endpoint persistence (Node.Persistence).
+	persistence := n.Persistence()
+	assembler, err = matteradapter.New(identity, matteradapter.Config{
+		VendorID:                mc.VendorID,
+		ProductID:               mc.ProductID,
+		NodeLabel:               mc.NodeLabel,
+		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
+		IncludeMeasurements:     mc.IncludeMeasurements,
+		Labels:                  labels,
+		ChannelLabel:            channelLabel,
+		Groups:                  n.Groups(),
+		Scenes:                  persistence,
+		NodeLabels:              persistence,
+	}, logger)
+	if err != nil {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		_ = n.Stop(stopCtx)
+		cancel()
+		return fail("matter.bridge.assembler", err)
+	}
+	// The allowlist checker is wired before the first assembly, so the
+	// bridge only ever serves sources the operator has explicitly
+	// enabled. Default = empty allowlist = empty topology. The
+	// exposure-management REST endpoints (`/api/v1/matter/exposable`)
+	// drive the matter_exposures table the checker reads through.
+	// Without it Apple Home would see every CCU device as a Matter
+	// endpoint (1000+), the initial Subscribe would expand to 60+ KB,
+	// the post-CASE phase would exceed Apple's pairing-UI timeout and
+	// the user would see a generic add-failed error even though the
+	// cryptographic handshake completed.
+	assembler.SetExposureChecker(identity)
+
 	if mc.TimeSyncEnabled() {
 		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")
 	}
@@ -556,16 +546,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 	return &matterBridgeBundle{
 		node:                    n,
-		bridge:                  bridge,
 		stop:                    stop,
 		store:                   store,
 		identity:                identity,
 		assembler:               assembler,
 		opMgr:                   n.Sessions(),
 		subMgr:                  n.Subscriptions(),
-		opCreds:                 n.Root().OperationalCredentials,
-		root:                    n.Root(),
-		groups:                  groupMgr,
 		fabricEvents:            fabricEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
@@ -596,7 +582,6 @@ type matterWiring struct {
 	candidates    handlers.MatterCandidateProvider
 	pub           *matterEventPublisher
 	reassembler   handlers.MatterTopologyReassembler
-	bi            *mattercore.BasicInformation
 	// centralHook wires a runtime-adopted central into the running bridge
 	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Nil when
 	// the bridge is disabled; the live-adopt orchestrator skips it then. The
@@ -858,9 +843,9 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 // sequence — so a snapshot and the topology built from it stay one
 // atomic step from the bridge's point of view, and a reassembly still
 // reads the model as late as possible rather than at wiring time.
-func matterTopologySnapshotter(asm *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) node.Snapshotter {
+func matterTopologySnapshotter(asm func() *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) node.Snapshotter {
 	return func(ctx context.Context) (*node.Topology, error) {
-		return asm.AssembleDevices(ctx, walk(ctx))
+		return asm().AssembleDevices(ctx, walk(ctx))
 	}
 }
 
@@ -1005,13 +990,13 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// used to publish discriminator 0 while the bridge core held the
 	// 0xF00 default.
 	mcfg := cfg.North.Matter.WithDefaults()
-	mb := bundle.bridge
+	mb := bundle.node.Bridge()
 	mids := bundle.identity
 	teardown = bundle.stop
 	wiring.fabricStore = bundle.node
 	wiring.sessionLister = matterSessionLister{op: bundle.opMgr, sub: bundle.subMgr}
 	wiring.mdnsReporter = matterMdnsReporter{node: bundle.node}
-	wiring.endpointInspector = matterEndpointInspector{bridge: mb}
+	wiring.endpointInspector = matterEndpointInspector{node: bundle.node}
 	wiring.compatReporter = matterCompatibilityReporter{
 		fabrics:   bundle.node,
 		inspector: wiring.endpointInspector,
@@ -1090,7 +1075,6 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// WebSocket frames follow. The bridge's SetOnFabricAdded is not the
 	// seam: the facade never fires it.
 	bundle.fabricEvents.set(wiring.pub.publishFabricAdded, wiring.pub.publishFabricRemoved)
-	wiring.bi = bundle.root.BasicInformation
 	wiring.statusReader = &matterStatusReaderAdapter{
 		enabled:   mcfg.Enabled,
 		node:      bundle.node,
@@ -1254,14 +1238,18 @@ func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
 // fleet. Anything picking an endpoint by ordinal — "the lowest one with
 // cluster X" — reads a different device after any change to the store's
 // history.
-type matterEndpointInspector struct{ bridge *matterbridge.Bridge }
+type matterEndpointInspector struct{ node *node.Node }
 
 // MatterEndpoints implements [handlers.MatterEndpointInspector].
 func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo {
-	if i.bridge == nil {
+	if i.node == nil {
 		return nil
 	}
-	topo := i.bridge.Topology()
+	br := i.node.Bridge()
+	if br == nil {
+		return nil
+	}
+	topo := br.Topology()
 	if topo == nil {
 		return nil
 	}

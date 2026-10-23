@@ -39,7 +39,7 @@ func TestStartMatterBridge_EphemeralWindow(t *testing.T) {
 	}
 	t.Cleanup(bundle.stop)
 
-	if bundle.bridge.LocalAddr() == "" {
+	if bundle.node.Bridge().LocalAddr() == "" {
 		t.Error("expected non-empty LocalAddr")
 	}
 }

@@ -101,7 +101,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 	t.Cleanup(bundle.stop)
 	exposeEveryCandidate(ctx, t, bundle, reg)
 
-	topo := bundle.bridge.Topology()
+	topo := bundle.node.Bridge().Topology()
 	if topo == nil {
 		t.Fatal("bridge has no topology after Start")
 	}
@@ -116,7 +116,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 		t.Fatalf("no OnOffPlugInUnit endpoint among %d bridged endpoints", len(topo.Bridged()))
 	}
 
-	cmr := bridgetest.Dial(t, bundle.bridge.LocalAddr(), bridgetest.Options{
+	cmr := bridgetest.Dial(t, bundle.node.Bridge().LocalAddr(), bridgetest.Options{
 		Passcode:      groupsTestPasscode,
 		Discriminator: groupsTestDiscrim,
 		FabricID:      groupsTestFabricID,
@@ -143,7 +143,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 // group on the bridged OnOff endpoint and views it back.
 func TestStartMatterBridgeMountsGroupsOnBridgedEndpoints(t *testing.T) {
 	t.Parallel()
-	ctx, _, sess, onOffEP := bootCommissionedBridge(t)
+	ctx, bundle, sess, onOffEP := bootCommissionedBridge(t)
 
 	// AddGroup is refused unless the group already has a key mapping
 	// (core spec §1.3.7.1). The key set and the map are written on the
@@ -214,6 +214,26 @@ func TestStartMatterBridgeMountsGroupsOnBridgedEndpoints(t *testing.T) {
 	}
 	if name, _ := view.Fields.Child(2); name.String != "pin" {
 		t.Fatalf("ViewGroupResponse name = %q, want %q", name.String, "pin")
+	}
+
+	// The endpoint's Groups server and the node's group routing are one
+	// manager: the group the endpoint added is a membership the node's
+	// manager holds in memory, so the bridge joins its multicast address
+	// without waiting for a reload. A second manager over the same store
+	// would hold it only after the next load.
+	memberships, err := bundle.node.Groups().Memberships(ctx)
+	if err != nil {
+		t.Fatalf("Memberships: %v", err)
+	}
+	found := false
+	for _, m := range memberships {
+		if m.GroupID == groupsTestGroupID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the node's group manager does not hold group 0x%04X the endpoint added (memberships %v): "+
+			"the assembler runs on a manager of its own", groupsTestGroupID, memberships)
 	}
 }
 
