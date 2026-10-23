@@ -11,6 +11,8 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
+	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -34,26 +36,50 @@ func TestSwitchMatter_MatterDeviceType(t *testing.T) {
 	}
 }
 
+// matterOnOffServer is what these tests read from the switch's OnOff
+// server: the cluster surface, its data version and its lists.
+type matterOnOffServer interface {
+	contract.ClusterServer
+	contract.ClusterDataVersion
+	contract.ClusterAttributeLister
+	contract.ClusterCommandLister
+}
+
+// matterSwitchDevice returns the device a switch projects.
+func matterSwitchDevice(t *testing.T, s *Switch) *fabricdevice.Device {
+	t.Helper()
+	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("switch"), Name: "switch"})
+	if err != nil {
+		t.Fatalf("MatterDevice: %v", err)
+	}
+	if d == nil {
+		t.Fatal("MatterDevice: a STATE switch must project a device")
+	}
+	return d
+}
+
+// matterOnOffOf returns the OnOff server of d.
+func matterOnOffOf(t *testing.T, d *fabricdevice.Device) matterOnOffServer {
+	t.Helper()
+	srv, ok := d.Server(onoff.ClusterID).(matterOnOffServer)
+	if !ok {
+		t.Fatalf("OnOff server is %T, want a server with data version and lists", d.Server(onoff.ClusterID))
+	}
+	return srv
+}
+
 // matterSwitch builds a writable STATE switch and returns it with its
 // OnOff server and the stub writer behind the Sink.
-func matterSwitch(t *testing.T) (*Switch, *onoff.Server, *stubWriter) {
+func matterSwitch(t *testing.T) (*Switch, matterOnOffServer, *stubWriter) {
 	t.Helper()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
 		hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
 	w := &stubWriter{}
 	s.Writer = w
-	servers := s.MatterClusterServers()
-	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers = %d servers, want exactly the OnOff server", len(servers))
-	}
-	srv, ok := servers[0].(*onoff.Server)
-	if !ok {
-		t.Fatalf("OnOff server is %T, want go-fabric's *onoff.Server", servers[0])
-	}
-	return s, srv, w
+	return s, matterOnOffOf(t, matterSwitchDevice(t, s)), w
 }
 
-func TestSwitchMatter_MatterClusterServers_State(t *testing.T) {
+func TestSwitchMatter_MatterDevice_ServesOnOff(t *testing.T) {
 	t.Parallel()
 	_, srv, _ := matterSwitch(t)
 	if srv.MatterClusterID() != onoff.ClusterID {
@@ -61,28 +87,29 @@ func TestSwitchMatter_MatterClusterServers_State(t *testing.T) {
 	}
 }
 
-func TestSwitchMatter_MatterClusterServers_BuiltOncePerSwitch(t *testing.T) {
+func TestSwitchMatter_MatterDevice_BuiltOncePerSwitch(t *testing.T) {
 	t.Parallel()
-	s, srv, _ := matterSwitch(t)
-	if again := s.MatterClusterServers()[0]; again != srv {
-		t.Fatalf("a second MatterClusterServers call returned a different server (%p vs %p); the bridge keeps the server it serves across reassemblies, so it must be the same one", again, srv)
+	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead|hmenum.OperationsWrite))
+	d := matterSwitchDevice(t, s)
+	if again := matterSwitchDevice(t, s); again != d {
+		t.Fatalf("a second MatterDevice call returned a different device (%p vs %p); the bridge keeps the servers it serves across reassemblies, so it must be the same one", again, d)
 	}
 }
 
-func TestSwitchMatter_MatterClusterServers_NonState_ReturnsNil(t *testing.T) {
+func TestSwitchMatter_MatterDevice_NonState_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterOnTime, hmenum.ParameterTypeBool,
 		hmenum.OperationsRead|hmenum.OperationsWrite))
-	if servers := s.MatterClusterServers(); servers != nil {
-		t.Errorf("MatterClusterServers with ON_TIME: want nil, got %v", servers)
+	if d, err := s.MatterDevice(fabricdevice.Options{}); d != nil || err != nil {
+		t.Errorf("MatterDevice with ON_TIME: want (nil, nil), got (%v, %v)", d, err)
 	}
 }
 
-func TestSwitchMatter_MatterClusterServers_Nil(t *testing.T) {
+func TestSwitchMatter_MatterDevice_Nil(t *testing.T) {
 	t.Parallel()
 	var s *Switch
-	if servers := s.MatterClusterServers(); servers != nil {
-		t.Error("nil switch: MatterClusterServers must return nil")
+	if d, err := s.MatterDevice(fabricdevice.Options{}); d != nil || err != nil {
+		t.Errorf("nil switch: MatterDevice must return (nil, nil), got (%v, %v)", d, err)
 	}
 }
 
@@ -98,7 +125,7 @@ func TestSwitchMatter_OnOffStartsFromTheObservedState(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead|hmenum.OperationsEvent))
 	s.OnEvent(true)
-	srv := s.MatterClusterServers()[0]
+	srv := matterOnOffOf(t, matterSwitchDevice(t, s))
 	if v, ok := srv.MatterRead(onoff.AttrOnOff); !ok || v != true {
 		t.Errorf("observed true before the server was built: want (true, true), got (%v, %v)", v, ok)
 	}

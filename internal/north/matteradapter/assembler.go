@@ -22,6 +22,7 @@ import (
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // Config tunes the model walk and the topology assembly it feeds. The
@@ -413,13 +414,15 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
-		if src, ok := cdp.(contract.EndpointSource); ok {
+		if src, ok := projectionOf(cdp); ok {
 			ok, err := allow(matterendpoint.DPKindCustom, dpKey(cdp))
 			if err != nil {
 				return nil, err
 			}
 			if ok {
-				out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src))
+				if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src); built {
+					out = append(out, spec)
+				}
 			}
 		}
 	}
@@ -427,7 +430,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 	// Calculated DPs.
 	for _, calc := range ch.CalculatedDataPoints() {
 		key := dpKey(calc)
-		if src, ok := calc.(contract.EndpointSource); ok {
+		if src, ok := projectionOf(calc); ok {
 			allowed, err := allow(matterendpoint.DPKindCalculated, key)
 			if err != nil {
 				return nil, err
@@ -435,7 +438,9 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			if !allowed {
 				continue
 			}
-			out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src))
+			if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src); built {
+				out = append(out, spec)
+			}
 			continue
 		}
 		if !a.cfg.IncludeMeasurements {
@@ -463,7 +468,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 
 	// Combined DPs.
 	for _, comb := range ch.CombinedDataPoints() {
-		src, ok := comb.(contract.EndpointSource)
+		src, ok := projectionOf(comb)
 		if !ok {
 			continue
 		}
@@ -474,7 +479,9 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src))
+		if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src); built {
+			out = append(out, spec)
+		}
 	}
 
 	// Generic DPs project to Matter on two paths:
@@ -518,8 +525,12 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		// projection (the wrapper itself wires the same DP under the
 		// hood).
 		if !channelHasCustom {
-			if src, ok := gdp.(contract.EndpointSource); ok {
-				if servers := src.MatterClusterServers(); len(servers) > 0 {
+			if src, ok := projectionOf(gdp); ok {
+				// The spec is described before the allowlist probe: a generic
+				// source projects nothing for most of its parameters (a
+				// generic Switch serves STATE alone), and only one that
+				// projects an endpoint takes this path at all.
+				if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
 					allowed, err := allow(matterendpoint.DPKindGeneric, key)
 					if err != nil {
 						return nil, err
@@ -527,7 +538,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 					if !allowed {
 						continue
 					}
-					out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src))
+					out = append(out, spec)
 					continue
 				}
 			}
@@ -749,7 +760,36 @@ func genericDPKeyForMeasurement(dp any) string {
 	return ""
 }
 
-// makeSpec describes one source-backed bridged endpoint.
+// projection is how a data point reaches the Matter plane as an endpoint
+// of its own: a device it builds from its cluster declarations, or the
+// cluster servers it still serves itself. Exactly one is set.
+type projection struct {
+	device interfaces.MatterDeviceSource
+	source contract.EndpointSource
+}
+
+// projectionOf reports the data point's projection; the device form wins
+// over the server form for a source that offers both.
+func projectionOf(dp any) (projection, bool) {
+	if d, ok := dp.(interfaces.MatterDeviceSource); ok {
+		return projection{device: d}, true
+	}
+	if s, ok := dp.(contract.EndpointSource); ok {
+		return projection{source: s}, true
+	}
+	return projection{}, false
+}
+
+// deviceType is the projection's advertised Device Library type.
+func (p projection) deviceType() uint16 {
+	if p.device != nil {
+		return p.device.MatterDeviceType()
+	}
+	return p.source.MatterDeviceType()
+}
+
+// makeSpec describes one source-backed bridged endpoint. The second
+// result is false when the source projects nothing.
 func (a *Assembler) makeSpec(
 	ctx context.Context,
 	centralName string,
@@ -758,8 +798,8 @@ func (a *Assembler) makeSpec(
 	ch *device.Channel,
 	kind matterendpoint.DPKind,
 	key string,
-	src contract.EndpointSource,
-) endpoint.Spec {
+	src projection,
+) (endpoint.Spec, bool) {
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -767,14 +807,59 @@ func (a *Assembler) makeSpec(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	return a.deviceSpec(ctx, specInput{
+	in := specInput{
 		key:          sourceKey,
 		dev:          dev,
 		ch:           ch,
-		deviceType:   src.MatterDeviceType(),
+		deviceType:   src.deviceType(),
 		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
-		source:       src,
+	}
+	if src.device != nil {
+		return a.declaredDeviceSpec(ctx, in, src.device)
+	}
+	if len(src.source.MatterClusterServers()) == 0 && kind == matterendpoint.DPKindGeneric {
+		return endpoint.Spec{}, false
+	}
+	in.source = src.source
+	return a.deviceSpec(ctx, in), true
+}
+
+// declaredDeviceSpec describes the endpoint of a source that builds its
+// device itself from its cluster declarations. The device is the
+// source's and lives as long as the source; the name, addresses and
+// availability are this assembly's, applied on the device's Spec, and the
+// persisted NodeLabel is set as in [Assembler.deviceSpec]. A source that
+// projects nothing, or whose device the kit refuses, yields no endpoint —
+// there is no hand-built fallback, because the servers exist only inside
+// the device.
+func (a *Assembler) declaredDeviceSpec(ctx context.Context, in specInput, src interfaces.MatterDeviceSource) (endpoint.Spec, bool) {
+	d, err := src.MatterDevice(fabricdevice.Options{
+		StableKey:      in.key,
+		Name:           in.friendlyName,
+		DeviceAddress:  in.dev.Address,
+		ChannelAddress: in.ch.Address,
+		Reachable:      in.dev.Available,
 	})
+	if err != nil {
+		a.logger.Warn("matter.assembler.device_refused",
+			slog.String("device_type", fmt.Sprintf("0x%04X", in.deviceType)),
+			slog.String("key", in.key.String()),
+			slog.String("err", err.Error()))
+		return endpoint.Spec{}, false
+	}
+	if d == nil {
+		return endpoint.Spec{}, false
+	}
+	spec := d.Spec()
+	spec.StableKey = in.key
+	spec.FriendlyName = in.friendlyName
+	spec.DeviceAddress = in.dev.Address
+	spec.ChannelAddress = in.ch.Address
+	spec.Availability = in.dev.Available
+	if a.cfg.NodeLabels != nil {
+		spec.NodeLabel = a.cfg.NodeLabels.NodeLabel(ctx, in.key)
+	}
+	return spec, true
 }
 
 // makeMeasurementSpec describes one standalone sensor endpoint. Its
