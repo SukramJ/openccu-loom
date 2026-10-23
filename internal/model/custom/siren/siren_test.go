@@ -802,7 +802,7 @@ func TestSmokeSirenMatterReadAttributes(t *testing.T) {
 	t.Parallel()
 
 	s, _, statusDP := newSmokeSirenRig(t)
-	servers := s.MatterClusterServers()
+	servers := matterServers(t, s)
 	if len(servers) == 0 {
 		t.Fatal("SmokeSiren.MatterClusterServers must be non-empty")
 	}
@@ -846,7 +846,7 @@ func TestSmokeSirenMatterWriteAlwaysErrors(t *testing.T) {
 	t.Parallel()
 
 	s, _, _ := newSmokeSirenRig(t)
-	servers := s.MatterClusterServers()
+	servers := matterServers(t, s)
 	srv := servers[0]
 	if err := srv.MatterWrite(context.Background(), alarm.AttrExpressedState, nil); err == nil {
 		t.Error("SmokeCO MatterWrite of ExpressedState must return an error")
@@ -857,7 +857,7 @@ func TestSmokeSirenMatterReportable(t *testing.T) {
 	t.Parallel()
 
 	s, _, _ := newSmokeSirenRig(t)
-	servers := s.MatterClusterServers()
+	servers := matterServers(t, s)
 	srv := servers[0]
 	rep := srv.MatterReportable()
 	if len(rep) == 0 {
@@ -869,7 +869,7 @@ func TestSmokeSirenReadBatteryAlert(t *testing.T) {
 	t.Parallel()
 
 	s, _, _ := newSmokeSirenRig(t)
-	servers := s.MatterClusterServers()
+	servers := matterServers(t, s)
 	srv := servers[0]
 	v, ok := srv.MatterRead(alarm.AttrBatteryAlert)
 	if !ok || v != uint8(alarm.AlarmNormal) {
@@ -881,7 +881,7 @@ func TestSmokeSirenReadSecondaryAlarmWarning(t *testing.T) {
 	t.Parallel()
 
 	s, _, statusDP := newSmokeSirenRig(t)
-	servers := s.MatterClusterServers()
+	servers := matterServers(t, s)
 	srv := servers[0]
 	fireSmokeStatus(t, statusDP, string(SmokeStatusSecondaryAlarm))
 	v, ok := srv.MatterRead(alarm.AttrSmokeState)

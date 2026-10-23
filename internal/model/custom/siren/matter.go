@@ -5,12 +5,9 @@ package siren
 
 import (
 	"context"
-	"fmt"
 	"slices"
-	"sync"
 
-	"github.com/SukramJ/go-fabric/cluster/alarm"
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 	smokecoalarmdef "github.com/SukramJ/go-fabric/cluster/spec/smokecoalarm"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 
@@ -42,17 +39,11 @@ const matterDispatchPriority = hmenum.CommandPriorityHigh
 // endpoint with the SmokeCOAlarm cluster (0x005C). SoundPlayer projects
 // onto a Speaker (0x0022) endpoint — see sound_matter.go.
 var (
-	_ interfaces.MatterEndpointSource     = (*Siren)(nil)
-	_ interfaces.MatterEndpointSource     = (*SmokeSiren)(nil)
-	_ interfaces.MatterClusterDataVersion = (*Siren)(nil)
-	_ interfaces.MatterClusterDataVersion = (*SmokeSiren)(nil)
-	_ interfaces.MatterChangeNotifier     = (*Siren)(nil)
-	_ interfaces.MatterChangeNotifier     = (*SmokeSiren)(nil)
+	_ interfaces.MatterDeviceSource   = (*Siren)(nil)
+	_ interfaces.MatterDeviceSource   = (*SmokeSiren)(nil)
+	_ interfaces.MatterChangeNotifier = (*Siren)(nil)
+	_ interfaces.MatterChangeNotifier = (*SmokeSiren)(nil)
 )
-
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion] for Siren.
-// Bumped on every successful MatterWrite / MatterInvoke.
-func (s *Siren) MatterDataVersion() uint32 { return s.dataVersion.Current() }
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for Siren.
 // The Matter surface is OnOff, driven by the acoustic and optical
@@ -70,11 +61,6 @@ func (s *Siren) OnMatterValueChanged(cb func()) func() {
 	)
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion] for SmokeSiren.
-// It is the SmokeCOAlarm server's own tracker (alarm.Config.DataVersion),
-// bumped on every confirmed status change (smoke.go).
-func (s *SmokeSiren) MatterDataVersion() uint32 { return s.dataVersion.Current() }
-
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
 // SmokeSiren. The SmokeCOAlarm cluster's ExpressedState/alarm attributes are
 // driven by the status DP; wiring it means a smoke/CO alarm raised at the
@@ -89,7 +75,7 @@ func (s *SmokeSiren) OnMatterValueChanged(cb func()) func() {
 	)
 }
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource].
+// MatterDeviceType implements [interfaces.MatterDeviceSource].
 func (s *Siren) MatterDeviceType() uint16 { return uint16(fabricdevice.OnOffPlugInUnitID) }
 
 // MatterEligibility marks Siren as partially mappable: OnOff covers the
@@ -101,53 +87,48 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 	return interfaces.MatterEligibilityVerdict{
 		State:      interfaces.MatterEligibilityPartial,
 		DeviceType: uint16(fabricdevice.OnOffPlugInUnitID),
-		Clusters:   []uint32{onoff.ClusterID},
+		Clusters:   []uint32{onoffdef.ClusterID},
 		Reason:     "Siren tone / optical selection is MQTT-only — OnOff covers alarm on/off; BooleanState omitted (non-conformant on OnOffPlugInUnit 0x010A per matter.js).",
 	}
 }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource]: the
-// OnOff cluster, served by go-fabric's [onoff.Server] (ADR 0084 phase 2).
+// MatterDevice implements [interfaces.MatterDeviceSource]: an
+// OnOffPlugInUnit with the OnOff cluster declared, built once per siren.
 // OnOffPlugInUnit (0x010A) mandates the LT (Lighting) feature on OnOff
-// (on-off-plug-in-unit.element.ts:27-30), so the server advertises it;
-// the LT attributes, the timed commands and the scene paths are the
-// stack's. The Groups and ScenesManagement clusters the device type
+// (on-off-plug-in-unit.element.ts:27-30), so the declaration selects it;
+// the LT attributes, the timed commands and the scene paths are the kit
+// server's. The Groups and ScenesManagement clusters the device type
 // mandates are stack state the endpoint assembler mounts.
-func (s *Siren) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{s.matterOnOffServer()}
-}
-
-// matterOnOffServer builds the siren's OnOff server once. The Sink
-// collapses every switch-on onto [Siren.TurnOn] with the empty
+//
+// The Sink collapses every switch-on onto [Siren.TurnOn] with the empty
 // [OnConfig] — the device-defined defaults pick the tone and the light —
 // and every switch-off onto [Siren.TurnOff], at [matterDispatchPriority].
-// An OnWithTimedOff now ends the alarm after OnTime through the stack's
+// An OnWithTimedOff ends the alarm after OnTime through the server's
 // countdown (OnOffServer.ts:216-232), whose off reaches the same Sink. The
 // acoustic and optical ACOUSTIC_ALARM_ACTIVE / OPTICAL_ALARM_ACTIVE
-// confirmations feed the CCU's state back through [onoff.Server.Set],
-// the one path that stores without asking the Sink, so a CCU program
-// raising the alarm reaches a subscribed controller.
+// confirmations feed the CCU's state back through
+// [generic.SetMatterOnOff], so a CCU program raising the alarm reaches a
+// subscribed controller.
 //
 // The server starts from the observed activity, false while nothing was
 // observed: OnOff is a non-nullable bool (Matter §1.5.6.2; chip-tool
 // answers CHIP_ERROR_WRONG_TLV_TYPE to TLV null there).
-func (s *Siren) matterOnOffServer() *onoff.Server {
-	return s.matterOnOff.Server(func() *onoff.Server {
+func (s *Siren) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		active, _ := s.IsActive()
-		srv := generic.MustMatterOnOffServer(generic.MatterOnOffConfig{
-			Lighting:    true,
-			DataVersion: &s.dataVersion,
-			Initial:     active,
-			Sink: func(ctx context.Context, on bool) error {
+		d, err := generic.NewMatterDevice(s, uint16(fabricdevice.OnOffPlugInUnitID), opts,
+			generic.MatterOnOffDeclaration(true, active, func(ctx context.Context, on bool) error {
 				if on {
 					return s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
 				}
 				return s.TurnOff(ctx, matterDispatchPriority)
-			},
-		})
+			}))
+		if err != nil {
+			return nil, err
+		}
 		syncActive := func(_, _ bool) {
 			active, _ := s.IsActive()
-			srv.Set(active)
+			generic.SetMatterOnOff(d, active)
 		}
 		if s.acousticActive != nil {
 			_ = s.acousticActive.OnConfirmedUpdate(syncActive)
@@ -159,45 +140,47 @@ func (s *Siren) matterOnOffServer() *onoff.Server {
 		// hook registration is not lost: the current value is stored
 		// again, which is a no-op when nothing changed.
 		if active, observed := s.IsActive(); observed {
-			srv.Set(active)
+			generic.SetMatterOnOff(d, active)
 		}
-		return srv
+		return d, nil
 	})
 }
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource].
+// MatterDeviceType implements [interfaces.MatterDeviceSource].
 func (s *SmokeSiren) MatterDeviceType() uint16 {
 	return uint16(fabricdevice.SmokeCoAlarmID)
 }
 
-// MatterClusterServers returns the SmokeCOAlarm cluster: go-fabric's
-// alarm.Server over this siren's status, built once so the stack's event
-// baseline and data version survive reassembly.
-func (s *SmokeSiren) MatterClusterServers() []interfaces.MatterClusterServer {
-	srv := s.matterAlarm.get(func() *alarm.Server {
-		srv, err := alarm.NewServer(alarm.Config{
-			Source: smokeAlarmSource{s: s},
-			// HM-SWSD carries a smoke sensor only, so the CO feature and
-			// every CO-conformance attribute stay off the wire.
-			Features:    alarm.FeatureSmokeAlarm,
-			DataVersion: &s.dataVersion,
-		})
-		if err != nil {
-			// invariant: the configuration is a constant SMOKE-only
-			// selection the cluster's conformance accepts.
-			panic(fmt.Sprintf("siren: smoke alarm server: %v", err))
-		}
-		return srv
+// MatterDevice implements [interfaces.MatterDeviceSource]: a SmokeCoAlarm
+// with the SmokeCOAlarm cluster declared over this siren's status, built
+// once so the server's event baseline survives reassembly. HM-SWSD
+// carries a smoke sensor only, so the CO feature and every
+// CO-conformance attribute stay off the wire.
+func (s *SmokeSiren) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
+		return generic.NewMatterDevice(s, uint16(fabricdevice.SmokeCoAlarmID), opts,
+			smokecoalarmdef.Declare{
+				StateSource: smokeAlarmSource{s: s},
+				Features:    smokecoalarmdef.FeatureSmokeAlarm,
+			})
 	})
-	return []interfaces.MatterClusterServer{srv}
 }
+
+// alarmRefresher is the part of the SmokeCOAlarm server the siren drives
+// itself: re-reading its source and emitting the events the change calls
+// for.
+type alarmRefresher interface{ Refresh() }
 
 // refreshMatterAlarm lets the alarm server diff the status it now reads
 // against the previous one and emit the SmokeAlarm / AllClear events the
-// change calls for. Before the first assembly there is no server and
+// change calls for. Before the first assembly there is no device and
 // nothing to tell.
 func (s *SmokeSiren) refreshMatterAlarm() {
-	if srv := s.matterAlarm.current(); srv != nil {
+	d := s.matterDevice.Current()
+	if d == nil {
+		return
+	}
+	if srv, ok := d.Server(smokecoalarmdef.ClusterID).(alarmRefresher); ok {
 		srv.Refresh()
 	}
 }
@@ -210,35 +193,13 @@ func (s *SmokeSiren) refreshMatterAlarm() {
 // non-nullable.
 type smokeAlarmSource struct{ s *SmokeSiren }
 
-// SmokeCOState implements alarm.StateSource.
+// SmokeCOState implements [smokecoalarmdef.StateSource].
 func (src smokeAlarmSource) SmokeCOState() smokecoalarmdef.State {
 	var st smokecoalarmdef.State
 	if status, ok := src.s.Status(); ok {
 		st.SmokeState = smokeStatusToAlarmState(status)
 	}
 	return st
-}
-
-// matterAlarmHolder builds the alarm server once and hands the same value
-// back on every later assembly.
-type matterAlarmHolder struct {
-	mu  sync.Mutex
-	srv *alarm.Server
-}
-
-func (h *matterAlarmHolder) get(build func() *alarm.Server) *alarm.Server {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.srv == nil {
-		h.srv = build()
-	}
-	return h.srv
-}
-
-func (h *matterAlarmHolder) current() *alarm.Server {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.srv
 }
 
 // smokeStatusToAlarmState maps the HM status onto AlarmStateEnum.
@@ -255,12 +216,12 @@ func (h *matterAlarmHolder) current() *alarm.Server {
 // intrusion belongs at Normal however loud the sounder is.
 //
 // Only the severity of a genuine smoke label is decided locally.
-func smokeStatusToAlarmState(st SmokeAlarmStatus) alarm.AlarmState {
+func smokeStatusToAlarmState(st SmokeAlarmStatus) smokecoalarmdef.AlarmStateEnum {
 	if !slices.Contains(hmenum.SmokeDetectorAlarmStatusSmokeLabels(), string(st)) {
-		return alarm.AlarmNormal
+		return smokecoalarmdef.AlarmStateNormal
 	}
 	if st == SmokeStatusSecondaryAlarm {
-		return alarm.AlarmWarning
+		return smokecoalarmdef.AlarmStateWarning
 	}
-	return alarm.AlarmCritical
+	return smokecoalarmdef.AlarmStateCritical
 }

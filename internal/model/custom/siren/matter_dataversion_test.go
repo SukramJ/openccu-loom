@@ -10,38 +10,22 @@ import (
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 )
 
-// The siren's MatterDataVersion is the counter controllers evaluate
-// DataVersionFilters against. The OnOff server shares the siren's tracker,
-// so every attribute change the server commits must surface there, and
-// nothing that leaves the attributes alone may move it.
-
-// TestSirenDataVersionIsTheOnOffServersVersion pins the sharing: the
-// version the siren reports is the version its OnOff server reports.
-func TestSirenDataVersionIsTheOnOffServersVersion(t *testing.T) {
-	t.Parallel()
-	r, srv, _ := matterSiren(t)
-	if got, want := r.siren.MatterDataVersion(), srv.MatterDataVersion(); got != want {
-		t.Fatalf("Siren.MatterDataVersion = %d, OnOff server's = %d; the tracker must be shared", got, want)
-	}
-	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOn, nil); err != nil {
-		t.Fatalf("On: %v", err)
-	}
-	if got, want := r.siren.MatterDataVersion(), srv.MatterDataVersion(); got != want {
-		t.Fatalf("after On: Siren.MatterDataVersion = %d, OnOff server's = %d", got, want)
-	}
-}
+// The OnOff server's data version advances on every attribute change the
+// server commits, and nothing that leaves the attributes alone may move
+// it. (On the wire a bridged endpoint reports the version the endpoint
+// hosts, which the bridge advances on the same changes.)
 
 // TestSirenDataVersionRisesWithEveryAcceptedChange pins a strictly rising
 // counter across alternating On / Off commands.
 func TestSirenDataVersionRisesWithEveryAcceptedChange(t *testing.T) {
 	t.Parallel()
-	r, srv, _ := matterSiren(t)
+	_, srv, _ := matterSiren(t)
 	for i, cmd := range []uint32{onoff.CmdOn, onoff.CmdOff, onoff.CmdOn} {
-		prev := r.siren.MatterDataVersion()
+		prev := srv.MatterDataVersion()
 		if _, err := srv.MatterInvoke(context.Background(), cmd, nil); err != nil {
 			t.Fatalf("cmd %d (0x%02X): %v", i, cmd, err)
 		}
-		if next := r.siren.MatterDataVersion(); next <= prev {
+		if next := srv.MatterDataVersion(); next <= prev {
 			t.Fatalf("cmd %d (0x%02X): data version not rising: prev=%d next=%d", i, cmd, prev, next)
 		}
 	}
@@ -50,12 +34,12 @@ func TestSirenDataVersionRisesWithEveryAcceptedChange(t *testing.T) {
 // TestSirenDataVersionStableOnRead pins that reads leave the counter alone.
 func TestSirenDataVersionStableOnRead(t *testing.T) {
 	t.Parallel()
-	r, srv, _ := matterSiren(t)
-	before := r.siren.MatterDataVersion()
+	_, srv, _ := matterSiren(t)
+	before := srv.MatterDataVersion()
 	for _, id := range []uint32{onoff.AttrOnOff, 0xFFFC, 0xFFFD} {
 		srv.MatterRead(id)
 	}
-	if after := r.siren.MatterDataVersion(); after != before {
+	if after := srv.MatterDataVersion(); after != before {
 		t.Fatalf("a read moved the data version: before=%d after=%d", before, after)
 	}
 }
@@ -66,8 +50,8 @@ func TestSirenDataVersionStableOnRead(t *testing.T) {
 // the counter alone.
 func TestSirenDataVersionStableOnRejectedRequests(t *testing.T) {
 	t.Parallel()
-	r, srv, _ := matterSiren(t)
-	before := r.siren.MatterDataVersion()
+	_, srv, _ := matterSiren(t)
+	before := srv.MatterDataVersion()
 	const undefinedCmdID = 0x7F // no OnOff command carries this id
 	if _, err := srv.MatterInvoke(context.Background(), undefinedCmdID, nil); err == nil {
 		t.Error("an undefined command must be rejected")
@@ -78,7 +62,7 @@ func TestSirenDataVersionStableOnRejectedRequests(t *testing.T) {
 	if err := srv.MatterWrite(context.Background(), 0x9999, true); err == nil {
 		t.Error("a write of an undefined attribute must be rejected")
 	}
-	if after := r.siren.MatterDataVersion(); after != before {
+	if after := srv.MatterDataVersion(); after != before {
 		t.Fatalf("a rejected request moved the data version: before=%d after=%d", before, after)
 	}
 }

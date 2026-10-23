@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/go-fabric/cluster/alarm"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
+	"github.com/SukramJ/go-fabric/contract"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -24,10 +25,39 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// findCluster returns the cluster server with the given ID.
-func findCluster(t *testing.T, src interfaces.MatterEndpointSource, id uint32) interfaces.MatterClusterServer {
+// matterOnOffServer is what these tests read from an OnOff server: the
+// cluster surface, its data version and its lists.
+type matterOnOffServer interface {
+	contract.ClusterServer
+	contract.ClusterDataVersion
+	contract.ClusterAttributeLister
+	contract.ClusterCommandLister
+}
+
+// matterServers returns the cluster servers src projects: the servers of
+// the device a declaring source builds, or the ones a serving source
+// returns itself.
+func matterServers(t *testing.T, src any) []interfaces.MatterClusterServer {
 	t.Helper()
-	for _, s := range src.MatterClusterServers() {
+	switch s := src.(type) {
+	case interfaces.MatterDeviceSource:
+		d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("siren-test"), Name: "siren"})
+		if err != nil || d == nil {
+			t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
+		}
+		return d.Servers()
+	case interfaces.MatterEndpointSource:
+		return matterServers(t, s)
+	default:
+		t.Fatalf("%T projects nothing to Matter", src)
+		return nil
+	}
+}
+
+// findCluster returns the cluster server with the given ID.
+func findCluster(t *testing.T, src any, id uint32) interfaces.MatterClusterServer {
+	t.Helper()
+	for _, s := range matterServers(t, src) {
 		if s.MatterClusterID() == id {
 			return s
 		}
@@ -52,7 +82,7 @@ func TestSirenMatterDeviceTypeIsOnOffPlugInUnit(t *testing.T) {
 func TestSirenClusterServersIncludeOnOff(t *testing.T) {
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{})
 	got := map[uint32]bool{}
-	for _, s := range r.siren.MatterClusterServers() {
+	for _, s := range matterServers(t, r.siren) {
 		got[s.MatterClusterID()] = true
 	}
 	if !got[onoff.ClusterID] {
@@ -97,18 +127,18 @@ func (w *matterWriter) snapshot() []matterCall {
 // FREQUENCY_RISING, so a switch-on writes that tone and a switch-off writes
 // the disable label — the two Sink paths are told apart on the wire. It
 // returns the siren's OnOff server and the writer behind the Sink.
-func matterSiren(t *testing.T) (*rig, *onoff.Server, *matterWriter) {
+func matterSiren(t *testing.T) (*rig, matterOnOffServer, *matterWriter) {
 	t.Helper()
 	w := &matterWriter{}
 	r := newRig(t, "HmIP-ASIR:3", w, custom.SirenCapabilities{SupportsAcoustic: true})
 	r.acousticIdxDP.RecordLabel("FREQUENCY_RISING")
-	servers := r.siren.MatterClusterServers()
+	servers := matterServers(t, r.siren)
 	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers = %d servers, want exactly the OnOff server", len(servers))
+		t.Fatalf("the device carries %d servers, want exactly the OnOff server", len(servers))
 	}
-	srv, ok := servers[0].(*onoff.Server)
+	srv, ok := servers[0].(matterOnOffServer)
 	if !ok {
-		t.Fatalf("OnOff server is %T, want go-fabric's *onoff.Server", servers[0])
+		t.Fatalf("OnOff server is %T, want a server with data version and lists", servers[0])
 	}
 	return r, srv, w
 }
@@ -130,8 +160,8 @@ func wantSirenWrite(t *testing.T, c matterCall, label string) {
 func TestSirenOnOffServerIsBuiltOnce(t *testing.T) {
 	t.Parallel()
 	r, srv, _ := matterSiren(t)
-	if again := r.siren.MatterClusterServers()[0]; again != srv {
-		t.Fatalf("a second MatterClusterServers call returned a different server (%p vs %p)", again, srv)
+	if again := matterServers(t, r.siren)[0]; again != srv {
+		t.Fatalf("a second MatterDevice call returned a different server (%p vs %p)", again, srv)
 	}
 }
 
