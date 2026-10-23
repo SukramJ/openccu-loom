@@ -286,6 +286,14 @@ func TestSwitchMatter_OnWithTimedOffSwitchesOffAfterOnTime(t *testing.T) {
 	if len(w.calls) != 2 || w.calls[0].value != true || w.calls[1].value != false {
 		t.Fatalf("timed on must write STATE=true then STATE=false, got %+v", w.calls)
 	}
+	// The attribute is stored once the Sink returned: wait for it as for
+	// the write, so a loaded runner does not read it in between.
+	for time.Now().Before(deadline) {
+		if v, _ := srv.MatterRead(onoff.AttrOnOff); v == false {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
 		t.Errorf("OnOff after the countdown: got %v, want false", v)
 	}

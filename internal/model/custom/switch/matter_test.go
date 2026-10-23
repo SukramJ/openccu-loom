@@ -398,6 +398,14 @@ func TestMatterOnWithTimedOffSwitchesOffAfterOnTime(t *testing.T) {
 	if calls[1].priority != hmenum.CommandPriorityHigh {
 		t.Errorf("countdown Off priority = %v, want High", calls[1].priority)
 	}
+	// The attribute is stored once the Sink returned: wait for it as for
+	// the write, so a loaded runner does not read it in between.
+	for time.Now().Before(deadline) {
+		if v, _ := srv.MatterRead(onoff.AttrOnOff); v == false {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
 		t.Errorf("OnOff after the countdown: got %v, want false", v)
 	}
