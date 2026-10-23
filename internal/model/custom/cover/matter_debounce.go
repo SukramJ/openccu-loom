@@ -210,7 +210,7 @@ func goToAtTarget(pct uint16, position func() (custom.Position, bool)) bool {
 //     The commanded target is already stored — go-fabric's server sets
 //     TargetPosition*Percent100ths before it calls the Mover, as
 //     matter.js sets it before triggering motion
-//     (WindowCoveringServer.ts:578/:600) — so attribute reads and the
+//     (WindowCoveringServer.ts:580/:602) — so attribute reads and the
 //     motion-direction inference see it at once.
 //
 // write receives the HM domain-level converted from pct — captured

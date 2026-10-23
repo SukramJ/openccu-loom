@@ -532,7 +532,7 @@ func (c *Cover) moving() bool { return c.IsOpening() || c.IsClosing() }
 // motion parameter, a CCU program) reports a target equal to its
 // position, as matter.js initialises the target from the position
 // (WindowCoveringServer.ts:142) and the StopMotion snap leaves it
-// (:490). A commanded target survives until the motion it started ends
+// (:492). A commanded target survives until the motion it started ends
 // — [Cover.syncMatterMotion] snaps it on the moving→stopped transition.
 func (c *Cover) syncMatterLiftTo(srv wcServer) {
 	pct, ok := c.matterLiftPosition()

@@ -179,7 +179,7 @@ func (b *BinarySensor) MatterMeasurementClass() interfaces.MatterMeasurementClas
 // while being deliberately classified as a battery reading, so a SERVICE
 // pre-filter would delete an established classification. The flag is not
 // even stable across our own sources — the same UNREACH is FLAGS=9 there
-// and flags=1 in tests/integration/testdata/model_snapshot_openccu-loom.json.
+// and flags=1 in the generated tests/integration/testdata/model_snapshot_openccu-loom.json.
 // A list that says which parameters and why is honest; a property test on
 // a value that disagrees with itself is not.
 func isDeviceHousekeepingParameter(p hmenum.Parameter) bool {
@@ -241,7 +241,7 @@ func (b *BinarySensor) MatterBoolValue() (value, observed bool) {
 // Apply / rollback transitions stay invisible to Apple's Subscribe.
 //
 // Mirrors matter.js's `events.measuredValue$Changed.on(...)` pattern
-// (see ThermostatServer.ts:450 in matter.js): fires on confirmed change,
+// (see ThermostatServer.ts:481 in matter.js): fires on confirmed change,
 // not on every write or read. The wrapper discards the typed old/new
 // payload because the Matter dispatcher re-reads the current value via
 // MatterFloatValue before encoding the report; the notification's job
@@ -284,9 +284,11 @@ func (s *Switch) OnMatterValueChanged(cb func()) func() {
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier]
 // for the writable Float specialisation (LEVEL / dimmer brightness /
 // cover position / setpoint). Custom device types that embed *Float —
-// Light, Cover and their variants — inherit this method, so an external
-// CCU-confirmed level change dirty-marks the OnOff / LevelControl /
-// WindowCovering attributes and Apple's Subscribe sees the new value.
+// Light and its variants — inherit this method, so an external
+// CCU-confirmed level change dirty-marks the OnOff / LevelControl
+// attributes and Apple's Subscribe sees the new value; Cover, Blind and
+// Garage fan several carriers into one notifier of their own
+// (cover/matter.go).
 // Without it a bridged dimmer or blind only ever reflected commands
 // Apple itself sent, never a change made at the wall switch or via the
 // CCU. Wraps OnConfirmedUpdate for the same optimistic-transition

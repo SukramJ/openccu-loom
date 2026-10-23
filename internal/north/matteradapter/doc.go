@@ -18,10 +18,12 @@
 // rather than a Matter-side re-derivation.
 //
 // The walk is non-reactive: it consumes a snapshot of devices and
-// produces a topology, then is done. Re-running on model changes is the
-// caller's responsibility (the bridge core subscribes to the event bus
-// and triggers re-assembly when devices are added, removed, or change
-// reachability).
+// describes their endpoints, then is done. Re-running on model changes
+// is the caller's responsibility: the daemon subscribes to the event bus
+// and syncs the described endpoints into the node when devices are
+// added, removed, renamed or released, and when a central becomes
+// ready; a reachability change is forwarded to the bridged endpoint as
+// a ReachableChanged event without a sync.
 //
 // Source surface (see ADR 0012 §"Source surface"):
 //

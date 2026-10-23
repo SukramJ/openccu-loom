@@ -35,9 +35,9 @@ var (
 )
 
 // matterDeviceTypeOnOffPlugInUnit is the Device Library type a switching
-// actuator advertises; the endpoint assembler may upgrade it to
-// OnOffLight (0x0100) when the hosting model classifies the channel as a
-// light role. The type mandates the LT feature on OnOff, which the server
+// actuator advertises; a channel the model classifies as a light is a
+// light profile's device, never an upgrade of this one. The type
+// mandates the LT feature on OnOff, which the server
 // advertises; the cluster's ids, revision and lists come from go-fabric's
 // generated definition and are pinned against the matter.js snapshot by
 // TestHmLgtSwitchOnOffMatchesMatterJS.
