@@ -24,7 +24,7 @@ func TestParityMatterJS_GarageDataVersionBumpsOnInvoke(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
 	before := g.MatterDataVersion()
 
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 	if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdUpOrOpen, nil); err != nil {
 		t.Fatalf("MatterInvoke(UpOrOpen): %v", err)
 	}
@@ -40,7 +40,7 @@ func TestParityMatterJS_GarageDataVersionStableOnRead(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	before := g.MatterDataVersion()
 
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 	srv.MatterRead(windowcoveringspec.AttrCurrentPositionLiftPercent100ths)
 	srv.MatterRead(windowcoveringspec.AttrEndProductType)
 

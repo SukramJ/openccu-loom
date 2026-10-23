@@ -6,12 +6,12 @@ package cover
 import (
 	"context"
 	"errors"
-	"sync"
 
-	fabriccover "github.com/SukramJ/go-fabric/cluster/cover"
 	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -29,17 +29,16 @@ import (
 const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // Compile-time assertions: Cover, Blind, and Garage participate in the
-// Matter source surface (ADR 0012). Cover and Blind project onto a
-// WindowCovering (0x0102) cluster served by go-fabric's
-// [fabriccover.WindowCoveringServer] since the ADR 0084 WindowCovering
-// follow-up — the lift axis for a Cover, lift and tilt for a Blind —
-// with the cover's CCU writes behind its [fabriccover.Mover] port and
-// the CCU's confirmed position and motion fed back through the server's
-// inbound setters. Garage projects a ClosureControl cluster of its own
-// ([Garage.MatterClusterServers]).
+// Matter source surface (ADR 0012). Cover and Blind are WindowCovering
+// (0x0202) devices whose WindowCovering (0x0102) cluster is a
+// declaration for go-fabric's device kit — the lift axis for a Cover,
+// lift and tilt for a Blind — with the cover's CCU writes behind its
+// [windowcoveringspec.Mover] port and the CCU's confirmed position and
+// motion fed back through the kit server's typed Set. Garage projects a
+// ClosureControl cluster of its own ([Garage.MatterClusterServers]).
 var (
-	_ interfaces.MatterEndpointSource     = (*Cover)(nil)
-	_ interfaces.MatterEndpointSource     = (*Blind)(nil)
+	_ interfaces.MatterDeviceSource       = (*Cover)(nil)
+	_ interfaces.MatterDeviceSource       = (*Blind)(nil)
 	_ interfaces.MatterEndpointSource     = (*Garage)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Garage)(nil)
 	// All three implement OnMatterValueChanged explicitly below,
@@ -51,7 +50,7 @@ var (
 	_ interfaces.MatterChangeNotifier = (*Blind)(nil)
 	_ interfaces.MatterChangeNotifier = (*Garage)(nil)
 
-	_ fabriccover.Mover = wcMover{}
+	_ windowcoveringspec.Mover = wcMover{}
 )
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
@@ -214,50 +213,20 @@ func motionForOpeningClosing(opening, closing bool) uint8 {
 	}
 }
 
-// matterWCHolder keeps the one WindowCovering server a cover serves
-// across [interfaces.MatterEndpointSource.MatterClusterServers] calls,
-// for the same reason [generic.MatterOnOffHolder] does: the assembler
-// re-reads the servers on every reassembly and the bridge keeps the ones
-// it already serves; a server rebuilt each time would lose its target
-// and the subscription state behind it. It lives on the [Cover] so the
-// Blind, which embeds one, shares it.
-type matterWCHolder struct {
-	mu  sync.Mutex
-	srv *fabriccover.WindowCoveringServer
-}
-
-// server returns the held server, building it through build on first
-// use.
-func (h *matterWCHolder) server(build func() *fabriccover.WindowCoveringServer) *fabriccover.WindowCoveringServer {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.srv == nil {
-		h.srv = build()
-	}
-	return h.srv
-}
-
-// current returns the held server, nil while none was built.
-func (h *matterWCHolder) current() *fabriccover.WindowCoveringServer {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.srv
-}
-
 // wcPorts is what a cover variant hands the shared server builder: the
 // FeatureMap it serves and the device operations behind the Mover. The
 // Blind supplies its own open / close / stop / position methods (they
 // drive both axes through one combined write) and the tilt axis; a
 // plain Cover leaves the tilt fields nil.
 type wcPorts struct {
-	features             uint32
+	features             windowcoveringspec.Feature
 	open, close, stop    func(ctx context.Context, priority hmenum.CommandPriority) error
 	setPosition, setTilt func(ctx context.Context, level float64, priority hmenum.CommandPriority) error
 	tiltPosition         func() (custom.Position, bool)
 	onTiltConfirmed      func(fn func())
 }
 
-// wcMover is the [fabriccover.Mover] of a cover: the server validates
+// wcMover is the [windowcoveringspec.Mover] of a cover: the server validates
 // the command and stores the target, the Mover carries it to the CCU.
 // UpOrOpen and DownOrClose arrive as one GoTo with every served axis at
 // its limit and become the cover's Open / Close — the HM motor drives
@@ -270,7 +239,7 @@ type wcMover struct {
 	ports wcPorts
 }
 
-// GoTo implements [fabriccover.Mover].
+// GoTo implements [windowcoveringspec.Mover].
 func (m wcMover) GoTo(ctx context.Context, lift, tilt *uint16) error {
 	m.c.matterCommanded.Store(true)
 	if lift != nil && tilt != nil && *lift == *tilt && (*lift == 0 || *lift == matterCoverPctMax) {
@@ -319,7 +288,7 @@ func (wcMover) atPriority(write func(ctx context.Context, level float64, priorit
 	}
 }
 
-// Stop implements [fabriccover.Mover]. A debounced GoTo write firing
+// Stop implements [windowcoveringspec.Mover]. A debounced GoTo write firing
 // after the STOP would restart the movement the user just halted, so
 // the pending writes go first; the command in effect ends with the stop
 // (the server has snapped the targets to the positions).
@@ -349,23 +318,34 @@ func (g *Garage) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{g.closure.get(g)}
 }
 
-// MatterDeviceType implements [interfaces.MatterEndpointSource]. All
+// MatterDeviceType implements [interfaces.MatterDeviceSource]. All
 // cover variants surface as Matter WindowCovering (0x0202); the Type
 // and EndProductType attributes inside the cluster carry the variant
 // distinction.
 func (c *Cover) MatterDeviceType() uint16 { return matterDeviceTypeWindowCovering }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource]:
-// the lift-only WindowCovering server with the Cover's own operations
-// behind the Mover.
-func (c *Cover) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{c.matterWindowCoveringServer(wcPorts{
-		features:    fabriccover.ServedFeatureMap,
+// wcLiftFeatures is the lift-only selection a Cover serves: Lift and
+// PositionAwareLift. Lift without PositionAwareLift would disallow the
+// two position attributes (TargetPositionLiftPercent100ths and
+// CurrentPositionLiftPercent100ths are "LF & PA_LF"), so the axis is
+// always position-aware.
+const wcLiftFeatures = windowcoveringspec.FeatureLift | windowcoveringspec.FeaturePositionAwareLift
+
+// wcLiftTiltFeatures is a Blind's selection: both axes, each
+// position-aware.
+const wcLiftTiltFeatures = wcLiftFeatures | windowcoveringspec.FeatureTilt | windowcoveringspec.FeaturePositionAwareTilt
+
+// MatterDevice implements [interfaces.MatterDeviceSource]: the
+// lift-only WindowCovering device with the Cover's own operations behind
+// the Mover.
+func (c *Cover) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return c.matterWindowCoveringDevice(c, opts, wcPorts{
+		features:    wcLiftFeatures,
 		open:        c.Open,
 		close:       c.Close,
 		stop:        c.Stop,
 		setPosition: c.SetPosition,
-	})}
+	})
 }
 
 // MatterDeviceType for Blind shadows the embedded Cover's method so
@@ -373,13 +353,13 @@ func (c *Cover) MatterClusterServers() []interfaces.MatterClusterServer {
 // interface.
 func (b *Blind) MatterDeviceType() uint16 { return matterDeviceTypeWindowCovering }
 
-// MatterClusterServers for Blind returns the lift+tilt projection, with
-// the Blind's combined-write operations behind the Mover. Shadows the
-// embedded Cover's method; the server is the one held on the embedded
-// Cover, so whichever method the assembler reaches first builds it.
-func (b *Blind) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{b.matterWindowCoveringServer(wcPorts{
-		features:     fabriccover.ServedLiftTiltFeatureMap,
+// MatterDevice for Blind is the lift+tilt projection, with the Blind's
+// combined-write operations behind the Mover. Shadows the embedded
+// Cover's method; the device is the one held on the embedded Cover, so
+// whichever method the assembler reaches first builds it.
+func (b *Blind) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return b.matterWindowCoveringDevice(b, opts, wcPorts{
+		features:     wcLiftTiltFeatures,
 		open:         b.Open,
 		close:        b.Close,
 		stop:         b.Stop,
@@ -391,21 +371,22 @@ func (b *Blind) MatterClusterServers() []interfaces.MatterClusterServer {
 				_ = b.level2.OnConfirmedUpdate(func(_, _ float64) { fn() })
 			}
 		},
-	})}
+	})
 }
 
-// matterWindowCoveringServer builds the cover's WindowCovering server
-// once: go-fabric's server with the variant's Type / EndProductType and
-// FeatureMap, the position the CCU last reported as the initial value
-// (open until the first report), the cover's operations as its Mover,
-// and the LEVEL (and LEVEL_2) data points' confirmed-update hooks
-// feeding the CCU's values back through the inbound setters — the path
-// that stores without asking the Mover, so a position set at the wall
-// or by a CCU program reaches a subscribed controller and a confirmed
-// command does not echo into a second write. Motion reaches the server
-// through [Cover.OnDirection] → [Cover.syncMatterMotion].
-func (c *Cover) matterWindowCoveringServer(ports wcPorts) *fabriccover.WindowCoveringServer {
-	return c.matterWC.server(func() *fabriccover.WindowCoveringServer {
+// matterWindowCoveringDevice builds the cover's WindowCovering device
+// once: the WindowCovering cluster declared with the variant's Type /
+// EndProductType and features, the position the CCU last reported as the
+// initial value (open until the first report) and the cover's operations
+// as its Mover; source is the variant, whose change notifier the device
+// carries. The LEVEL (and LEVEL_2) data points' confirmed-update hooks
+// feed the CCU's values back through the kit server's typed Set — the
+// path that stores without asking the Mover, so a position set at the
+// wall or by a CCU program reaches a subscribed controller and a
+// confirmed command does not echo into a second write. Motion reaches
+// the server through [Cover.OnDirection] → [Cover.syncMatterMotion].
+func (c *Cover) matterWindowCoveringDevice(source any, opts fabricdevice.Options, ports wcPorts) (*fabricdevice.Device, error) {
+	return c.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		c.matterPorts = ports
 		wcType := coverTypeFor(c.Variant)
 		endProduct := coverEndProductTypeFor(c.Variant)
@@ -416,19 +397,22 @@ func (c *Cover) matterWindowCoveringServer(ports wcPorts) *fabriccover.WindowCov
 			wcType = windowcoveringspec.TypeTiltBlindLift
 			endProduct = windowcoveringspec.EndProductTypeInteriorBlind
 		}
-		cfg := fabriccover.Config{
-			Type:           uint8(wcType),
-			EndProductType: uint8(endProduct),
-			FeatureMap:     ports.features,
-			Mover:          wcMover{c: c, ports: ports},
-		}
+		initial := windowcoveringspec.Patch{Type: &wcType, EndProductType: &endProduct}
 		if pct, ok := c.matterLiftPosition(); ok {
-			cfg.InitialPositionPercent100ths = pct
+			initial.CurrentPositionLiftPercent100ths = &pct
 		}
 		if pct, ok := c.matterTiltPosition(); ok {
-			cfg.InitialTiltPositionPercent100ths = pct
+			initial.CurrentPositionTiltPercent100ths = &pct
 		}
-		srv := fabriccover.NewWindowCoveringServer(cfg)
+		d, err := generic.NewMatterDevice(source, matterDeviceTypeWindowCovering, opts, windowcoveringspec.Declare{
+			Initial:  initial,
+			Features: ports.features,
+			Mover:    wcMover{c: c, ports: ports},
+		})
+		if err != nil {
+			return nil, err
+		}
+		srv := wcServerOf(d)
 		// The hooks close over srv rather than going through the holder:
 		// the holder's lock is held while this builder runs, and the
 		// first sync below runs inside it.
@@ -444,8 +428,61 @@ func (c *Cover) matterWindowCoveringServer(ports wcPorts) *fabriccover.WindowCov
 		c.syncMatterLiftTo(srv)
 		c.syncMatterTiltTo(srv)
 		c.syncMatterMotionTo(srv, false, c.moving())
-		return srv
+		return d, nil
 	})
+}
+
+// wcServer is the WindowCovering server of a cover's device, the inbound
+// side the CCU's position and motion reach it through. Each setter is one
+// typed Set: the server stores what it is told without asking the Mover
+// (go-fabric cluster/cover SetAttributes, the path its own
+// SetCurrentPosition / SetTargetPosition / SetOperationalStatus take). A
+// cover whose device carries no WindowCovering server stores nothing.
+type wcServer struct{ srv *windowcoveringspec.Server }
+
+// wcServerOf returns the WindowCovering server of d.
+func wcServerOf(d *fabricdevice.Device) wcServer {
+	if d == nil {
+		return wcServer{}
+	}
+	srv := d.Server(windowcoveringspec.ClusterID)
+	if srv == nil {
+		return wcServer{}
+	}
+	return wcServer{srv: windowcoveringspec.Wrap(srv)}
+}
+
+func (w wcServer) set(p windowcoveringspec.Patch) {
+	if w.srv != nil {
+		_ = w.srv.Set(p)
+	}
+}
+
+// setCurrentPosition stores the current position of the axes given.
+func (w wcServer) setCurrentPosition(lift, tilt *uint16) {
+	w.set(windowcoveringspec.Patch{CurrentPositionLiftPercent100ths: lift, CurrentPositionTiltPercent100ths: tilt})
+}
+
+// setTargetPosition stores the target position of the axes given.
+func (w wcServer) setTargetPosition(lift, tilt *uint16) {
+	if lift == nil && tilt == nil {
+		return
+	}
+	w.set(windowcoveringspec.Patch{TargetPositionLiftPercent100ths: lift, TargetPositionTiltPercent100ths: tilt})
+}
+
+// setOperationalStatus stores OperationalStatus.
+func (w wcServer) setOperationalStatus(status uint8) {
+	v := windowcoveringspec.OperationalStatusBitmap(status)
+	w.set(windowcoveringspec.Patch{OperationalStatus: &v})
+}
+
+// MatterRead reads one of the server's attributes.
+func (w wcServer) MatterRead(attrID uint32) (any, bool) {
+	if w.srv == nil {
+		return nil, false
+	}
+	return w.srv.Underlying().MatterRead(attrID)
 }
 
 // matterLiftPosition is the CCU's last reported lift position in
@@ -484,26 +521,26 @@ func (c *Cover) moving() bool { return c.IsOpening() || c.IsClosing() }
 // (WindowCoveringServer.ts:142) and the StopMotion snap leaves it
 // (:490). A commanded target survives until the motion it started ends
 // — [Cover.syncMatterMotion] snaps it on the moving→stopped transition.
-func (c *Cover) syncMatterLiftTo(srv *fabriccover.WindowCoveringServer) {
+func (c *Cover) syncMatterLiftTo(srv wcServer) {
 	pct, ok := c.matterLiftPosition()
 	if !ok {
 		return
 	}
-	srv.SetCurrentPosition(&pct, nil)
+	srv.setCurrentPosition(&pct, nil)
 	if !c.moving() && !c.matterCommanded.Load() {
-		srv.SetTargetPosition(&pct, nil)
+		srv.setTargetPosition(&pct, nil)
 	}
 }
 
 // syncMatterTiltTo is [Cover.syncMatterLiftTo] for the tilt axis.
-func (c *Cover) syncMatterTiltTo(srv *fabriccover.WindowCoveringServer) {
+func (c *Cover) syncMatterTiltTo(srv wcServer) {
 	pct, ok := c.matterTiltPosition()
 	if !ok {
 		return
 	}
-	srv.SetCurrentPosition(nil, &pct)
+	srv.setCurrentPosition(nil, &pct)
 	if !c.moving() && !c.matterCommanded.Load() {
-		srv.SetTargetPosition(nil, &pct)
+		srv.setTargetPosition(nil, &pct)
 	}
 }
 
@@ -511,8 +548,8 @@ func (c *Cover) syncMatterTiltTo(srv *fabriccover.WindowCoveringServer) {
 // server, if one was built; [Cover.OnDirection] calls it after every
 // motion update with the moving state before and after it.
 func (c *Cover) syncMatterMotion(wasMoving, nowMoving bool) {
-	if srv := c.matterWC.current(); srv != nil {
-		c.syncMatterMotionTo(srv, wasMoving, nowMoving)
+	if d := c.matterDevice.Current(); d != nil {
+		c.syncMatterMotionTo(wcServerOf(d), wasMoving, nowMoving)
 	}
 }
 
@@ -542,22 +579,22 @@ func (c *Cover) syncMatterMotion(wasMoving, nowMoving bool) {
 //
 // An unobserved position reports the direction limit while moving and
 // leaves the target alone at the stop.
-func (c *Cover) syncMatterMotionTo(srv *fabriccover.WindowCoveringServer, wasMoving, nowMoving bool) {
+func (c *Cover) syncMatterMotionTo(srv wcServer, wasMoving, nowMoving bool) {
 	opening, closing := c.IsOpening(), c.IsClosing()
 	motion := motionForOpeningClosing(opening, closing)
-	srv.SetOperationalStatus(motion | motion<<matterWCLiftShift)
+	srv.setOperationalStatus(motion | motion<<matterWCLiftShift)
 
 	lift, hasLift := c.matterLiftPosition()
 	switch {
 	case opening:
 		if target, ok := storedLiftTarget(srv); !ok || !hasLift || target >= lift {
 			limit := uint16(0)
-			srv.SetTargetPosition(&limit, nil)
+			srv.setTargetPosition(&limit, nil)
 		}
 	case closing:
 		if target, ok := storedLiftTarget(srv); !ok || !hasLift || target <= lift {
 			limit := matterCoverPctMax
-			srv.SetTargetPosition(&limit, nil)
+			srv.setTargetPosition(&limit, nil)
 		}
 	case wasMoving && !nowMoving:
 		c.matterCommanded.Store(false)
@@ -568,12 +605,12 @@ func (c *Cover) syncMatterMotionTo(srv *fabriccover.WindowCoveringServer, wasMov
 		if tilt, ok := c.matterTiltPosition(); ok {
 			tiltTarget = &tilt
 		}
-		srv.SetTargetPosition(liftTarget, tiltTarget)
+		srv.setTargetPosition(liftTarget, tiltTarget)
 	}
 }
 
 // storedLiftTarget reads the server's TargetPositionLiftPercent100ths.
-func storedLiftTarget(srv *fabriccover.WindowCoveringServer) (uint16, bool) {
+func storedLiftTarget(srv wcServer) (uint16, bool) {
 	v, ok := srv.MatterRead(windowcoveringspec.AttrTargetPositionLiftPercent100ths)
 	if !ok {
 		return 0, false

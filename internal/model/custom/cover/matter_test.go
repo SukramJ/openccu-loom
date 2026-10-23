@@ -15,6 +15,7 @@ import (
 	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
 
@@ -65,7 +66,7 @@ func TestGarageMatterDeviceTypeIsClosure(t *testing.T) {
 func TestPositionInversionConvention(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	c.OnLevel(1.0) // HM "fully open"
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	v, ok := srv.MatterRead(0x000E) // CurrentPositionLiftPercent100ths
 	if !ok {
 		t.Fatalf("Position not observed")
@@ -85,7 +86,7 @@ func TestPositionInversionConvention(t *testing.T) {
 func TestPositionInversionMidpoint(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	c.OnLevel(0.25) // HM 25 % open
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	v, _ := srv.MatterRead(0x000E)
 	// Matter "75 % closed" = 7500
 	if v.(uint16) != 7500 {
@@ -97,7 +98,7 @@ func TestPositionInversionMidpoint(t *testing.T) {
 func TestUpOrOpenCommand(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("UpOrOpen err: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestUpOrOpenCommand(t *testing.T) {
 func TestDownOrCloseCommand(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("DownOrClose err: %v", err)
 	}
@@ -124,7 +125,7 @@ func TestDownOrCloseCommand(t *testing.T) {
 func TestStopMotionCommand(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	if _, err := srv.MatterInvoke(context.Background(), 0x02, nil); err != nil {
 		t.Fatalf("StopMotion err: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestGoToLiftPercentageInversion(t *testing.T) {
 		defer drainOptimisticRollbacks()
 		w := &stubWriter{}
 		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-		srv := c.MatterClusterServers()[0]
+		srv := matterServers(t, c)[0]
 		if _, err := srv.MatterInvoke(context.Background(), 0x05, uint16(7500)); err != nil {
 			t.Fatalf("GoToLift err: %v", err)
 		}
@@ -161,7 +162,7 @@ func TestBlindGoToTiltPercentage(t *testing.T) {
 		defer drainOptimisticRollbacks()
 		w := &putWriter{}
 		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 		if _, err := srv.MatterInvoke(context.Background(), 0x08, uint16(2500)); err != nil {
 			t.Fatalf("GoToTilt err: %v", err)
 		}
@@ -192,7 +193,7 @@ func TestBlindGoToTiltPercentage(t *testing.T) {
 // resting halfway.
 func TestGarageStateMapsToNamedStops(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 
 	cases := []struct {
 		state DoorState
@@ -229,7 +230,7 @@ func TestGarageStateMapsToNamedStops(t *testing.T) {
 // one.
 func TestGarageTravellingReportsNullPosition(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 
 	g.OnState(DoorStateOpen)
 	g.OnState(DoorStateUnknown)
@@ -252,7 +253,7 @@ func TestGarageTravellingReportsNullPosition(t *testing.T) {
 // ventilation stop, whatever the position enum says.
 func TestGarageAdvertisesVentilationFeature(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 	v, ok := srv.MatterRead(mattercluster.AttrGlobalFeatureMap)
 	if !ok {
 		t.Fatal("FeatureMap not readable")
@@ -285,7 +286,7 @@ func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := &stubWriter{}
 			g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-			srv := g.MatterClusterServers()[0]
+			srv := matterServers(t, g)[0]
 			target := tc.target
 			if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
 				closuredef.MoveToRequest{Position: &target}); err != nil {
@@ -302,7 +303,7 @@ func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
 // of the OperationalStatus byte while the cover is reported moving.
 func TestOperationalStatusReflectsDirection(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 
 	// Unobserved direction → stopped.
 	v, _ := srv.MatterRead(0x000A)
@@ -395,11 +396,31 @@ func TestGarageOnMatterValueChangedNilSafe(t *testing.T) {
 
 // windowCoveringServer returns the go-fabric WindowCovering server a
 // Cover or Blind mounts.
-func windowCoveringServer(t *testing.T, src interfaces.MatterEndpointSource) *fabriccover.WindowCoveringServer {
+// matterServers returns the cluster servers src projects: the servers of
+// the device a declaring source builds, or the ones a serving source
+// returns itself.
+func matterServers(t *testing.T, src any) []interfaces.MatterClusterServer {
 	t.Helper()
-	servers := src.MatterClusterServers()
+	switch s := src.(type) {
+	case interfaces.MatterDeviceSource:
+		d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("cover-test"), Name: "cover"})
+		if err != nil || d == nil {
+			t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
+		}
+		return d.Servers()
+	case interfaces.MatterEndpointSource:
+		return s.MatterClusterServers()
+	default:
+		t.Fatalf("%T projects nothing to Matter", src)
+		return nil
+	}
+}
+
+func windowCoveringServer(t *testing.T, src any) *fabriccover.WindowCoveringServer {
+	t.Helper()
+	servers := matterServers(t, src)
 	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers = %d servers, want the one WindowCovering server", len(servers))
+		t.Fatalf("the projection carries %d servers, want the one WindowCovering server", len(servers))
 	}
 	srv, ok := servers[0].(*fabriccover.WindowCoveringServer)
 	if !ok {
@@ -534,17 +555,17 @@ func TestReportableAttributes(t *testing.T) {
 	}
 
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	requireContains(t, "Cover", c.MatterClusterServers()[0].MatterReportable(), []uint32{
+	requireContains(t, "Cover", matterServers(t, c)[0].MatterReportable(), []uint32{
 		windowcoveringspec.AttrOperationalStatus,
 		windowcoveringspec.AttrTargetPositionLiftPercent100ths,
 		windowcoveringspec.AttrCurrentPositionLiftPercent100ths,
 	})
-	if got := c.MatterClusterServers()[0].MatterReportable(); slices.Contains(got, windowcoveringspec.AttrType) ||
+	if got := matterServers(t, c)[0].MatterReportable(); slices.Contains(got, windowcoveringspec.AttrType) ||
 		slices.Contains(got, windowcoveringspec.AttrEndProductType) {
 		t.Errorf("Cover reportable=%v carries a Fixed attribute (Type / EndProductType)", got)
 	}
 	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	requireContains(t, "Blind", b.MatterClusterServers()[0].MatterReportable(), []uint32{
+	requireContains(t, "Blind", matterServers(t, b)[0].MatterReportable(), []uint32{
 		windowcoveringspec.AttrOperationalStatus,
 		windowcoveringspec.AttrTargetPositionLiftPercent100ths,
 		windowcoveringspec.AttrTargetPositionTiltPercent100ths,
@@ -559,7 +580,7 @@ func TestReportableAttributes(t *testing.T) {
 	// quality in matter.js (closure-control.element.ts:42, "R V", M), so
 	// it is reported like the others.
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	requireAttrs(t, "Garage", g.MatterClusterServers()[0].MatterReportable(), []uint32{
+	requireAttrs(t, "Garage", matterServers(t, g)[0].MatterReportable(), []uint32{
 		clusterwire.ClosureControlAttrMainState,
 		clusterwire.ClosureControlAttrCurrentErrorList,
 		clusterwire.ClosureControlAttrOverallCurrentState,

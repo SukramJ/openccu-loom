@@ -990,7 +990,7 @@ func TestMatterPct100thsToHMLevelEdge(t *testing.T) {
 
 func TestCoverMatterClusterID(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	if srv.MatterClusterID() != windowcoveringspec.ClusterID {
 		t.Errorf("Cover MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), windowcoveringspec.ClusterID)
 	}
@@ -998,7 +998,7 @@ func TestCoverMatterClusterID(t *testing.T) {
 
 func TestCoverMatterWrite(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	err := srv.MatterWrite(context.Background(), windowcoveringspec.AttrType, uint8(0))
 	if err == nil {
 		t.Error("MatterWrite must return error (writes not supported)")
@@ -1007,7 +1007,7 @@ func TestCoverMatterWrite(t *testing.T) {
 
 func TestCoverMatterAttributes(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
 	if !ok {
 		t.Fatal("Cover MatterClusterServer must implement MatterClusterAttributeLister")
@@ -1022,7 +1022,7 @@ func TestCoverMatterReadAllAttributes(t *testing.T) {
 	c, _, level := newRig(t, "x", &stubWriter{}, custom.CoverCapabilities{})
 	level.OnEvent(0.6)
 	c.OnDirection(DirectionUp)
-	srv := c.MatterClusterServers()[0]
+	srv := matterServers(t, c)[0]
 
 	readableAttrs := []uint32{
 		windowcoveringspec.AttrType,
@@ -1049,7 +1049,7 @@ func TestCoverMatterReadAllAttributes(t *testing.T) {
 
 func TestBlindMatterClusterID(t *testing.T) {
 	b := newBlindRig(t, "VCU:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	srv := b.MatterClusterServers()[0]
+	srv := matterServers(t, b)[0]
 	if srv.MatterClusterID() != windowcoveringspec.ClusterID {
 		t.Errorf("Blind MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), windowcoveringspec.ClusterID)
 	}
@@ -1057,7 +1057,7 @@ func TestBlindMatterClusterID(t *testing.T) {
 
 func TestBlindMatterWrite(t *testing.T) {
 	b := newBlindRig(t, "VCU:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	srv := b.MatterClusterServers()[0]
+	srv := matterServers(t, b)[0]
 	err := srv.MatterWrite(context.Background(), windowcoveringspec.AttrType, uint8(0))
 	if err == nil {
 		t.Error("Blind MatterWrite must return error")
@@ -1066,7 +1066,7 @@ func TestBlindMatterWrite(t *testing.T) {
 
 func TestBlindMatterAttributes(t *testing.T) {
 	b := newBlindRig(t, "VCU:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	srv := b.MatterClusterServers()[0]
+	srv := matterServers(t, b)[0]
 	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
 	if !ok {
 		t.Fatal("Blind MatterClusterServer must implement MatterClusterAttributeLister")
@@ -1082,7 +1082,7 @@ func TestBlindMatterReadAllAttributes(t *testing.T) {
 	// Observe tilt position.
 	b.level2.OnEvent(0.4)
 	b.OnDirection(DirectionDown)
-	srv := b.MatterClusterServers()[0]
+	srv := matterServers(t, b)[0]
 
 	readableAttrs := []uint32{
 		windowcoveringspec.AttrType,
@@ -1112,7 +1112,7 @@ func TestBlindMatterInvokeAllCommands(t *testing.T) {
 		defer drainOptimisticRollbacks()
 		w := &putWriter{}
 		b := newBlindRig(t, "VCU:1", w, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
-		srv := b.MatterClusterServers()[0]
+		srv := matterServers(t, b)[0]
 
 		// UpOrOpen.
 		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdUpOrOpen, nil); err != nil {
@@ -1145,7 +1145,7 @@ func TestBlindMatterInvokeAllCommands(t *testing.T) {
 // happens to be halfway.
 func TestGarageMatterClusterID(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 	if srv.MatterClusterID() != clusterwire.ClosureControlClusterID {
 		t.Errorf("Garage MatterClusterID = 0x%04X, want 0x%04X (ClosureControl)",
 			srv.MatterClusterID(), clusterwire.ClosureControlClusterID)
@@ -1154,7 +1154,7 @@ func TestGarageMatterClusterID(t *testing.T) {
 
 func TestGarageMatterWrite(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 	err := srv.MatterWrite(context.Background(), clusterwire.ClosureControlAttrMainState,
 		uint8(0))
 	if err == nil {
@@ -1164,7 +1164,7 @@ func TestGarageMatterWrite(t *testing.T) {
 
 func TestGarageMatterAttributes(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
 	if !ok {
 		t.Fatal("Garage MatterClusterServer must implement MatterClusterAttributeLister")
@@ -1179,7 +1179,7 @@ func TestGarageMatterReadAllAttributes(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	g.OnState(DoorStateOpen)
 	g.OnSection(int32(sectionOpening))
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 
 	readableAttrs := []uint32{
 		clusterwire.ClosureControlAttrMainState,
@@ -1204,7 +1204,7 @@ func TestGarageMatterReadAllAttributes(t *testing.T) {
 func TestGarageMatterInvokeAllCommands(t *testing.T) {
 	w := &stubWriter{}
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-	srv := g.MatterClusterServers()[0]
+	srv := matterServers(t, g)[0]
 
 	for _, target := range []closuredef.TargetPositionEnum{
 		closuredef.TargetPositionMoveToFullyOpen,
