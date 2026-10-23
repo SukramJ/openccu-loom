@@ -45,7 +45,7 @@ func TestFixedColorLightDeviceTypeIsExtendedColorLight(t *testing.T) {
 	if got := l.MatterDeviceType(); got != matterDeviceTypeExtendedColorLight {
 		t.Fatalf("MatterDeviceType = 0x%04X, want 0x%04X", got, matterDeviceTypeExtendedColorLight)
 	}
-	servers := l.MatterClusterServers()
+	servers := matterServers(t, l)
 	if len(servers) != 3 {
 		t.Fatalf("MatterClusterServers = %d servers, want OnOff + LevelControl + ColorControl", len(servers))
 	}
@@ -170,7 +170,7 @@ func TestSoundPlayerLEDStaysADimmableLight(t *testing.T) {
 	if got := led.MatterDeviceType(); got != matterDeviceTypeDimmableLight {
 		t.Fatalf("MatterDeviceType = 0x%04X, want DimmableLight 0x%04X", got, matterDeviceTypeDimmableLight)
 	}
-	for _, s := range led.MatterClusterServers() {
+	for _, s := range matterServers(t, led) {
 		if s.MatterClusterID() == 0x0300 {
 			t.Fatal("SoundPlayerLED serves ColorControl; ADR 0012 keeps it on OnOff + LevelControl")
 		}

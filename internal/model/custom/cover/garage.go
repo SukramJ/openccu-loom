@@ -80,11 +80,6 @@ type Garage struct {
 	// Service methods are registered in [NewGarage].
 	payload.ServiceRegistry
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Bumped on every successful MatterInvoke so
-	// DataVersionFilter evaluation correctly detects cluster changes.
-	dataVersion hmtypes.DataVersionTracker
-
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on DOOR_COMMAND
 	// (the primary write parameter for garage doors).
@@ -103,11 +98,11 @@ type Garage struct {
 	// only on vent-capable drives. Nil elsewhere — every use is guarded.
 	doorMode *combined.EnumSelect
 
-	// closure is the ClosureControl projection. Built on first Matter
-	// read and kept: the cluster server owns the attribute state a
-	// controller subscribes to, so rebuilding it would reset the reported
-	// position to "nothing observed" mid-session.
-	closure closureProjection
+	// matterDevice holds the Closure device the Matter projection serves
+	// (matter_closure.go), built once per drive: the cluster server owns
+	// the attribute state a controller subscribes to, so rebuilding it
+	// would reset the reported position to "nothing observed" mid-session.
+	matterDevice generic.MatterDeviceHolder
 
 	mu       sync.RWMutex
 	state    DoorState
@@ -148,15 +143,6 @@ func NewGarage(cfg GarageConfig) *Garage {
 		sectionDp:     custom.IntegerSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSection, hmenum.ParameterSection)),
 	}
 	g.registerGarageServices()
-	if g.doorStateDp != nil {
-		_ = g.doorStateDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
-	}
-	if g.doorCommandDp != nil {
-		_ = g.doorCommandDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
-	}
-	if g.sectionDp != nil {
-		_ = g.sectionDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
-	}
 	g.attachDoorMode(cfg.Channel)
 	return g
 }
@@ -415,7 +401,7 @@ func (g *Garage) OnState(s DoorState) {
 	// it here would create a cluster server for a drive no controller has
 	// asked about, and the projection seeds itself from DoorState on
 	// first read anyway.
-	g.closure.publishIfBuilt()
+	g.publishClosure()
 }
 
 // OnSection records a CCU-emitted SECTION update.
@@ -438,7 +424,7 @@ func (g *Garage) OnSection(v int32) {
 	// it as MainState. Without this the cluster could only ever learn about
 	// motion from a DOOR_STATE push — which carries no travelling value — so
 	// a door that started moving stayed reported as stopped until it arrived.
-	g.closure.publishIfBuilt()
+	g.publishClosure()
 }
 
 func toInt32(v any) (int32, bool) {

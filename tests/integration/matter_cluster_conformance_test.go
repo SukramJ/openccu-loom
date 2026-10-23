@@ -138,11 +138,11 @@ func walkMountedClusters(t *testing.T) []mountedCluster {
 			if cdp == nil {
 				continue
 			}
-			src, ok := cdp.(interfaces.MatterEndpointSource)
+			_, servers, ok := matterProjectionOf(t, cdp, projectionWitness(dev.Model, ch.Number, cdp))
 			if !ok {
 				continue
 			}
-			for _, server := range src.MatterClusterServers() {
+			for _, server := range servers {
 				if server == nil {
 					continue
 				}

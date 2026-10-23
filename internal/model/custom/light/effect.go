@@ -92,9 +92,6 @@ func newEffectLightOn(cfg Config, programChannel, colorChannel *device.Channel) 
 	if el.Float != nil {
 		el.registerEffectLightServices()
 	}
-	if prog != nil {
-		_ = prog.OnConfirmedUpdate(func(_, _ int32) { el.dataVersion.Bump() })
-	}
 	return el
 }
 

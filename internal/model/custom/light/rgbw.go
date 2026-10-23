@@ -141,15 +141,6 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 	if r.Float != nil {
 		r.registerRGBWLightServices()
 	}
-	if r.mode != nil {
-		_ = r.mode.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
-	}
-	if r.kelvin != nil {
-		_ = r.kelvin.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
-	}
-	if r.direction != nil {
-		_ = r.direction.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
-	}
 	// The HmIP-LSC runs hs colour and colour temperature simultaneously (no
 	// DEVICE_OPERATION_MODE); keyed by model to match the reference registry.
 	if cfg.Channel != nil && cfg.Channel.Device() != nil {

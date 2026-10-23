@@ -5,13 +5,10 @@ package cover
 
 import (
 	"context"
-	"sync"
 
-	"github.com/SukramJ/go-fabric/cluster/closure"
+	"github.com/SukramJ/go-fabric/cluster/spec"
 	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
-	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
-
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 )
 
 // matterDeviceTypeClosure is the Matter Closure device type (0x0230).
@@ -20,10 +17,8 @@ import (
 // The device type requires ClosureControl and forbids WindowCovering
 // (conformance "X" at :20), which is why a garage drive projecting as a
 // Closure carries no WindowCovering server at all.
-const matterDeviceTypeClosure uint16 = 0x0230
+const matterDeviceTypeClosure = uint16(fabricdevice.ClosureID)
 
-// garageClosureServer projects a [Garage] onto the ClosureControl cluster.
-//
 // A garage drive's travel has named stops — closed, ventilation, open —
 // and no meaningful position between them. WindowCovering, the cluster
 // this projection replaced, has only a lift percentage, so the
@@ -33,31 +28,23 @@ const matterDeviceTypeClosure uint16 = 0x0230
 // names the stop, so it survives the round trip.
 //
 // The mapping between a Matter position and DOOR_STATE / DOOR_COMMAND
-// lives here; the cluster server itself holds no CCU knowledge.
-type garageClosureServer struct {
-	g *Garage
-
-	// srv holds the attribute state a controller reads. The Garage feeds
-	// it through [Garage.publishClosureState]; commands travel the other
-	// way through the handlers below.
-	srv *closure.ControlServer
-}
+// lives here; the kit's cluster server holds no CCU knowledge.
 
 // closureStateFor maps a door state onto the Matter CurrentPositionEnum.
 //
 // A travelling door reports a state that is not a named stop, and that
 // maps to nil — a null Position — rather than to the nearest stop. The
 // difference matters: PartiallyOpened is a claim the drive is resting
-// between stops, which is not what a door mid-travel is doing.
-func closureStateFor(state DoorState) *clusterwire.ClosureCurrentPosition {
-	var pos clusterwire.ClosureCurrentPosition
+// somewhere between the stops, and the drive makes no such claim.
+func closureStateFor(state DoorState) *closuredef.CurrentPositionEnum {
+	var pos closuredef.CurrentPositionEnum
 	switch state {
 	case DoorStateClosed:
-		pos = clusterwire.ClosureCurrentPositionFullyClosed
+		pos = closuredef.CurrentPositionFullyClosed
 	case DoorStateOpen:
-		pos = clusterwire.ClosureCurrentPositionFullyOpened
+		pos = closuredef.CurrentPositionFullyOpened
 	case DoorStateVentilation:
-		pos = clusterwire.ClosureCurrentPositionOpenedForVentilation
+		pos = closuredef.CurrentPositionOpenedForVentilation
 	case DoorStateUnknown:
 		return nil
 	default:
@@ -86,16 +73,8 @@ func closureCommandFor(target closuredef.TargetPositionEnum) (DoorCommand, bool)
 	}
 }
 
-// newGarageClosureServer builds the ClosureControl projection for g and
-// seeds it with whatever the drive has already reported.
-func newGarageClosureServer(g *Garage) *garageClosureServer {
-	p := &garageClosureServer{g: g}
-	p.srv = closure.NewControlServer(closure.Config{Mover: garageMover{g: g}})
-	p.publish()
-	return p
-}
-
-// garageMover is the ClosureControl server's drive port over a Garage.
+// garageMover is the [closuredef.Mover] of a garage drive: the kit's
+// ClosureControl server's drive port.
 //
 // Both methods name matterDispatchPriority themselves: the cluster
 // contract carries no priority, and Critical is the zero value of the
@@ -103,7 +82,7 @@ func newGarageClosureServer(g *Garage) *garageClosureServer {
 // escalate rather than degrade.
 type garageMover struct{ g *Garage }
 
-// MoveTo implements [closure.Mover].
+// MoveTo implements [closuredef.Mover].
 func (m garageMover) MoveTo(ctx context.Context, target closuredef.TargetPositionEnum) error {
 	command, ok := closureCommandFor(target)
 	if !ok {
@@ -112,166 +91,77 @@ func (m garageMover) MoveTo(ctx context.Context, target closuredef.TargetPositio
 	return m.g.command(ctx, command, matterDispatchPriority)
 }
 
-// Stop implements [closure.Mover].
+// Stop implements [closuredef.Mover].
 func (m garageMover) Stop(ctx context.Context) error {
 	return m.g.Stop(ctx, matterDispatchPriority)
 }
 
-// publish pushes the drive's current state into the cluster server.
-func (s *garageClosureServer) publish() {
-	if s == nil || s.srv == nil || s.g == nil {
+// StopIgnored implements [closuredef.StopObserver]: a Stop the kit's
+// server answers without motion still reaches the drive. MainState here
+// follows the drive's SECTION push, which lags the physical motion, so a
+// Stop pressed in that window would otherwise answer SUCCESS and leave
+// the door running (notes/parity/by_design.md
+// BD-Matter-ClosureControl-StopForwarded).
+func (m garageMover) StopIgnored(ctx context.Context) error {
+	return m.g.Stop(ctx, matterDispatchPriority)
+}
+
+// publishClosure pushes the drive's current state into the device's
+// ClosureControl server, if the device was built. Only then: building it
+// here would create a device for a drive no controller has asked about,
+// and the device seeds itself from DoorState when it is built anyway.
+func (g *Garage) publishClosure() {
+	if d := g.matterDevice.Current(); d != nil {
+		g.publishClosureTo(d)
+	}
+}
+
+// publishClosureTo stores the drive's position and motion on the
+// ClosureControl server of d through its typed Set: the Position of
+// OverallCurrentState (null between the stops) and MainState, the server
+// deriving SecureState and emitting the events the change calls for.
+func (g *Garage) publishClosureTo(d *fabricdevice.Device) {
+	if g == nil || d == nil {
 		return
 	}
-	state, observed := s.g.DoorState()
+	srv := d.Server(closuredef.ClusterID)
+	if srv == nil {
+		return
+	}
+	state, observed := g.DoorState()
 	if !observed {
 		// Nothing heard from the drive yet. Leaving the server at its
 		// constructed SetupRequired / null-position state is the honest
 		// reading; seeding a stop would invent one.
 		return
 	}
-	s.srv.SetCurrentPosition(closureStateFor(state))
-	// Motion is the drive's own signal (SECTION), not something to infer from
-	// the position: DOOR_STATE has no travelling value at all, so a position
-	// alone can never say whether the door is moving.
-	s.srv.SetMainState(closureMainStateFor(s.g.IsOpening(), s.g.IsClosing()))
+	position := spec.Nullable[closuredef.CurrentPositionEnum]{Null: true}
+	if pos := closureStateFor(state); pos != nil {
+		position = spec.Nullable[closuredef.CurrentPositionEnum]{Value: *pos}
+	}
+	// Motion is the drive's own signal (SECTION), not something to infer
+	// from the position: DOOR_STATE has no travelling value at all, so a
+	// position alone can never say whether the door is moving.
+	main := closureMainStateFor(g.IsOpening(), g.IsClosing())
+	_ = closuredef.Wrap(srv).Set(closuredef.Patch{
+		OverallCurrentState: &closuredef.OverallCurrentStateStruct{Position: &position},
+		MainState:           &main,
+	})
 }
 
 // closureMainStateFor maps the model's motion predicates onto the cluster's
 // MainState, the same way the window-covering projection maps them onto
 // OperationalStatus (motionForOpeningClosing).
-func closureMainStateFor(opening, closing bool) clusterwire.ClosureMainState {
+func closureMainStateFor(opening, closing bool) closuredef.MainStateEnum {
 	if opening || closing {
-		return clusterwire.ClosureMainStateMoving
+		return closuredef.MainStateMoving
 	}
-	return clusterwire.ClosureMainStateStopped
+	return closuredef.MainStateStopped
 }
 
-// --- interfaces.MatterClusterServer -------------------------------
-
-func (s *garageClosureServer) MatterClusterID() uint32 { return s.srv.MatterClusterID() }
-
-func (s *garageClosureServer) MatterRead(attrID uint32) (value any, ok bool) {
-	return s.srv.MatterRead(attrID)
-}
-
-func (s *garageClosureServer) MatterWrite(
-	ctx context.Context, attrID uint32, value any,
-) error {
-	return s.srv.MatterWrite(ctx, attrID, value)
-}
-
-func (s *garageClosureServer) MatterInvoke(
-	ctx context.Context, cmdID uint32, fields any,
-) (response any, err error) {
-	if cmdID == clusterwire.ClosureControlCmdStop && !s.closureInMotion() {
-		// Deliberate divergence (notes/parity/by_design.md,
-		// BD-Matter-ClosureControl-StopForwarded): the cluster ignores a Stop
-		// while it does not consider the closure moving, but MainState here
-		// follows the drive's SECTION push, which lags the physical motion.
-		// A Stop pressed in that window must still reach the drive.
-		if err := s.g.Stop(ctx, matterDispatchPriority); err != nil {
-			return nil, err
-		}
-	}
-	resp, err := s.srv.MatterInvoke(ctx, cmdID, fields)
-	if err != nil {
-		return nil, err
-	}
-	s.g.dataVersion.Bump()
-	return resp, nil
-}
-
-// closureInMotion reports whether the cluster server is in one of the
-// states in which its own Stop handling reaches the Stop handler
-// (go-fabric closurecontrol_server.go invokeStop, cluster §5.4.8.1).
-func (s *garageClosureServer) closureInMotion() bool {
-	v, ok := s.srv.MatterRead(clusterwire.ClosureControlAttrMainState)
-	if !ok {
-		return false
-	}
-	state, ok := v.(uint8)
-	if !ok {
-		return false
-	}
-	switch clusterwire.ClosureMainState(state) {
-	case clusterwire.ClosureMainStateMoving,
-		clusterwire.ClosureMainStateWaitingForMotion,
-		clusterwire.ClosureMainStateCalibrating:
-		return true
-	default:
-		return false
-	}
-}
-
-func (s *garageClosureServer) MatterReportable() []uint32 { return s.srv.MatterReportable() }
-
-// MatterAttributes lists every attribute the projection serves. Apple
-// Home's service rebuild reads the full set; without it the dispatcher
-// falls back to the reportable subset.
-func (s *garageClosureServer) MatterAttributes() []uint32 { return s.srv.MatterAttributes() }
-
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
-//
-// Calibrate is absent: it is conformance "CL" and this profile does not
-// advertise Calibration, so listing it would offer a controller a command
-// the server refuses.
-func (s *garageClosureServer) MatterAcceptedCommands() []uint32 {
-	return []uint32{
-		clusterwire.ClosureControlCmdStop,
-		clusterwire.ClosureControlCmdMoveTo,
-	}
-}
-
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
-func (s *garageClosureServer) MatterGeneratedCommands() []uint32 { return nil }
-
-// closureProjection holds the per-Garage ClosureControl projection.
-//
-// One per drive, built lazily and kept: the cluster server owns the
-// attribute state a controller subscribes to, so rebuilding it on every
-// read would reset the position to "nothing observed" mid-session.
-type closureProjection struct {
-	once sync.Once
-	mu   sync.RWMutex
-	srv  *garageClosureServer
-}
-
-// get returns the projection, building it on first use.
-//
-// The write happens under the lock even though sync.Once orders it for
-// every caller of Do, because [closureProjection.publishIfBuilt] reads
-// the field without calling Do — a device event arriving while the first
-// Matter read builds the projection would otherwise race.
-func (p *closureProjection) get(g *Garage) *garageClosureServer {
-	p.once.Do(func() {
-		srv := newGarageClosureServer(g)
-		p.mu.Lock()
-		p.srv = srv
-		p.mu.Unlock()
-	})
-	p.mu.RLock()
-	srv := p.srv
-	p.mu.RUnlock()
-	return srv
-}
-
-// publishIfBuilt pushes the drive's state into an already-built
-// projection and does nothing otherwise.
-//
-// The guard is what keeps a device event from constructing a cluster
-// server for a drive no controller has subscribed to. It is not a
-// missed update: [closureProjection.get] seeds the projection from the
-// drive's current state when it does build it.
-func (p *closureProjection) publishIfBuilt() {
-	p.mu.RLock()
-	srv := p.srv
-	p.mu.RUnlock()
-	srv.publish()
-}
-
-// Compile-time assertions: the projection satisfies both the cluster
-// contract and the command lister the endpoint assembler probes for.
+// Compile-time assertions: the mover is the declared port, and it hears
+// of a Stop the server would ignore.
 var (
-	_ interfaces.MatterClusterServer        = (*garageClosureServer)(nil)
-	_ interfaces.MatterClusterCommandLister = (*garageClosureServer)(nil)
+	_ closuredef.Mover        = garageMover{}
+	_ closuredef.StopObserver = garageMover{}
 )

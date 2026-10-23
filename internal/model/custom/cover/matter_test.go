@@ -396,6 +396,19 @@ func TestGarageOnMatterValueChangedNilSafe(t *testing.T) {
 
 // windowCoveringServer returns the go-fabric WindowCovering server a
 // Cover or Blind mounts.
+// closureServer returns the ClosureControl server of the device a garage
+// drive projects.
+func closureServer(t *testing.T, g *Garage) contract.ClusterServer {
+	t.Helper()
+	for _, s := range matterServers(t, g) {
+		if s.MatterClusterID() == closuredef.ClusterID {
+			return s
+		}
+	}
+	t.Fatal("the garage's device carries no ClosureControl server")
+	return nil
+}
+
 // matterServers returns the cluster servers src projects: the servers of
 // the device a declaring source builds, or the ones a serving source
 // returns itself.

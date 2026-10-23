@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/SukramJ/go-fabric/cluster/measurement"
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 	tuidef "github.com/SukramJ/go-fabric/cluster/spec/thermostatuserinterfaceconfiguration"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
@@ -90,10 +89,11 @@ const (
 var errMatterUnsupportedMode = errors.New("matter: unsupported SystemMode for this device")
 
 // celsiusToMatter encodes a Celsius reading as Matter's centi-degree int16
-// through the one encoder, in [measurement.CelsiusToInt16]. It used to be a
-// byte-identical copy of it, clamps and comments included — two encoders for
-// one wire format, either of which could have been corrected alone.
-func celsiusToMatter(c float64) int16 { return measurement.CelsiusToInt16(c) }
+// through the one encoder, in [thermostatspec.CelsiusToInt16]. It used to
+// be a byte-identical copy of it, clamps and comments included — two
+// encoders for one wire format, either of which could have been corrected
+// alone.
+func celsiusToMatter(c float64) int16 { return thermostatspec.CelsiusToInt16(c) }
 
 // matterToCelsius is the inverse of [celsiusToMatter].
 func matterToCelsius(m int16) float64 { return float64(m) / 100 }

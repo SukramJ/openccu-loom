@@ -8,7 +8,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Matter: go-fabric v0.10.1, on its node facade.** The bridge is built
+- **Matter: go-fabric v0.10.2, on its node facade.** The bridge is built
   through the facade's own routes: health probe, attestation files,
   DNS-SD, fabric list, commissioning credentials. Nothing changes on the
   wire and nothing needs to be re-paired. A Matter commissioning window is
@@ -17,10 +17,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Database:** migration 050 adds the tables go-fabric keeps for
   Thermostat presets and DoorLock users, credentials and schedules.
 - **Matter: bridged devices are built from cluster declarations.**
-  Switches, locks, mode selects, sirens, smoke detectors, covers, blinds
-  and thermostats now describe their clusters to go-fabric's device kit
-  instead of building the cluster servers themselves. Nothing changes on
-  the wire and nothing needs to be re-paired.
+  Every profile — switches, lights, locks, mode selects, sirens, smoke
+  detectors, the sound player, covers, blinds, garage drives and
+  thermostats — now describes its clusters to go-fabric's device kit
+  (go-fabric v0.10.2) instead of building the cluster servers itself.
+  Nothing needs to be re-paired.
+- **Matter: colour lights without a colour-temperature axis serve one.**
+  An HmIP-RGBW in its colour mode and the HM-LC-RGBW-WM advertise the
+  colour-temperature feature their device type (ExtendedColorLight)
+  mandates: a white a controller asks for becomes the nearest hue and
+  saturation, as matter.js's own bridges do for an RGB bulb. Apple Home
+  and Google Home show a white slider on these lights now.
 - **Matter: the exposable list hides what cannot be exposed.** A
   writable parameter that can never be a Matter device (a switch
   parameter other than STATE, a mode list ModeSelect cannot carry) no

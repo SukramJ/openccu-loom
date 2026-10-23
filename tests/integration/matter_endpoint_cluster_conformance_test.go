@@ -23,7 +23,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // A bridged endpoint advertises one primary device type and a set of server
@@ -121,13 +120,13 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 			if cdp == nil {
 				continue
 			}
-			src, ok := cdp.(interfaces.MatterEndpointSource)
+			advertised, servers, ok := matterProjectionOf(t, cdp, projectionWitness(dev.Model, ch.Number, cdp))
 			if !ok {
 				continue
 			}
 			sourcesSeen++
 
-			deviceType := schema.DeviceTypeID(src.MatterDeviceType())
+			deviceType := schema.DeviceTypeID(advertised)
 			if deviceType == 0 {
 				t.Errorf("%s channel %d (%T) is a MatterEndpointSource declaring device type 0: its "+
 					"endpoint would advertise DeviceTypeList=[BridgedNode] with no primary type",
@@ -141,7 +140,7 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 				continue
 			}
 
-			for _, server := range src.MatterClusterServers() {
+			for _, server := range servers {
 				if server == nil {
 					continue
 				}

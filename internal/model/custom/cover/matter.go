@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 
+	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
 	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 
@@ -34,13 +35,12 @@ const matterDispatchPriority = hmenum.CommandPriorityHigh
 // declaration for go-fabric's device kit — the lift axis for a Cover,
 // lift and tilt for a Blind — with the cover's CCU writes behind its
 // [windowcoveringspec.Mover] port and the CCU's confirmed position and
-// motion fed back through the kit server's typed Set. Garage projects a
-// ClosureControl cluster of its own ([Garage.MatterClusterServers]).
+// motion fed back through the kit server's typed Set. Garage is a
+// Closure device with ClosureControl declared ([Garage.MatterDevice]).
 var (
-	_ interfaces.MatterDeviceSource       = (*Cover)(nil)
-	_ interfaces.MatterDeviceSource       = (*Blind)(nil)
-	_ interfaces.MatterEndpointSource     = (*Garage)(nil)
-	_ interfaces.MatterClusterDataVersion = (*Garage)(nil)
+	_ interfaces.MatterDeviceSource = (*Cover)(nil)
+	_ interfaces.MatterDeviceSource = (*Blind)(nil)
+	_ interfaces.MatterDeviceSource = (*Garage)(nil)
 	// All three implement OnMatterValueChanged explicitly below,
 	// fanning every cluster state carrier (position + motion, plus
 	// tilt for Blind) into one notifier. The WindowCovering attributes
@@ -298,10 +298,6 @@ func (m wcMover) Stop(ctx context.Context) error {
 	return m.ports.stop(ctx, matterDispatchPriority)
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion] for Garage.
-// Bumped on every successful MatterInvoke.
-func (g *Garage) MatterDataVersion() uint32 { return g.dataVersion.Current() }
-
 // MatterDeviceType for Garage is Closure (0x0230), not WindowCovering.
 //
 // A garage drive's travel has named stops, and WindowCovering has only a
@@ -313,9 +309,25 @@ func (g *Garage) MatterDataVersion() uint32 { return g.dataVersion.Current() }
 // one cluster, not two.
 func (g *Garage) MatterDeviceType() uint16 { return matterDeviceTypeClosure }
 
-// MatterClusterServers for Garage returns the ClosureControl projection.
-func (g *Garage) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{g.closure.get(g)}
+// MatterDevice implements [interfaces.MatterDeviceSource]: a Closure
+// with ClosureControl declared on the drive as its Mover, built once per
+// drive and seeded from the drive's state; later DOOR_STATE and SECTION
+// pushes reach the server through [Garage.publishClosure].
+func (g *Garage) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return g.matterDevice.Device(func() (*fabricdevice.Device, error) {
+		d, err := generic.NewMatterDevice(g, matterDeviceTypeClosure, opts, closuredef.Declare{
+			// Positioning and Ventilation, as the server advertised them
+			// before (every garage drive, ventilation stop or not): the
+			// MoveTo targets a controller may name follow the selection.
+			Features: closuredef.FeaturePositioning | closuredef.FeatureVentilation,
+			Mover:    garageMover{g: g},
+		})
+		if err != nil {
+			return nil, err
+		}
+		g.publishClosureTo(d)
+		return d, nil
+	})
 }
 
 // MatterDeviceType implements [interfaces.MatterDeviceSource]. All

@@ -440,14 +440,23 @@ and **the profile holds the device** built from them.
 - **Eligibility reads the device.** go-fabric's derivation reads the
   endpoint-source surface; the candidate list classifies a declaring
   source by its device, which carries that surface.
-- **What waits on go-fabric.** The light and the sound player (the
-  native level ramp, go-fabric #228, and the colour and level value
-  helpers, #230), the garage drive's ClosureControl (a Stop the server
-  ignores while the drive's motion report lags, #232) and the move of
-  the assembler onto the node's Aggregator (completeness per CCU, #229,
-  and batched changes, #231) keep their current shape until those
-  routes exist. The credential store stays built on the shared handle,
-  since the daemon carries go-fabric's schema in its own migrations.
+- **Every profile declares.** go-fabric v0.10.2 answered the routes
+  this step found missing: the light and the sound player declare the
+  dimmer's own ramp (`levelcontroldef.Declare{Ramp}`, go-fabric #228;
+  the kit couples it to the endpoint's OnOff server itself), the garage
+  drive hears of a Stop the server would ignore through the declared
+  Mover's `StopIgnored` (#232), and the value helpers the profiles need
+  live in the generated packages (#230). The device kit checks a
+  declaration against the device type's feature conformance, which
+  surfaced the HS-only colour lights' missing CT feature; they serve it
+  now, mapped onto their colour (by_design
+  BD-Matter-ExtendedColorLight-HSOnly). No profile builds a server of
+  its own any more, and the per-profile DataVersion counters are gone.
+- **What remains below the facade.** The assembler and the endpoint
+  store (`endpoint`, `groups`; the move onto the node's Aggregator with
+  its partitions and batches, #229 and #231, is the next step) and the
+  credential store built on the shared handle, since the daemon carries
+  go-fabric's schema in its own migrations.
 
 ## Consequences
 

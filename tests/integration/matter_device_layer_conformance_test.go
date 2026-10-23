@@ -32,7 +32,6 @@ import (
 // departures of the category fleet. Key: "<device type>|<requirement>|<kind>".
 var acceptedCategoryDeviceTypeViolations = map[string]string{
 	"OnOffLight|OnOff.LT|missing":                   "finding: the OnOff smoke fixture is a single-cluster stub without the LT feature, see report",
-	"ExtendedColorLight|ColorControl.CT|missing":    "finding: loom's ColorControl server carries no colour-temperature feature, see report",
 	"SmokeCoAlarm|device:PowerSource|instanceCount": "finding: the smoke siren endpoint has no PowerSource composition in the smoke fleet, see report",
 }
 

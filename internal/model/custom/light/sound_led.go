@@ -171,15 +171,6 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 		led.repetitions = custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldRepetitions, hmenum.ParameterRepetitions))
 		led.direction = custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection))
 	}
-	if led.onTimeList != nil {
-		_ = led.onTimeList.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
-	}
-	if led.repetitions != nil {
-		_ = led.repetitions.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
-	}
-	if led.direction != nil {
-		_ = led.direction.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
-	}
 	// The embedded chain registers turn_on / turn_off / set_level only
 	// when the LEVEL Float resolved (see [New]); without it there is
 	// nothing to override and the LED has no write path either.
