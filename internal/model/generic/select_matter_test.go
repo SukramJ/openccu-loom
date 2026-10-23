@@ -14,6 +14,7 @@ import (
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/cluster/modeselect"
 	"github.com/SukramJ/go-fabric/cluster/spec"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/im"
 	"github.com/SukramJ/go-fabric/tlv"
 
@@ -54,15 +55,43 @@ func newModeSelect(t *testing.T, ops hmenum.Operations, values []string) (*Selec
 	return NewSelect(cfg), w
 }
 
-// modeSelectServer returns the single cluster server a Select projects,
-// failing when the projection produced anything else.
+// modeSelectDevice returns the device a Select projects, nil for one that
+// projects nothing.
+func modeSelectDevice(t *testing.T, s *Select) *fabricdevice.Device {
+	t.Helper()
+	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("select"), Name: "select"})
+	if err != nil {
+		t.Fatalf("MatterDevice: %v", err)
+	}
+	return d
+}
+
+// modeSelectServer returns the single cluster server a Select's device
+// carries, failing when the projection produced anything else.
 func modeSelectServer(t *testing.T, s *Select) interfaces.MatterClusterServer {
 	t.Helper()
-	servers := s.MatterClusterServers()
+	d := modeSelectDevice(t, s)
+	if d == nil {
+		t.Fatal("MatterDevice returned no device")
+	}
+	servers := d.Servers()
 	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers() returned %d servers, want exactly 1", len(servers))
+		t.Fatalf("the device carries %d servers, want exactly 1", len(servers))
 	}
 	return servers[0]
+}
+
+// TestSelectMatter_BoundsAreTheGeneratedDefinitions pins the two bounds the
+// projection reads from the generated ModeSelect definition to the values
+// the cluster package states for them.
+func TestSelectMatter_BoundsAreTheGeneratedDefinitions(t *testing.T) {
+	t.Parallel()
+	if matterSelectMaxModes != modeselect.SupportedModesMaxEntries {
+		t.Errorf("SupportedModes bound = %d, want %d", matterSelectMaxModes, modeselect.SupportedModesMaxEntries)
+	}
+	if matterModeLabelMaxBytes != modeselect.LabelMaxBytes {
+		t.Errorf("Label bound = %d, want %d", matterModeLabelMaxBytes, modeselect.LabelMaxBytes)
+	}
 }
 
 // TestSelectMatter_WritableEnumMountsOneModeSelectServer pins the cluster set
@@ -445,32 +474,32 @@ func TestSelectMatter_IneligibleDataPointsMountNoServer(t *testing.T) {
 	t.Run("not writable", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, hmenum.OperationsRead|hmenum.OperationsEvent, modeSelectValueList)
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("a read-only ENUM mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("a read-only ENUM projected a device, want none")
 		}
 	})
 
 	t.Run("empty value list", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent, nil)
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("an ENUM with no VALUE_LIST mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("an ENUM with no VALUE_LIST projected a device, want none")
 		}
 	})
 
 	t.Run("neither readable nor an event source", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, hmenum.OperationsWrite, modeSelectValueList)
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("a write-only ENUM mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("a write-only ENUM projected a device, want none")
 		}
 	})
 
 	t.Run("nil select", func(t *testing.T) {
 		t.Parallel()
 		var s *Select
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Errorf("a nil Select mounted %d servers, want none", len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Errorf("a nil Select projected a device, want none")
 		}
 	})
 }
@@ -511,9 +540,9 @@ func TestSelectMatter_SupportedModesStayWithinTheListBound(t *testing.T) {
 	t.Run("past the bound", func(t *testing.T) {
 		t.Parallel()
 		s, _ := newModeSelect(t, ops, valueList(modeselect.SupportedModesMaxEntries+1))
-		if servers := s.MatterClusterServers(); servers != nil {
-			t.Fatalf("a %d-entry VALUE_LIST mounted %d servers, want none",
-				modeselect.SupportedModesMaxEntries+1, len(servers))
+		if d := modeSelectDevice(t, s); d != nil {
+			t.Fatalf("a %d-entry VALUE_LIST projected a device, want none",
+				modeselect.SupportedModesMaxEntries+1)
 		}
 		if modes := s.SupportedModes(); len(modes) != 0 {
 			t.Fatalf("SupportedModes past the bound returned %d entries, want none", len(modes))
