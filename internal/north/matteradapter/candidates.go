@@ -175,7 +175,12 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 // builds its Matter device from cluster declarations is classified by that
 // device: go-fabric's derivation reads the endpoint-source surface (device
 // type and cluster servers), which the device carries and the source no
-// longer does. A source that states its own verdict keeps it.
+// longer does. A source that states its own verdict keeps it. One that
+// projects no device — a generic switch on a parameter other than STATE,
+// a select whose list cannot back ModeSelect — is not a candidate at all:
+// nothing could be exposed, so no row is shown (a row would name a
+// reason the operator can do nothing about). source is any because the
+// walk probes every data point of a channel, whatever its type.
 func classifyCandidate(source any, key matterendpoint.SourceKey, name string) eligibility.Verdict {
 	if _, own := source.(contract.EligibilitySource); !own {
 		if ds, ok := source.(interfaces.MatterDeviceSource); ok {

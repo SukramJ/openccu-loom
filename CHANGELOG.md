@@ -21,6 +21,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and thermostats now describe their clusters to go-fabric's device kit
   instead of building the cluster servers themselves. Nothing changes on
   the wire and nothing needs to be re-paired.
+- **Matter: the exposable list hides what cannot be exposed.** A
+  writable parameter that can never be a Matter device (a switch
+  parameter other than STATE, a mode list ModeSelect cannot carry) no
+  longer appears as a blocked row; before, it was listed with a reason
+  the operator could do nothing about.
 
 ### Fixed
 

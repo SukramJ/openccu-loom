@@ -160,8 +160,10 @@ type Assembler struct {
 	logger    *slog.Logger
 	// fallbackTypes records, once each, a device type the generated
 	// device layer does not carry, so the hand-built Spec path is visible
-	// in the log rather than silent.
-	fallbackTypes sync.Map
+	// in the log rather than silent; refusedDevices records, once each, a
+	// source whose own device the kit refused.
+	fallbackTypes  sync.Map
+	refusedDevices sync.Map
 }
 
 // NodeLabelStore persists controller-written bridged NodeLabels per
@@ -526,11 +528,11 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		// hood).
 		if !channelHasCustom {
 			if src, ok := projectionOf(gdp); ok {
-				// The spec is described before the allowlist probe: a generic
-				// source projects nothing for most of its parameters (a
-				// generic Switch serves STATE alone), and only one that
-				// projects an endpoint takes this path at all.
-				if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
+				// A generic source projects nothing for most of its
+				// parameters (a generic Switch serves STATE alone), so the
+				// projection is probed before the allowlist and the spec —
+				// with its persisted-label read — is described after it.
+				if src.projects(a.sourceOptions(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key)) {
 					allowed, err := allow(matterendpoint.DPKindGeneric, key)
 					if err != nil {
 						return nil, err
@@ -538,7 +540,9 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 					if !allowed {
 						continue
 					}
-					out = append(out, spec)
+					if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
+						out = append(out, spec)
+					}
 					continue
 				}
 			}
@@ -769,7 +773,9 @@ type projection struct {
 }
 
 // projectionOf reports the data point's projection; the device form wins
-// over the server form for a source that offers both.
+// over the server form for a source that offers both. dp is any because
+// the model's data points share no type: the walk probes each for the
+// two projection interfaces.
 func projectionOf(dp any) (projection, bool) {
 	if d, ok := dp.(interfaces.MatterDeviceSource); ok {
 		return projection{device: d}, true
@@ -778,6 +784,18 @@ func projectionOf(dp any) (projection, bool) {
 		return projection{source: s}, true
 	}
 	return projection{}, false
+}
+
+// projects reports whether the source projects an endpoint at all: a
+// device source once its device is built with opts (the build is kept by
+// the source, so the later spec reuses it), a server source when it
+// serves a cluster.
+func (p projection) projects(opts fabricdevice.Options) bool {
+	if p.device != nil {
+		d, err := p.device.MatterDevice(opts)
+		return err == nil && d != nil
+	}
+	return len(p.source.MatterClusterServers()) > 0
 }
 
 // deviceType is the projection's advertised Device Library type.
@@ -824,6 +842,27 @@ func (a *Assembler) makeSpec(
 	return a.deviceSpec(ctx, in), true
 }
 
+// sourceOptions are the device options of a source-backed endpoint: the
+// key, the composed label, the addresses and the live availability — what
+// [Assembler.declaredDeviceSpec] hands the source, so a device built from
+// the projection probe is the one the spec reuses.
+func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *device.Device, ch *device.Channel, kind matterendpoint.DPKind, key string) fabricdevice.Options {
+	sourceKey := matterendpoint.SourceKey{
+		CentralName:   centralName,
+		DeviceAddress: dev.Address,
+		ChannelNo:     ch.Number,
+		DPKind:        kind,
+		DPKey:         key,
+	}
+	return fabricdevice.Options{
+		StableKey:      sourceKey,
+		Name:           endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		DeviceAddress:  dev.Address,
+		ChannelAddress: ch.Address,
+		Reachable:      dev.Available,
+	}
+}
+
 // declaredDeviceSpec describes the endpoint of a source that builds its
 // device itself from its cluster declarations. The device is the
 // source's and lives as long as the source; the name, addresses and
@@ -841,15 +880,20 @@ func (a *Assembler) declaredDeviceSpec(ctx context.Context, in specInput, src in
 		Reachable:      in.dev.Available,
 	})
 	if err != nil {
-		a.logger.Warn("matter.assembler.device_refused",
-			slog.String("device_type", fmt.Sprintf("0x%04X", in.deviceType)),
-			slog.String("key", in.key.String()),
-			slog.String("err", err.Error()))
+		// Once per key: the source retries the build on every assembly,
+		// and the finding does not change between two of them.
+		if _, seen := a.refusedDevices.LoadOrStore(in.key.String(), struct{}{}); !seen {
+			a.logger.Warn("matter.assembler.device_refused",
+				slog.String("device_type", fmt.Sprintf("0x%04X", in.deviceType)),
+				slog.String("key", in.key.String()),
+				slog.String("err", err.Error()))
+		}
 		return endpoint.Spec{}, false
 	}
 	if d == nil {
 		return endpoint.Spec{}, false
 	}
+	a.refusedDevices.Delete(in.key.String())
 	spec := d.Spec()
 	spec.StableKey = in.key
 	spec.FriendlyName = in.friendlyName

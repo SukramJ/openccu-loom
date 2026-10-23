@@ -65,10 +65,12 @@ func (h *MatterDeviceHolder) Quiesce() {
 }
 
 // NewMatterDevice builds the device of source: the generated device type
-// for deviceType, opts, and the source's cluster declarations. A source
-// that also implements [contract.ChangeNotifier] is declared as the
-// device's change notifier, so the bridge keeps hearing the model's
-// confirmed updates for the clusters whose servers read the source.
+// for deviceType, opts, and the source's cluster declarations. source is
+// any because the profiles share no type and only one capability of it
+// is read: a source that implements [contract.ChangeNotifier] is declared
+// as the device's change notifier, so the bridge keeps hearing the
+// model's confirmed updates for the clusters whose servers read the
+// source.
 func NewMatterDevice(source any, deviceType uint16, opts fabricdevice.Options, decls ...fabricdevice.Declaration) (*fabricdevice.Device, error) {
 	if n, ok := source.(contract.ChangeNotifier); ok {
 		decls = append(decls, fabricdevice.WithChangeNotifier(n))
