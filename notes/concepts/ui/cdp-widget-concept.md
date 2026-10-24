@@ -98,7 +98,7 @@ the rest, so the wire shape stays category-agnostic.
 | Light | `dimmable`, `color`, `color_temp`, `effects`, `transition` |
 | Cover | `position`, `tilt`, `stop`, `vent`, `inverted_control` |
 | Climate | `boost`, `profile`, `auto`, `heat`, `cool`, `off`, `away`, `comfort`, `eco` |
-| Lock | `open`, `child_safe` |
+| Lock | `open`, `child_safe`, `button` |
 | Siren | `acoustic`, `optical`, `duration`, `soundfiles`, `volume_set` |
 
 ## State sourcing

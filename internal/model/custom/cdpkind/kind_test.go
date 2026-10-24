@@ -244,6 +244,20 @@ func TestCapabilities_Lock(t *testing.T) {
 	assertCapsEqual(t, got, map[string]bool{
 		"open":       true,
 		"child_safe": false,
+		"button":     false,
+	})
+}
+
+// TestCapabilities_ButtonLock pins the flag that tells a client the lock
+// is a device's operating lock (GLOBAL_BUTTON_LOCK), not a door: the SPA
+// drops the lock card on it.
+func TestCapabilities_ButtonLock(t *testing.T) {
+	t.Parallel()
+	got := Capabilities(&lock.Lock{Capabilities: custom.LockCapabilities{ButtonLock: true}})
+	assertCapsEqual(t, got, map[string]bool{
+		"open":       false,
+		"child_safe": false,
+		"button":     true,
 	})
 }
 

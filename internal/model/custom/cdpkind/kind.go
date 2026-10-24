@@ -116,7 +116,7 @@ func CapabilityFlags() []string {
 		// climate
 		"boost", "profile", "auto", "heat", "cool", "off", "away", "comfort", "eco",
 		// lock
-		"open", "child_safe",
+		"open", "child_safe", "button",
 		// siren
 		"acoustic", "optical", "duration", "soundfiles", "volume_set",
 	}
@@ -286,6 +286,7 @@ func lockCaps(c custom.LockCapabilities) map[string]bool {
 	return map[string]bool{
 		"open":       c.SupportsOpen,
 		"child_safe": c.SupportsChildSafe,
+		"button":     c.ButtonLock,
 	}
 }
 

@@ -96,3 +96,15 @@ export function cdpWidgetFor(kind: string | undefined): CdpWidget | undefined {
 export function hasCdpWidget(kind: string | undefined): boolean {
   return cdpWidgetFor(kind) !== undefined;
 }
+
+/** Returns true when the CDP gets a tile: its kind has a widget and it
+ *  is not a device's operating lock (`capabilities.button`). That lock
+ *  switches the device's own buttons, has no `STATE` a lock tile could
+ *  show, and sits in the device's parameters already — REST, MQTT and
+ *  Matter keep it, the SPA renders no card for it. */
+export function isCdpRenderable(
+  cdp: import("$lib/api/types").CustomDPSummary,
+): boolean {
+  if (!hasCdpWidget(cdp.kind)) return false;
+  return !(cdp.kind === "lock" && cdp.capabilities?.button === true);
+}

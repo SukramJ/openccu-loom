@@ -6,6 +6,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The operating lock has no card in the SPA any more.** HmIP thermostats
+  (eTRV, BWTH, ALPHA-IP-RBG), the HmIP-DLD / DLP keypads, HmIP-FAL and
+  HmIP-WGT carry their global operating lock (`GLOBAL_BUTTON_LOCK`) as a
+  lock-category custom data point. The SPA rendered it as a lock tile
+  that could never show a state (it read a `STATE` the channel does not
+  have), while the same switch sits in the device's parameters. The tile
+  is gone from the device page, the overview and the favourites; REST,
+  WebSocket, MQTT and Matter keep the data point and its lock / unlock
+  operations.
+- **Matter: the operating lock's endpoint is named as one.** Its NodeLabel
+  carries the data point's label in the daemon's locale
+  ("Thermostat (Bediensperre)", "Thermostat (Button Lock)") where it was
+  the device name alone, so a controller no longer lists a thermostat as
+  a door lock under the thermostat's name. The label changes on the next
+  sync; nothing needs to be re-paired.
+
+### Added
+
+- **REST API 13.10.0.** `capabilities.button` on a lock custom data point
+  marks the operating lock, so a client can tell it from a door lock
+  without parsing the name. Additive; every other field is unchanged.
+
 ## [0.93.0] - 2026-10-23
 
 ### Release summary
