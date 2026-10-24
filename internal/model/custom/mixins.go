@@ -638,6 +638,12 @@ type (
 	LockCapabilities struct {
 		SupportsOpen      bool
 		SupportsChildSafe bool
+		// ButtonLock reports that the "lock" is a device's operating lock
+		// (GLOBAL_BUTTON_LOCK on the MASTER paramset): it locks the
+		// device's own buttons, not a door. The SPA shows no lock card for
+		// it — the same switch sits in the device's parameters — while
+		// REST, MQTT and Matter keep it, named as the operating lock.
+		ButtonLock bool
 	}
 
 	// SirenCapabilities signals an acoustic/optical siren.

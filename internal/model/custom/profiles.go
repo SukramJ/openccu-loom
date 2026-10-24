@@ -721,6 +721,15 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("RfThermostat")],
 	})
+	// The reference binds this profile to the device-level channel (its
+	// channels=(None,) form), where HM-TC-IT-WM-W-EU carries
+	// GLOBAL_BUTTON_LOCK on the MASTER paramset of the device address.
+	// relevantChannels has no form for that channel and
+	// CreateCustomDataPoints walks Channels(), which leaves the root
+	// channel out, so this registration materialises no data point
+	// (measured against the simulator's HM-TC-IT-WM-W-EU). Hosting a
+	// custom data point on the root channel touches every north-bound
+	// plane and is a change of its own.
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("RFButtonLock"),
 		DeviceType:        "hm-tc-it-wm-w-eu",

@@ -14,7 +14,7 @@
   import { isOverviewExcluded } from "$lib/quickcontrol/domain";
   import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
   import ChannelPinButton from "./ChannelPinButton.svelte";
-  import { cdpWidgetFor, hasCdpWidget } from "./dispatch";
+  import { cdpWidgetFor, isCdpRenderable } from "./dispatch";
 
   type Props = {
     detail: DeviceDetail;
@@ -26,7 +26,7 @@
   let { detail, cdps, pinnable = false }: Props = $props();
 
   // CDPs with a registered widget — these render as CDP tiles.
-  const renderable = $derived(cdps.filter((c) => hasCdpWidget(c.kind)));
+  const renderable = $derived(cdps.filter(isCdpRenderable));
 
   // CDP channel numbers, used to filter the orphan section. A
   // channel is orphan when (a) it has no CustomDP attached, or (b)

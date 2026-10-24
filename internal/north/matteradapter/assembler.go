@@ -748,6 +748,27 @@ func (p projection) deviceType() uint16 {
 	return p.source.MatterDeviceType()
 }
 
+// customPostfixLabel is the NodeLabel suffix of a custom data point that
+// names itself with a postfix — the operating lock's BUTTON_LOCK, which
+// sits on a thermostat's channel 0 beside nothing else. REST and MQTT
+// append that postfix's label to the channel name; the endpoint takes
+// the same label through the same route ([NameResolver.ParameterLabel]),
+// so a controller shows "Thermostat (Bediensperre)" rather than a door
+// lock under the thermostat's bare name. A source without a postfix
+// adds nothing, as before.
+func customPostfixLabel(names NameResolver, key matterendpoint.SourceKey, src projection) string {
+	var dp any = src.device
+	if src.device == nil {
+		dp = src.source
+	}
+	pf, ok := dp.(interface{ NamePostfix() string })
+	if !ok || pf.NamePostfix() == "" {
+		return ""
+	}
+	key.DPKey = pf.NamePostfix()
+	return names.ParameterLabel(key)
+}
+
 // makeSpec describes one source-backed bridged endpoint. The second
 // result is false when the source projects nothing.
 func (a *Assembler) makeSpec(
@@ -771,7 +792,7 @@ func (a *Assembler) makeSpec(
 		dev:          dev,
 		ch:           ch,
 		deviceType:   src.deviceType(),
-		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), customPostfixLabel(names, sourceKey, src)),
 	}
 	if src.device != nil {
 		return a.declaredDeviceSpec(in, src.device)

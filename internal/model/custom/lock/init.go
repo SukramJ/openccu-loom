@@ -50,7 +50,7 @@ func init() {
 var IPLockCaps = custom.LockCapabilities{SupportsOpen: true}
 
 // ButtonLockCaps mirrors capabilities/lock.py:41.
-var ButtonLockCaps = custom.LockCapabilities{SupportsOpen: false}
+var ButtonLockCaps = custom.LockCapabilities{SupportsOpen: false, ButtonLock: true}
 
 // SmartDoorLockCaps describes a smart door lock that supports OPEN
 // (open=true). Defined here for parity completeness; no DeviceProfile
@@ -82,9 +82,11 @@ var rfLockCapabilities = custom.LockCapabilities{
 	SupportsOpen: true,
 }
 
-// buttonLockCapabilities: button locks have no open capability.
+// buttonLockCapabilities: button locks have no open capability, and
+// the flag that tells a client it is an operating lock, not a door.
 var buttonLockCapabilities = custom.LockCapabilities{
 	SupportsOpen: false,
+	ButtonLock:   true,
 }
 
 func ipLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {

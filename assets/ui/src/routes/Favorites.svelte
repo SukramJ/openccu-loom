@@ -18,7 +18,7 @@
   import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
   import ChannelTiles from "$lib/cdp/ChannelTiles.svelte";
   import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
-  import { cdpWidgetFor, hasCdpWidget } from "$lib/cdp/dispatch";
+  import { cdpWidgetFor, isCdpRenderable } from "$lib/cdp/dispatch";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
 
@@ -97,7 +97,7 @@
     if (!addr) return undefined;
     const no = Number(id.split(":")[1]);
     if (!Number.isFinite(no)) return undefined;
-    return (cdps[addr] ?? []).find((c) => c.channel_no === no && hasCdpWidget(c.kind));
+    return (cdps[addr] ?? []).find((c) => c.channel_no === no && isCdpRenderable(c));
   }
 
   async function runProgram(id: string, label: string) {

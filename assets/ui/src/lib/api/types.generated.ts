@@ -6266,7 +6266,8 @@ export interface components {
             /**
              * @description Flat string→bool map of optional features the device
              *     supports — e.g. `dimmable`, `color`, `color_temp`,
-             *     `effects`, `tilt`, `boost`, `away`. Mirrors the
+             *     `effects`, `tilt`, `boost`, `away`, `button` (a lock that is
+             *     a device's operating lock, not a door). Mirrors the
              *     per-category Capability struct from
              *     `internal/model/custom/mixins.go`.
              *
