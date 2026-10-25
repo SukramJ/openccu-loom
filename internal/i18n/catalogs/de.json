@@ -276,5 +276,6 @@
   "node.exposure.column.channel": "Kanal",
   "node.exposure.column.kind": "Datenpunktart",
   "node.exposure.column.key": "Parameter",
-  "node.exposure.column.parameter": "Parameterbezeichnung"
+  "node.exposure.column.parameter": "Parameterbezeichnung",
+  "node.exposure.column.type": "Matter-Typ"
 }

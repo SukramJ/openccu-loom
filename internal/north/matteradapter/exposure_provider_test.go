@@ -89,7 +89,7 @@ func TestExposureProviderSchemaNamesTheSourceKeyColumnsAndGroups(t *testing.T) {
 	if !s.Groups {
 		t.Error("the list groups by device")
 	}
-	want := []string{"central", "device", "channel", "kind", "key", "parameter"}
+	want := []string{"central", "device", "channel", "kind", "key", "parameter", "type"}
 	if len(s.Columns) != len(want) {
 		t.Fatalf("columns = %d, want %d", len(s.Columns), len(want))
 	}
@@ -130,6 +130,9 @@ func TestExposureProviderListMergesTheAllowlistAndSorts(t *testing.T) {
 	}
 	if lamp.Fields["parameter"] != "Switch" {
 		t.Errorf("parameter label without a translation = %q, want the title-cased key", lamp.Fields["parameter"])
+	}
+	if lamp.Fields["type"] != "On/Off Plug-in Unit" || temp.Fields["type"] != "Temperature Sensor" {
+		t.Errorf("type labels = %q / %q, want loom's device-type names", lamp.Fields["type"], temp.Fields["type"])
 	}
 	if lamp.Fields["channel"] != "4" || lamp.Fields["kind"] != "custom" || lamp.Fields["central"] != "ccu" {
 		t.Errorf("source-key fields = %v", lamp.Fields)

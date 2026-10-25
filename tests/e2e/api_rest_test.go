@@ -427,6 +427,7 @@ func defaultPathParamValues() map[string]string {
 		"no":          "0",
 		"name":        "test_name",
 		"id":          "test_id",
+		"index":       "1",
 		"key":         "MASTER",
 		"param":       "STATE",
 		"peer":        "peer_test",

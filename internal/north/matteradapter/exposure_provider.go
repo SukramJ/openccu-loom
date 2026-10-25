@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // The item fields of the selection page: the schema's columns, keyed as
@@ -28,6 +29,7 @@ const (
 	ExposureFieldKind      = "kind"
 	ExposureFieldKey       = "key"
 	ExposureFieldParameter = "parameter"
+	ExposureFieldType      = "type"
 )
 
 // The verdict sources the provider reports in [fabricui.Item].Source: a
@@ -91,8 +93,8 @@ func NewExposureProvider(cfg ExposureProviderConfig) *ExposureProvider {
 }
 
 // Schema implements [fabricui.ExposureProvider]: the five source-key
-// columns and the parameter label, grouped by device. The central and the
-// kind carry a value filter; a fleet of one CCU shows a one-entry filter,
+// columns, the parameter label and the Matter device type, grouped by
+// device. The central, the kind and the type carry a value filter; a fleet of one CCU shows a one-entry filter,
 // which is cheaper than a schema that depends on the registry.
 func (p *ExposureProvider) Schema(context.Context) (fabricui.Schema, error) {
 	return fabricui.Schema{
@@ -103,6 +105,10 @@ func (p *ExposureProvider) Schema(context.Context) (fabricui.Schema, error) {
 			{Key: ExposureFieldKind, Label: p.label("node.exposure.column.kind"), Filter: true},
 			{Key: ExposureFieldKey, Label: p.label("node.exposure.column.key")},
 			{Key: ExposureFieldParameter, Label: p.label("node.exposure.column.parameter")},
+			// loom's device-type label (interfaces.MatterDeviceTypeName: go-fabric's
+			// table, the generated schema behind it) rather than the verdict's
+			// device_type_name alone, with the value filter the old list offered.
+			{Key: ExposureFieldType, Label: p.label("node.exposure.column.type"), Filter: true},
 		},
 		Groups: true,
 	}, nil
@@ -192,6 +198,7 @@ func (p *ExposureProvider) item(c *Candidate) fabricui.Item {
 			ExposureFieldKind:      string(c.Key.DPKind),
 			ExposureFieldKey:       c.Key.DPKey,
 			ExposureFieldParameter: p.parameterLabel(c.ChannelType, c.Key.DPKey),
+			ExposureFieldType:      interfaces.MatterDeviceTypeName(c.Verdict.DeviceType),
 		},
 		Verdict: c.Verdict,
 		Source:  ExposureSourceRule,

@@ -1,15 +1,15 @@
 {
-  "generated": "432a3205",
-  "head": "432a3205",
+  "generated": "33383bad",
+  "head": "33383bad",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 6151,
-    "reachable": 3958,
-    "whitelisted": 2067,
+    "total_exported": 6100,
+    "reachable": 3978,
+    "whitelisted": 1996,
     "unreachable": 126
   },
   "by_package": [
@@ -1488,7 +1488,7 @@
       "identifier": "EscapeString",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/rega/runner.go",
-      "line": 647
+      "line": 652
     },
     {
       "package": "internal/client/rega",
@@ -1523,7 +1523,7 @@
       "identifier": "SanitizeJSONControls",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/rega/runner.go",
-      "line": 708
+      "line": 713
     },
     {
       "package": "internal/client/rega",
@@ -1544,14 +1544,14 @@
       "identifier": "SystemVariableDescription",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/rega/runner.go",
-      "line": 528
+      "line": 533
     },
     {
       "package": "internal/client/rega",
       "identifier": "SysvarUsageProgram",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/rega/runner.go",
-      "line": 504
+      "line": 509
     },
     {
       "package": "internal/client/reliability",
@@ -3329,7 +3329,7 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 283
+      "line": 277
     },
     {
       "package": "internal/model/custom/climate",
@@ -3364,7 +3364,7 @@
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 131
+      "line": 126
     },
     {
       "package": "internal/model/custom/cover",
@@ -3385,7 +3385,7 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/light.go",
-      "line": 163
+      "line": 150
     },
     {
       "package": "internal/model/custom/light",
@@ -3399,7 +3399,7 @@
       "identifier": "NewColorTempLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/color.go",
-      "line": 301
+      "line": 295
     },
     {
       "package": "internal/model/custom/light",
@@ -3420,7 +3420,7 @@
       "identifier": "NewFixedColorLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/color.go",
-      "line": 516
+      "line": 504
     },
     {
       "package": "internal/model/custom/light",
@@ -3441,14 +3441,14 @@
       "identifier": "Writer",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/model/custom/light/light.go",
-      "line": 39
+      "line": 37
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/lock/lock.go",
-      "line": 175
+      "line": 173
     },
     {
       "package": "internal/model/custom/lock",
@@ -3462,42 +3462,42 @@
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 303
+      "line": 297
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ConvertSoundfileIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 70
+      "line": 67
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ErrUnknownSoundfile",
       "reason": "wrapped and returned by PlaySound in this package when a caller names a tone the device does not offer, and exported so a caller can match it with errors.Is; the analyzer does not follow sentinel-var references",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 55
+      "line": 52
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 108
+      "line": 103
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSmokeSiren",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 112
+      "line": 107
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 145
+      "line": 139
     },
     {
       "package": "internal/model/custom/siren",
@@ -3511,7 +3511,7 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 87
+      "line": 82
     },
     {
       "package": "internal/model/custom/switch",
@@ -3623,7 +3623,7 @@
       "identifier": "AllowedInternalParameters",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2238
+      "line": 2276
     },
     {
       "package": "internal/model/generic",
@@ -3714,7 +3714,7 @@
       "identifier": "DetectStatusParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2037
+      "line": 2075
     },
     {
       "package": "internal/model/generic",
@@ -3805,7 +3805,7 @@
       "identifier": "EventData",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2179
+      "line": 2217
     },
     {
       "package": "internal/model/generic",
@@ -3956,17 +3956,17 @@
     },
     {
       "package": "internal/model/generic",
-      "identifier": "MatterOnOffConfig",
+      "identifier": "MatterDeviceHolder",
       "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/model/generic/matter_onoff.go",
-      "line": 29
+      "file": "internal/model/generic/matter_device.go",
+      "line": 20
     },
     {
       "package": "internal/model/generic",
-      "identifier": "MatterOnOffHolder",
+      "identifier": "MatterOnOffDeclaration",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/matter_onoff.go",
-      "line": 98
+      "line": 24
     },
     {
       "package": "internal/model/generic",
@@ -3988,13 +3988,6 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/unit_cleanup.go",
       "line": 148
-    },
-    {
-      "package": "internal/model/generic",
-      "identifier": "MustMatterOnOffServer",
-      "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/model/generic/matter_onoff.go",
-      "line": 85
     },
     {
       "package": "internal/model/generic",
@@ -4117,17 +4110,17 @@
     },
     {
       "package": "internal/model/generic",
-      "identifier": "NewMatterOnOffServer",
+      "identifier": "NewMatterDevice",
       "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/model/generic/matter_onoff.go",
-      "line": 57
+      "file": "internal/model/generic/matter_device.go",
+      "line": 76
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewSelect",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/select.go",
-      "line": 30
+      "line": 25
     },
     {
       "package": "internal/model/generic",
@@ -4148,7 +4141,7 @@
       "identifier": "NewSwitch",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/switch.go",
-      "line": 29
+      "line": 26
     },
     {
       "package": "internal/model/generic",
@@ -4239,7 +4232,7 @@
       "identifier": "Select",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/select.go",
-      "line": 17
+      "line": 16
     },
     {
       "package": "internal/model/generic",
@@ -4257,6 +4250,13 @@
     },
     {
       "package": "internal/model/generic",
+      "identifier": "SetMatterOnOff",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/matter_onoff.go",
+      "line": 40
+    },
+    {
+      "package": "internal/model/generic",
       "identifier": "Spec",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
@@ -4267,14 +4267,14 @@
       "identifier": "StateChangeOpt",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2091
+      "line": 2129
     },
     {
       "package": "internal/model/generic",
       "identifier": "Switch",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/switch.go",
-      "line": 17
+      "line": 16
     },
     {
       "package": "internal/model/generic",
@@ -4295,7 +4295,7 @@
       "identifier": "TransformSensorValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 212
+      "line": 224
     },
     {
       "package": "internal/model/generic",
@@ -4316,7 +4316,7 @@
       "identifier": "WithValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2127
+      "line": 2165
     },
     {
       "package": "internal/model/generic",
@@ -5618,56 +5618,56 @@
       "identifier": "Candidate",
       "reason": "returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used",
       "file": "internal/north/matteradapter/candidates.go",
-      "line": 28
+      "line": 31
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "Config",
       "reason": "constructed by the daemon when it builds the assembler (cmd/openccu-loom/daemon_matter.go, startMatterBridge)",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 34
+      "line": 30
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "DeviceSnapshot",
       "reason": "constructed per registered central by matterSnapshotter in cmd/openccu-loom/daemon_matter.go",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 243
+      "line": 181
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "ExposureChecker",
       "reason": "taken by Assembler.SetExposureChecker and satisfied host-side by the matter store (cmd/openccu-loom/daemon_matter.go, wireMatterRuntime); interface satisfaction is invisible to the analyzer",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 137
+      "line": 107
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "NameResolver",
       "reason": "satisfied by modelNameResolver and injected through Config; interface satisfaction is invisible to the analyzer",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 117
+      "line": 87
     },
     {
       "package": "internal/north/mcp",
       "identifier": "AddonUpdateService",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 192
+      "line": 185
     },
     {
       "package": "internal/north/mcp",
       "identifier": "AreaLister",
       "reason": "the declared type of Deps.Areas, filled at cmd/openccu-loom/daemon_rest_mount.go with the same area service REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 207
+      "line": 200
     },
     {
       "package": "internal/north/mcp",
       "identifier": "BackupLister",
       "reason": "the Deps.Backups seam the composition root satisfies with *adapter.BackupAdapter; an interface reached only by assignment, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/mcp/server.go",
-      "line": 270
+      "line": 263
     },
     {
       "package": "internal/north/mcp",
@@ -5681,56 +5681,49 @@
       "identifier": "EnergyReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 245
+      "line": 238
     },
     {
       "package": "internal/north/mcp",
       "identifier": "GroupsReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 199
+      "line": 192
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HistoryReader",
       "reason": "the declared type of Deps.History, filled at cmd/openccu-loom/daemon_rest_mount.go with the history handler adapter; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 228
+      "line": 221
     },
     {
       "package": "internal/north/mcp",
       "identifier": "InterfaceLister",
       "reason": "the declared type of Deps.Interfaces, filled at cmd/openccu-loom/daemon_rest_mount.go with the same interface index REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 218
+      "line": 211
     },
     {
       "package": "internal/north/mcp",
       "identifier": "LinkLister",
       "reason": "the declared type of Deps.Links, filled at cmd/openccu-loom/daemon_rest_mount.go with the links domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 251
-    },
-    {
-      "package": "internal/north/mcp",
-      "identifier": "MatterStatusReader",
-      "reason": "auto-whitelist:pattern=type-alias",
-      "file": "internal/north/mcp/server.go",
-      "line": 186
+      "line": 244
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ScheduleLister",
       "reason": "the declared type of Deps.Schedules, filled at cmd/openccu-loom/daemon_rest_mount.go with the schedules domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 260
+      "line": 253
     },
     {
       "package": "internal/north/mcp",
       "identifier": "VisibilityLister",
       "reason": "the declared type of Deps.Visibility, filled at cmd/openccu-loom/daemon_rest_mount.go with the un-ignore store; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 238
+      "line": 231
     },
     {
       "package": "internal/north/mqtt",
@@ -7694,31 +7687,10 @@
     },
     {
       "package": "internal/north/rest/handlers",
-      "identifier": "ErrBridgeTopologyNotReady",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 140
-    },
-    {
-      "package": "internal/north/rest/handlers",
       "identifier": "ErrCentralLinksUnsupported",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/central_links.go",
       "line": 78
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "ErrCommissioningBlocked",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 132
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "ErrCommissioningInProgress",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 126
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9007,475 +8979,6 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_mqtt_reload.go",
       "line": 21
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCandidateProvider",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 36
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCandidateProviderFunc",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 41
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioning",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 27
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningClose",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 422
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningCloser",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 413
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningOpener",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 94
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningWindow",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 148
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningWindowRequest",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 111
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningWindowResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 116
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCommissioningWindowResult",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 100
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCompatFinding",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 519
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCompatibility",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 527
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCompatibilityHandler",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 540
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterCompatibilityReporter",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 535
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterDiagnosticEventList",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 569
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterDiagnosticEventReporter",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 555
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterDiagnosticEventResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 560
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterDiagnosticEvents",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 578
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEcosystem",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 511
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEndpointCluster",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 459
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEndpointInfo",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 466
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEndpointInspector",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 485
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEndpointList",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 480
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEndpoints",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 496
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEvent",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 18
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterEventPublisher",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 41
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposable",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 86
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposeBulk",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 253
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposeUpdate",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 178
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposureBulkUpdate",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 243
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposureList",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 76
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposureResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 58
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposureStore",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 25
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterExposureUpdate",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 152
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabricList",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 259
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabricPurger",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_maintenance.go",
-      "line": 49
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabricResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 245
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabricRevoke",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 383
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabricRevoker",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 375
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabricStore",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 230
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFabrics",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 266
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterFactoryReset",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_maintenance.go",
-      "line": 67
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterForceSync",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_maintenance.go",
-      "line": 27
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterMdns",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 445
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterMdnsDiagnostics",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 426
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterMdnsFinding",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 418
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterMdnsReporter",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 434
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterMdnsService",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 406
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSessionInfo",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 302
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSessionList",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 349
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSessionLister",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 358
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSessionOccupancy",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 341
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSessionResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 320
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSessions",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 374
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSetupPayload",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 51
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterSetupPayloadResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter.go",
-      "line": 35
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterShare",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 448
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterStatus",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 363
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterStatusReader",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 345
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterStatusResponse",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 350
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopicCommissioningProgress",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 78
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopicCommissioningWindowOpened",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 74
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopicEndpointAssembled",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 87
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopicExposableChanged",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 67
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopicFabricAdded",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 81
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopicFabricRemoved",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 84
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "MatterTopologyReassembler",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/matter_events.go",
-      "line": 54
     },
     {
       "package": "internal/north/rest/handlers",
@@ -11946,14 +11449,14 @@
       "identifier": "DeviceRefreshedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/device_refreshed.go",
-      "line": 21
+      "line": 22
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DeviceRefreshedSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/device_refreshed.go",
-      "line": 36
+      "line": 37
     },
     {
       "package": "internal/north/rest/ws",
@@ -12289,7 +11792,7 @@
       "identifier": "NewDeviceRefreshedSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/device_refreshed.go",
-      "line": 46
+      "line": 47
     },
     {
       "package": "internal/north/rest/ws",
@@ -13213,7 +12716,7 @@
       "identifier": "DPKind",
       "reason": "passed by the adapter when it emits a candidate (internal/north/matteradapter/candidates.go:93); a named string type reached only as an argument is invisible to the analyzer",
       "file": "internal/store/matterendpoint/sourcekey.go",
-      "line": 21
+      "line": 22
     },
     {
       "package": "internal/store/matterendpoint",
@@ -15089,154 +14592,154 @@
       "identifier": "FabricScopedReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 26
+      "line": 46
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterBoolMeasurementSource",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 132
+      "line": 152
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterChangeNotifier",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 135
+      "line": 155
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterAttributeLister",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 29
+      "line": 49
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterAttributeReadPrivilege",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 41
+      "line": 61
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterAttributeWritePrivilege",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 44
+      "line": 64
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterCommandInvokePrivilege",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 47
+      "line": 67
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterCommandLister",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 32
+      "line": 52
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterDataVersion",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 35
+      "line": 55
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterEventLister",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 38
+      "line": 58
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterClusterServer",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 23
+      "line": 43
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterElectricalReadings",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 123
+      "line": 143
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilitySource",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 177
+      "line": 197
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilityState",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 159
+      "line": 179
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilityVerdict",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 174
+      "line": 194
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEndpointSource",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 20
+      "line": 21
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventEmitter",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 153
+      "line": 173
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventPriority",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 138
+      "line": 158
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventReceiver",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 156
+      "line": 176
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterFloatMeasurementSource",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 129
+      "line": 149
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterMeasurementClass",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 50
+      "line": 70
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterMeasurementSource",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "pkg/interfaces/matter.go",
-      "line": 126
+      "line": 146
     },
     {
       "package": "tests/chiptool/harness",
