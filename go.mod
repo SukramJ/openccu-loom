@@ -4,7 +4,6 @@ go 1.27.3
 
 require (
 	filippo.io/nistec v0.0.4 // indirect
-	github.com/SukramJ/go-fabric-ui v0.1.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
@@ -35,6 +34,7 @@ require (
 
 require (
 	github.com/SukramJ/go-fabric v0.12.1
+	github.com/SukramJ/go-fabric-ui v0.1.1
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.38.0
 	github.com/SukramJ/go-mqtt v1.6.0
