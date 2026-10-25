@@ -105,6 +105,11 @@ how they are shown, what a change would do, and the change itself.
   2.0). The Python client regenerates its models from the new
   `openapi.yaml` and follows the `node.*` topics; its `matter.*` event
   types are dead until then.
+- A window on the configured credentials no longer echoes the
+  configured passcode: go-fabric-ui returns the passcode only for a
+  window on fresh credentials, and serves the QR and manual codes in
+  both cases. The operator pairs with the codes; the passcode itself
+  stays where it was configured.
 - The device-type name in the selection list is go-fabric's
   (`contract.DeviceTypeName`), not loom's richer table
   (`interfaces.MatterDeviceTypeName`); the list shows the standard's

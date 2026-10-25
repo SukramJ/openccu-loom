@@ -100,10 +100,17 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 
 	// Open the commissioning window first. Matter §5.5.1 caps the
 	// window to 180..900s (3..15 min); the daemon enforces the same
-	// range so the request must pick a value inside it. The bridge
-	// generates a fresh passcode + discriminator on every open — the
-	// pairing call must consume the response body or PASE Sigma1
-	// fails on a passcode mismatch.
+	// range so the request must pick a value inside it.
+	//
+	// Which passcode the window runs on follows go-fabric-ui's contract
+	// (POST /node/pairing/window, schema Window): a window on fresh
+	// credentials carries its passcode in the response; a window on the
+	// node's configured credentials — what the daemon opens when a
+	// passcode is configured, as this harness does — carries none, and
+	// pairs with the configured one. Pairing with whichever applies is
+	// itself the check: had the daemon opened a window on fresh
+	// credentials and withheld the passcode, PASE with the configured
+	// passcode fails and the test with it.
 	resp, status := b.RESTPost(t, "/api/v1/node/pairing/window",
 		map[string]any{"duration_seconds": 180})
 	if status < 200 || status >= 300 {
@@ -113,12 +120,17 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 		Discriminator   uint16 `json:"discriminator"`
 		Passcode        uint32 `json:"passcode"`
 		DurationSeconds uint16 `json:"duration_seconds"`
+		ManualCode      string `json:"manual_code"`
 	}
 	if err := json.Unmarshal(resp, &openResp); err != nil {
 		t.Fatalf("decode window-open response: %v\nbody=%s", err, resp)
 	}
-	if openResp.Passcode == 0 {
-		t.Fatalf("window-open returned no passcode (body=%s)", resp)
+	if openResp.ManualCode == "" {
+		t.Fatalf("window-open returned no pairing code (body=%s)", resp)
+	}
+	passcode := openResp.Passcode
+	if passcode == 0 {
+		passcode = harness.ChipDefaultPasscode
 	}
 	t.Cleanup(func() {
 		_, _ = b.RESTPost(t, "/api/v1/node/pairing/window/close", nil)
@@ -141,7 +153,7 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 	var paired bool
 	for attempt := 1; attempt <= pairAttempts; attempt++ {
 		attemptCtx, attemptCancel := context.WithTimeout(ctx, 120*time.Second)
-		o, err := ctl.PairFullWithPasscode(attemptCtx, t, harness.PairTargetHost, b.MatterPort(), openResp.Passcode)
+		o, err := ctl.PairFullWithPasscode(attemptCtx, t, harness.PairTargetHost, b.MatterPort(), passcode)
 		attemptCancel()
 		out = o
 		if err == nil && harness.PairingSuccess(o) {
