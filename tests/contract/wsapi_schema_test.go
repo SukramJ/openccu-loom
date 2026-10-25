@@ -86,6 +86,7 @@ type wsSchema struct {
 // known categories.
 var knownWSCategories = map[string]bool{
 	"taxonomy":       true,
+	"node":           true,
 	"alarms":         true,
 	"alarm_panel":    true,
 	"backup":         true,

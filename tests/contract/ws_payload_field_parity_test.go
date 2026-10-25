@@ -10,9 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/go-fabric-ui/fabricui"
+
 	"github.com/getkin/kin-openapi/openapi3"
 
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
@@ -50,12 +51,14 @@ import (
 var wsPayloadStructs = map[string]any{
 	"AddonUpdateStatus":             ws.AddonUpdateStatusPayload{},
 	"PairingRequestsChangedPayload": ws.PairingRequestsChangedPayload{},
-	// Two handler DTOs that double as broadcast payloads. They were
-	// recorded as holes on the grounds that they live outside the ws
-	// package — true, and irrelevant: they are exported, so reflection
-	// reaches them exactly as it reaches a ws struct.
-	"MatterCommissioningWindowResponse":  handlers.MatterCommissioningWindowResponse{},
-	"MatterExposureUpdate":               handlers.MatterExposureUpdate{},
+	// The node page family's payloads are go-fabric-ui's event structs,
+	// published onto the hub as they come (cmd/openccu-loom/
+	// matter_node_events.go); the schemas are the contract's, copied into
+	// openapi.yaml. endpoints_changed carries an empty object.
+	"FabricEvent":                        fabricui.FabricEvent{},
+	"WindowEvent":                        fabricui.WindowEvent{},
+	"ExposureEvent":                      fabricui.ExposureEvent{},
+	"NodeEndpointsChangedPayload":        struct{}{},
 	"AlarmCountdownPayload":              ws.AlarmCountdownPayload{},
 	"AlarmHealthChangedPayload":          ws.AlarmHealthChangedPayload{},
 	"AlarmJournalAppendedPayload":        ws.AlarmJournalAppendedPayload{},

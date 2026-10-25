@@ -17,7 +17,8 @@ package contract
 // broadcast in assets/wsapi.json it names the production source file(s)
 // that carry the emitter and a set of literal tokens that must appear
 // there. Where the wire identity is a typed Go constant (an
-// hmevent.EventType or an exported handlers.MatterTopicXxx string), the
+// hmevent.EventType or go-fabric-ui's fabricui.Event* type under the
+// `node.` prefix), the
 // table additionally pins the constant's value against the schema name
 // at compile time — a renamed or re-valued constant fails the build or
 // the assertion, not silently. A declared broadcast with no matching
@@ -32,13 +33,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/go-fabric-ui/fabricui"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // wsBroadcastEmitter documents where a broadcast's production emitter
 // lives and what the wire source must literally contain to prove it is
-// still wired to a real hub.Publish / publishMatterEvent call site.
+// still wired to a real hub.Publish call site.
 type wsBroadcastEmitter struct {
 	// Files lists the repo-relative source file(s) whose concatenated
 	// content must contain every entry in Tokens.
@@ -48,8 +50,8 @@ type wsBroadcastEmitter struct {
 	// means the emitter code moved or was deleted.
 	Tokens []string
 	// WireValue, when non-empty, is the compile-time-resolved wire
-	// identity (an hmevent.EventType string value or an exported
-	// handlers.MatterTopicXxx constant) that must equal the broadcast
+	// identity (an hmevent.EventType string value or go-fabric-ui's
+	// event type under the `node.` prefix) that must equal the broadcast
 	// name. Left empty for the three hub-model-singleton broadcasts
 	// whose wire identity is an unexported local constant in the ws
 	// package (checked only via Tokens below).
@@ -284,62 +286,53 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"s.hub.Publish(Event{", `broadcastSecurityNotification = "security.notification"`},
 		WireValue: string(hmevent.EventTypeSecurityNotification),
 	},
-	"matter.exposable_changed": {
+	"node.fabric_added": {
 		Files: []string{
-			"internal/north/rest/handlers/matter_events.go",
-			"internal/north/rest/handlers/matter_exposures.go",
-		},
-		Tokens:    []string{`MatterTopicExposableChanged = "matter.exposable_changed"`, "publishMatterEvent(req.Context(), publisher, MatterTopicExposableChanged"},
-		WireValue: handlers.MatterTopicExposableChanged,
-	},
-	"matter.commissioning_window_opened": {
-		Files: []string{
-			"internal/north/rest/handlers/matter_events.go",
-			"internal/north/rest/handlers/matter.go",
-		},
-		Tokens:    []string{`MatterTopicCommissioningWindowOpened = "matter.commissioning_window_opened"`, "publishMatterEvent(req.Context(), publisher, MatterTopicCommissioningWindowOpened"},
-		WireValue: handlers.MatterTopicCommissioningWindowOpened,
-	},
-	"matter.commissioning_progress": {
-		Files: []string{
-			"internal/north/rest/handlers/matter_events.go",
-			"internal/north/rest/handlers/matter_exposures.go",
-		},
-		Tokens:    []string{`MatterTopicCommissioningProgress = "matter.commissioning_progress"`, "MatterTopicCommissioningProgress, map[string]any{"},
-		WireValue: handlers.MatterTopicCommissioningProgress,
-	},
-	"matter.fabric_added": {
-		Files: []string{
-			"internal/north/rest/handlers/matter_events.go",
-			"cmd/openccu-loom/matter_event_publisher.go",
+			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`MatterTopicFabricAdded = "matter.fabric_added"`, "Topic:   handlers.MatterTopicFabricAdded", "fabricEvents.set(wiring.pub.publishFabricAdded, wiring.pub.publishFabricRemoved)"},
-		WireValue: handlers.MatterTopicFabricAdded,
+		Tokens:    []string{`nodeTopicFabricAdded = "node.fabric_added"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		WireValue: "node." + fabricui.EventFabricAdded,
 	},
-	"matter.fabric_removed": {
+	"node.fabric_removed": {
 		Files: []string{
-			"internal/north/rest/handlers/matter_events.go",
-			"internal/north/rest/handlers/matter_exposures.go",
-			"cmd/openccu-loom/matter_event_publisher.go",
+			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens: []string{
-			`MatterTopicFabricRemoved = "matter.fabric_removed"`,
-			"MatterTopicFabricRemoved, map[string]any{",
-			"Topic:   handlers.MatterTopicFabricRemoved",
-			"fabricEvents.set(wiring.pub.publishFabricAdded, wiring.pub.publishFabricRemoved)",
-		},
-		WireValue: handlers.MatterTopicFabricRemoved,
+		Tokens:    []string{`nodeTopicFabricRemoved = "node.fabric_removed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		WireValue: "node." + fabricui.EventFabricRemoved,
 	},
-	"matter.endpoint_assembled": {
+	"node.window_opened": {
 		Files: []string{
-			"internal/north/rest/handlers/matter_events.go",
-			"cmd/openccu-loom/matter_event_publisher.go",
+			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`MatterTopicEndpointAssembled = "matter.endpoint_assembled"`, "Topic:   handlers.MatterTopicEndpointAssembled", "SetOnReassembled(func(count int)"},
-		WireValue: handlers.MatterTopicEndpointAssembled,
+		Tokens:    []string{`nodeTopicWindowOpened = "node.window_opened"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		WireValue: "node." + fabricui.EventWindowOpened,
+	},
+	"node.window_closed": {
+		Files: []string{
+			"cmd/openccu-loom/matter_node_events.go",
+			"cmd/openccu-loom/daemon_matter.go",
+		},
+		Tokens:    []string{`nodeTopicWindowClosed = "node.window_closed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		WireValue: "node." + fabricui.EventWindowClosed,
+	},
+	"node.endpoints_changed": {
+		Files: []string{
+			"cmd/openccu-loom/matter_node_events.go",
+			"cmd/openccu-loom/daemon_matter.go",
+		},
+		Tokens:    []string{`nodeTopicEndpointsChanged = "node.endpoints_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))", "bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged"},
+		WireValue: "node." + fabricui.EventEndpointsChanged,
+	},
+	"node.exposure_changed": {
+		Files: []string{
+			"cmd/openccu-loom/matter_node_events.go",
+			"cmd/openccu-loom/daemon_matter.go",
+		},
+		Tokens:    []string{`nodeTopicExposureChanged = "node.exposure_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))", "Events:           bundle.events,"},
+		WireValue: "node." + fabricui.EventExposureChanged,
 	},
 	"pairing.requests_changed": {
 		Files: []string{

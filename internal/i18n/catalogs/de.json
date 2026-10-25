@@ -270,5 +270,11 @@
   "sysvars.title": "Systemvariablen",
   "onboarding.pairing.purpose.devices": "Deine Homematic-Geräte aus OpenCCU-Loom lesen, schalten und konfigurieren.",
   "onboarding.pairing.purpose.names": "Gerätenamen, Räume und Gewerke in OpenCCU-Loom anzeigen und dort bearbeiten.",
-  "onboarding.pairing.purpose.system": "Systemzustand, Servicemeldungen, Heizgruppen und Updates in OpenCCU-Loom anzeigen."
+  "onboarding.pairing.purpose.system": "Systemzustand, Servicemeldungen, Heizgruppen und Updates in OpenCCU-Loom anzeigen.",
+  "node.exposure.column.central": "CCU",
+  "node.exposure.column.device": "Geräteadresse",
+  "node.exposure.column.channel": "Kanal",
+  "node.exposure.column.kind": "Datenpunktart",
+  "node.exposure.column.key": "Parameter",
+  "node.exposure.column.parameter": "Parameterbezeichnung"
 }

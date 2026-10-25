@@ -351,34 +351,35 @@ Live config section read / write / delete + schema introspection
 | DELETE | `/devices/{addr}/links` | Remove a direct link | operator |
 | POST | `/devices/{addr}/links/test` | Test a direct link at the device (activate link paramset) | operator |
 
-## matter {#matter}
-
-| Method | Path | Summary | Access |
-|---|---|---|---|
-| POST | `/matter/commissioning/window` | Open a Matter commissioning window | admin |
-| POST | `/matter/commissioning/window/close` | Close an open Matter commissioning window early (admin) | admin |
-| GET | `/matter/compatibility` | How each commissioned ecosystem will treat what the bridge exposes | viewer |
-| GET | `/matter/endpoints` | The assembled Matter topology as a controller sees it | viewer |
-| GET | `/matter/events` | Recent Matter pairing, session and discovery events | viewer |
-| GET | `/matter/exposable` | List every candidate source with current allowlist state + mappable verdict | viewer |
-| PUT | `/matter/exposable` | Update one allowlist row (admin) | admin |
-| POST | `/matter/exposable/bulk` | Apply multiple allowlist updates at once (admin) | admin |
-| GET | `/matter/fabrics` | List Matter fabrics commissioned to the bridge | viewer |
-| DELETE | `/matter/fabrics/{id}` | Unpair a Matter fabric (admin) | admin |
-| POST | `/matter/factory-reset` | Remove every Matter fabric (admin, destructive) | admin |
-| POST | `/matter/force-sync` | Re-assemble the exposed Matter topology (admin) | admin |
-| GET | `/matter/mdns` | What the bridge advertises over mDNS, and what is wrong with it | viewer |
-| GET | `/matter/sessions` | Open Matter sessions with per-session liveness (operator diagnostics) | viewer |
-| GET | `/matter/setup-payload` | Bridge's QR + manual pairing code | admin |
-| POST | `/matter/share` | Open a commissioning window for a second Matter controller (admin) | admin |
-| GET | `/matter/status` | Bridge runtime state (endpoint count, fabric count, advertise on/off) | viewer |
-
 ## messages {#messages}
 
 | Method | Path | Summary | Access |
 |---|---|---|---|
 | GET | `/alarm-messages` |  | viewer |
 | GET | `/service-messages` |  | viewer |
+
+## node {#node}
+
+| Method | Path | Summary | Access |
+|---|---|---|---|
+| GET | `/node/compatibility` | The commissioned ecosystems and known incompatibilities. | viewer |
+| GET | `/node/endpoints` | The bridged endpoints a controller sees. | viewer |
+| GET | `/node/events` | The pairing, session and discovery trace, newest first. | viewer |
+| GET | `/node/exposure` | Every item the host could expose. | viewer |
+| PUT | `/node/exposure` | Apply a batch of item changes and reassemble the endpoints. | admin |
+| POST | `/node/exposure/preview` | The items as a batch of changes would leave them; nothing is written. | admin |
+| GET | `/node/exposure/schema` | How the selection page shows the host's items. | viewer |
+| GET | `/node/fabrics` | The commissioned fabrics. | viewer |
+| DELETE | `/node/fabrics/{index}` | Remove one fabric. | admin |
+| POST | `/node/maintenance/factory-reset` | Remove every fabric. The body must name the action. | admin |
+| POST | `/node/maintenance/reassemble` | Rebuild the endpoints from the host's current selection; pairings are untouched. | admin |
+| GET | `/node/mdns` | The live DNS-SD advertisement and its diagnosis. | viewer |
+| GET | `/node/pairing` | The pairing codes — of the window this handler opened while it is open, else the configured ones. | admin |
+| POST | `/node/pairing/window` | Open a commissioning window. | admin |
+| POST | `/node/pairing/window/close` | Close the open commissioning window. | admin |
+| GET | `/node/sessions` | The open secure sessions and the session-id occupancy. | viewer |
+| GET | `/node/status` | Health, counts and the commissioning window. | viewer |
+| GET | `/node/stream` | Server-sent events. | viewer |
 
 ## paramsets {#paramsets}
 

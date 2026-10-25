@@ -35,6 +35,7 @@ var wiringFuncsWithoutSeam = map[string]string{
 	"wireHubDiscoveryOnReady":           "installs the attach for a seam its caller declares one level up (wireHubReadyRestart, seam mqtt.hub_ready_restart); it subscribes and debounces, and declares nothing of its own",
 	"wireMasterValuesStore":             "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireMatterCentralReadinessForUnit": "runs once per central, from the boot walk and the live-adopt path alike; the manifest records daemon-level seams, and a name declared per central would collide",
+	"wireMatterNodeEvents":              "subscribes the WebSocket hub to go-fabric-ui's event source, which the node's observers (chained at node.New) feed; the seam is the node page family's, declared by the module, and the subscription is one call with nothing of its own to attach",
 	"wireMatterDeviceReachableForward":  "runs once per central, from the boot walk and the live-adopt path alike; the manifest records daemon-level seams, and a name declared per central would collide",
 	"wireMatterReassembleOnReady":       "composes several attaches rather than being one; the ones with a constraint declare it themselves, at the call that makes them",
 	"wireMatterRuntime":                 "composes several attaches rather than being one; the ones with a constraint declare it themselves, at the call that makes them",

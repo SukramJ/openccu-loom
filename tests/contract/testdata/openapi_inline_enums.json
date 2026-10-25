@@ -200,34 +200,6 @@
   "name": "role"
  },
  {
-  "path": "components/schemas/MatterDiagnosticEvent/properties/kind",
-  "name": "kind"
- },
- {
-  "path": "components/schemas/MatterDiagnosticEvent/properties/severity",
-  "name": "severity"
- },
- {
-  "path": "components/schemas/MatterEcosystem/properties/ecosystem",
-  "name": "ecosystem"
- },
- {
-  "path": "components/schemas/MatterMdnsFinding/properties/severity",
-  "name": "severity"
- },
- {
-  "path": "components/schemas/MatterExposure/properties/dp_kind",
-  "name": "dp_kind"
- },
- {
-  "path": "components/schemas/MatterExposure/properties/mappable",
-  "name": "mappable"
- },
- {
-  "path": "components/schemas/MatterExposureUpdate/properties/dp_kind",
-  "name": "dp_kind"
- },
- {
   "path": "components/schemas/UnIgnoreCandidateGroup/properties/paramset",
   "name": "paramset"
  },
@@ -542,10 +514,6 @@
  {
   "path": "components/schemas/DiscoveredCentral/properties/system_type",
   "name": "system_type"
- },
- {
-  "path": "components/schemas/MatterFactoryResetRequest/properties/confirm",
-  "name": "confirm"
  },
  {
   "path": "components/schemas/SetupRequest/properties/locale/properties/locale",

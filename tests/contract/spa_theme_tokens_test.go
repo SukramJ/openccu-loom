@@ -45,16 +45,28 @@ func themeTokensIn(block string) map[string]bool {
 	return out
 }
 
+// loadThemeBlocks reads the token blocks of the two stylesheets the SPA
+// is built from: loom's app.css and the tokens.css of @sukramj/fabric-ui,
+// which carries the --ha-* consumption tokens, the HA skin and the
+// palette remap since the Matter pages moved into that package (app.css
+// imports it). The package file is read from the go-fabric-ui Go module
+// in the module cache — the same release as the npm package, and present
+// wherever the Go tests run, which node_modules is not.
 func loadThemeBlocks(t *testing.T) map[string]map[string]bool {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "assets", "ui", "src", "app.css"))
 	if err != nil {
 		t.Fatalf("read app.css: %v", err)
 	}
+	tokens, err := os.ReadFile(filepath.Join(goFabricUIModuleDir(t), "ui", "src", "lib", "theme", "tokens.css"))
+	if err != nil {
+		t.Fatalf("read @sukramj/fabric-ui tokens.css from the go-fabric-ui module: %v", err)
+	}
+	css := string(tokens) + "\n" + string(raw)
 	blocks := make(map[string]map[string]bool)
 	for name, re := range themeBlockRes {
 		var all strings.Builder
-		for _, m := range re.FindAllStringSubmatch(string(raw), -1) {
+		for _, m := range re.FindAllStringSubmatch(css, -1) {
 			all.WriteString(m[1])
 			all.WriteString("\n")
 		}

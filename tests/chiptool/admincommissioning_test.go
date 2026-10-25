@@ -41,7 +41,7 @@ func TestAdminCommissioning_WindowStatus_Closed(t *testing.T) {
 // reflects the open state. Closes the window again afterwards so
 // subsequent tests see WindowStatus=Closed.
 //
-// Mirrors the production flow `POST /api/v1/matter/commissioning/window`.
+// Mirrors the production flow `POST /api/v1/node/pairing/window`.
 func TestAdminCommissioning_RESTOpenWindow(t *testing.T) {
 	b := requireBridge(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -55,7 +55,7 @@ func TestAdminCommissioning_RESTOpenWindow(t *testing.T) {
 	body := map[string]any{
 		"duration_seconds": 180,
 	}
-	resp, status := b.RESTPost(t, "/api/v1/matter/commissioning/window", body)
+	resp, status := b.RESTPost(t, "/api/v1/node/pairing/window", body)
 	if status < 200 || status >= 300 {
 		// Some daemon builds gate this endpoint behind the
 		// "ephemeral_window" config flag (off by default). Treat 4xx
@@ -74,7 +74,7 @@ func TestAdminCommissioning_RESTOpenWindow(t *testing.T) {
 	}
 
 	// Cleanup: close the window so the next test sees WindowStatus=0.
-	_, _ = b.RESTPost(t, "/api/v1/matter/commissioning/window/close", nil)
+	_, _ = b.RESTPost(t, "/api/v1/node/pairing/window/close", nil)
 }
 
 // TestAdminCommissioning_AdminFabricIndex_AfterOpen reads

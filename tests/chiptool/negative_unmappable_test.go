@@ -42,20 +42,6 @@ const (
 	unmappableIrrigationPrimaryChannel = 4
 )
 
-// negativeExposableRow mirrors the subset of the REST GET
-// /api/v1/matter/exposable row shape this test needs. Duplicated
-// rather than imported for the same reason
-// harness/ccu_resolve.go's exposureItem is duplicated: the test only
-// talks to the daemon through its REST/chip-tool surface, never by
-// importing daemon-internal packages.
-type negativeExposableRow struct {
-	DeviceAddress string `json:"device_address"`
-	ChannelNo     int    `json:"channel_no"`
-	DPKey         string `json:"dp_key"`
-	Mappable      string `json:"mappable"`
-	Enabled       bool   `json:"enabled"`
-}
-
 // negativeDisplayParamKeys are HmIP-WRCD's ACOUSTIC_DISPLAY_RECEIVER
 // VALUES-paramset parameters (godevccu's paramset_descriptions/
 // HmIP-WRCD.json, channel :3). None of them ever drive a bridged
@@ -97,12 +83,7 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	var candidates struct {
-		Items []negativeExposableRow `json:"items"`
-	}
-	if status := b.RESTGet(t, "/api/v1/matter/exposable", &candidates); status != 200 {
-		t.Fatalf("GET /matter/exposable: status=%d", status)
-	}
+	candidates := b.FetchExposable(t)
 
 	// SEND/RECEIVE direction does not apply here — a source with no
 	// Matter projection has no attribute to write or subscribe to.
@@ -119,10 +100,10 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 		// collectChannelCandidates) drops the whole channel from the
 		// candidate list rather than surfacing it as an explicit
 		// unmappable row — so this channel must be entirely absent
-		// from /matter/exposable, not merely marked "unmappable".
-		for _, it := range candidates.Items {
+		// from /node/exposure, not merely marked "unmappable".
+		for _, it := range candidates {
 			if it.DeviceAddress == unmappableTextDisplayAddr && it.ChannelNo == unmappableTextDisplayChannel {
-				t.Errorf("unexpected /matter/exposable row for HmIP-WRCD's TextDisplay channel: %+v", it)
+				t.Errorf("unexpected /node/exposure row for HmIP-WRCD's TextDisplay channel: %+v", it)
 			}
 		}
 	})
@@ -204,7 +185,7 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 	// mappable STATE row.
 	t.Run("irrigation-valve/only-primary-channel-onoff", func(t *testing.T) {
 		stateChannels := map[int]bool{}
-		for _, it := range candidates.Items {
+		for _, it := range candidates {
 			if it.DeviceAddress == unmappableIrrigationAddr && it.DPKey == "STATE" && it.Mappable == "mappable" {
 				stateChannels[it.ChannelNo] = true
 			}
@@ -237,7 +218,7 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 			"SECTION_STATUS":             true, // ignored: *_STATUS validity flag
 			"WEEK_PROGRAM_CHANNEL_LOCKS": true, // no_create: consumed by week profile
 		}
-		for _, it := range candidates.Items {
+		for _, it := range candidates {
 			if it.DeviceAddress == unmappableIrrigationAddr && internal[it.DPKey] {
 				t.Errorf("ELV-SH-WSM exposes a Matter candidate for internal param %q (ch %d) — ignored / no_create params must stay out of the candidate list", it.DPKey, it.ChannelNo)
 			}

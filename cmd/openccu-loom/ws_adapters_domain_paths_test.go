@@ -20,13 +20,10 @@ import (
 	"strings"
 	"testing"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
-	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -295,49 +292,7 @@ func TestHotReloadHandler_OpenAPIValidateEnabledChange(t *testing.T) {
 
 // ── matter_ephemeral_provider.go: concurrent-mode (lines 115-129, 157-165) ───
 
-// TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric exercises the
-// non-nil-store path of RevokeFabric. RemoveFabric for a non-existent index
-// may return nil or an error — what matters is that the live-store path is hit.
-func TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.North.Matter.Enabled = true
-	cfg.North.Matter.MDNSAdvertise = "noop"
-	cfg.North.Matter.Listen = ":0"
-	cfg.DataDir = t.TempDir()
-	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
-
-	reg := buildTestRegistry(t, "ccu-01")
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
-	if bundle == nil {
-		t.Skip("bridge did not start; skipping RevokeFabric live test")
-	}
-	t.Cleanup(bundle.stop)
-
-	a := &matterFabricRevokerAdapter{node: bundle.node}
-	// Revoke fabric 255 (non-existent) — must not panic; error acceptable.
-	err := a.RevokeFabric(context.Background(), 255)
-	_ = err // may be nil or "not found"
-}
-
 // ── matter_status_adapter.go: CloseCommissioningWindow with live window ───────
-
-// TestMatterCommissioningCloserAdapter_LiveWindow_RevokeWhenClosed exercises the
-// live-window path of CloseCommissioningWindow. The window is not currently open
-// so RevokeWindow returns an error — that's fine, the live-store path is covered.
-func TestMatterCommissioningCloserAdapter_LiveWindow_RevokeWhenClosed(t *testing.T) {
-	t.Parallel()
-	window := matterbridge.NewCommissioningWindow()
-	a := &matterCommissioningCloserAdapter{window: window}
-
-	// RevokeWindow when window not open → error or nil; must not panic.
-	err := a.CloseCommissioningWindow(context.Background())
-	_ = err
-}
 
 // ── visibility_adapter.go: overlapping patterns across two centrals ───────────
 

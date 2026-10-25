@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.10.0
+  version: 14.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -33,7 +33,7 @@ tags:
   - name: diagnostics
   - name: alarm
     description: Alarm system zones, arming, sensors, outputs, journal, walk-test
-  - name: matter
+  - name: node
   - name: config-admin
     description: Live config section read / write / delete + schema introspection
   - name: user-admin
@@ -6339,196 +6339,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/SystemRestartResponse"
 
-  /matter/status:
+  # ---------------------------------------------------------------------
+  # The node page family (go-fabric-ui, github.com/SukramJ/go-fabric-ui):
+  # the Matter bridge's status, pairing, fabrics, endpoints, sessions,
+  # mDNS, compatibility, trace, the exposure selection and maintenance.
+  # The daemon mounts go-fabric-ui's handler under /api/v1/node
+  # (internal/north/rest/router.go, fabricui.Mount); these operations and
+  # the schemas named Node*/Fabric*/… below are its contract
+  # (contract/openapi.yaml of go-fabric-ui v0.1.1, paths /node/*), copied
+  # so the request validator and the clients generated from this file
+  # know them. tests/contract/node_contract_sync_test.go holds the copy
+  # to the pinned module version. `x-admin: true` is go-fabric-ui's own
+  # gate (Options.Admin); the `security` block beneath it is loom's
+  # declaration of the same requirement for the scope guard.
+  # ---------------------------------------------------------------------
+  /node/status:
     get:
-      operationId: matterStatus
-      summary: Bridge runtime state (endpoint count, fabric count, advertise on/off)
-      tags: [matter]
+      tags: [node]
+      operationId: getNodeStatus
+      summary: Health, counts and the commissioning window.
       responses:
         "200":
-          description: OK
+          description: The status; `enabled` is false when the host serves no node.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MatterStatus" }
-
-  /matter/compatibility:
+              schema: { $ref: "#/components/schemas/Status" }
+  /node/fabrics:
     get:
-      operationId: matterCompatibility
-      summary: How each commissioned ecosystem will treat what the bridge exposes
-      description: |
-        Classifies every commissioned fabric by ecosystem and reports what
-        that ecosystem does with the exposed device types.
-
-        These problems are invisible from the bridge: the endpoint is
-        assembled, its clusters answer reads, commissioning succeeds — and
-        the device is missing from the app, or the whole bridge stops
-        responding there. Naming the combination is what connects the two.
-      tags: [matter]
+      tags: [node]
+      operationId: listFabrics
+      summary: The commissioned fabrics.
       responses:
         "200":
-          description: OK
+          description: The fabrics.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MatterCompatibility" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/endpoints:
-    get:
-      operationId: matterEndpointInspector
-      summary: The assembled Matter topology as a controller sees it
-      description: |
-        Reports every endpoint the bridge exposes with its device type,
-        its clusters and where it came from — the view a controller gets,
-        without needing chip-tool to obtain it.
-
-        Endpoint numbers are assigned from persisted identity, not from
-        position, so they are stable across restarts but not derivable
-        from the device list. Reading them here is the way to find the
-        endpoint belonging to a given device; guessing by ordinal is not.
-      tags: [matter]
+              schema: { $ref: "#/components/schemas/FabricList" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/fabrics/{index}:
+    delete:
+      tags: [node]
+      operationId: removeFabric
+      summary: Remove one fabric.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: index
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 254 }
       responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterEndpointList" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/mdns:
+        "204": { description: Removed. }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/pairing:
     get:
-      operationId: matterMdnsDiagnostics
-      summary: What the bridge advertises over mDNS, and what is wrong with it
-      description: |
-        Reports the mDNS records the bridge currently announces, together
-        with findings that explain why a controller might not discover it.
-
-        Every finding corresponds to a failure that presents identically
-        from inside the daemon: advertising succeeds, the log says so, and
-        the controller simply never offers the bridge. Missing subtype
-        PTRs (Apple and Google browse through them), container-internal
-        addresses a LAN controller cannot route to, a commissioning port
-        other than 5540 (Alexa uses no other), an IPv4-only announcement.
-      tags: [matter]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterMdnsDiagnostics" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/sessions:
-    get:
-      operationId: listMatterSessions
-      summary: Open Matter sessions with per-session liveness (operator diagnostics)
-      description: |
-        Lists every secure session the bridge currently holds, with when it
-        last carried traffic and how many subscriptions ride on it.
-
-        The two timestamps answer different questions. `last_activity` moves
-        on traffic in either direction; `last_peer_activity` only when the
-        controller sent something. A session whose peer has been quiet while
-        the bridge kept reporting is a controller that went away without
-        closing — the shape that otherwise shows up only as entities going
-        stale in the ecosystem.
-
-        The `occupancy` block answers the other half: how much of the
-        session-id space the listed sessions leave free, including the ids
-        held by handshakes that never became sessions.
-
-        No key material is exposed.
-      tags: [matter]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterSessionList" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/events:
-    get:
-      operationId: getMatterDiagnosticEvents
-      summary: Recent Matter pairing, session and discovery events
-      description: >-
-        A bounded, in-memory trace of the moments that explain a failed
-        pairing — a commissioner refused while another was mid-handshake,
-        pairing locked after repeated failed attempts, a session
-        closed. The existing Matter diagnostics report state and
-        therefore cannot answer "what happened thirty seconds ago", which
-        is the question left after a controller gives up and goes quiet.
-
-
-        The trace is lossy by design: oldest entries are dropped to make
-        room, and it does not survive a restart. It is a diagnostic, not
-        an audit trail.
-      tags: [matter]
-      responses:
-        "200":
-          description: Recorded events, newest first
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterDiagnosticEventList" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/force-sync:
-    post:
-      operationId: matterForceSync
-      summary: Re-assemble the exposed Matter topology (admin)
-      description: >-
-        Re-runs endpoint assembly against the current device model. Use
-        when the bridge and the CCU disagree about what exists — a change
-        that arrived while the bridge was down, an exposure edited
-        outside the usual path. Not destructive: controllers keep their
-        sessions and fabrics.
-      tags: [matter]
+      tags: [node]
+      operationId: getPairing
+      summary: The pairing codes — of the window this handler opened while it is open, else the configured ones.
+      x-admin: true
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [admin]
       responses:
-        "204": { description: Topology re-assembled }
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter bridge not enabled
+        "200":
+          description: The codes.
           content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/factory-reset:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pairing" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/pairing/window:
     post:
-      operationId: matterFactoryReset
-      summary: Remove every Matter fabric (admin, destructive)
-      description: >-
-        Returns the bridge to its uncommissioned state. Every paired
-        controller loses it and has to commission it again; there is no
-        undo.
-
-
-        The request body must name the action —
-        `{"confirm": "remove-all-fabrics"}` — so a replayed or
-        mis-scripted POST cannot unpair an installation.
-      tags: [matter]
+      tags: [node]
+      operationId: openWindow
+      summary: Open a commissioning window.
+      x-admin: true
       security:
         - basicAuth: []
         - bearerAuth: []
@@ -6537,73 +6430,221 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/MatterFactoryResetRequest"
-      responses:
-        "204": { description: Every fabric removed }
-        "400":
-          description: Confirmation missing or wrong
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-        "500":
-          description: >-
-            The reset did not complete. It may be partial: the fabrics
-            already revoked stay revoked, and the problem detail names how
-            many of how many were removed. Re-run to finish.
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/fabrics:
-    get:
-      operationId: listMatterFabrics
-      summary: List Matter fabrics commissioned to the bridge
-      tags: [matter]
+            schema: { $ref: "#/components/schemas/WindowRequest" }
       responses:
         "200":
-          description: OK
+          description: The window is open; the codes commission through it.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MatterFabricList" }
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/fabrics/{id}:
-    delete:
-      operationId: revokeMatterFabric
-      summary: Unpair a Matter fabric (admin)
-      tags: [matter]
+              schema: { $ref: "#/components/schemas/Window" }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "409": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/pairing/window/close:
+    post:
+      tags: [node]
+      operationId: closeWindow
+      summary: Close the open commissioning window.
+      x-admin: true
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [admin]
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer, minimum: 1, maximum: 254 }
       responses:
-        "204":
-          description: Fabric revoked
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter bridge not enabled
+        "204": { description: Closed. }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/endpoints:
+    get:
+      tags: [node]
+      operationId: listEndpoints
+      summary: The bridged endpoints a controller sees.
+      responses:
+        "200":
+          description: The endpoints.
           content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
+            application/json:
+              schema: { $ref: "#/components/schemas/EndpointList" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/sessions:
+    get:
+      tags: [node]
+      operationId: listSessions
+      summary: The open secure sessions and the session-id occupancy.
+      responses:
+        "200":
+          description: The sessions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionList" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/mdns:
+    get:
+      tags: [node]
+      operationId: getMdns
+      summary: The live DNS-SD advertisement and its diagnosis.
+      responses:
+        "200":
+          description: The advertisement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mdns" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/compatibility:
+    get:
+      tags: [node]
+      operationId: getCompatibility
+      summary: The commissioned ecosystems and known incompatibilities.
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Compatibility" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/events:
+    get:
+      tags: [node]
+      operationId: listDiagnosticEvents
+      summary: The pairing, session and discovery trace, newest first.
+      responses:
+        "200":
+          description: The trace.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagnosticEventList" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/exposure/schema:
+    get:
+      tags: [node]
+      operationId: getExposureSchema
+      summary: How the selection page shows the host's items.
+      responses:
+        "200":
+          description: The schema.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExposureSchema" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/exposure:
+    get:
+      tags: [node]
+      operationId: listExposure
+      summary: Every item the host could expose.
+      responses:
+        "200":
+          description: The items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+    put:
+      tags: [node]
+      operationId: applyExposure
+      summary: Apply a batch of item changes and reassemble the endpoints.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateList" }
+      responses:
+        "200":
+          description: Applied.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Applied" }
+        "204": { description: The batch was empty. }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/exposure/preview:
+    post:
+      tags: [node]
+      operationId: previewExposure
+      summary: The items as a batch of changes would leave them; nothing is written.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateList" }
+      responses:
+        "200":
+          description: The touched items after the changes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/maintenance/reassemble:
+    post:
+      tags: [node]
+      operationId: reassemble
+      summary: Rebuild the endpoints from the host's current selection; pairings are untouched.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Reassembled. }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/maintenance/factory-reset:
+    post:
+      tags: [node]
+      operationId: factoryReset
+      summary: Remove every fabric. The body must name the action.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FactoryResetRequest" }
+      responses:
+        "204": { description: Every fabric is removed. }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/stream:
+    get:
+      tags: [node]
+      operationId: stream
+      summary: Server-sent events.
+      description: |
+        `event:` is one of fabric_added, fabric_removed, window_opened,
+        window_closed, endpoints_changed, exposure_changed; `data:` is the
+        JSON payload (`FabricEvent`, `WindowEvent`, `{}`, `ExposureEvent`).
+        A comment line arrives every 15 s. No payload carries a passcode.
+      responses:
+        "200":
+          description: The event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
   /visibility/unignore:
     get:
       operationId: listVisibilityUnIgnore
@@ -6664,213 +6705,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/UnIgnoreCandidateList" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-
-  /matter/exposable:
-    get:
-      operationId: listMatterExposable
-      summary: List every candidate source with current allowlist state + mappable verdict
-      tags: [matter]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterExposureList" }
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-    put:
-      operationId: updateMatterExposable
-      summary: Update one allowlist row (admin)
-      tags: [matter]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MatterExposureUpdate" }
-      responses:
-        "204":
-          description: Updated
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/exposable/bulk:
-    post:
-      operationId: bulkUpdateMatterExposable
-      summary: Apply multiple allowlist updates at once (admin)
-      tags: [matter]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MatterExposureBulkUpdate" }
-      responses:
-        "200":
-          description: Bulk applied
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BulkUpdateMatterExposableResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "204":
-          description: No content — all updates failed or zero applied
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/ServiceUnavailable" }
-
-  /matter/commissioning/window/close:
-    post:
-      operationId: closeMatterCommissioningWindow
-      summary: Close an open Matter commissioning window early (admin)
-      tags: [matter]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      responses:
-        "204":
-          description: Window closed
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter bridge not enabled
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/share:
-    post:
-      operationId: shareMatterBridge
-      summary: Open a commissioning window for a second Matter controller (admin)
-      tags: [matter]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MatterCommissioningWindowRequest" }
-      responses:
-        "200":
-          description: Sharing window opened
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterCommissioningWindowResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "409":
-          description: Commissioning window already open
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: >-
-            Matter bridge not enabled, or its endpoint topology has not
-            finished assembling yet — the latter carries a `Retry-After`
-            header and clears on its own.
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-          headers:
-            Retry-After:
-              description: Seconds to wait before retrying, when the topology is still assembling.
-              required: false
-              schema: { type: integer }
-
-  /matter/setup-payload:
-    get:
-      operationId: matterSetupPayload
-      summary: Bridge's QR + manual pairing code
-      description: >-
-        Admin only. The response carries the commissioning passcode and the QR
-        and manual codes derived from it, so anyone holding it can commission
-        the bridge into their own fabric while a window is open.
-      tags: [matter]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterSetupPayload" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: Matter commissioning not configured (passcode = 0)
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-
-  /matter/commissioning/window:
-    post:
-      operationId: openMatterCommissioningWindow
-      summary: Open a Matter commissioning window
-      tags: [matter]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MatterCommissioningWindowRequest" }
-      responses:
-        "200":
-          description: Window opened
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MatterCommissioningWindowResponse" }
-        "400":
-          description: duration_seconds out of range (180..900)
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-        "409":
-          description: >-
-            Commissioning window already open, or new commissioning is
-            disabled because the configured attestation chain
-            (`north.matter.attestation`) does not load. In the second case
-            the bridge keeps serving every controller already paired; the
-            log names the cause.
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-        "500": { $ref: "#/components/responses/InternalError" }
-        "503":
-          description: >-
-            Matter bridge not enabled, or its endpoint topology has not
-            finished assembling yet — the latter carries a `Retry-After`
-            header and clears on its own.
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-          headers:
-            Retry-After:
-              description: Seconds to wait before retrying, when the topology is still assembling.
-              required: false
-              schema: { type: integer }
 
   # ---- Config live-edit (Wave-C) ----
   /config/schema:
@@ -8657,6 +8491,11 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     ServiceUnavailable:
       description: Backend not wired
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NodeProblem:
+      description: An RFC 9457 problem of the node page family (go-fabric-ui).
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -11978,389 +11817,6 @@ components:
         subject: { type: string }
         role: { type: string, enum: [admin, operator, viewer] }
 
-    MatterDiagnosticEvent:
-      type: object
-      required: [at, kind, severity, message]
-      properties:
-        at: { type: string, format: date-time }
-        kind:
-          type: string
-          enum: [pairing, session, discovery]
-        severity:
-          type: string
-          enum: [info, warning, error]
-        message:
-          type: string
-          description: One sentence an operator can act on.
-        detail:
-          type: object
-          additionalProperties: { type: string }
-          description: Identifiers that make the message specific.
-
-    MatterDiagnosticEventList:
-      type: object
-      required: [events]
-      properties:
-        events:
-          type: array
-          items: { $ref: "#/components/schemas/MatterDiagnosticEvent" }
-
-    MatterFabric:
-      type: object
-      required: [fabric_index, fabric_id, fabric_id_hex, node_id, node_id_hex, vendor_id, compressed_id, root_public_key]
-      properties:
-        fabric_index:
-          type: integer
-          minimum: 1
-          maximum: 254
-          description: "Stack-assigned fabric index per Matter Core Spec §11.18.5"
-        fabric_id: { type: integer, format: int64 }
-        fabric_id_hex:
-          type: string
-          description: >-
-            The exact 64-bit fabric id as 16 uppercase hex digits. A JSON
-            number carries only 53 bits of integer precision, so a client
-            that renders `fabric_id` shows rounded low digits for any id
-            above 2^53. Render this field.
-        node_id: { type: integer, format: int64 }
-        node_id_hex:
-          type: string
-          description: >-
-            The exact 64-bit operational node id as 16 uppercase hex
-            digits, in the form controllers and chip-tool print it.
-            Render this field rather than `node_id`, which loses
-            precision in transport.
-        vendor_id: { type: integer, minimum: 0, maximum: 65535 }
-        vendor_name:
-          type: string
-          description: >-
-            Human-readable name of the controller vendor behind vendor_id
-            (e.g. "Apple", "Google"). A vendor the daemon has no name for
-            renders as its id in `0xNNNN` form rather than an empty
-            string, so the row still identifies the controller.
-        label: { type: string }
-        compressed_id:
-          type: string
-          description: "8-byte compressed fabric identifier, hex-encoded"
-        root_public_key:
-          type: string
-          description: "Issuing root CA public key (uncompressed P-256, 65 bytes), hex-encoded"
-
-    MatterFabricList:
-      type: object
-      required: [fabrics]
-      properties:
-        fabrics:
-          type: array
-          items: { $ref: "#/components/schemas/MatterFabric" }
-
-    MatterEcosystem:
-      type: object
-      required: [ecosystem, vendor_id, fabric_index]
-      properties:
-        ecosystem:
-          type: string
-          enum: [apple, google, amazon, smartthings, aqara, home_assistant, unknown]
-        vendor_id: { type: integer }
-        fabric_index: { type: integer }
-        label: { type: string }
-
-    MatterCompatFinding:
-      type: object
-      required: [ecosystem, code, message]
-      properties:
-        ecosystem: { type: string }
-        code: { type: string }
-        message: { type: string }
-        device_type:
-          type: integer
-          description: "The device type concerned; absent when the finding applies to the bridge as a whole"
-
-    MatterCompatibility:
-      type: object
-      required: [ecosystems, endpoint_count, findings]
-      properties:
-        ecosystems:
-          type: array
-          items: { $ref: "#/components/schemas/MatterEcosystem" }
-        endpoint_count: { type: integer }
-        findings:
-          type: array
-          items: { $ref: "#/components/schemas/MatterCompatFinding" }
-
-    MatterEndpointCluster:
-      type: object
-      required: [id, name, revision]
-      properties:
-        id: { type: integer, description: "Cluster id" }
-        name: { type: string, description: "Empty when the cluster is not in the generated schema" }
-        revision: { type: integer, description: "0 when unknown to the schema" }
-
-    MatterEndpointInfo:
-      type: object
-      required:
-        [endpoint_id, parent_endpoint_id, device_type, device_type_name,
-         reachable, friendly_name, clusters]
-      properties:
-        endpoint_id: { type: integer }
-        parent_endpoint_id: { type: integer }
-        device_type: { type: integer }
-        device_type_name: { type: string }
-        device_type_revision: { type: integer }
-        reachable: { type: boolean }
-        friendly_name: { type: string }
-        device_address:
-          type: string
-          description: "Source device, absent for the root and aggregator endpoints"
-        channel_address:
-          type: string
-          description: "Source channel, absent when the endpoint is not channel-scoped"
-        clusters:
-          type: array
-          items: { $ref: "#/components/schemas/MatterEndpointCluster" }
-
-    MatterEndpointList:
-      type: object
-      required: [endpoints]
-      properties:
-        endpoints:
-          type: array
-          items: { $ref: "#/components/schemas/MatterEndpointInfo" }
-
-    MatterMdnsService:
-      type: object
-      required: [service_type, instance_name, host_name, port, addresses, subtypes, txt]
-      properties:
-        service_type: { type: string, example: "_matterc._udp" }
-        instance_name: { type: string }
-        host_name: { type: string }
-        port: { type: integer }
-        addresses:
-          type: array
-          items: { type: string }
-        subtypes:
-          type: array
-          items: { type: string }
-          description: "Service subtypes (`_L<discriminator>`, `_S<short>`, `_CM`) Apple and Google browse through"
-        txt:
-          type: object
-          additionalProperties: { type: string }
-
-    MatterMdnsFinding:
-      type: object
-      required: [severity, code, message]
-      properties:
-        severity: { type: string, enum: [error, warning] }
-        code:
-          type: string
-          description: "Stable identifier; the message is prose and may be reworded"
-        message: { type: string }
-        service:
-          type: string
-          description: "The advertised record this applies to; absent when it concerns the advertisement as a whole"
-
-    MatterMdnsDiagnostics:
-      type: object
-      required: [advertising, services, findings]
-      properties:
-        advertising:
-          type: boolean
-          description: "False when advertising is switched off (`north.matter.mdns_advertise: noop`)"
-        services:
-          type: array
-          items: { $ref: "#/components/schemas/MatterMdnsService" }
-        findings:
-          type: array
-          items: { $ref: "#/components/schemas/MatterMdnsFinding" }
-
-    MatterSession:
-      type: object
-      required:
-        [session_id, fabric_index, peer_node_id, local_node_id, is_pase,
-         subscriptions, last_activity, last_peer_activity,
-         idle_seconds, peer_idle_seconds]
-      properties:
-        session_id: { type: integer, minimum: 0, maximum: 65535 }
-        fabric_index:
-          type: integer
-          minimum: 0
-          maximum: 255
-          description: "0 for a PASE (commissioning) session"
-        peer_node_id: { type: string, description: "64-bit node id, hex" }
-        local_node_id: { type: string, description: "64-bit node id, hex" }
-        is_pase:
-          type: boolean
-          description: "Commissioning session rather than an operational (CASE) one"
-        subscriptions:
-          type: integer
-          description: "Active subscriptions riding on this session"
-        last_activity:
-          type: string
-          format: date-time
-          description: "Last traffic in either direction"
-        last_peer_activity:
-          type: string
-          format: date-time
-          description: "Last message received from the peer"
-        idle_seconds:
-          type: integer
-          description: "Seconds since last_activity"
-        peer_idle_seconds:
-          type: integer
-          description: "Seconds since last_peer_activity — the controller-liveness signal"
-
-    MatterSessionOccupancy:
-      type: object
-      required: [live, reserved, capacity, free]
-      description: |
-        Usage of the bridge's 16-bit session-id space.
-
-        `reserved` is the field the session list cannot supply: a CASE
-        handshake announces its session id in Sigma2 one round trip before
-        the session exists, and an id staked by a handshake that never
-        completes holds its slot for twenty minutes without appearing as a
-        session. A space filling up with those looks like a quiet bridge
-        from every other view, until the next controller is refused.
-      properties:
-        live:
-          type: integer
-          description: "Sessions with key material installed"
-        reserved:
-          type: integer
-          description: "Ids staked by a handshake that has not completed"
-        capacity:
-          type: integer
-          description: "Size of the allocator's id space (ids 1..0xFFFE)"
-        free:
-          type: integer
-          description: "Ids held by neither a live session nor a staked handshake"
-
-    MatterSessionList:
-      type: object
-      required: [sessions, occupancy]
-      properties:
-        sessions:
-          type: array
-          items: { $ref: "#/components/schemas/MatterSession" }
-        occupancy: { $ref: "#/components/schemas/MatterSessionOccupancy" }
-
-    MatterSetupPayload:
-      type: object
-      required: [discriminator, passcode, vendor_id, product_id, qr_code, manual_code]
-      properties:
-        discriminator: { type: integer, minimum: 0, maximum: 4095 }
-        passcode: { type: integer, minimum: 1, maximum: 99999998 }
-        vendor_id: { type: integer, minimum: 0, maximum: 65535 }
-        product_id: { type: integer, minimum: 0, maximum: 65535 }
-        qr_code:
-          type: string
-          description: "Onboarding payload prefixed with `MT:` per Matter §5.7.4"
-        manual_code:
-          type: string
-          description: "11-digit decimal code with Verhoeff check digit per Matter §5.1.4"
-
-    MatterCommissioningWindowRequest:
-      type: object
-      properties:
-        duration_seconds:
-          type: integer
-          minimum: 180
-          maximum: 900
-          description: "Commissioning window duration in seconds. Default 900 (15 minutes)."
-
-    MatterCommissioningWindowResponse:
-      type: object
-      required: [discriminator, passcode, duration_seconds, qr_code, manual_code]
-      properties:
-        discriminator: { type: integer, minimum: 0, maximum: 4095 }
-        passcode: { type: integer, minimum: 1, maximum: 99999998 }
-        duration_seconds: { type: integer, minimum: 180, maximum: 900 }
-        qr_code: { type: string }
-        manual_code: { type: string }
-
-    MatterStatus:
-      type: object
-      required: [enabled, listening, endpoint_count, fabric_count, enabled_count, advertising, commissioning_window_open]
-      properties:
-        enabled: { type: boolean, description: "Bridge feature flag" }
-        listening: { type: boolean, description: "UDP listener bound" }
-        listen_addr: { type: string, description: "Effective UDP listen address" }
-        endpoint_count: { type: integer, description: "Bridged-endpoint count (excludes the root and Aggregator endpoints)" }
-        fabric_count: { type: integer, description: "Commissioned fabrics" }
-        enabled_count: { type: integer, description: "Allowlist entries with enabled=true" }
-        advertising: { type: boolean, description: "mDNS records emitted" }
-        commissioning_window_open: { type: boolean }
-        commissioning_window_duration_seconds:
-          type: integer
-          minimum: 0
-          maximum: 900
-
-    MatterExposure:
-      type: object
-      required: [central_name, device_address, channel_no, dp_kind, dp_key, mappable, enabled]
-      properties:
-        central_name: { type: string }
-        device_address: { type: string }
-        channel_no: { type: integer }
-        dp_kind:
-          type: string
-          enum: [custom, generic, calculated, combined, measurement]
-        dp_key: { type: string }
-        parameter_label:
-          type: string
-          description: |
-            Ready-to-display caption for the data point behind
-            `dp_key`: locale-aware channel-typed translation when one
-            exists, otherwise the title-cased key. Same resolution as
-            `DataPointSummary.parameter_label`.
-        display_name: { type: string }
-        enabled: { type: boolean }
-        friendly_name: { type: string }
-        mappable:
-          type: string
-          enum: [mappable, partially_mappable, unmappable]
-        device_type: { type: integer, minimum: 0, maximum: 65535 }
-        device_type_label:
-          type: string
-          description: |
-            Operator-facing Matter device-type name for `device_type`
-            (e.g. "On/Off Light"). Empty when `device_type` is zero
-            (measurement rides on a host endpoint).
-        clusters:
-          type: array
-          items: { type: integer }
-        reason: { type: string }
-
-    MatterExposureList:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/MatterExposure" }
-
-    MatterExposureUpdate:
-      type: object
-      required: [central_name, device_address, channel_no, dp_kind, dp_key, enabled]
-      properties:
-        central_name: { type: string }
-        device_address: { type: string }
-        channel_no: { type: integer }
-        dp_kind:
-          type: string
-          enum: [custom, generic, calculated, combined, measurement]
-        dp_key: { type: string }
-        enabled: { type: boolean }
-        friendly_name: { type: string }
-
-    MatterExposureBulkUpdate:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/MatterExposureUpdate" }
-
     UnIgnoreEntry:
       type: object
       required: [pattern]
@@ -13824,48 +13280,6 @@ components:
     # via their `payload` field. The bridge publishes them through
     # ws.Hub on the documented topics so SPA + external clients can
     # react to commissioning + topology changes without polling.
-
-    MatterCommissioningProgressPayload:
-      type: object
-      description: |
-        Payload of `matter.commissioning_progress`. Free-form progress
-        update during a commissioning session (PASE handshake → CASE
-        pickup → AddNOC → completion). Fields are intentionally
-        sparse — the bridge emits whatever stage information is
-        available at the moment.
-      required: [stage]
-      properties:
-        stage: { type: string, description: "Stage label (e.g. `pase_session_open`, `add_noc`, `case_session_first`)." }
-        message: { type: string, description: "Human-readable detail; may be empty." }
-
-    MatterFabricRemovedPayload:
-      type: object
-      description: |
-        Payload of `matter.fabric_removed`. Emitted after a fabric is
-        revoked via `DELETE /api/v1/matter/fabrics/{id}` or by the
-        commissioner cluster command.
-      required: [fabric_index]
-      properties:
-        fabric_index:
-          type: integer
-          minimum: 1
-          maximum: 254
-          description: "Stack-assigned fabric index of the removed fabric."
-
-    MatterEndpointAssembledPayload:
-      type: object
-      description: |
-        Payload of `matter.endpoint_assembled`. Fires after the
-        bridge's endpoint topology has been reassembled (e.g. after
-        an allowlist update). Carries the new endpoint count so the
-        SPA can refresh its bridge view without re-fetching the full
-        fabric list.
-      required: [endpoint_count]
-      properties:
-        endpoint_count:
-          type: integer
-          minimum: 0
-          description: "Bridged-endpoint count of the assembled topology (excludes the root and Aggregator endpoints)."
 
     # ─── Wave-C live-edit schemas ─────────────────────────────────────
 
@@ -16407,13 +15821,6 @@ components:
       properties:
         username: { type: string }
         password: { type: string }
-    MatterFactoryResetRequest:
-      type: object
-      required: [confirm]
-      properties:
-        confirm:
-          type: string
-          enum: ["remove-all-fabrics"]
     OpenEditSessionRequest:
       type: object
       required: [key]
@@ -16804,3 +16211,347 @@ components:
             about itself — the collaborator IS wired, so nothing
             else about the daemon looks wrong.
           items: { type: string }
+    # The node page family's schemas (go-fabric-ui contract v0.1.1,
+    # components.schemas): see the /node/* paths above. `Problem` is
+    # loom's own; the contract's `Warning` is `NodeWarning` here because
+    # loom already carries a `Warning`.
+    Status:
+      type: object
+      required: [enabled, listening, endpoint_count, fabric_count, advertising, commissioning_window_open, exposure]
+      properties:
+        enabled: { type: boolean }
+        listening: { type: boolean }
+        listen_addr: { type: string }
+        healthy: { type: boolean, description: Absent when the node runs no health probe. }
+        health_note: { type: string }
+        endpoint_count: { type: integer }
+        fabric_count: { type: integer }
+        enabled_count: { type: integer, description: Enabled selection items; absent without a selection. }
+        advertising: { type: boolean }
+        commissioning_window_open: { type: boolean }
+        commissioning_window_duration_seconds: { type: integer }
+        exposure: { type: boolean, description: Whether the host serves a selection. }
+        csrf_token: { type: string, description: The admin token of token mode; absent when the host decides admin rights. }
+        warnings:
+          type: array
+          description: The host's findings about its own configuration; absent when the host reports none (no Options.Warnings), empty when it finds nothing.
+          items: { $ref: "#/components/schemas/NodeWarning" }
+    NodeWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: "The kind of finding, stable across host releases." }
+        message: { type: string, description: "What is wrong, in the host's language." }
+        since: { type: string, format: date-time, description: "When the host first saw it; absent when unknown." }
+    Fabric:
+      type: object
+      required: [fabric_index, fabric_id, fabric_id_hex, node_id, node_id_hex, vendor_id, vendor_name, compressed_id, root_public_key]
+      properties:
+        fabric_index: { type: integer }
+        fabric_id: { type: integer, description: Informational; use fabric_id_hex. }
+        fabric_id_hex: { type: string }
+        node_id: { type: integer, description: Informational; use node_id_hex. }
+        node_id_hex: { type: string }
+        vendor_id: { type: integer }
+        vendor_name: { type: string }
+        label: { type: string }
+        compressed_id: { type: string }
+        root_public_key: { type: string }
+    FabricList:
+      type: object
+      required: [fabrics]
+      properties:
+        fabrics:
+          type: array
+          items: { $ref: "#/components/schemas/Fabric" }
+    Pairing:
+      type: object
+      required: [qr_code, manual_code, source, window_open]
+      properties:
+        discriminator: { type: integer, description: Only for a window this handler opened on fresh credentials; the codes carry it. }
+        passcode: { type: integer, description: Only for a window this handler opened on fresh credentials. }
+        qr_code: { type: string }
+        manual_code: { type: string }
+        source: { $ref: "#/components/schemas/NodePairingSource" }
+        window_open: { type: boolean }
+        duration_seconds: { type: integer }
+    WindowRequest:
+      type: object
+      properties:
+        duration_seconds: { type: integer, description: "180..900; 0 or absent is 900." }
+    Window:
+      type: object
+      required: [duration_seconds, qr_code, manual_code]
+      properties:
+        discriminator: { type: integer, description: Absent for a window on the configured credentials. }
+        passcode: { type: integer, description: Absent for a window on the configured credentials. }
+        duration_seconds: { type: integer }
+        qr_code: { type: string }
+        manual_code: { type: string }
+    Cluster:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        revision: { type: integer }
+    Endpoint:
+      type: object
+      required: [endpoint_id, parent_endpoint_id, device_type, device_type_name, reachable, name, source, clusters]
+      properties:
+        endpoint_id: { type: integer }
+        parent_endpoint_id: { type: integer }
+        device_type: { type: integer }
+        device_type_name: { type: string }
+        reachable: { type: boolean }
+        name: { type: string }
+        source:
+          type: object
+          description: Opaque identity of the host's source; `key` is the endpoint's stable key.
+          additionalProperties: { type: string }
+        clusters:
+          type: array
+          items: { $ref: "#/components/schemas/Cluster" }
+    EndpointList:
+      type: object
+      required: [endpoints]
+      properties:
+        endpoints:
+          type: array
+          items: { $ref: "#/components/schemas/Endpoint" }
+    Session:
+      type: object
+      required: [session_id, fabric_index, peer_node_id, peer_node_id_hex, local_node_id, local_node_id_hex, is_pase, subscriptions, last_activity, last_peer_activity, idle_seconds, peer_idle_seconds]
+      properties:
+        session_id: { type: integer }
+        fabric_index: { type: integer }
+        peer_node_id: { type: integer, description: Informational; use peer_node_id_hex. }
+        peer_node_id_hex: { type: string }
+        local_node_id: { type: integer, description: Informational; use local_node_id_hex. }
+        local_node_id_hex: { type: string }
+        is_pase: { type: boolean }
+        subscriptions: { type: integer }
+        last_activity: { type: string, format: date-time }
+        last_peer_activity: { type: string, format: date-time }
+        idle_seconds: { type: integer }
+        peer_idle_seconds: { type: integer }
+    Occupancy:
+      type: object
+      required: [live, reserved, capacity, free]
+      properties:
+        live: { type: integer }
+        reserved: { type: integer }
+        capacity: { type: integer }
+        free: { type: integer }
+    SessionList:
+      type: object
+      required: [sessions, occupancy]
+      properties:
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/Session" }
+        occupancy: { $ref: "#/components/schemas/Occupancy" }
+    MdnsService:
+      type: object
+      required: [service_type, instance_name, host_name, port, addresses, subtypes, txt]
+      properties:
+        service_type: { type: string }
+        instance_name: { type: string }
+        host_name: { type: string }
+        port: { type: integer }
+        addresses: { type: array, items: { type: string } }
+        subtypes: { type: array, items: { type: string } }
+        txt: { type: object, additionalProperties: { type: string } }
+    MdnsFinding:
+      type: object
+      required: [severity, code, message]
+      properties:
+        severity: { $ref: "#/components/schemas/NodeMdnsFindingSeverity" }
+        code: { type: string }
+        message: { type: string }
+        service: { type: string }
+    Mdns:
+      type: object
+      required: [advertising, services, findings]
+      properties:
+        advertising: { type: boolean }
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/MdnsService" }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/MdnsFinding" }
+    Ecosystem:
+      type: object
+      required: [ecosystem, vendor_id, fabric_index]
+      properties:
+        ecosystem: { type: string }
+        vendor_id: { type: integer }
+        fabric_index: { type: integer }
+        label: { type: string }
+    CompatFinding:
+      type: object
+      required: [ecosystem, code, message]
+      properties:
+        ecosystem: { type: string }
+        code: { type: string }
+        message: { type: string }
+        device_type: { type: integer }
+    Compatibility:
+      type: object
+      required: [ecosystems, endpoint_count, findings]
+      properties:
+        ecosystems:
+          type: array
+          items: { $ref: "#/components/schemas/Ecosystem" }
+        endpoint_count: { type: integer }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/CompatFinding" }
+    DiagnosticEvent:
+      type: object
+      required: [at, kind, severity, message]
+      properties:
+        at: { type: string, format: date-time }
+        kind: { $ref: "#/components/schemas/NodeDiagnosticEventKind" }
+        severity: { $ref: "#/components/schemas/NodeDiagnosticEventSeverity" }
+        message: { type: string }
+        detail: { type: object, additionalProperties: { type: string } }
+    DiagnosticEventList:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/DiagnosticEvent" }
+    Column:
+      type: object
+      required: [key, label, filter]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        filter: { type: boolean, description: Offer a value filter built from the listed values. }
+        multi: { type: boolean, description: "Default false. The field is a comma-separated list: shown as chips, filtered by membership, the filter's options built from the individual values." }
+    FilterOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: string }
+        label: { type: string }
+    Filter:
+      type: object
+      required: [field, label, options]
+      properties:
+        field: { type: string }
+        label: { type: string }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/FilterOption" }
+        multi: { type: boolean, description: "Default false. Match by membership in the field's comma-separated list (values trimmed; an empty value never matches) instead of equality." }
+    ExposureSchema:
+      type: object
+      required: [columns, groups, filters]
+      properties:
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/Column" }
+        groups: { type: boolean }
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/Filter" }
+    Verdict:
+      type: object
+      required: [state, device_type, device_type_name, clusters, reason]
+      properties:
+        state: { $ref: "#/components/schemas/NodeVerdictState" }
+        device_type: { type: integer }
+        device_type_name: { type: string }
+        clusters: { type: array, items: { type: integer } }
+        reason: { type: string }
+    Item:
+      type: object
+      required: [key, name, group, fields, verdict, enabled, source]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        group: { type: string }
+        fields: { type: object, additionalProperties: { type: string } }
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        enabled: { type: boolean }
+        source: { type: string, description: "Where the verdict comes from, in the host's words." }
+    ItemList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Item" }
+    Update:
+      type: object
+      required: [key, enabled]
+      properties:
+        key: { type: string }
+        enabled: { type: boolean }
+        name: { type: string, description: Renames the item; absent leaves the name. }
+    UpdateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Update" }
+    Applied:
+      type: object
+      required: [applied]
+      properties:
+        applied: { type: integer }
+    FactoryResetRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { type: string, const: remove-all-fabrics }
+    FabricEvent:
+      type: object
+      required: [fabric_index]
+      properties:
+        fabric_index: { type: integer }
+        vendor_id: { type: integer }
+        vendor_name: { type: string }
+        label: { type: string }
+    WindowEvent:
+      type: object
+      properties:
+        discriminator: { type: integer }
+        duration_seconds: { type: integer }
+    ExposureEvent:
+      type: object
+      required: [keys]
+      properties:
+        keys: { type: array, items: { type: string } }
+    # The node contract's inline enums, named here because a generated
+    # client numbers anonymous enums by document position
+    # (TestOpenAPIInlineEnumsAreFrozen); the values are the contract's.
+    NodePairingSource:
+      type: string
+      description: Where the pairing codes come from — the configured credentials, or the window the handler opened on fresh ones.
+      enum: [configured, window]
+    NodeMdnsFindingSeverity:
+      type: string
+      enum: [error, warning]
+    NodeDiagnosticEventKind:
+      type: string
+      enum: [pairing, session, discovery]
+    NodeDiagnosticEventSeverity:
+      type: string
+      enum: [info, warning, error]
+    NodeVerdictState:
+      type: string
+      description: go-fabric's eligibility state of an exposable item.
+      enum: [mappable, partially_mappable, unmappable]
+    NodeEndpointsChangedPayload:
+      type: object
+      description: >-
+        The payload of the `node.endpoints_changed` broadcast: empty. The
+        node reassembled its bridged endpoints; a subscriber reloads
+        GET /node/endpoints.
+      additionalProperties: false

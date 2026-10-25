@@ -15,7 +15,6 @@ import (
 	"time"
 
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	"github.com/SukramJ/go-fabric/node"
 	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 	"github.com/SukramJ/go-fabric/secure/spake2"
 	matterstore "github.com/SukramJ/go-fabric/store"
@@ -88,24 +87,6 @@ func TestMatterAttestationWithoutVendorMaterialIsTheFacadesTestChain(t *testing.
 	}
 }
 
-// TestMatterFabricEventsRelayToThePublisherAttachedLater: the facade's
-// observers are fixed at node.New; the WebSocket publisher is attached
-// afterwards and still receives the fabric index.
-func TestMatterFabricEventsRelayToThePublisherAttachedLater(t *testing.T) {
-	t.Parallel()
-	ev := &matterFabricEvents{}
-	if err := ev.fabricAdded(node.FabricInfo{FabricIndex: 3}); err != nil {
-		t.Fatalf("fabricAdded before attach: %v", err)
-	}
-	var added, removed []uint8
-	ev.set(func(i uint8) { added = append(added, i) }, func(i uint8) { removed = append(removed, i) })
-	_ = ev.fabricAdded(node.FabricInfo{FabricIndex: 4})
-	_ = ev.fabricRemoved(node.FabricInfo{FabricIndex: 4})
-	if len(added) != 1 || added[0] != 4 || len(removed) != 1 || removed[0] != 4 {
-		t.Fatalf("added=%v removed=%v, want [4] [4]", added, removed)
-	}
-}
-
 // TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager: the
 // endpoints' Groups servers (the assembler's manager) and the facade's
 // root GroupKeyManagement plus the bridge's group routing (node.Config.Groups)
@@ -136,8 +117,10 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	if bundle.node.Aggregator() == nil {
 		t.Fatal("the facade built no Aggregator although the daemon syncs its model into it")
 	}
-	if bundle.opMgr == nil || bundle.subMgr == nil || bundle.opMgr != bundle.node.Sessions() || bundle.subMgr != bundle.node.Subscriptions() {
-		t.Fatal("the diagnostics managers on the bundle are not the facade's")
+	// The session and subscription managers go-fabric-ui's sessions route
+	// reads (GET /node/sessions) are the facade's own.
+	if bundle.node.Sessions() == nil || bundle.node.Subscriptions() == nil {
+		t.Fatal("the facade reports no session or subscription manager")
 	}
 }
 
@@ -313,56 +296,5 @@ func TestStartMatterBridgeServesAUniqueIDTheDaemonPinnedBefore(t *testing.T) {
 	t.Cleanup(bundle.stop)
 	if got := servedUniqueID(t, bundle); got != pinned {
 		t.Fatalf("served UniqueID = %q, want the previously pinned %q", got, pinned)
-	}
-}
-
-// fakeMdnsSource is a node's DNS-SD as the diagnostics read it.
-type fakeMdnsSource struct {
-	enabled  bool
-	services []node.MDNSService
-	findings []node.MDNSFinding
-}
-
-func (f fakeMdnsSource) MDNSEnabled() bool                { return f.enabled }
-func (f fakeMdnsSource) MDNSServices() []node.MDNSService { return f.services }
-func (f fakeMdnsSource) DiagnoseMDNS() []node.MDNSFinding { return f.findings }
-
-// TestMatterMdnsReporterAdvertisingFollowsTheAdvertiser: the no-op
-// advertiser is the explicit "stay quiet" opt-in and reports not
-// advertising, without findings; a publishing advertiser reports
-// advertising and its findings.
-func TestMatterMdnsReporterAdvertisingFollowsTheAdvertiser(t *testing.T) {
-	t.Parallel()
-	finding := node.MDNSFinding{Code: "probe", Message: "m"}
-	quiet := (matterMdnsReporter{node: fakeMdnsSource{findings: []node.MDNSFinding{finding}}}).MatterMdns()
-	if quiet.Advertising || len(quiet.Findings) != 0 {
-		t.Fatalf("noop advertiser: Advertising=%v findings=%d, want false and none", quiet.Advertising, len(quiet.Findings))
-	}
-	loud := (matterMdnsReporter{node: fakeMdnsSource{enabled: true, findings: []node.MDNSFinding{finding}}}).MatterMdns()
-	if !loud.Advertising || len(loud.Findings) != 1 || loud.Findings[0].Code != "probe" {
-		t.Fatalf("publishing advertiser: Advertising=%v findings=%+v, want true and the probe finding", loud.Advertising, loud.Findings)
-	}
-}
-
-// TestMatterMdnsReporterReadsTheNodesAdvertiser pins the wiring: the
-// reporter wired by wireMatterRuntime reads the node facade's advertiser,
-// which mdns_advertise=noop leaves quiet.
-func TestMatterMdnsReporterReadsTheNodesAdvertiser(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	cfg := matterTestConfig(t, "ccu-mdns-report")
-	wiring, closers, teardown := wireMatterRuntime(ctx, cfg, buildTestRegistry(t, "ccu-mdns-report"), openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
-	t.Cleanup(func() {
-		for _, c := range closers {
-			c()
-		}
-		teardown()
-	})
-	if wiring.mdnsReporter == nil {
-		t.Fatal("wireMatterRuntime wired no mDNS reporter")
-	}
-	if got := wiring.mdnsReporter.MatterMdns(); got.Advertising {
-		t.Fatal("mdns_advertise=noop reported Advertising = true")
 	}
 }

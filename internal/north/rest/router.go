@@ -13,6 +13,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/go-fabric-ui/fabricui"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
@@ -37,7 +39,7 @@ import (
 //  2. Nil → 503 service_unready. The route IS mounted but the handler
 //     inspects the field internally and writes a 503 Problem+JSON body.
 //     Used where the OpenAPI spec documents the endpoint as always-present
-//     but optionally wired. Examples: MatterStatusReader (GET /matter/status),
+//     but optionally wired. Examples: NodeUI.Node (GET /node/status),
 //     ConfigExport (GET and POST /config/export|import),
 //     ChannelFlags (PUT .../channels/{no}/flags).
 //
@@ -443,65 +445,28 @@ type Deps struct {
 	// produces a logged record. Build via
 	// [middleware.NewOpenAPIValidator] in the composition root.
 	OpenAPIValidator *middleware.OpenAPIValidator
-	// MatterFabricStore backs GET /api/v1/matter/fabrics. Nil disables
-	// the endpoint (returns 503 service_unready).
-	MatterFabricStore handlers.MatterFabricStore
-	// MatterCommissioning carries the bridge's discriminator / passcode /
-	// vendor / product so GET /api/v1/matter/setup-payload can emit
-	// QR + manual codes. Zero-value disables the endpoint (503).
-	MatterCommissioning handlers.MatterCommissioning
-	// MatterCommissioningOpener backs POST /api/v1/matter/commissioning/window.
-	// Nil disables the endpoint (503).
-	MatterCommissioningOpener handlers.MatterCommissioningOpener
-	// MatterExposureStore backs the allowlist endpoints
-	// (`/matter/exposable*`). Nil disables them (503).
-	MatterExposureStore handlers.MatterExposureStore
-	// MatterCandidateProvider yields the per-source classification
-	// list the operator sees in the allowlist UI. Nil disables the
-	// `/matter/exposable` GET endpoint.
-	MatterCandidateProvider handlers.MatterCandidateProvider
-	// MatterStatusReader backs `/matter/status`. Nil → status returns
-	// `{"enabled":false}` (clean default for SPA probing).
-	MatterStatusReader handlers.MatterStatusReader
-	// MatterSessionLister backs GET /api/v1/matter/sessions. Nil
-	// disables the route (Matter bridge off), matching the other Matter
-	// ports.
-	MatterSessionLister handlers.MatterSessionLister
-
-	// MatterDiagnosticEvents backs GET /api/v1/matter/events — the
-	// bounded trace of pairing and session moments. Nil serves 503, so a
-	// disabled bridge is distinguishable from one that recorded nothing.
-	MatterDiagnosticEvents handlers.MatterDiagnosticEventReporter
-
-	// MatterMdnsReporter backs GET /api/v1/matter/mdns.
-	MatterMdnsReporter handlers.MatterMdnsReporter
-
-	// MatterEndpointInspector backs GET /api/v1/matter/endpoints.
-	MatterEndpointInspector handlers.MatterEndpointInspector
-
-	// MatterCompatibilityReporter backs GET /api/v1/matter/compatibility.
-	MatterCompatibilityReporter handlers.MatterCompatibilityReporter
-
-	// MatterFabricPurger backs POST /api/v1/matter/factory-reset.
-	MatterFabricPurger handlers.MatterFabricPurger
-
-	// MatterFabricRevoker backs `DELETE /matter/fabrics/{id}`.
-	MatterFabricRevoker handlers.MatterFabricRevoker
-	// MatterCommissioningCloser backs `POST /matter/commissioning/window/close`.
-	MatterCommissioningCloser handlers.MatterCommissioningCloser
-	// MatterEventPublisher routes server-pushed Matter events
-	// (`matter.exposable_changed`, `matter.fabric_added`, …) to the
-	// WebSocket hub. Nil = events are dropped (test convenience).
-	MatterEventPublisher handlers.MatterEventPublisher
-	// MatterTopologyReassembler triggers a bridge re-assemble after
-	// `/matter/exposable[/bulk]` writes so the allowlist takes effect
-	// immediately. Nil = the persisted change only surfaces on the
-	// next daemon restart (test convenience).
-	MatterTopologyReassembler handlers.MatterTopologyReassembler
+	// NodeUI are go-fabric-ui's options for the node page family's API,
+	// mounted under /api/v1/node by [fabricui.Mount] (go-fabric-ui's
+	// embedding guide, docs/embedding in that repository): the node facade,
+	// loom's exposure provider, the
+	// reassemble hook and the event source. The composition root fills
+	// them; the router sets Prefix and Admin itself (Admin from
+	// [Deps.IsAdmin]), so a value set here is overwritten. The zero value
+	// mounts the family as disabled: GET /node/status answers
+	// `enabled: false`, every other node route 503 service_unready.
+	NodeUI fabricui.Options
+	// IsAdmin answers whether the request's identity holds the admin role.
+	// It is the per-request form of [Deps.RequireAdmin] for a handler that
+	// gates its own writes (fabricui's node routes). Nil admits nobody,
+	// unless no auth chain is wired at all (RequireAdmin and AuthRequire
+	// both nil — the test fallback the role gates share), where it admits
+	// everybody.
+	IsAdmin func(*http.Request) bool
 	// MatterAuditRecorder is the write side of the audit ledger the
-	// Matter mutation handlers append to (per
-	// `notes/concepts/matter-ui-concept.md` §6). Same buffer as the read-side
-	// [Deps.Audit] in production; nil = audit-disabled (test).
+	// visibility mutation handlers append to. Same buffer as the read-side
+	// [Deps.Audit] in production; nil = audit-disabled (test). The Matter
+	// exposure writes it was named for record through the exposure
+	// provider now (internal/north/matteradapter).
 	MatterAuditRecorder audit.Recorder
 
 	// VisibilityUnIgnoreStore backs the `/visibility/unignore*` REST
@@ -1321,37 +1286,20 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.With(admin).Post("/admin/values-cache/reset", handlers.ResetValuesCacheGlobal(d.ValuesCache))
 			pr.With(admin).Post("/devices/{addr}/values-cache/reset", handlers.ResetValuesCacheDevice(d.ValuesCache, d.DeviceLookup))
 
-			// Matter endpoints — each sub-route returns 503 service_unready
-			// when its dependency is nil, so the bridge being disabled
-			// surfaces cleanly rather than as 404. Mutating routes
-			// (PUT / POST / DELETE) gate on admin role.
-			pr.Get("/matter/status", handlers.MatterStatus(d.MatterStatusReader))
-			pr.Get("/matter/fabrics", handlers.MatterFabrics(d.MatterFabricStore))
-			pr.Get("/matter/sessions", handlers.MatterSessions(d.MatterSessionLister))
-			pr.Get("/matter/mdns", handlers.MatterMdns(d.MatterMdnsReporter))
-			pr.Get("/matter/endpoints", handlers.MatterEndpoints(d.MatterEndpointInspector))
-			pr.Get("/matter/compatibility", handlers.MatterCompatibilityHandler(d.MatterCompatibilityReporter))
-			pr.Get("/matter/events", handlers.MatterDiagnosticEvents(d.MatterDiagnosticEvents))
-			// Admin, not operator: force-sync changes what every paired
-			// controller sees, and the reset unpairs all of them.
-			pr.With(admin).Post("/matter/force-sync",
-				handlers.MatterForceSync(d.MatterTopologyReassembler, d.MatterEventPublisher, d.AuditRecorder))
-			pr.With(admin).Post("/matter/factory-reset",
-				handlers.MatterFactoryReset(d.MatterFabricPurger, d.MatterEventPublisher, d.AuditRecorder))
-			pr.With(admin).Delete("/matter/fabrics/{id}", handlers.MatterFabricRevoke(d.MatterFabricRevoker, d.MatterEventPublisher, d.MatterAuditRecorder))
-			// Admin-gated despite being a GET: the response carries the
-			// cfg:"secret" commissioning passcode and the QR / manual codes
-			// derived from it, so anyone holding it can commission the bridge
-			// into their own fabric while a window is open. A read that hands
-			// out a credential is as privileged as a write.
-			pr.With(admin).Get("/matter/setup-payload", handlers.MatterSetupPayload(d.MatterCommissioning))
-			pr.Get("/matter/exposable", handlers.MatterExposable(d.MatterCandidateProvider, d.MatterExposureStore, d.Labels))
-			pr.With(admin).Put("/matter/exposable", handlers.MatterExposeUpdate(d.MatterExposureStore, d.MatterEventPublisher, d.MatterAuditRecorder, d.MatterTopologyReassembler))
-			pr.With(admin).Post("/matter/exposable/bulk", handlers.MatterExposeBulk(d.MatterExposureStore, d.MatterEventPublisher, d.MatterAuditRecorder, d.MatterTopologyReassembler))
-			pr.With(admin).Post("/matter/commissioning/window", handlers.MatterCommissioningWindow(d.MatterCommissioningOpener, d.MatterEventPublisher, d.MatterAuditRecorder))
-			pr.With(admin).Post("/matter/commissioning/window/close", handlers.MatterCommissioningClose(d.MatterCommissioningCloser, d.MatterEventPublisher, d.MatterAuditRecorder))
-			pr.With(admin).Post("/matter/share", handlers.MatterShare(d.MatterCommissioningOpener, d.MatterEventPublisher, d.MatterAuditRecorder))
-
+			// The node page family's API (go-fabric-ui): status, fabrics,
+			// pairing, endpoints, sessions, mDNS, compatibility, the trace,
+			// the exposure selection, maintenance and the event stream under
+			// /node/…. fabricui gates its own writes (every POST, PUT and
+			// DELETE, and GET /node/pairing, which hands out a passcode)
+			// through Options.Admin — the per-request form of the admin gate
+			// above — and answers 503 service_unready for a route whose
+			// dependency the composition root left nil, so a disabled bridge
+			// surfaces cleanly rather than as 404. The handler's own SSE
+			// stream (GET /node/stream) is mounted for the contract's sake;
+			// loom's SPA reads the same events from the WebSocket hub, which
+			// the composition root feeds from Options.Events, because the
+			// request timeout above would end a stream after one period.
+			pr.Mount("/node", nodeUIHandler(d))
 			// Visibility / un-ignore endpoints — power-user surface that
 			// promotes otherwise-hidden parameters to first-class data
 			// points. See notes/concepts/ui/unignore-concept.md.
@@ -1659,4 +1607,28 @@ func (d Deps) AssertAuthWired() error {
 		return errors.New("rest: AuthRequire middleware is not wired — refusing to serve with no auth gate")
 	}
 	return nil
+}
+
+// nodeUIHandler mounts go-fabric-ui's node routes ([NodeAPI]) under the
+// same prefix the chi group serves, so the two route tables agree on the
+// full path (fabricui registers patterns with the prefix spelled out;
+// chi's Mount hands the request through with its path intact). Admin is
+// the router's: [Deps.IsAdmin], or the test fallback when no auth chain
+// is wired.
+//
+// invariant: fabricui.Mount fails only on a malformed prefix or a pattern
+// registered twice on the mux, both programming errors of this function.
+func nodeUIHandler(d Deps) http.Handler {
+	o := d.NodeUI
+	o.Prefix = "/api/v1"
+	o.Admin = d.IsAdmin
+	if o.Admin == nil {
+		open := d.RequireAdmin == nil && d.AuthRequire == nil
+		o.Admin = func(*http.Request) bool { return open }
+	}
+	h, err := NodeAPI(o)
+	if err != nil {
+		panic(err)
+	}
+	return h
 }

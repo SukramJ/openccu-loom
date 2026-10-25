@@ -10,18 +10,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/SukramJ/go-fabric/eligibility"
+	"github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/node"
-	matterschema "github.com/SukramJ/go-fabric/schema"
 	matterstore "github.com/SukramJ/go-fabric/store"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -30,7 +30,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -105,21 +104,17 @@ type matterBridgeBundle struct {
 	assembler *matteradapter.Assembler
 	sync      func(context.Context) error
 	retire    func(ctx context.Context, centralName string) error
-	// opMgr and subMgr are the facade's session and subscription managers
-	// ([node.Node.Sessions], [node.Node.Subscriptions]). Carried so the
-	// REST diagnostics surface reports which peers hold a session and how
-	// many subscriptions ride on each — a commissioned controller holding
-	// none looks identical to a healthy one from every other angle.
-	opMgr  *node.SessionManager
-	subMgr *node.SubscriptionManager
-	// fabricEvents is where the facade's fabric observers deliver. The
-	// WebSocket publisher attaches in wireMatterRuntime, once the hub
-	// exists; startMatterBridge runs before it.
-	fabricEvents *matterFabricEvents
+	// events is go-fabric-ui's event source: the node's fabric and window
+	// transitions reach it through the observers wired at [node.New]
+	// (fabricui.Events.Observers), the daemon publishes its own reassemblies
+	// into it, and the handler's SSE stream and the WebSocket bridge
+	// (wireMatterNodeEvents) read from it.
+	events *fabricui.Events
 	// configuredCommissioning reports whether the operator configured a
-	// valid setup passcode. Without one the REST opener refuses the
-	// configured-credentials window, as the daemon did before the facade;
-	// the node itself always has credentials ([matterCommissioningCredentials]).
+	// valid setup passcode. Without one the operator's window runs on
+	// credentials generated for it alone (fabricui.Options.ConfiguredWindow
+	// false); the node itself always has credentials
+	// ([matterCommissioningCredentials]).
 	configuredCommissioning bool
 	// commissioningBlocked is why the bridge admits no new controller, nil
 	// when it does. A configured attestation chain that does not load sets
@@ -129,44 +124,6 @@ type matterBridgeBundle struct {
 	// the CSA test vendor while the operator believes the production chain
 	// is served.
 	commissioningBlocked error
-}
-
-// matterFabricEvents relays the facade's fabric observers to the WebSocket
-// publisher, which is built after the node: the observers are fixed at
-// [node.New], the hub reaches wireMatterRuntime later. An event before the
-// publisher is attached is dropped — the window is the few milliseconds
-// between [node.Node.Start] and the attach, and a controller cannot have
-// commissioned in it.
-type matterFabricEvents struct {
-	mu      sync.RWMutex
-	added   func(fabricIndex uint8)
-	removed func(fabricIndex uint8)
-}
-
-func (e *matterFabricEvents) set(added, removed func(fabricIndex uint8)) {
-	e.mu.Lock()
-	e.added, e.removed = added, removed
-	e.mu.Unlock()
-}
-
-func (e *matterFabricEvents) fabricAdded(info node.FabricInfo) error {
-	e.mu.RLock()
-	fn := e.added
-	e.mu.RUnlock()
-	if fn != nil {
-		fn(info.FabricIndex)
-	}
-	return nil
-}
-
-func (e *matterFabricEvents) fabricRemoved(info node.FabricInfo) error {
-	e.mu.RLock()
-	fn := e.removed
-	e.mu.RUnlock()
-	if fn != nil {
-		fn(info.FabricIndex)
-	}
-	return nil
 }
 
 // matterRootNodeDeviceType is the device type the commissionable record's
@@ -216,8 +173,8 @@ func matterLocales(locale string) []string {
 // passcode — the operator pairs through the ephemeral window, or not at
 // all. A missing or invalid passcode becomes a random one for this
 // process: the node's own window at first boot then runs on credentials
-// nobody holds, and the REST opener refuses the configured-credentials
-// window as it did before (configured is false). A salt outside the PBKDF
+// nobody holds, and the operator's window runs on fresh credentials of its
+// own (configured is false). A salt outside the PBKDF
 // bounds becomes a random one, which changes nothing a commissioner sees:
 // the salt travels in PBKDFParamResponse, and the verifier is recomputed
 // from passcode and salt at every boot.
@@ -333,8 +290,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	identity := matterendpoint.New(db)
 
 	// Single defaulting point: the SAME defaulted view feeds the facade
-	// here and the opener / status reader in wireMatterRuntime +
-	// mountRESTRouter. See config.NorthMatter.WithDefaults.
+	// here and the status reader in wireMatterRuntime. See
+	// config.NorthMatter.WithDefaults.
 	mc := cfg.North.Matter.WithDefaults()
 	if mc.DevRotateUniqueIDs {
 		// Dev-mode: rotate every bridged endpoint's UniqueID at boot so
@@ -382,7 +339,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return fail("matter.bridge.pase.credentials", err)
 	}
 	attest := matterAttestation(mc, logger)
-	fabricEvents := &matterFabricEvents{}
+	uiEvents := fabricui.NewEvents()
 	n, err := node.New(node.Config{
 		Network: node.Network{
 			Listen:     mc.Listen,
@@ -426,11 +383,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Locales:                    matterLocales(cfg.Locale),
 		SupportedFabrics:           matterSupportedFabrics,
 		DisableTimeSynchronization: !mc.TimeSyncEnabled(),
-		Observers: node.Observers{
-			OnFabricAdded:   fabricEvents.fabricAdded,
-			OnFabricRemoved: fabricEvents.fabricRemoved,
-		},
-		Logger: logger,
+		// The fabric and window observers are go-fabric-ui's: the node page
+		// family's stream and loom's WebSocket topics both report a
+		// controller commissioning the node from here (go-fabric-ui's
+		// embedding guide: "node.Config.Observers is set before node.New").
+		Observers: uiEvents.Observers(node.Observers{}),
+		Logger:    logger,
 	})
 	if err != nil {
 		return fail("matter.bridge.node", err)
@@ -453,8 +411,9 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// The allowlist checker is wired before the first sync, so the
 	// bridge only ever serves sources the operator has explicitly
 	// enabled. Default = empty allowlist = empty topology. The
-	// exposure-management REST endpoints (`/api/v1/matter/exposable`)
-	// drive the matter_exposures table the checker reads through.
+	// exposure selection (go-fabric-ui's `/api/v1/node/exposure` over
+	// loom's exposure provider) drives the matter_exposures table the
+	// checker reads through.
 	// Without it Apple Home would see every CCU device as a Matter
 	// endpoint (1000+), the initial Subscribe would expand to 60+ KB,
 	// the post-CASE phase would exceed Apple's pairing-UI timeout and
@@ -476,7 +435,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	attestErr := n.AttestationError()
 	if attestErr != nil {
 		// The bridge still starts on the test chain with commissioning
-		// refused — every window: the node's own, the REST opener's and a
+		// refused — every window: the node's own, the operator's and a
 		// paired controller's AdministratorCommissioning (multi-admin).
 		logger.Error("matter.bridge.attestation",
 			slog.String("err", attestErr.Error()),
@@ -541,42 +500,32 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		assembler:               assembler,
 		sync:                    syncModel,
 		retire:                  reconciler.Retire,
-		opMgr:                   n.Sessions(),
-		subMgr:                  n.Subscriptions(),
-		fabricEvents:            fabricEvents,
+		events:                  uiEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
 	}
 }
 
-// matterWiring carries the Matter REST/WS-facing adapters produced by
-// wireMatterRuntime. All fields are nil when the bridge is disabled.
+// matterWiring carries what wireMatterRuntime hands the rest of the
+// composition root. All fields are zero when the bridge is disabled.
 type matterWiring struct {
-	fabricStore       handlers.MatterFabricStore
-	sessionLister     handlers.MatterSessionLister
-	mdnsReporter      handlers.MatterMdnsReporter
-	endpointInspector handlers.MatterEndpointInspector
-	compatReporter    handlers.MatterCompatibilityReporter
-	diagEvents        handlers.MatterDiagnosticEventReporter
-	opener            handlers.MatterCommissioningOpener
-	statusReader      handlers.MatterStatusReader
-	fabricRevoker     handlers.MatterFabricRevoker
-	fabricPurger      handlers.MatterFabricPurger
-	closer            handlers.MatterCommissioningCloser
-	// exposureStore is the concrete allowlist store rather than the narrower
-	// handlers.MatterExposureStore port: the live-adopt orchestrator also
-	// needs DeleteForCentral (matterExposureStore/setMatterExposureStore in
-	// central_adopt.go), which that REST-facing interface does not declare.
-	// It still satisfies handlers.MatterExposureStore at every assignment
-	// site below.
+	// nodeUI are go-fabric-ui's options for the node page family's API
+	// (rest.Deps.NodeUI): the node, loom's exposure provider, the
+	// reassemble hook and the event source. The router sets Prefix and
+	// Admin.
+	nodeUI fabricui.Options
+	// status is the daemon-side status seam the MCP tool and the health
+	// probe read; the REST status comes from go-fabric-ui over the node.
+	status *matterStatusReaderAdapter
+	// exposureStore is the concrete allowlist store: the live-adopt
+	// orchestrator needs DeleteForCentral (matterExposureStore /
+	// setMatterExposureStore in central_adopt.go), the exposure provider
+	// reads and writes rows through it.
 	exposureStore *matterendpoint.Store
 	// retire collects a removed central's Matter endpoint numbers
 	// (matteradapter.Reconciler.Retire); the live-remove orchestrator
 	// calls it after the central's rows are purged.
-	retire      func(ctx context.Context, centralName string) error
-	candidates  handlers.MatterCandidateProvider
-	pub         *matterEventPublisher
-	reassembler handlers.MatterTopologyReassembler
+	retire func(ctx context.Context, centralName string) error
 	// centralHook wires a runtime-adopted central into the running bridge
 	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Nil when
 	// the bridge is disabled; the live-adopt orchestrator skips it then. The
@@ -830,12 +779,28 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 	return unsub
 }
 
-// matterReassembler is the REST surface's topology reassembly: a sync of
-// the Aggregator with the model, as every reassembly trigger runs.
-type matterReassembler func(context.Context) error
-
-// Reassemble implements [handlers.MatterTopologyReassembler].
-func (r matterReassembler) Reassemble(ctx context.Context) error { return r(ctx) }
+// matterReassembler is the node page family's topology reassembly
+// (fabricui.Options.Reassemble, run by POST /node/maintenance/reassemble
+// and after every exposure change): a sync of the Aggregator with the
+// model, as every reassembly trigger runs, followed by an audit entry
+// naming the request's principal. After an exposure change the ledger
+// therefore shows the exposure batch and the reassembly it caused, in
+// that order.
+func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder) func(context.Context) error {
+	return func(ctx context.Context) error {
+		err := syncModel(ctx)
+		if rec != nil {
+			if id, ok := auth.IdentityFrom(ctx); ok {
+				note := "ok"
+				if err != nil {
+					note = "error: " + err.Error()
+				}
+				rec.Record(audit.Entry{User: id.Subject, Action: audit.ActionMatterForceSync, Note: note})
+			}
+		}
+		return err
+	}
+}
 
 // matterSnapshotter builds the model walk behind the reconciler: one
 // [matteradapter.DeviceSnapshot] per registered central, read live from
@@ -960,39 +925,27 @@ func newMatterCentralHook(
 }
 
 // wireMatterRuntime boots the bridge through startMatterBridge and builds
-// the daemon's adapters over it: the REST / WebSocket ports, the
-// reassemble-on-ready and hot-plug triggers, the reachability forward and
-// the live-adopt hook. What the node facade wires itself — the
-// commissioning window with its fail-safe, verifier installer and CM=2
-// announcement, the PartsList providers, the StartUp / BootReason events,
-// the fabric fan-out — is not repeated here (ADR 0084 phase 3).
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) { //nolint:gocritic // importShadow: see the note above
+// the daemon's adapters over it: go-fabric-ui's options for the node page
+// family's API, the WebSocket bridge of its events, the MCP / health
+// status seam, the reassemble-on-ready and hot-plug triggers, the
+// reachability forward and the live-adopt hook. What the node facade wires
+// itself — the commissioning window with its fail-safe, verifier installer
+// and CM=2 announcement, the PartsList providers, the StartUp / BootReason
+// events, the fabric fan-out — is not repeated here (ADR 0084 phase 3).
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) { //nolint:gocritic // importShadow: see the note above
 	teardown = func() {}
 	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger)
 	if bundle == nil {
 		return wiring, closers, teardown
 	}
 	// Defaulted view of the Matter config — the identical view
-	// startMatterBridge fed the facade. The opener and the status reader
-	// below MUST consume the same values; mixing raw and defaulted fields
-	// used to publish discriminator 0 while the bridge core held the
-	// 0xF00 default.
+	// startMatterBridge fed the facade. The status reader below MUST
+	// consume the same values; mixing raw and defaulted fields used to
+	// publish discriminator 0 while the bridge core held the 0xF00 default.
 	mcfg := cfg.North.Matter.WithDefaults()
 	mb := bundle.node.Bridge()
 	mids := bundle.identity
 	teardown = bundle.stop
-	wiring.fabricStore = bundle.node
-	wiring.sessionLister = matterSessionLister{op: bundle.opMgr, sub: bundle.subMgr}
-	wiring.mdnsReporter = matterMdnsReporter{node: bundle.node}
-	wiring.endpointInspector = matterEndpointInspector{node: bundle.node}
-	wiring.compatReporter = matterCompatibilityReporter{
-		fabrics:   bundle.node,
-		inspector: wiring.endpointInspector,
-	}
-	// The pairing trace ring is attached by the facade before the bridge
-	// serves its first datagram; here we only expose the bridge as the
-	// REST surface's reporter.
-	wiring.diagEvents = mb
 	wiring.exposureStore = mids
 	wiring.retire = bundle.retire
 
@@ -1037,316 +990,87 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// wiring as the boot-time centrals above.
 	wiring.centralHook = newMatterCentralHook(reassembleTrigger, mb.NotifyDeviceReachable)
 
-	// The commissioning window is the facade's: the operator's REST
-	// window is the node's own window with the configured credentials,
-	// or — in ephemeral-window mode — a per-window set of credentials the
-	// facade installs for the window's lifetime (node.OpenBasicWindow).
-	// A commissioner's OpenCommissioningWindow with a supplied verifier
-	// (multi-admin) is served by the facade's verifier installer.
-	window := bundle.node.CommissioningWindow()
-	wiring.opener = &matterCommissioningOpenerAdapter{
-		node:          bundle.node,
-		commissioning: mcfg.Commissioning,
-		discriminator: mcfg.Discriminator,
-		configured:    bundle.configuredCommissioning,
-		blocked:       bundle.commissioningBlocked,
-	}
-	// Wire the Reassemble → WS event emit pipeline so the SPA's
-	// allowlist save flow gets a `matter.endpoint_assembled`
-	// notification after the topology refresh completes. The StartUp /
-	// BootReason events are the facade's (emitted by its Start).
-	wiring.pub = &matterEventPublisher{hub: wsHub, fabrics: wiring.fabricStore}
-	mb.SetOnReassembled(func(count int) { //nolint:contextcheck // callback signature is fixed; publishEndpointAssembled has no ctx
-		wiring.pub.publishEndpointAssembled(count)
+	// Every reassembly — the ready trigger, hot-plug, the operator's
+	// selection, the maintenance route — ends in the event source, so the
+	// node pages reload their endpoint list and the WebSocket hub carries
+	// `node.endpoints_changed`. The StartUp / BootReason events are the
+	// facade's (emitted by its Start).
+	mb.SetOnReassembled(func(int) {
+		bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
 	})
-	// The facade's fabric observers run after its own handling of AddNOC
-	// / RemoveFabric (CASE identity, operational record, sessions); the
-	// WebSocket frames follow. The bridge's SetOnFabricAdded is not the
-	// seam: the facade never fires it.
-	bundle.fabricEvents.set(wiring.pub.publishFabricAdded, wiring.pub.publishFabricRemoved)
-	wiring.statusReader = &matterStatusReaderAdapter{
+	closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))
+
+	wiring.status = &matterStatusReaderAdapter{
 		enabled:   mcfg.Enabled,
 		node:      bundle.node,
 		exposures: mids,
-		window:    window,
+		window:    bundle.node.CommissioningWindow(),
 		cfg: &matterStatusConfig{
 			advertising: mcfg.MDNSAdvertise == "zeroconf",
 		},
 	}
 	if healthTracker != nil {
-		_ = startMatterHealthProbe(ctx, wiring.statusReader, bundle.commissioningBlocked, healthTracker, matterHealthProbeInterval)
+		_ = startMatterHealthProbe(ctx, wiring.status, bundle.commissioningBlocked, healthTracker, matterHealthProbeInterval)
 	}
-	// The REST revoke and the factory reset remove a fabric through the
-	// facade (node.RemoveFabric), which runs the RemoveFabric command's
-	// own fan-out: the Leave event, the CASE identity and operational
-	// record withdrawn, the sessions and subscriptions closed, the
-	// node's own window reopened once the last fabric is gone, then the
-	// observer above. Deleting the row alone left the removed
-	// controller's session and subscription alive and the next pair
-	// retry colliding on the same session id.
-	revoker := &matterFabricRevokerAdapter{node: bundle.node}
-	wiring.fabricRevoker = revoker
-	wiring.fabricPurger = revoker
-	wiring.reassembler = matterReassembler(bundle.sync)
-	wiring.closer = &matterCommissioningCloserAdapter{window: window}
-	wiring.candidates = &matterCandidateProviderAdapter{reg: reg, cfg: cfg}
+
+	// The node page family's API. The exposure provider is loom's: which
+	// CCU channels are exposable and how they are named stays here; the
+	// pages render what it describes. The commissioning window is the
+	// facade's: with a configured passcode the operator's window is the
+	// node's own window on the configured credentials, otherwise — and in
+	// ephemeral-window mode — a window on credentials generated for it
+	// alone (node.OpenBasicWindow), whose codes GET /node/pairing serves
+	// while it is open. A broken attestation chain refuses every window
+	// through the facade (node.ErrCommissioningBlocked), as it refuses a
+	// commissioner's AdministratorCommissioning.
+	candidates := &matterCandidateProviderAdapter{reg: reg, cfg: cfg}
+	wiring.nodeUI = fabricui.Options{
+		Node: bundle.node,
+		Exposure: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{
+			Candidates: candidates.MatterCandidates,
+			Store:      mids,
+			Labels:     matterParameterLabels{labels},
+			Translate:  matterColumnTranslator(catalogs, cfg.Locale),
+			Actor: func(ctx context.Context) string {
+				if id, ok := auth.IdentityFrom(ctx); ok {
+					return id.Subject
+				}
+				return ""
+			},
+			Audit: auditRec,
+		}),
+		Reassemble:       matterReassembler(bundle.sync, auditRec),
+		Events:           bundle.events,
+		Logger:           logger,
+		ConfiguredWindow: bundle.configuredCommissioning && !mcfg.Commissioning.EphemeralWindow,
+	}
 	return wiring, closers, teardown
 }
 
-// matterSessionLister joins the two managers that each hold half of the
-// session picture: the operational manager knows which sessions exist
-// and when they last carried traffic, the subscription manager knows
-// what rides on them.
-//
-// Neither half is meaningful alone. A session with recent local activity
-// and a long-idle peer is a controller that went away without closing;
-// a session with no subscriptions is a controller that is connected but
-// receiving nothing. Both states are invisible from the ecosystem side,
-// where they look like entities that quietly stop updating.
-type matterSessionLister struct {
-	op  *node.SessionManager
-	sub *node.SubscriptionManager
-}
-
-// MatterSessions implements [handlers.MatterSessionLister].
-func (l matterSessionLister) MatterSessions() []handlers.MatterSessionInfo {
-	if l.op == nil {
-		return nil
-	}
-	var counts map[uint16]int
-	if l.sub != nil {
-		counts = l.sub.CountBySession()
-	}
-	sessions := l.op.Sessions()
-	out := make([]handlers.MatterSessionInfo, 0, len(sessions))
-	for _, s := range sessions {
-		out = append(out, handlers.MatterSessionInfo{
-			SessionID:        s.SessionID,
-			FabricIndex:      s.FabricIndex,
-			PeerNodeID:       s.PeerNodeID,
-			LocalNodeID:      s.LocalNodeID,
-			IsPASE:           s.IsPASE,
-			Subscriptions:    counts[s.SessionID],
-			LastActivity:     s.LastActivity,
-			LastPeerActivity: s.LastPeerActivity,
-		})
-	}
-	return out
-}
-
-// MatterSessionOccupancy implements [handlers.MatterSessionLister]. It
-// reads the id space from the allocator itself rather than counting the
-// session list: an id staked for a handshake that never completed is not
-// a session and would otherwise stay invisible right up to the point
-// where the space refuses the next controller.
-func (l matterSessionLister) MatterSessionOccupancy() handlers.MatterSessionOccupancy {
-	if l.op == nil {
-		return handlers.MatterSessionOccupancy{}
-	}
-	occ := l.op.Occupancy()
-	return handlers.MatterSessionOccupancy{
-		Live:     occ.Live,
-		Reserved: occ.Reserved,
-		Capacity: occ.Capacity,
-		Free:     occ.Free(),
+// matterColumnTranslator renders the exposure provider's column headers
+// from the daemon's catalogue in the configured locale; without a
+// catalogue (a test wiring) the keys are shown as they are.
+func matterColumnTranslator(catalogs *i18n.Catalogs, locale string) func(string) string {
+	return func(key string) string {
+		if catalogs == nil {
+			return key
+		}
+		return catalogs.T(locale, key)
 	}
 }
 
-// matterMdnsReporter reads the live advertiser and runs the mDNS
-// diagnosis over what it is currently announcing.
-//
-// Reading the advertiser rather than the config is the point: the two
-// diverge exactly when discovery fails. A configured address set that
-// the host resolved differently, a subtype responder that failed to
-// start, a publish that errored after boot — each leaves the config
-// looking correct and the announcement wrong.
-type matterMdnsReporter struct{ node matterMdnsSource }
+// matterParameterLabels adapts the daemon's parameter translator to the
+// exposure provider's labeler: the channel-typed translation, or empty.
+type matterParameterLabels struct{ t device.ParameterTranslator }
 
-// matterMdnsSource is what the mDNS diagnostics read from the node facade
-// (node.Node.MDNSEnabled, MDNSServices, DiagnoseMDNS).
-type matterMdnsSource interface {
-	MDNSEnabled() bool
-	MDNSServices() []node.MDNSService
-	DiagnoseMDNS() []node.MDNSFinding
-}
-
-// MatterMdns implements [handlers.MatterMdnsReporter].
-func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
-	out := handlers.MatterMdnsDiagnostics{
-		Services: []handlers.MatterMdnsService{},
-		Findings: []handlers.MatterMdnsFinding{},
+func (l matterParameterLabels) ChannelTypedParameterLabel(channelType, parameter string) string {
+	if l.t == nil {
+		return ""
 	}
-	if r.node == nil {
-		return out
+	if s, ok := l.t.ChannelTypedParameterLabelOk(channelType, parameter); ok {
+		return s
 	}
-	// A no-op advertiser is the explicit "stay quiet" opt-in, not a
-	// fault: reporting it as advertising=false lets the surface say so
-	// instead of listing an empty announcement as a defect.
-	out.Advertising = r.node.MDNSEnabled()
-
-	services := r.node.MDNSServices()
-	for i := range services {
-		svc := &services[i]
-		addrs := make([]string, 0, len(svc.Addresses))
-		for _, ip := range svc.Addresses {
-			addrs = append(addrs, ip.String())
-		}
-		txt := make(map[string]string, len(svc.TXT))
-		for _, rec := range svc.TXT {
-			txt[rec.Key] = rec.Value
-		}
-		out.Services = append(out.Services, handlers.MatterMdnsService{
-			ServiceType:  svc.ServiceType,
-			InstanceName: svc.InstanceName,
-			HostName:     svc.HostName,
-			Port:         svc.Port,
-			Addresses:    addrs,
-			Subtypes:     append([]string(nil), svc.Subtypes...),
-			TXT:          txt,
-		})
-	}
-	if !out.Advertising {
-		return out
-	}
-	for _, f := range r.node.DiagnoseMDNS() {
-		out.Findings = append(out.Findings, handlers.MatterMdnsFinding{
-			Severity: string(f.Severity),
-			Code:     f.Code,
-			Message:  f.Message,
-			Service:  f.Service,
-		})
-	}
-	return out
-}
-
-// matterEndpointInspector reads the bridge's assembled topology.
-//
-// It reports the endpoint identity as assigned, never as derived: the
-// numbers come from persisted identity rather than from position in the
-// device list, so they survive restarts but cannot be inferred from the
-// fleet. Anything picking an endpoint by ordinal — "the lowest one with
-// cluster X" — reads a different device after any change to the store's
-// history.
-type matterEndpointInspector struct{ node *node.Node }
-
-// MatterEndpoints implements [handlers.MatterEndpointInspector].
-func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo {
-	if i.node == nil {
-		return nil
-	}
-	br := i.node.Bridge()
-	if br == nil {
-		return nil
-	}
-	topo := br.Topology()
-	if topo == nil {
-		return nil
-	}
-	out := make([]handlers.MatterEndpointInfo, 0, len(topo.Endpoints))
-	for _, ep := range topo.Endpoints {
-		if ep == nil {
-			continue
-		}
-		info := handlers.MatterEndpointInfo{
-			EndpointID:       ep.ID,
-			ParentEndpointID: ep.ParentEndpointID,
-			DeviceType:       ep.DeviceType,
-			Reachable:        ep.Reachable,
-			FriendlyName:     ep.FriendlyName,
-			Clusters:         []handlers.MatterEndpointCluster{},
-		}
-		if name, ok := matterschema.DeviceTypeName(matterschema.DeviceTypeID(ep.DeviceType)); ok {
-			info.DeviceTypeName = name
-		}
-		if rev, ok := matterschema.DeviceTypeRevision(matterschema.DeviceTypeID(ep.DeviceType)); ok {
-			info.DeviceTypeRevision = rev
-		}
-		info.DeviceAddress = ep.DeviceAddress
-		info.ChannelAddress = ep.ChannelAddress
-		if ep.Source != nil {
-			seen := make(map[uint32]struct{})
-			for _, cs := range ep.Source.MatterClusterServers() {
-				if cs == nil {
-					continue
-				}
-				id := cs.MatterClusterID()
-				if _, dup := seen[id]; dup {
-					continue
-				}
-				seen[id] = struct{}{}
-				cluster := handlers.MatterEndpointCluster{ID: id}
-				if name, ok := matterschema.ClusterName(id); ok {
-					cluster.Name = name
-				}
-				if rev, ok := matterschema.ClusterRevision(id); ok {
-					cluster.Revision = rev
-				}
-				info.Clusters = append(info.Clusters, cluster)
-			}
-			sort.Slice(info.Clusters, func(a, b int) bool { return info.Clusters[a].ID < info.Clusters[b].ID })
-		}
-		out = append(out, info)
-	}
-	return out
-}
-
-// matterCompatibilityReporter joins the commissioned fabrics with the
-// assembled topology, which is the only place both halves are known.
-//
-// A compatibility problem needs both: the device type alone is fine
-// until an ecosystem that refuses it is commissioned, and the fabric
-// alone says nothing about what it will be shown.
-type matterCompatibilityReporter struct {
-	fabrics   handlers.MatterFabricStore
-	inspector handlers.MatterEndpointInspector
-}
-
-// MatterCompatibility implements [handlers.MatterCompatibilityReporter].
-func (r matterCompatibilityReporter) MatterCompatibility() handlers.MatterCompatibility {
-	out := handlers.MatterCompatibility{
-		Ecosystems: []handlers.MatterEcosystem{},
-		Findings:   []handlers.MatterCompatFinding{},
-	}
-
-	var vendorIDs []uint16
-	if r.fabrics != nil {
-		if recs, err := r.fabrics.FabricInfos(context.Background()); err == nil {
-			for _, rec := range recs {
-				vendorIDs = append(vendorIDs, rec.VendorID)
-				out.Ecosystems = append(out.Ecosystems, handlers.MatterEcosystem{
-					Ecosystem:   string(eligibility.EcosystemForVendor(rec.VendorID)),
-					VendorID:    rec.VendorID,
-					FabricIndex: rec.FabricIndex,
-					Label:       rec.Label,
-				})
-			}
-		}
-	}
-
-	deviceTypes := make(map[uint16]int)
-	if r.inspector != nil {
-		endpoints := r.inspector.MatterEndpoints()
-		// The root and aggregator endpoints are bridge scaffolding, not
-		// exposed devices — counting them would push the ecosystem
-		// ceiling warning two devices early.
-		for _, ep := range endpoints {
-			if ep.EndpointID <= 1 {
-				continue
-			}
-			deviceTypes[ep.DeviceType]++
-			out.EndpointCount++
-		}
-	}
-
-	for _, f := range eligibility.Compat(vendorIDs, deviceTypes, out.EndpointCount) {
-		out.Findings = append(out.Findings, handlers.MatterCompatFinding{
-			Ecosystem:  string(f.Ecosystem),
-			Code:       f.Code,
-			Message:    f.Message,
-			DeviceType: f.DeviceType,
-		})
-	}
-	return out
+	return ""
 }
 
 // matterHealthRecorder adapts the daemon's health tracker to the slim

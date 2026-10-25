@@ -10,17 +10,16 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ─── fakes ────────────────────────────────────────────────────────────────
 
 type fakeMatterStatus struct {
-	resp handlers.MatterStatusResponse
+	resp mcp.MatterStatus
 }
 
-func (f *fakeMatterStatus) MatterStatus(context.Context) handlers.MatterStatusResponse {
+func (f *fakeMatterStatus) MatterStatus(context.Context) mcp.MatterStatus {
 	return f.resp
 }
 
@@ -46,7 +45,7 @@ func (f *fakeAddonUpdate) InstallAsync(context.Context) error { return nil }
 // ─── get_matter_status ──────────────────────────────────────────────────
 
 func TestGetMatterStatus_ReportsBridgeState(t *testing.T) {
-	matter := &fakeMatterStatus{resp: handlers.MatterStatusResponse{
+	matter := &fakeMatterStatus{resp: mcp.MatterStatus{
 		Enabled:        true,
 		Listening:      true,
 		EndpointCount:  3,

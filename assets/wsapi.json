@@ -1,5 +1,5 @@
 {
- "version": "1.14",
+ "version": "2.0",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -1462,52 +1462,52 @@
    }
   },
   {
-   "category": "matter",
-   "description": "Server-pushed: an allowlist row was inserted, updated or deleted via /api/v1/matter/exposable. A bulk write emits one frame per affected row.",
+   "category": "node",
+   "description": "Server-pushed: a controller commissioned the node (post-AddNOC). Payload: the fabric's index, vendor and label — go-fabric-ui's FabricEvent, as its SSE stream (GET /api/v1/node/stream) carries it.",
    "kind": "broadcast",
-   "name": "matter.exposable_changed",
-   "topic": "matter.exposable_changed",
-   "payload": "MatterExposureUpdate"
+   "name": "node.fabric_added",
+   "topic": "node.fabric_added",
+   "payload": "FabricEvent"
   },
   {
-   "category": "matter",
-   "description": "Server-pushed: a Matter commissioning window opened (REST or cluster command). The pairing credential is redacted from the broadcast — `passcode`, `qr_code` and `manual_code` are empty, because the WS event plane has no role filter. Read them from the admin-gated POST /api/v1/matter/commissioning/window response.",
+   "category": "node",
+   "description": "Server-pushed: a fabric was removed — by the operator (DELETE /api/v1/node/fabrics/{index}, the factory reset) or by the controller itself (RemoveFabric). Payload: the fabric index.",
    "kind": "broadcast",
-   "name": "matter.commissioning_window_opened",
-   "topic": "matter.commissioning_window_opened",
-   "payload": "MatterCommissioningWindowResponse"
+   "name": "node.fabric_removed",
+   "topic": "node.fabric_removed",
+   "payload": "FabricEvent"
   },
   {
-   "category": "matter",
-   "description": "Server-pushed: commissioning state transition (PASE / CASE / AddNOC / completion).",
+   "category": "node",
+   "description": "Server-pushed: a commissioning window opened (the operator's POST /api/v1/node/pairing/window, a commissioner's AdministratorCommissioning). The payload carries the discriminator only; the passcode and the pairing codes stay in the admin-gated GET /api/v1/node/pairing response.",
    "kind": "broadcast",
-   "name": "matter.commissioning_progress",
-   "topic": "matter.commissioning_progress",
-   "payload": "MatterCommissioningProgressPayload"
+   "name": "node.window_opened",
+   "topic": "node.window_opened",
+   "payload": "WindowEvent"
   },
   {
-   "category": "matter",
-   "description": "Server-pushed: a Matter fabric finished commissioning (post-AddNOC, first CASE pickup).",
+   "category": "node",
+   "description": "Server-pushed: the commissioning window closed (commissioned, timed out, revoked).",
    "kind": "broadcast",
-   "name": "matter.fabric_added",
-   "topic": "matter.fabric_added",
-   "payload": "MatterFabric"
+   "name": "node.window_closed",
+   "topic": "node.window_closed",
+   "payload": "WindowEvent"
   },
   {
-   "category": "matter",
-   "description": "Server-pushed: a Matter fabric was revoked via /api/v1/matter/fabrics/{id}.",
+   "category": "node",
+   "description": "Server-pushed: the node reassembled its bridged endpoints (a central became ready, a device was paired or removed, the operator changed the exposure selection or ran the maintenance reassemble). Empty payload; reload GET /api/v1/node/endpoints.",
    "kind": "broadcast",
-   "name": "matter.fabric_removed",
-   "topic": "matter.fabric_removed",
-   "payload": "MatterFabricRemovedPayload"
+   "name": "node.endpoints_changed",
+   "topic": "node.endpoints_changed",
+   "payload": "NodeEndpointsChangedPayload"
   },
   {
-   "category": "matter",
-   "description": "Server-pushed: bridge endpoint topology was reassembled. Payload includes the new endpoint count.",
+   "category": "node",
+   "description": "Server-pushed: the exposure selection changed through PUT /api/v1/node/exposure. Payload: the keys of the changed items (loom's source keys, `central|address|channel|kind|key`).",
    "kind": "broadcast",
-   "name": "matter.endpoint_assembled",
-   "topic": "matter.endpoint_assembled",
-   "payload": "MatterEndpointAssembledPayload"
+   "name": "node.exposure_changed",
+   "topic": "node.exposure_changed",
+   "payload": "ExposureEvent"
   },
   {
    "category": "alarm_panel",

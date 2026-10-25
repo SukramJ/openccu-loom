@@ -8,15 +8,17 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
+
+	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -35,7 +37,7 @@ import (
 //
 // So the assertion runs through the production path end to end: the bridge
 // is the one startMatterBridge built, and the name is read back off the
-// handler that answers GET /api/v1/matter/endpoints, through the same
+// handler that answers GET /api/v1/node/endpoints, through the same
 // inspector the REST mount is given. Nothing here constructs an
 // endpoint.Config, which is what makes the pin able to see the gap between
 // "the assembler honours the field" and "the daemon fills it in".
@@ -77,17 +79,18 @@ func TestBridgedEndpointNameCarriesTheOperatorsChannelWord(t *testing.T) {
 	t.Cleanup(bundle.stop)
 	exposeEveryCandidate(ctx, t, bundle, reg)
 
-	endpoints := bridgedEndpointsViaREST(t, matterEndpointInspector{node: bundle.node})
+	endpoints := bridgedEndpointsViaREST(t, bundle.node)
 
 	var got string
 	var seen []string
 	for _, ep := range endpoints {
-		if ep.DeviceAddress != deviceAddress {
+		// The endpoint's stable key is loom's source key, "central|address|…".
+		if !strings.HasPrefix(ep.Source["key"], "ccu-locale|"+deviceAddress+"|") {
 			continue
 		}
-		seen = append(seen, ep.FriendlyName)
-		if ep.FriendlyName == wantName {
-			got = ep.FriendlyName
+		seen = append(seen, ep.Name)
+		if ep.Name == wantName {
+			got = ep.Name
 		}
 	}
 	if len(seen) == 0 {
@@ -139,19 +142,27 @@ func switchDeviceWithUnnamedChannel(address, name string, channelNo int) *device
 }
 
 // bridgedEndpointsViaREST reads the assembled topology back the way an
-// operator does — through the handler behind GET /api/v1/matter/endpoints —
-// so the observed string is the one the daemon actually publishes rather
-// than one the test reached in and computed.
-func bridgedEndpointsViaREST(t *testing.T, inspector handlers.MatterEndpointInspector) []handlers.MatterEndpointInfo {
+// operator does — through go-fabric-ui's GET /api/v1/node/endpoints over
+// the node — so the observed string is the one the daemon actually
+// publishes rather than one the test reached in and computed.
+func bridgedEndpointsViaREST(t *testing.T, n *node.Node) []nodeEndpointRow {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	handlers.MatterEndpoints(inspector)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/matter/endpoints", http.NoBody))
+	rec := serveNodeAPI(t, fabricui.Options{Node: n}, http.MethodGet, "/api/v1/node/endpoints", "")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/matter/endpoints = %d, want 200: %s", rec.Code, rec.Body.String())
+		t.Fatalf("GET /api/v1/node/endpoints = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	var list handlers.MatterEndpointList
+	var list struct {
+		Endpoints []nodeEndpointRow `json:"endpoints"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
 		t.Fatalf("decode endpoint list: %v (body %s)", err, rec.Body.String())
 	}
 	return list.Endpoints
+}
+
+// nodeEndpointRow is the part of go-fabric-ui's Endpoint the tests read.
+type nodeEndpointRow struct {
+	EndpointID uint16            `json:"endpoint_id"`
+	Name       string            `json:"name"`
+	Source     map[string]string `json:"source"`
 }

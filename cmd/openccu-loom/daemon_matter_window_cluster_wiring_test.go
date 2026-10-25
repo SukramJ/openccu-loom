@@ -7,9 +7,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/im"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -18,11 +20,11 @@ import (
 // TestMatterCommissioningWindowReachesTheAdminCommissioningCluster asserts
 // the effect of the window wiring rather than its presence: the root
 // endpoint serves AdministratorCommissioning, and a window the daemon
-// opens through its REST opener is the node facade's window — open, the
+// opens through the node page family's route is the node facade's window — open, the
 // node's own, and what the status surface reports. The facade keeps the
 // AdministratorCommissioning attributes for administrator windows alone,
 // as matter.js does: the node's own window reads WindowNotOpen there,
-// before and after the REST open.
+// before and after the operator's open.
 func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing.T) {
 	t.Parallel()
 
@@ -38,7 +40,7 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil,
+		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil,
 	)
 	// Cancel here rather than in a t.Cleanup of its own. Cleanups run LIFO, and
@@ -56,11 +58,11 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 			teardown()
 		}
 	})
-	inspector, ok := wiring.endpointInspector.(matterEndpointInspector)
-	if !ok || inspector.node == nil || wiring.opener == nil {
-		t.Fatalf("matter runtime did not produce a node and an opener (inspector=%T); without them this pin asserts nothing", wiring.endpointInspector)
+	n, ok := wiring.nodeUI.Node.(*node.Node)
+	if !ok || n == nil {
+		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}
-	bridge := inspector.node.Bridge()
+	bridge := n.Bridge()
 
 	const (
 		rootEndpoint     uint16 = 0
@@ -79,13 +81,10 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 	if got := readStatus(); got != windowNotOpen {
 		t.Fatalf("WindowStatus at boot = %s, want %s (the node's own window is not an administrator's)", got, windowNotOpen)
 	}
-	opener, ok := wiring.opener.(*matterCommissioningOpenerAdapter)
-	if !ok {
-		t.Fatalf("opener is %T, want the daemon's window adapter", wiring.opener)
-	}
-	opener.allowEmptyTopology = true
-	if _, err := opener.OpenCommissioningWindow(ctx, 180); err != nil {
-		t.Fatalf("open commissioning window: %v", err)
+	opts := wiring.nodeUI
+	opts.AllowEmptyTopology = true
+	if rec := serveNodeAPI(t, opts, http.MethodPost, "/api/v1/node/pairing/window", `{"duration_seconds":180}`); rec.Code != http.StatusOK {
+		t.Fatalf("open commissioning window: %d %s", rec.Code, rec.Body.String())
 	}
 	window := bridge.CommissioningWindow()
 	if window == nil || !window.IsOpen() || !window.IsOwnWindow() {
@@ -96,7 +95,7 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 	if got := window.RequestedDurationSeconds(); got != 180 {
 		t.Fatalf("the window runs for %d s, want the requested 180", got)
 	}
-	if status := wiring.statusReader.MatterStatus(ctx); !status.WindowOpen || status.WindowDuration != 180 {
+	if status := wiring.status.MatterStatus(ctx); !status.WindowOpen || status.WindowDuration != 180 {
 		t.Fatalf("status = open %v / %d s, want open / 180 — the status surface reads another window than the opener opens",
 			status.WindowOpen, status.WindowDuration)
 	}

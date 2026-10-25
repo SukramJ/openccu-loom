@@ -7,20 +7,21 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 )
 
 // TestMatterRuntimeShutsCommissioningOnABrokenAttestationChain pins the
 // effect through the daemon's own Matter wiring: with a configured
-// attestation chain that does not load, the REST opener refuses every
-// window with ErrCommissioningBlocked, and the matter.bridge health
-// component reports the cause.
+// attestation chain that does not load, the node page family's window
+// route answers 409, and the matter.bridge health component reports the
+// cause.
 func TestMatterRuntimeShutsCommissioningOnABrokenAttestationChain(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
@@ -36,7 +37,7 @@ func TestMatterRuntimeShutsCommissioningOnABrokenAttestationChain(t *testing.T) 
 	tracker := health.NewTracker()
 	ctx, cancel := context.WithCancel(context.Background())
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), tracker, nil,
+		ctx, cfg, reg, openTestLoomDB(t), tracker, nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil,
 	)
 	t.Cleanup(func() {
@@ -48,12 +49,21 @@ func TestMatterRuntimeShutsCommissioningOnABrokenAttestationChain(t *testing.T) 
 			teardown()
 		}
 	})
-	if wiring.opener == nil {
-		t.Fatal("matter runtime produced no opener on a broken attestation chain; the bridge must keep running")
+	if wiring.nodeUI.Node == nil {
+		t.Fatal("matter runtime produced no node on a broken attestation chain; the bridge must keep running")
 	}
 
-	if _, err := wiring.opener.OpenCommissioningWindow(ctx, 300); !errors.Is(err, handlers.ErrCommissioningBlocked) {
-		t.Errorf("OpenCommissioningWindow err = %v, want ErrCommissioningBlocked", err)
+	// The operator's window goes through go-fabric-ui's route over the
+	// node; the facade refuses it with node.ErrCommissioningBlocked, which
+	// the route answers as 409 (go-fabric-ui's contract: "409 when a
+	// window is open or commissioning is blocked"). The empty topology is
+	// lifted so the refusal measured is the attestation's, not the
+	// endpoint count's (503).
+	opts := wiring.nodeUI
+	opts.AllowEmptyTopology = true
+	rec := serveNodeAPI(t, opts, http.MethodPost, "/api/v1/node/pairing/window", `{"duration_seconds":300}`)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("POST /node/pairing/window = %d body=%s, want 409 while commissioning is blocked", rec.Code, rec.Body.String())
 	}
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -73,8 +83,8 @@ func TestMatterRuntimeShutsCommissioningOnABrokenAttestationChain(t *testing.T) 
 // fakeMatterStatus is a listening, enabled bridge for the probe.
 type fakeMatterStatus struct{}
 
-func (fakeMatterStatus) MatterStatus(context.Context) handlers.MatterStatusResponse {
-	return handlers.MatterStatusResponse{Enabled: true, Listening: true}
+func (fakeMatterStatus) MatterStatus(context.Context) mcp.MatterStatus {
+	return mcp.MatterStatus{Enabled: true, Listening: true}
 }
 
 // TestMatterHealthProbeReportsBlockedCommissioning: a listening bridge whose

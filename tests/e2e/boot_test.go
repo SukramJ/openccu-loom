@@ -43,20 +43,20 @@ func TestE2EDaemonBoot(t *testing.T) {
 		t.Fatal("MQTT broker URL empty")
 	}
 
-	// 3. Matter disabled by default — /api/v1/matter/status must either
+	// 3. Matter disabled by default — /api/v1/node/status must either
 	//    return 200 with enabled=false or 401 (auth guard). A 5xx would
 	//    indicate the handler panicked or the router is broken.
 	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	req, _ := h.REST().NewRequest(http.MethodGet, "/api/v1/matter/status", nil)
+	req, _ := h.REST().NewRequest(http.MethodGet, "/api/v1/node/status", nil)
 	resp2, err := h.REST().Do(req)
 	if err != nil {
-		t.Fatalf("GET /api/v1/matter/status: %v", err)
+		t.Fatalf("GET /api/v1/node/status: %v", err)
 	}
 	defer resp2.Body.Close()
 	if resp2.StatusCode >= 500 {
 		body, _ := io.ReadAll(resp2.Body)
-		t.Fatalf("/api/v1/matter/status: unexpected 5xx status=%d body=%s", resp2.StatusCode, body)
+		t.Fatalf("/api/v1/node/status: unexpected 5xx status=%d body=%s", resp2.StatusCode, body)
 	}
 }

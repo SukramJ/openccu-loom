@@ -202,6 +202,9 @@
   "state",
   "walktest_active"
  ],
+ "Applied": [
+  "applied"
+ ],
  "Area": [
   "id",
   "name"
@@ -330,11 +333,29 @@
   "base_temperature",
   "periods"
  ],
+ "Cluster": [
+  "id"
+ ],
+ "Column": [
+  "filter",
+  "key",
+  "label"
+ ],
  "CommunicationTestResult": [
   "duration_ms",
   "passed",
   "started_at",
   "timed_out"
+ ],
+ "CompatFinding": [
+  "code",
+  "ecosystem",
+  "message"
+ ],
+ "Compatibility": [
+  "ecosystems",
+  "endpoint_count",
+  "findings"
  ],
  "ConfigRepairCorrection": [
   "parameter"
@@ -512,6 +533,15 @@
   "parameter",
   "unique_id"
  ],
+ "DiagnosticEvent": [
+  "at",
+  "kind",
+  "message",
+  "severity"
+ ],
+ "DiagnosticEventList": [
+  "events"
+ ],
  "DiagramConfig": [
   "config",
   "created_at_ms",
@@ -533,6 +563,11 @@
   "suggested_host"
  ],
  "DownloadSystemFirmwareRequest": [],
+ "Ecosystem": [
+  "ecosystem",
+  "fabric_index",
+  "vendor_id"
+ ],
  "EditSessionRequest": [
   "key"
  ],
@@ -540,6 +575,19 @@
   "expires",
   "key",
   "token"
+ ],
+ "Endpoint": [
+  "clusters",
+  "device_type",
+  "device_type_name",
+  "endpoint_id",
+  "name",
+  "parent_endpoint_id",
+  "reachable",
+  "source"
+ ],
+ "EndpointList": [
+  "endpoints"
  ],
  "EnergyBucket": [
   "avg_power_w",
@@ -585,6 +633,43 @@
   "paramset_key",
   "values",
   "version"
+ ],
+ "ExposureEvent": [
+  "keys"
+ ],
+ "ExposureSchema": [
+  "columns",
+  "filters",
+  "groups"
+ ],
+ "Fabric": [
+  "compressed_id",
+  "fabric_id",
+  "fabric_id_hex",
+  "fabric_index",
+  "node_id",
+  "node_id_hex",
+  "root_public_key",
+  "vendor_id",
+  "vendor_name"
+ ],
+ "FabricEvent": [
+  "fabric_index"
+ ],
+ "FabricList": [
+  "fabrics"
+ ],
+ "FactoryResetRequest": [
+  "confirm"
+ ],
+ "Filter": [
+  "field",
+  "label",
+  "options"
+ ],
+ "FilterOption": [
+  "label",
+  "value"
  ],
  "ForceCloseEditSessionRequest": [
   "key"
@@ -759,6 +844,18 @@
   "interface",
   "name"
  ],
+ "Item": [
+  "enabled",
+  "fields",
+  "group",
+  "key",
+  "name",
+  "source",
+  "verdict"
+ ],
+ "ItemList": [
+  "items"
+ ],
  "Link": [
   "direction",
   "peer_address",
@@ -815,114 +912,17 @@
   "reloaded",
   "took_ms"
  ],
- "MatterCommissioningProgressPayload": [
-  "stage"
- ],
- "MatterCommissioningWindowRequest": [],
- "MatterCommissioningWindowResponse": [
-  "discriminator",
-  "duration_seconds",
-  "manual_code",
-  "passcode",
-  "qr_code"
- ],
- "MatterCompatFinding": [
-  "code",
-  "ecosystem",
-  "message"
- ],
- "MatterCompatibility": [
-  "ecosystems",
-  "endpoint_count",
-  "findings"
- ],
- "MatterDiagnosticEvent": [
-  "at",
-  "kind",
-  "message",
-  "severity"
- ],
- "MatterDiagnosticEventList": [
-  "events"
- ],
- "MatterEcosystem": [
-  "ecosystem",
-  "fabric_index",
-  "vendor_id"
- ],
- "MatterEndpointAssembledPayload": [
-  "endpoint_count"
- ],
- "MatterEndpointCluster": [
-  "id",
-  "name",
-  "revision"
- ],
- "MatterEndpointInfo": [
-  "clusters",
-  "device_type",
-  "device_type_name",
-  "endpoint_id",
-  "friendly_name",
-  "parent_endpoint_id",
-  "reachable"
- ],
- "MatterEndpointList": [
-  "endpoints"
- ],
- "MatterExposure": [
-  "central_name",
-  "channel_no",
-  "device_address",
-  "dp_key",
-  "dp_kind",
-  "enabled",
-  "mappable"
- ],
- "MatterExposureBulkUpdate": [
-  "items"
- ],
- "MatterExposureList": [
-  "items"
- ],
- "MatterExposureUpdate": [
-  "central_name",
-  "channel_no",
-  "device_address",
-  "dp_key",
-  "dp_kind",
-  "enabled"
- ],
- "MatterFabric": [
-  "compressed_id",
-  "fabric_id",
-  "fabric_id_hex",
-  "fabric_index",
-  "node_id",
-  "node_id_hex",
-  "root_public_key",
-  "vendor_id"
- ],
- "MatterFabricList": [
-  "fabrics"
- ],
- "MatterFabricRemovedPayload": [
-  "fabric_index"
- ],
- "MatterFactoryResetRequest": [
-  "confirm"
- ],
- "MatterMdnsDiagnostics": [
+ "Mdns": [
   "advertising",
   "findings",
   "services"
  ],
- "MatterMdnsFinding": [
+ "MdnsFinding": [
   "code",
   "message",
   "severity"
  ],
- "MatterMdnsService": [
+ "MdnsService": [
   "addresses",
   "host_name",
   "instance_name",
@@ -931,48 +931,20 @@
   "subtypes",
   "txt"
  ],
- "MatterSession": [
-  "fabric_index",
-  "idle_seconds",
-  "is_pase",
-  "last_activity",
-  "last_peer_activity",
-  "local_node_id",
-  "peer_idle_seconds",
-  "peer_node_id",
-  "session_id",
-  "subscriptions"
+ "NodeEndpointsChangedPayload": [],
+ "NodeRef": [
+  "central",
+  "path"
  ],
- "MatterSessionList": [
-  "occupancy",
-  "sessions"
+ "NodeWarning": [
+  "code",
+  "message"
  ],
- "MatterSessionOccupancy": [
+ "Occupancy": [
   "capacity",
   "free",
   "live",
   "reserved"
- ],
- "MatterSetupPayload": [
-  "discriminator",
-  "manual_code",
-  "passcode",
-  "product_id",
-  "qr_code",
-  "vendor_id"
- ],
- "MatterStatus": [
-  "advertising",
-  "commissioning_window_open",
-  "enabled",
-  "enabled_count",
-  "endpoint_count",
-  "fabric_count",
-  "listening"
- ],
- "NodeRef": [
-  "central",
-  "path"
  ],
  "OpenEditSessionRequest": [
   "key"
@@ -985,6 +957,12 @@
   "paramset_key",
   "reason",
   "unique_id"
+ ],
+ "Pairing": [
+  "manual_code",
+  "qr_code",
+  "source",
+  "window_open"
  ],
  "PairingAnswer": [
   "expires_in",
@@ -1272,6 +1250,24 @@
   "name",
   "quittable"
  ],
+ "Session": [
+  "fabric_index",
+  "idle_seconds",
+  "is_pase",
+  "last_activity",
+  "last_peer_activity",
+  "local_node_id",
+  "local_node_id_hex",
+  "peer_idle_seconds",
+  "peer_node_id",
+  "peer_node_id_hex",
+  "session_id",
+  "subscriptions"
+ ],
+ "SessionList": [
+  "occupancy",
+  "sessions"
+ ],
  "SetActiveProfileRequest": [
   "profile"
  ],
@@ -1311,6 +1307,15 @@
  "StartupCaptureConfigWrite": [
   "duration_seconds",
   "enabled"
+ ],
+ "Status": [
+  "advertising",
+  "commissioning_window_open",
+  "enabled",
+  "endpoint_count",
+  "exposure",
+  "fabric_count",
+  "listening"
  ],
  "SuitableMemberEntry": [
   "address"
@@ -1562,6 +1567,10 @@
  "UnsuppressServiceMessageRequest": [
   "channel"
  ],
+ "Update": [
+  "enabled",
+  "key"
+ ],
  "UpdateFirmwareResponse": [
   "status"
  ],
@@ -1571,6 +1580,9 @@
  "UpdateLinkRequest": [
   "receiver_address",
   "sender_address"
+ ],
+ "UpdateList": [
+  "items"
  ],
  "UploadBackupRequest": [
   "file"
@@ -1609,6 +1621,13 @@
   "rows",
   "value_json_bytes"
  ],
+ "Verdict": [
+  "clusters",
+  "device_type",
+  "device_type_name",
+  "reason",
+  "state"
+ ],
  "VisibilityConfig": [],
  "Warning": [
   "id",
@@ -1639,6 +1658,13 @@
   "schedule_type",
   "unique_id"
  ],
+ "Window": [
+  "duration_seconds",
+  "manual_code",
+  "qr_code"
+ ],
+ "WindowEvent": [],
+ "WindowRequest": [],
  "WiringSeam": [
   "collaborator",
   "name",

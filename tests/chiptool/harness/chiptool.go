@@ -240,7 +240,7 @@ func (c *Controller) RunWithTimeout(parent context.Context, t *testing.T, timeou
 //
 //   - addr  → bridge IP (use [PairTargetHost]; ipv6only chip-tool
 //     builds reject IPv4 literals)
-//   - port  → bridge UDP port (read out of /api/v1/matter/status)
+//   - port  → bridge UDP port (read out of /api/v1/node/status)
 //
 // The flow used here matches notes/contributor/matter-smoke.md §3
 // (and the v9 capability report's T2): PASE-only,
@@ -277,7 +277,7 @@ func (c *Controller) PairFull(ctx context.Context, t *testing.T, addr string, po
 // PairFullWithPasscode is the [PairFull] variant that uses a caller-
 // supplied passcode instead of [ChipDefaultPasscode]. Required when
 // commissioning into a window opened via REST
-// `/api/v1/matter/commissioning/window`, which generates a fresh
+// `/api/v1/node/pairing/window`, which generates a fresh
 // passcode the test must consume from the response body.
 func (c *Controller) PairFullWithPasscode(ctx context.Context, t *testing.T, addr string, port int, passcode uint32) (string, error) {
 	t.Helper()
@@ -310,7 +310,7 @@ func (c *Controller) PairFullVerifyAttestation(ctx context.Context, t *testing.T
 }
 
 // Unpair removes the chip-tool side of the fabric. The bridge-side
-// removal is exercised separately via DELETE /api/v1/matter/fabrics/{id}.
+// removal is exercised separately via DELETE /api/v1/node/fabrics/{index}.
 func (c *Controller) Unpair(ctx context.Context, t *testing.T) (string, error) {
 	t.Helper()
 	return c.Run(ctx, t, "pairing", "unpair", fmt.Sprintf("0x%X", c.NodeID))

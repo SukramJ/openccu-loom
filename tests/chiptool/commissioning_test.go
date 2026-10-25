@@ -86,7 +86,7 @@ func TestCommissioning_Attestation_ValidatesWithoutBypass(t *testing.T) {
 // TestCommissioning_SecondFabric_AfterWindow opens a commissioning
 // window via the AdministratorCommissioning REST flow and pairs a
 // SECOND controller against the freshly opened window. The window
-// must be open (POST /matter/commissioning/window) — without it the
+// must be open (POST /node/pairing/window) — without it the
 // bridge's PASE port stays closed to new commissioners after the
 // first fabric is installed, which is the production-correct
 // behaviour per Matter §5.5.
@@ -104,7 +104,7 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 	// generates a fresh passcode + discriminator on every open — the
 	// pairing call must consume the response body or PASE Sigma1
 	// fails on a passcode mismatch.
-	resp, status := b.RESTPost(t, "/api/v1/matter/commissioning/window",
+	resp, status := b.RESTPost(t, "/api/v1/node/pairing/window",
 		map[string]any{"duration_seconds": 180})
 	if status < 200 || status >= 300 {
 		t.Skipf("commissioning-window REST not supported on this build: status=%d body=%s", status, resp)
@@ -121,7 +121,7 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 		t.Fatalf("window-open returned no passcode (body=%s)", resp)
 	}
 	t.Cleanup(func() {
-		_, _ = b.RESTPost(t, "/api/v1/matter/commissioning/window/close", nil)
+		_, _ = b.RESTPost(t, "/api/v1/node/pairing/window/close", nil)
 	})
 
 	ctl := harness.NewController(t, chipBin, 0x2000) // distinct node ID

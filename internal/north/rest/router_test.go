@@ -905,28 +905,24 @@ func TestRouter_Audit_RequiresAdmin(t *testing.T) {
 	}
 }
 
-// TestRouter_MatterSetupPayload_RequiresAdmin pins that the commissioning
-// passcode is admin-only.
+// TestRouter_NodePairing_RequiresAdmin pins that the pairing codes are
+// admin-only through the mounted node page family.
 //
-// The response carries north.matter.commissioning.passcode — a cfg:"secret"
-// value — plus the QR and manual codes derived from it, and anyone holding it
-// can commission the bridge into their own fabric while a window is open. The
-// route sat outside the admin gate that every mutating Matter route uses,
-// because the comment above them scopes the gate to "mutating routes
-// (PUT / POST / DELETE)" — a read that hands out a credential is exactly as
-// privileged as a write.
-func TestRouter_MatterSetupPayload_RequiresAdmin(t *testing.T) {
+// GET /node/pairing hands out the commissioning passcode and the QR and
+// manual codes derived from it, and anyone holding them can commission the
+// bridge into their own fabric while a window is open — a read that hands
+// out a credential is exactly as privileged as a write. go-fabric-ui gates
+// the route through Options.Admin, which the router fills from
+// Deps.IsAdmin; this test measures that the fill happens, with the viewer
+// and the operator as the negative controls. The admin reaches the
+// handler, which answers 503 here because no node is wired — the point is
+// that it is not 403.
+func TestRouter_NodePairing_RequiresAdmin(t *testing.T) {
 	t.Parallel()
 	mw := auth.NewMiddleware(nil, nil)
 	build := func(role auth.Role) http.Handler {
 		return NewRouter(Deps{
 			StartedAt: time.Now(),
-			MatterCommissioning: handlers.MatterCommissioning{
-				Discriminator: 3840,
-				Passcode:      20202021,
-				VendorID:      0xFFF1,
-				ProductID:     0x8001,
-			},
 			AuthResolve: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
@@ -935,25 +931,28 @@ func TestRouter_MatterSetupPayload_RequiresAdmin(t *testing.T) {
 			},
 			AuthRequire:  mw.Require,
 			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+			IsAdmin: func(r *http.Request) bool {
+				id, ok := auth.IdentityFrom(r.Context())
+				return ok && id.HasRole(auth.RoleAdmin)
+			},
 		})
 	}
 
+	for _, role := range []auth.Role{auth.RoleViewer, auth.RoleOperator} {
+		rr := httptest.NewRecorder()
+		build(role).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/node/pairing", http.NoBody))
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("%s must not receive the pairing codes, got %d body=%s", role, rr.Code, rr.Body.String())
+		}
+	}
+
 	rr := httptest.NewRecorder()
-	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/matter/setup-payload", http.NoBody))
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("viewer must not receive the commissioning passcode, got %d body=%s", rr.Code, rr.Body.String())
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/node/pairing", http.NoBody))
+	if rr.Code == http.StatusForbidden || rr.Code == http.StatusUnauthorized {
+		t.Fatalf("admin must pass the gate, got %d body=%s", rr.Code, rr.Body.String())
 	}
-
-	rr = httptest.NewRecorder()
-	build(auth.RoleOperator).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/matter/setup-payload", http.NoBody))
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("operator must not receive the commissioning passcode, got %d", rr.Code)
-	}
-
-	rr = httptest.NewRecorder()
-	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/matter/setup-payload", http.NoBody))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("admin must reach the setup payload, got %d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("without a node the admin's read answers 503 service_unready, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

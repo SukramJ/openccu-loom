@@ -783,7 +783,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// daemon — the bridge is best-effort until GA.
 	// auditDB (ov.db) is threaded through rather than opened again — see
 	// openLoomDB in daemon_boot.go.
-	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, auditDB, healthTracker, parameterLabels, logger, wsHub)
+	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, auditDB, healthTracker, parameterLabels, catalogs, auditRec, logger, wsHub)
 	// Hand the per-central Matter wiring hook to the live-adopt
 	// orchestrator so a runtime-added central latches readiness, triggers
 	// a reassemble, and forwards reachability exactly like a boot-time
