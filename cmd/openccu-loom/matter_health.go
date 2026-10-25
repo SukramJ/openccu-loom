@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 )
 
 // matterHealthComponentName is the tracker component name reported
@@ -23,14 +23,14 @@ const matterHealthComponentName = "matter.bridge"
 // the same cadence.
 const matterHealthProbeInterval = 30 * time.Second
 
-// matterStatusSnapshot is the subset of [handlers.MatterStatusReader]
+// matterStatusSnapshot is the subset of [mcp.MatterStatusReader]
 // the probe needs. Defined locally so we keep the daemon-side
 // adapter free of cross-package interface dependencies.
 type matterStatusSnapshot interface {
-	MatterStatus(ctx context.Context) handlers.MatterStatusResponse
+	MatterStatus(ctx context.Context) mcp.MatterStatus
 }
 
-// startMatterHealthProbe polls the [handlers.MatterStatusReader] on a
+// startMatterHealthProbe polls the [mcp.MatterStatusReader] on a
 // fixed cadence and records the bridge's liveness verdict. Returns a
 // stop function that cancels the goroutine and waits for it to exit.
 // A nil reader or tracker yields a no-op stopper.

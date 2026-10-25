@@ -25,10 +25,10 @@ import (
 
 type getMatterStatusIn struct{}
 
-// getMatterStatusOut projects [handlers.MatterStatusResponse]. A local
-// type rather than reusing the REST DTO directly, matching how every
-// other tool in this package (deviceSummary, incidentSummary, …)
-// projects its backing facade rather than exposing it verbatim.
+// getMatterStatusOut projects [MatterStatus]. A local type rather than
+// the facade's struct, matching how every other tool in this package
+// (deviceSummary, incidentSummary, …) projects its backing facade rather
+// than exposing it verbatim.
 type getMatterStatusOut struct {
 	Enabled bool `json:"enabled"`
 	// Listening reports whether the bridge's UDP listener is bound —
@@ -52,9 +52,8 @@ type getMatterStatusOut struct {
 	WindowDurationSeconds uint16 `json:"commissioning_window_duration_seconds,omitempty"`
 }
 
-// registerGetMatterStatus implements `get_matter_status`, projecting
-// the same [handlers.MatterStatusReader] seam GET /matter/status reads
-// through. The bridge is one instance per daemon (not per CCU), so the
+// registerGetMatterStatus implements `get_matter_status` over the
+// [MatterStatusReader] seam the composition root wires. The bridge is one instance per daemon (not per CCU), so the
 // tool takes no central_name.
 func registerGetMatterStatus(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{

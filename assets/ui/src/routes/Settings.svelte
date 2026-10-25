@@ -43,7 +43,7 @@
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
   import { foldedRouteTarget, landingTargets } from "$lib/nav";
-  import { matterStore } from "$lib/stores/matter.svelte";
+  import { fabricUI } from "$lib/stores/fabric-node.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
@@ -144,7 +144,7 @@
   // operator is never offered a view they cannot reach.
   const startRouteOptions = $derived(
     landingTargets({
-      matterEnabled: matterStore.status?.enabled === true,
+      matterEnabled: fabricUI.node.status?.enabled === true,
       // Same pair the nav and the view itself require: a landing target the
       // operator can pick and then cannot reach is worse than one absent
       // from the list.

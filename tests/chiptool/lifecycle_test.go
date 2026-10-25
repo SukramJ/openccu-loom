@@ -35,43 +35,43 @@ func TestLifecycle_RESTMatterStatus(t *testing.T) {
 }
 
 // TestLifecycle_RESTMatterFabrics asserts the bridge surfaces the
-// shared fabric on `GET /api/v1/matter/fabrics`.
+// shared fabric on `GET /api/v1/node/fabrics`.
 func TestLifecycle_RESTMatterFabrics(t *testing.T) {
 	b := requireBridge(t)
 	var body any
-	st := b.RESTGet(t, "/api/v1/matter/fabrics", &body)
+	st := b.RESTGet(t, "/api/v1/node/fabrics", &body)
 	if st != 200 {
-		t.Fatalf("/matter/fabrics: status=%d", st)
+		t.Fatalf("/node/fabrics: status=%d", st)
 	}
 	// JSON shape varies; just assert at least one fabric entry.
 	if body == nil {
-		t.Errorf("/matter/fabrics: empty body")
+		t.Errorf("/node/fabrics: empty body")
 	}
 }
 
 // TestLifecycle_SetupPayload asserts
-// `GET /api/v1/matter/setup-payload` returns a payload with a
+// `GET /api/v1/node/pairing` returns the configured pairing codes with a
 // non-empty manual code + QR string. The bridge needs a passcode +
 // discriminator to emit one, both of which the harness configured.
 func TestLifecycle_SetupPayload(t *testing.T) {
 	b := requireBridge(t)
 	var body map[string]any
-	st := b.RESTGet(t, "/api/v1/matter/setup-payload", &body)
+	st := b.RESTGet(t, "/api/v1/node/pairing", &body)
 	if st != 200 {
-		t.Fatalf("/matter/setup-payload: status=%d", st)
+		t.Fatalf("/node/pairing: status=%d", st)
 	}
 	if body == nil {
-		t.Fatal("/matter/setup-payload: empty body")
+		t.Fatal("/node/pairing: empty body")
 	}
 	// Either "manual_code" or "manual_pairing_code" — accept the
 	// field name commonly produced by the handler.
 	mc := pickString(body, "manual_code", "manual_pairing_code", "manualCode")
 	if mc == "" {
-		t.Errorf("/matter/setup-payload: no manual pairing code surfaced: %v", body)
+		t.Errorf("/node/pairing: no manual pairing code surfaced: %v", body)
 	}
 	qr := pickString(body, "qr_code", "qr_payload", "qrPayload")
 	if qr == "" {
-		t.Errorf("/matter/setup-payload: no QR string surfaced: %v", body)
+		t.Errorf("/node/pairing: no QR string surfaced: %v", body)
 	}
 }
 

@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 432a3205
-HEAD: 432a3205
+Generated: 33383bad
+HEAD: 33383bad
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6151 |
-| Reachable | 4028 |
-| Whitelisted | 2067 |
+| Total Exported | 6100 |
+| Reachable | 4048 |
+| Whitelisted | 1996 |
 | **Unreachable** | **56** |
 
 ## What these numbers cannot see

@@ -48,7 +48,7 @@ func TestDescriptor_RootPartsList(t *testing.T) {
 		t.Errorf("root PartsList %v missing aggregator (EP 1)", eps)
 	}
 	// When the godevccu fleet's exposures are not yet enabled (the
-	// /matter/exposable bulk path can return 500 on some daemon
+	// /node/exposure apply path can return 500 on some daemon
 	// builds), len(eps) == 1 — just the Aggregator. The cluster /
 	// subscribe / invoke tests SKIP in that mode; here we settle for
 	// the structural assertion that the Aggregator is published.
@@ -68,7 +68,7 @@ func TestDescriptor_AggregatorPartsList(t *testing.T) {
 	}
 	eps := harness.EndpointsInPartsList(out)
 	if len(eps) == 0 {
-		t.Skipf("aggregator PartsList empty — no exposures enabled. Light up /matter/exposable rows to populate bridged endpoints. Output:\n%s", out)
+		t.Skipf("aggregator PartsList empty — no exposures enabled. Light up /node/exposure rows to populate bridged endpoints. Output:\n%s", out)
 	}
 	for _, ep := range eps {
 		if ep == 0 || ep == 1 {

@@ -4272,15 +4272,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/matter/status": {
+    "/node/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Bridge runtime state (endpoint count, fabric count, advertise on/off) */
-        get: operations["matterStatus"];
+        /** Health, counts and the commissioning window. */
+        get: operations["getNodeStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4289,24 +4289,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/matter/compatibility": {
+    "/node/fabrics": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * How each commissioned ecosystem will treat what the bridge exposes
-         * @description Classifies every commissioned fabric by ecosystem and reports what
-         *     that ecosystem does with the exposed device types.
-         *
-         *     These problems are invisible from the bridge: the endpoint is
-         *     assembled, its clusters answer reads, commissioning succeeds — and
-         *     the device is missing from the app, or the whole bridge stops
-         *     responding there. Naming the combination is what connects the two.
-         */
-        get: operations["matterCompatibility"];
+        /** The commissioned fabrics. */
+        get: operations["listFabrics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4315,177 +4306,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/matter/endpoints": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The assembled Matter topology as a controller sees it
-         * @description Reports every endpoint the bridge exposes with its device type,
-         *     its clusters and where it came from — the view a controller gets,
-         *     without needing chip-tool to obtain it.
-         *
-         *     Endpoint numbers are assigned from persisted identity, not from
-         *     position, so they are stable across restarts but not derivable
-         *     from the device list. Reading them here is the way to find the
-         *     endpoint belonging to a given device; guessing by ordinal is not.
-         */
-        get: operations["matterEndpointInspector"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/mdns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * What the bridge advertises over mDNS, and what is wrong with it
-         * @description Reports the mDNS records the bridge currently announces, together
-         *     with findings that explain why a controller might not discover it.
-         *
-         *     Every finding corresponds to a failure that presents identically
-         *     from inside the daemon: advertising succeeds, the log says so, and
-         *     the controller simply never offers the bridge. Missing subtype
-         *     PTRs (Apple and Google browse through them), container-internal
-         *     addresses a LAN controller cannot route to, a commissioning port
-         *     other than 5540 (Alexa uses no other), an IPv4-only announcement.
-         */
-        get: operations["matterMdnsDiagnostics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Open Matter sessions with per-session liveness (operator diagnostics)
-         * @description Lists every secure session the bridge currently holds, with when it
-         *     last carried traffic and how many subscriptions ride on it.
-         *
-         *     The two timestamps answer different questions. `last_activity` moves
-         *     on traffic in either direction; `last_peer_activity` only when the
-         *     controller sent something. A session whose peer has been quiet while
-         *     the bridge kept reporting is a controller that went away without
-         *     closing — the shape that otherwise shows up only as entities going
-         *     stale in the ecosystem.
-         *
-         *     The `occupancy` block answers the other half: how much of the
-         *     session-id space the listed sessions leave free, including the ids
-         *     held by handshakes that never became sessions.
-         *
-         *     No key material is exposed.
-         */
-        get: operations["listMatterSessions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Recent Matter pairing, session and discovery events
-         * @description A bounded, in-memory trace of the moments that explain a failed pairing — a commissioner refused while another was mid-handshake, pairing locked after repeated failed attempts, a session closed. The existing Matter diagnostics report state and therefore cannot answer "what happened thirty seconds ago", which is the question left after a controller gives up and goes quiet.
-         *
-         *     The trace is lossy by design: oldest entries are dropped to make room, and it does not survive a restart. It is a diagnostic, not an audit trail.
-         */
-        get: operations["getMatterDiagnosticEvents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/force-sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Re-assemble the exposed Matter topology (admin)
-         * @description Re-runs endpoint assembly against the current device model. Use when the bridge and the CCU disagree about what exists — a change that arrived while the bridge was down, an exposure edited outside the usual path. Not destructive: controllers keep their sessions and fabrics.
-         */
-        post: operations["matterForceSync"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/factory-reset": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Remove every Matter fabric (admin, destructive)
-         * @description Returns the bridge to its uncommissioned state. Every paired controller loses it and has to commission it again; there is no undo.
-         *
-         *     The request body must name the action — `{"confirm": "remove-all-fabrics"}` — so a replayed or mis-scripted POST cannot unpair an installation.
-         */
-        post: operations["matterFactoryReset"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/fabrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Matter fabrics commissioned to the bridge */
-        get: operations["listMatterFabrics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/fabrics/{id}": {
+    "/node/fabrics/{index}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4495,8 +4316,253 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Unpair a Matter fabric (admin) */
-        delete: operations["revokeMatterFabric"];
+        /** Remove one fabric. */
+        delete: operations["removeFabric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pairing codes — of the window this handler opened while it is open, else the configured ones. */
+        get: operations["getPairing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/pairing/window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a commissioning window. */
+        post: operations["openWindow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/pairing/window/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close the open commissioning window. */
+        post: operations["closeWindow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The bridged endpoints a controller sees. */
+        get: operations["listEndpoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The open secure sessions and the session-id occupancy. */
+        get: operations["listSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/mdns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The live DNS-SD advertisement and its diagnosis. */
+        get: operations["getMdns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/compatibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The commissioned ecosystems and known incompatibilities. */
+        get: operations["getCompatibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pairing, session and discovery trace, newest first. */
+        get: operations["listDiagnosticEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/exposure/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the selection page shows the host's items. */
+        get: operations["getExposureSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every item the host could expose. */
+        get: operations["listExposure"];
+        /** Apply a batch of item changes and reassemble the endpoints. */
+        put: operations["applyExposure"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/exposure/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The items as a batch of changes would leave them; nothing is written. */
+        post: operations["previewExposure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/maintenance/reassemble": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebuild the endpoints from the host's current selection; pairings are untouched. */
+        post: operations["reassemble"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/maintenance/factory-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove every fabric. The body must name the action. */
+        post: operations["factoryReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-sent events.
+         * @description `event:` is one of fabric_added, fabric_removed, window_opened,
+         *     window_closed, endpoints_changed, exposure_changed; `data:` is the
+         *     JSON payload (`FabricEvent`, `WindowEvent`, `{}`, `ExposureEvent`).
+         *     A comment line arrives every 15 s. No payload carries a passcode.
+         */
+        get: operations["stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4538,112 +4604,6 @@ export interface paths {
         get: operations["listVisibilityUnIgnoreCandidates"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/exposable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List every candidate source with current allowlist state + mappable verdict */
-        get: operations["listMatterExposable"];
-        /** Update one allowlist row (admin) */
-        put: operations["updateMatterExposable"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/exposable/bulk": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Apply multiple allowlist updates at once (admin) */
-        post: operations["bulkUpdateMatterExposable"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/commissioning/window/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close an open Matter commissioning window early (admin) */
-        post: operations["closeMatterCommissioningWindow"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open a commissioning window for a second Matter controller (admin) */
-        post: operations["shareMatterBridge"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/setup-payload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Bridge's QR + manual pairing code
-         * @description Admin only. The response carries the commissioning passcode and the QR and manual codes derived from it, so anyone holding it can commission the bridge into their own fabric while a window is open.
-         */
-        get: operations["matterSetupPayload"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/matter/commissioning/window": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open a Matter commissioning window */
-        post: operations["openMatterCommissioningWindow"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8276,253 +8236,6 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "operator" | "viewer";
         };
-        MatterDiagnosticEvent: {
-            /** Format: date-time */
-            at: string;
-            /** @enum {string} */
-            kind: "pairing" | "session" | "discovery";
-            /** @enum {string} */
-            severity: "info" | "warning" | "error";
-            /** @description One sentence an operator can act on. */
-            message: string;
-            /** @description Identifiers that make the message specific. */
-            detail?: {
-                [key: string]: string;
-            };
-        };
-        MatterDiagnosticEventList: {
-            events: components["schemas"]["MatterDiagnosticEvent"][];
-        };
-        MatterFabric: {
-            /** @description Stack-assigned fabric index per Matter Core Spec §11.18.5 */
-            fabric_index: number;
-            /** Format: int64 */
-            fabric_id: number;
-            /** @description The exact 64-bit fabric id as 16 uppercase hex digits. A JSON number carries only 53 bits of integer precision, so a client that renders `fabric_id` shows rounded low digits for any id above 2^53. Render this field. */
-            fabric_id_hex: string;
-            /** Format: int64 */
-            node_id: number;
-            /** @description The exact 64-bit operational node id as 16 uppercase hex digits, in the form controllers and chip-tool print it. Render this field rather than `node_id`, which loses precision in transport. */
-            node_id_hex: string;
-            vendor_id: number;
-            /** @description Human-readable name of the controller vendor behind vendor_id (e.g. "Apple", "Google"). A vendor the daemon has no name for renders as its id in `0xNNNN` form rather than an empty string, so the row still identifies the controller. */
-            vendor_name?: string;
-            label?: string;
-            /** @description 8-byte compressed fabric identifier, hex-encoded */
-            compressed_id: string;
-            /** @description Issuing root CA public key (uncompressed P-256, 65 bytes), hex-encoded */
-            root_public_key: string;
-        };
-        MatterFabricList: {
-            fabrics: components["schemas"]["MatterFabric"][];
-        };
-        MatterEcosystem: {
-            /** @enum {string} */
-            ecosystem: "apple" | "google" | "amazon" | "smartthings" | "aqara" | "home_assistant" | "unknown";
-            vendor_id: number;
-            fabric_index: number;
-            label?: string;
-        };
-        MatterCompatFinding: {
-            ecosystem: string;
-            code: string;
-            message: string;
-            /** @description The device type concerned; absent when the finding applies to the bridge as a whole */
-            device_type?: number;
-        };
-        MatterCompatibility: {
-            ecosystems: components["schemas"]["MatterEcosystem"][];
-            endpoint_count: number;
-            findings: components["schemas"]["MatterCompatFinding"][];
-        };
-        MatterEndpointCluster: {
-            /** @description Cluster id */
-            id: number;
-            /** @description Empty when the cluster is not in the generated schema */
-            name: string;
-            /** @description 0 when unknown to the schema */
-            revision: number;
-        };
-        MatterEndpointInfo: {
-            endpoint_id: number;
-            parent_endpoint_id: number;
-            device_type: number;
-            device_type_name: string;
-            device_type_revision?: number;
-            reachable: boolean;
-            friendly_name: string;
-            /** @description Source device, absent for the root and aggregator endpoints */
-            device_address?: string;
-            /** @description Source channel, absent when the endpoint is not channel-scoped */
-            channel_address?: string;
-            clusters: components["schemas"]["MatterEndpointCluster"][];
-        };
-        MatterEndpointList: {
-            endpoints: components["schemas"]["MatterEndpointInfo"][];
-        };
-        MatterMdnsService: {
-            /** @example _matterc._udp */
-            service_type: string;
-            instance_name: string;
-            host_name: string;
-            port: number;
-            addresses: string[];
-            /** @description Service subtypes (`_L<discriminator>`, `_S<short>`, `_CM`) Apple and Google browse through */
-            subtypes: string[];
-            txt: {
-                [key: string]: string;
-            };
-        };
-        MatterMdnsFinding: {
-            /** @enum {string} */
-            severity: "error" | "warning";
-            /** @description Stable identifier; the message is prose and may be reworded */
-            code: string;
-            message: string;
-            /** @description The advertised record this applies to; absent when it concerns the advertisement as a whole */
-            service?: string;
-        };
-        MatterMdnsDiagnostics: {
-            /** @description False when advertising is switched off (`north.matter.mdns_advertise: noop`) */
-            advertising: boolean;
-            services: components["schemas"]["MatterMdnsService"][];
-            findings: components["schemas"]["MatterMdnsFinding"][];
-        };
-        MatterSession: {
-            session_id: number;
-            /** @description 0 for a PASE (commissioning) session */
-            fabric_index: number;
-            /** @description 64-bit node id, hex */
-            peer_node_id: string;
-            /** @description 64-bit node id, hex */
-            local_node_id: string;
-            /** @description Commissioning session rather than an operational (CASE) one */
-            is_pase: boolean;
-            /** @description Active subscriptions riding on this session */
-            subscriptions: number;
-            /**
-             * Format: date-time
-             * @description Last traffic in either direction
-             */
-            last_activity: string;
-            /**
-             * Format: date-time
-             * @description Last message received from the peer
-             */
-            last_peer_activity: string;
-            /** @description Seconds since last_activity */
-            idle_seconds: number;
-            /** @description Seconds since last_peer_activity — the controller-liveness signal */
-            peer_idle_seconds: number;
-        };
-        /**
-         * @description Usage of the bridge's 16-bit session-id space.
-         *
-         *     `reserved` is the field the session list cannot supply: a CASE
-         *     handshake announces its session id in Sigma2 one round trip before
-         *     the session exists, and an id staked by a handshake that never
-         *     completes holds its slot for twenty minutes without appearing as a
-         *     session. A space filling up with those looks like a quiet bridge
-         *     from every other view, until the next controller is refused.
-         */
-        MatterSessionOccupancy: {
-            /** @description Sessions with key material installed */
-            live: number;
-            /** @description Ids staked by a handshake that has not completed */
-            reserved: number;
-            /** @description Size of the allocator's id space (ids 1..0xFFFE) */
-            capacity: number;
-            /** @description Ids held by neither a live session nor a staked handshake */
-            free: number;
-        };
-        MatterSessionList: {
-            sessions: components["schemas"]["MatterSession"][];
-            occupancy: components["schemas"]["MatterSessionOccupancy"];
-        };
-        MatterSetupPayload: {
-            discriminator: number;
-            passcode: number;
-            vendor_id: number;
-            product_id: number;
-            /** @description Onboarding payload prefixed with `MT:` per Matter §5.7.4 */
-            qr_code: string;
-            /** @description 11-digit decimal code with Verhoeff check digit per Matter §5.1.4 */
-            manual_code: string;
-        };
-        MatterCommissioningWindowRequest: {
-            /** @description Commissioning window duration in seconds. Default 900 (15 minutes). */
-            duration_seconds?: number;
-        };
-        MatterCommissioningWindowResponse: {
-            discriminator: number;
-            passcode: number;
-            duration_seconds: number;
-            qr_code: string;
-            manual_code: string;
-        };
-        MatterStatus: {
-            /** @description Bridge feature flag */
-            enabled: boolean;
-            /** @description UDP listener bound */
-            listening: boolean;
-            /** @description Effective UDP listen address */
-            listen_addr?: string;
-            /** @description Bridged-endpoint count (excludes the root and Aggregator endpoints) */
-            endpoint_count: number;
-            /** @description Commissioned fabrics */
-            fabric_count: number;
-            /** @description Allowlist entries with enabled=true */
-            enabled_count: number;
-            /** @description mDNS records emitted */
-            advertising: boolean;
-            commissioning_window_open: boolean;
-            commissioning_window_duration_seconds?: number;
-        };
-        MatterExposure: {
-            central_name: string;
-            device_address: string;
-            channel_no: number;
-            /** @enum {string} */
-            dp_kind: "custom" | "generic" | "calculated" | "combined" | "measurement";
-            dp_key: string;
-            /**
-             * @description Ready-to-display caption for the data point behind
-             *     `dp_key`: locale-aware channel-typed translation when one
-             *     exists, otherwise the title-cased key. Same resolution as
-             *     `DataPointSummary.parameter_label`.
-             */
-            parameter_label?: string;
-            display_name?: string;
-            enabled: boolean;
-            friendly_name?: string;
-            /** @enum {string} */
-            mappable: "mappable" | "partially_mappable" | "unmappable";
-            device_type?: number;
-            /**
-             * @description Operator-facing Matter device-type name for `device_type`
-             *     (e.g. "On/Off Light"). Empty when `device_type` is zero
-             *     (measurement rides on a host endpoint).
-             */
-            device_type_label?: string;
-            clusters?: number[];
-            reason?: string;
-        };
-        MatterExposureList: {
-            items: components["schemas"]["MatterExposure"][];
-        };
-        MatterExposureUpdate: {
-            central_name: string;
-            device_address: string;
-            channel_no: number;
-            /** @enum {string} */
-            dp_kind: "custom" | "generic" | "calculated" | "combined" | "measurement";
-            dp_key: string;
-            enabled: boolean;
-            friendly_name?: string;
-        };
-        MatterExposureBulkUpdate: {
-            items: components["schemas"]["MatterExposureUpdate"][];
-        };
         UnIgnoreEntry: {
             pattern: string;
             /** Format: date-time */
@@ -9657,39 +9370,6 @@ export interface components {
             unique_id: string;
             /** @description Optional value carried by the trigger event in its native CCU type. Omitted when absent. */
             value?: unknown;
-        };
-        /**
-         * @description Payload of `matter.commissioning_progress`. Free-form progress
-         *     update during a commissioning session (PASE handshake → CASE
-         *     pickup → AddNOC → completion). Fields are intentionally
-         *     sparse — the bridge emits whatever stage information is
-         *     available at the moment.
-         */
-        MatterCommissioningProgressPayload: {
-            /** @description Stage label (e.g. `pase_session_open`, `add_noc`, `case_session_first`). */
-            stage: string;
-            /** @description Human-readable detail; may be empty. */
-            message?: string;
-        };
-        /**
-         * @description Payload of `matter.fabric_removed`. Emitted after a fabric is
-         *     revoked via `DELETE /api/v1/matter/fabrics/{id}` or by the
-         *     commissioner cluster command.
-         */
-        MatterFabricRemovedPayload: {
-            /** @description Stack-assigned fabric index of the removed fabric. */
-            fabric_index: number;
-        };
-        /**
-         * @description Payload of `matter.endpoint_assembled`. Fires after the
-         *     bridge's endpoint topology has been reassembled (e.g. after
-         *     an allowlist update). Carries the new endpoint count so the
-         *     SPA can refresh its bridge view without re-fetching the full
-         *     fabric list.
-         */
-        MatterEndpointAssembledPayload: {
-            /** @description Bridged-endpoint count of the assembled topology (excludes the root and Aggregator endpoints). */
-            endpoint_count: number;
         };
         /** @description Descriptor for one config field exposed by the schema endpoint. */
         SchemaField: {
@@ -11424,10 +11104,6 @@ export interface components {
             username: string;
             password: string;
         };
-        MatterFactoryResetRequest: {
-            /** @enum {string} */
-            confirm: "remove-all-fabrics";
-        };
         OpenEditSessionRequest: {
             key: string;
             subject?: string;
@@ -11673,6 +11349,273 @@ export interface components {
             /** @description Ordering constraints that were already broken when the seam was attached. Empty is the normal case; a non-empty list is a wiring defect the daemon reports about itself — the collaborator IS wired, so nothing else about the daemon looks wrong. */
             violations?: string[];
         };
+        Status: {
+            enabled: boolean;
+            listening: boolean;
+            listen_addr?: string;
+            /** @description Absent when the node runs no health probe. */
+            healthy?: boolean;
+            health_note?: string;
+            endpoint_count: number;
+            fabric_count: number;
+            /** @description Enabled selection items; absent without a selection. */
+            enabled_count?: number;
+            advertising: boolean;
+            commissioning_window_open: boolean;
+            commissioning_window_duration_seconds?: number;
+            /** @description Whether the host serves a selection. */
+            exposure: boolean;
+            /** @description The admin token of token mode; absent when the host decides admin rights. */
+            csrf_token?: string;
+            /** @description The host's findings about its own configuration; absent when the host reports none (no Options.Warnings), empty when it finds nothing. */
+            warnings?: components["schemas"]["NodeWarning"][];
+        };
+        NodeWarning: {
+            /** @description The kind of finding, stable across host releases. */
+            code: string;
+            /** @description What is wrong, in the host's language. */
+            message: string;
+            /**
+             * Format: date-time
+             * @description When the host first saw it; absent when unknown.
+             */
+            since?: string;
+        };
+        Fabric: {
+            fabric_index: number;
+            /** @description Informational; use fabric_id_hex. */
+            fabric_id: number;
+            fabric_id_hex: string;
+            /** @description Informational; use node_id_hex. */
+            node_id: number;
+            node_id_hex: string;
+            vendor_id: number;
+            vendor_name: string;
+            label?: string;
+            compressed_id: string;
+            root_public_key: string;
+        };
+        FabricList: {
+            fabrics: components["schemas"]["Fabric"][];
+        };
+        Pairing: {
+            /** @description Only for a window this handler opened on fresh credentials; the codes carry it. */
+            discriminator?: number;
+            /** @description Only for a window this handler opened on fresh credentials. */
+            passcode?: number;
+            qr_code: string;
+            manual_code: string;
+            source: components["schemas"]["NodePairingSource"];
+            window_open: boolean;
+            duration_seconds?: number;
+        };
+        WindowRequest: {
+            /** @description 180..900; 0 or absent is 900. */
+            duration_seconds?: number;
+        };
+        Window: {
+            /** @description Absent for a window on the configured credentials. */
+            discriminator?: number;
+            /** @description Absent for a window on the configured credentials. */
+            passcode?: number;
+            duration_seconds: number;
+            qr_code: string;
+            manual_code: string;
+        };
+        Cluster: {
+            id: number;
+            name?: string;
+            revision?: number;
+        };
+        Endpoint: {
+            endpoint_id: number;
+            parent_endpoint_id: number;
+            device_type: number;
+            device_type_name: string;
+            reachable: boolean;
+            name: string;
+            /** @description Opaque identity of the host's source; `key` is the endpoint's stable key. */
+            source: {
+                [key: string]: string;
+            };
+            clusters: components["schemas"]["Cluster"][];
+        };
+        EndpointList: {
+            endpoints: components["schemas"]["Endpoint"][];
+        };
+        Session: {
+            session_id: number;
+            fabric_index: number;
+            /** @description Informational; use peer_node_id_hex. */
+            peer_node_id: number;
+            peer_node_id_hex: string;
+            /** @description Informational; use local_node_id_hex. */
+            local_node_id: number;
+            local_node_id_hex: string;
+            is_pase: boolean;
+            subscriptions: number;
+            /** Format: date-time */
+            last_activity: string;
+            /** Format: date-time */
+            last_peer_activity: string;
+            idle_seconds: number;
+            peer_idle_seconds: number;
+        };
+        Occupancy: {
+            live: number;
+            reserved: number;
+            capacity: number;
+            free: number;
+        };
+        SessionList: {
+            sessions: components["schemas"]["Session"][];
+            occupancy: components["schemas"]["Occupancy"];
+        };
+        MdnsService: {
+            service_type: string;
+            instance_name: string;
+            host_name: string;
+            port: number;
+            addresses: string[];
+            subtypes: string[];
+            txt: {
+                [key: string]: string;
+            };
+        };
+        MdnsFinding: {
+            severity: components["schemas"]["NodeMdnsFindingSeverity"];
+            code: string;
+            message: string;
+            service?: string;
+        };
+        Mdns: {
+            advertising: boolean;
+            services: components["schemas"]["MdnsService"][];
+            findings: components["schemas"]["MdnsFinding"][];
+        };
+        Ecosystem: {
+            ecosystem: string;
+            vendor_id: number;
+            fabric_index: number;
+            label?: string;
+        };
+        CompatFinding: {
+            ecosystem: string;
+            code: string;
+            message: string;
+            device_type?: number;
+        };
+        Compatibility: {
+            ecosystems: components["schemas"]["Ecosystem"][];
+            endpoint_count: number;
+            findings: components["schemas"]["CompatFinding"][];
+        };
+        DiagnosticEvent: {
+            /** Format: date-time */
+            at: string;
+            kind: components["schemas"]["NodeDiagnosticEventKind"];
+            severity: components["schemas"]["NodeDiagnosticEventSeverity"];
+            message: string;
+            detail?: {
+                [key: string]: string;
+            };
+        };
+        DiagnosticEventList: {
+            events: components["schemas"]["DiagnosticEvent"][];
+        };
+        Column: {
+            key: string;
+            label: string;
+            /** @description Offer a value filter built from the listed values. */
+            filter: boolean;
+            /** @description Default false. The field is a comma-separated list: shown as chips, filtered by membership, the filter's options built from the individual values. */
+            multi?: boolean;
+        };
+        FilterOption: {
+            value: string;
+            label: string;
+        };
+        Filter: {
+            field: string;
+            label: string;
+            options: components["schemas"]["FilterOption"][];
+            /** @description Default false. Match by membership in the field's comma-separated list (values trimmed; an empty value never matches) instead of equality. */
+            multi?: boolean;
+        };
+        ExposureSchema: {
+            columns: components["schemas"]["Column"][];
+            groups: boolean;
+            filters: components["schemas"]["Filter"][];
+        };
+        Verdict: {
+            state: components["schemas"]["NodeVerdictState"];
+            device_type: number;
+            device_type_name: string;
+            clusters: number[];
+            reason: string;
+        };
+        Item: {
+            key: string;
+            name: string;
+            group: string;
+            fields: {
+                [key: string]: string;
+            };
+            verdict: components["schemas"]["Verdict"];
+            enabled: boolean;
+            /** @description Where the verdict comes from, in the host's words. */
+            source: string;
+        };
+        ItemList: {
+            items: components["schemas"]["Item"][];
+        };
+        Update: {
+            key: string;
+            enabled: boolean;
+            /** @description Renames the item; absent leaves the name. */
+            name?: string;
+        };
+        UpdateList: {
+            items: components["schemas"]["Update"][];
+        };
+        Applied: {
+            applied: number;
+        };
+        FactoryResetRequest: {
+            /** @constant */
+            confirm: "remove-all-fabrics";
+        };
+        FabricEvent: {
+            fabric_index: number;
+            vendor_id?: number;
+            vendor_name?: string;
+            label?: string;
+        };
+        WindowEvent: {
+            discriminator?: number;
+            duration_seconds?: number;
+        };
+        ExposureEvent: {
+            keys: string[];
+        };
+        /**
+         * @description Where the pairing codes come from — the configured credentials, or the window the handler opened on fresh ones.
+         * @enum {string}
+         */
+        NodePairingSource: "configured" | "window";
+        /** @enum {string} */
+        NodeMdnsFindingSeverity: "error" | "warning";
+        /** @enum {string} */
+        NodeDiagnosticEventKind: "pairing" | "session" | "discovery";
+        /** @enum {string} */
+        NodeDiagnosticEventSeverity: "info" | "warning" | "error";
+        /**
+         * @description go-fabric's eligibility state of an exposable item.
+         * @enum {string}
+         */
+        NodeVerdictState: "mappable" | "partially_mappable" | "unmappable";
+        /** @description The payload of the `node.endpoints_changed` broadcast: empty. The node reassembled its bridged endpoints; a subscriber reloads GET /node/endpoints. */
+        NodeEndpointsChangedPayload: Record<string, never>;
     };
     responses: {
         /** @description Validation or parsing failure */
@@ -11731,6 +11674,15 @@ export interface components {
         };
         /** @description Backend not wired */
         ServiceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description An RFC 9457 problem of the node page family (go-fabric-ui). */
+        NodeProblem: {
             headers: {
                 [name: string]: unknown;
             };
@@ -18414,7 +18366,7 @@ export interface operations {
             };
         };
     };
-    matterStatus: {
+    getNodeStatus: {
         parameters: {
             query?: never;
             header?: never;
@@ -18423,18 +18375,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description The status; `enabled` is false when the host serves no node. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MatterStatus"];
+                    "application/json": components["schemas"]["Status"];
                 };
             };
         };
     };
-    matterCompatibility: {
+    listFabrics: {
         parameters: {
             query?: never;
             header?: never;
@@ -18443,171 +18395,66 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description The fabrics. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MatterCompatibility"];
+                    "application/json": components["schemas"]["FabricList"];
                 };
             };
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
         };
     };
-    matterEndpointInspector: {
+    removeFabric: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                index: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterEndpointList"];
-                };
-            };
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    matterMdnsDiagnostics: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterMdnsDiagnostics"];
-                };
-            };
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    listMatterSessions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterSessionList"];
-                };
-            };
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    getMatterDiagnosticEvents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Recorded events, newest first */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterDiagnosticEventList"];
-                };
-            };
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    matterForceSync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Topology re-assembled */
+            /** @description Removed. */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
-            503: {
+            400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    getPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The codes. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/json": components["schemas"]["Pairing"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
         };
     };
-    matterFactoryReset: {
+    openWindow: {
         parameters: {
             query?: never;
             header?: never;
@@ -18616,47 +18463,27 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MatterFactoryResetRequest"];
+                "application/json": components["schemas"]["WindowRequest"];
             };
         };
         responses: {
-            /** @description Every fabric removed */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Confirmation missing or wrong */
-            400: {
+            /** @description The window is open; the codes commission through it. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/json": components["schemas"]["Window"];
                 };
             };
-            /** @description The reset did not complete. It may be partial: the fabrics already revoked stay revoked, and the problem detail names how many of how many were removed. Re-run to finish. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
+            400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
+            409: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
         };
     };
-    listMatterFabrics: {
+    closeWindow: {
         parameters: {
             query?: never;
             header?: never;
@@ -18665,54 +18492,293 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterFabricList"];
-                };
-            };
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    revokeMatterFabric: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Fabric revoked */
+            /** @description Closed. */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            400: components["responses"]["BadRequest"];
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
-            503: {
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    listEndpoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The endpoints. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/json": components["schemas"]["EndpointList"];
+                };
+            };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    listSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    getMdns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The advertisement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Mdns"];
+                };
+            };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    getCompatibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Compatibility"];
+                };
+            };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    listDiagnosticEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trace. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosticEventList"];
+                };
+            };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    getExposureSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The schema. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExposureSchema"];
+                };
+            };
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    listExposure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemList"];
+                };
+            };
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    applyExposure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateList"];
+            };
+        };
+        responses: {
+            /** @description Applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Applied"];
+                };
+            };
+            /** @description The batch was empty. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    previewExposure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateList"];
+            };
+        };
+        responses: {
+            /** @description The touched items after the changes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemList"];
+                };
+            };
+            400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    reassemble: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reassembled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    factoryReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactoryResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Every fabric is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };
@@ -18787,262 +18853,6 @@ export interface operations {
                 };
             };
             503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    listMatterExposable: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterExposureList"];
-                };
-            };
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    updateMatterExposable: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MatterExposureUpdate"];
-            };
-        };
-        responses: {
-            /** @description Updated */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    bulkUpdateMatterExposable: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MatterExposureBulkUpdate"];
-            };
-        };
-        responses: {
-            /** @description Bulk applied */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BulkUpdateMatterExposableResponse"];
-                };
-            };
-            /** @description No content — all updates failed or zero applied */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
-            500: components["responses"]["InternalError"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    closeMatterCommissioningWindow: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Window closed */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    shareMatterBridge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["MatterCommissioningWindowRequest"];
-            };
-        };
-        responses: {
-            /** @description Sharing window opened */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterCommissioningWindowResponse"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            /** @description Commissioning window already open */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled, or its endpoint topology has not finished assembling yet — the latter carries a `Retry-After` header and clears on its own. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before retrying, when the topology is still assembling. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    matterSetupPayload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterSetupPayload"];
-                };
-            };
-            403: components["responses"]["Forbidden"];
-            500: components["responses"]["InternalError"];
-            /** @description Matter commissioning not configured (passcode = 0) */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    openMatterCommissioningWindow: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["MatterCommissioningWindowRequest"];
-            };
-        };
-        responses: {
-            /** @description Window opened */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatterCommissioningWindowResponse"];
-                };
-            };
-            /** @description duration_seconds out of range (180..900) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Commissioning window already open, or new commissioning is disabled because the configured attestation chain (`north.matter.attestation`) does not load. In the second case the bridge keeps serving every controller already paired; the log names the cause. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled, or its endpoint topology has not finished assembling yet — the latter carries a `Retry-After` header and clears on its own. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before retrying, when the topology is still assembling. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
         };
     };
     getConfigSchema: {

@@ -975,7 +975,9 @@ func (h *scenarioHarness) expectLog(ctx string, st scenarioStep) {
 				continue
 			}
 			if exchBound {
-				e, ok := rec.uint16("exchange")
+				// go-fabric logs the exchange under `exchange_id` (its
+				// observability guide's key table, v0.10.6).
+				e, ok := rec.uint16("exchange_id")
 				if !ok || e != wantExch {
 					continue
 				}

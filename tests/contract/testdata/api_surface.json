@@ -1,5 +1,5 @@
 {
- "api_version": "13.10.0",
+ "api_version": "14.0.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -20,8 +20,8 @@
   "DELETE /functions/{name}": "deleteFunction",
   "DELETE /groups/{id}": "deleteGroup",
   "DELETE /incidents": "clearIncidents",
-  "DELETE /matter/fabrics/{id}": "revokeMatterFabric",
   "DELETE /me/preferences/{key}": "deletePreference",
+  "DELETE /node/fabrics/{index}": "removeFabric",
   "DELETE /pairing/{id}": "withdrawPairing",
   "DELETE /programs/{id}": "deleteProgram",
   "DELETE /rooms/{name}": "deleteRoom",
@@ -133,17 +133,19 @@
   "GET /interfaces": "listInterfaces",
   "GET /interfaces/{id}": "getInterface",
   "GET /links": "listAllLinks",
-  "GET /matter/compatibility": "matterCompatibility",
-  "GET /matter/endpoints": "matterEndpointInspector",
-  "GET /matter/events": "getMatterDiagnosticEvents",
-  "GET /matter/exposable": "listMatterExposable",
-  "GET /matter/fabrics": "listMatterFabrics",
-  "GET /matter/mdns": "matterMdnsDiagnostics",
-  "GET /matter/sessions": "listMatterSessions",
-  "GET /matter/setup-payload": "matterSetupPayload",
-  "GET /matter/status": "matterStatus",
   "GET /me/preferences/{key}": "getPreference",
   "GET /metrics": "metrics",
+  "GET /node/compatibility": "getCompatibility",
+  "GET /node/endpoints": "listEndpoints",
+  "GET /node/events": "listDiagnosticEvents",
+  "GET /node/exposure": "listExposure",
+  "GET /node/exposure/schema": "getExposureSchema",
+  "GET /node/fabrics": "listFabrics",
+  "GET /node/mdns": "getMdns",
+  "GET /node/pairing": "getPairing",
+  "GET /node/sessions": "listSessions",
+  "GET /node/status": "getNodeStatus",
+  "GET /node/stream": "stream",
   "GET /pairing-requests": "listPairingRequests",
   "GET /pairing/{id}": "pollPairing",
   "GET /programs": "listPrograms",
@@ -254,12 +256,11 @@
   "POST /install-mode/interfaces": "setInstallModeInterface",
   "POST /install-mode/search": "installModeSearch",
   "POST /interfaces/{id}/reconnect": "reconnectInterface",
-  "POST /matter/commissioning/window": "openMatterCommissioningWindow",
-  "POST /matter/commissioning/window/close": "closeMatterCommissioningWindow",
-  "POST /matter/exposable/bulk": "bulkUpdateMatterExposable",
-  "POST /matter/factory-reset": "matterFactoryReset",
-  "POST /matter/force-sync": "matterForceSync",
-  "POST /matter/share": "shareMatterBridge",
+  "POST /node/exposure/preview": "previewExposure",
+  "POST /node/maintenance/factory-reset": "factoryReset",
+  "POST /node/maintenance/reassemble": "reassemble",
+  "POST /node/pairing/window": "openWindow",
+  "POST /node/pairing/window/close": "closeWindow",
   "POST /pairing": "startPairing",
   "POST /pairing-requests/{id}/approve": "approvePairing",
   "POST /pairing-requests/{id}/reject": "rejectPairing",
@@ -313,8 +314,8 @@
   "PUT /diagrams/{id}": "updateDiagram",
   "PUT /groups/{id}": "updateGroup",
   "PUT /history/recording": "putRecordingOverride",
-  "PUT /matter/exposable": "updateMatterExposable",
   "PUT /me/preferences/{key}": "putPreference",
+  "PUT /node/exposure": "applyExposure",
   "PUT /security/sources/{ref}": "putSecuritySourceOverride",
   "PUT /system/ccu/{central}/position": "setSystemCCUPosition",
   "PUT /system/startup-capture": "putStartupCapture",
@@ -653,6 +654,9 @@
    "state:string",
    "walktest_active:boolean"
   ],
+  "Applied": [
+   "applied:integer"
+  ],
   "Area": [
    "id:string",
    "name:string",
@@ -877,12 +881,34 @@
    "base_temperature:number",
    "periods:array\u003c$ref:ClimatePeriod\u003e"
   ],
+  "Cluster": [
+   "id:integer",
+   "name:string",
+   "revision:integer"
+  ],
+  "Column": [
+   "filter:boolean",
+   "key:string",
+   "label:string",
+   "multi:boolean"
+  ],
   "CommunicationTestResult": [
    "completed_at:string",
    "duration_ms:integer",
    "passed:boolean",
    "started_at:string",
    "timed_out:boolean"
+  ],
+  "CompatFinding": [
+   "code:string",
+   "device_type:integer",
+   "ecosystem:string",
+   "message:string"
+  ],
+  "Compatibility": [
+   "ecosystems:array\u003c$ref:Ecosystem\u003e",
+   "endpoint_count:integer",
+   "findings:array\u003c$ref:CompatFinding\u003e"
   ],
   "ConfigRepairCorrection": [
    "corrected:unknown",
@@ -1162,6 +1188,16 @@
    "unique_id:string",
    "value:unknown"
   ],
+  "DiagnosticEvent": [
+   "at:string",
+   "detail:object",
+   "kind:$ref:NodeDiagnosticEventKind",
+   "message:string",
+   "severity:$ref:NodeDiagnosticEventSeverity"
+  ],
+  "DiagnosticEventList": [
+   "events:array\u003c$ref:DiagnosticEvent\u003e"
+  ],
   "DiagramConfig": [
    "config:object",
    "created_at_ms:integer",
@@ -1191,6 +1227,12 @@
    "central:string",
    "url:string"
   ],
+  "Ecosystem": [
+   "ecosystem:string",
+   "fabric_index:integer",
+   "label:string",
+   "vendor_id:integer"
+  ],
   "EditSessionRequest": [
    "key:string",
    "token:string"
@@ -1200,6 +1242,19 @@
    "key:string",
    "subject:string",
    "token:string"
+  ],
+  "Endpoint": [
+   "clusters:array\u003c$ref:Cluster\u003e",
+   "device_type:integer",
+   "device_type_name:string",
+   "endpoint_id:integer",
+   "name:string",
+   "parent_endpoint_id:integer",
+   "reachable:boolean",
+   "source:object"
+  ],
+  "EndpointList": [
+   "endpoints:array\u003c$ref:Endpoint\u003e"
   ],
   "EnergyBucket": [
    "avg_power_w:number",
@@ -1249,6 +1304,48 @@
    "paramset_key:string",
    "values:object",
    "version:string"
+  ],
+  "ExposureEvent": [
+   "keys:array\u003cstring\u003e"
+  ],
+  "ExposureSchema": [
+   "columns:array\u003c$ref:Column\u003e",
+   "filters:array\u003c$ref:Filter\u003e",
+   "groups:boolean"
+  ],
+  "Fabric": [
+   "compressed_id:string",
+   "fabric_id:integer",
+   "fabric_id_hex:string",
+   "fabric_index:integer",
+   "label:string",
+   "node_id:integer",
+   "node_id_hex:string",
+   "root_public_key:string",
+   "vendor_id:integer",
+   "vendor_name:string"
+  ],
+  "FabricEvent": [
+   "fabric_index:integer",
+   "label:string",
+   "vendor_id:integer",
+   "vendor_name:string"
+  ],
+  "FabricList": [
+   "fabrics:array\u003c$ref:Fabric\u003e"
+  ],
+  "FactoryResetRequest": [
+   "confirm:string"
+  ],
+  "Filter": [
+   "field:string",
+   "label:string",
+   "multi:boolean",
+   "options:array\u003c$ref:FilterOption\u003e"
+  ],
+  "FilterOption": [
+   "label:string",
+   "value:string"
   ],
   "ForceCloseEditSessionRequest": [
    "key:string"
@@ -1483,6 +1580,18 @@
    "name:string",
    "note:string"
   ],
+  "Item": [
+   "enabled:boolean",
+   "fields:object",
+   "group:string",
+   "key:string",
+   "name:string",
+   "source:string",
+   "verdict:$ref:Verdict"
+  ],
+  "ItemList": [
+   "items:array\u003c$ref:Item\u003e"
+  ],
   "Link": [
    "central_name:string",
    "description:string",
@@ -1566,134 +1675,18 @@
    "reloaded:boolean",
    "took_ms:integer"
   ],
-  "MatterCommissioningProgressPayload": [
-   "message:string",
-   "stage:string"
-  ],
-  "MatterCommissioningWindowRequest": [
-   "duration_seconds:integer"
-  ],
-  "MatterCommissioningWindowResponse": [
-   "discriminator:integer",
-   "duration_seconds:integer",
-   "manual_code:string",
-   "passcode:integer",
-   "qr_code:string"
-  ],
-  "MatterCompatFinding": [
-   "code:string",
-   "device_type:integer",
-   "ecosystem:string",
-   "message:string"
-  ],
-  "MatterCompatibility": [
-   "ecosystems:array\u003c$ref:MatterEcosystem\u003e",
-   "endpoint_count:integer",
-   "findings:array\u003c$ref:MatterCompatFinding\u003e"
-  ],
-  "MatterDiagnosticEvent": [
-   "at:string",
-   "detail:object",
-   "kind:string",
-   "message:string",
-   "severity:string"
-  ],
-  "MatterDiagnosticEventList": [
-   "events:array\u003c$ref:MatterDiagnosticEvent\u003e"
-  ],
-  "MatterEcosystem": [
-   "ecosystem:string",
-   "fabric_index:integer",
-   "label:string",
-   "vendor_id:integer"
-  ],
-  "MatterEndpointAssembledPayload": [
-   "endpoint_count:integer"
-  ],
-  "MatterEndpointCluster": [
-   "id:integer",
-   "name:string",
-   "revision:integer"
-  ],
-  "MatterEndpointInfo": [
-   "channel_address:string",
-   "clusters:array\u003c$ref:MatterEndpointCluster\u003e",
-   "device_address:string",
-   "device_type:integer",
-   "device_type_name:string",
-   "device_type_revision:integer",
-   "endpoint_id:integer",
-   "friendly_name:string",
-   "parent_endpoint_id:integer",
-   "reachable:boolean"
-  ],
-  "MatterEndpointList": [
-   "endpoints:array\u003c$ref:MatterEndpointInfo\u003e"
-  ],
-  "MatterExposure": [
-   "central_name:string",
-   "channel_no:integer",
-   "clusters:array\u003cinteger\u003e",
-   "device_address:string",
-   "device_type:integer",
-   "device_type_label:string",
-   "display_name:string",
-   "dp_key:string",
-   "dp_kind:string",
-   "enabled:boolean",
-   "friendly_name:string",
-   "mappable:string",
-   "parameter_label:string",
-   "reason:string"
-  ],
-  "MatterExposureBulkUpdate": [
-   "items:array\u003c$ref:MatterExposureUpdate\u003e"
-  ],
-  "MatterExposureList": [
-   "items:array\u003c$ref:MatterExposure\u003e"
-  ],
-  "MatterExposureUpdate": [
-   "central_name:string",
-   "channel_no:integer",
-   "device_address:string",
-   "dp_key:string",
-   "dp_kind:string",
-   "enabled:boolean",
-   "friendly_name:string"
-  ],
-  "MatterFabric": [
-   "compressed_id:string",
-   "fabric_id:integer",
-   "fabric_id_hex:string",
-   "fabric_index:integer",
-   "label:string",
-   "node_id:integer",
-   "node_id_hex:string",
-   "root_public_key:string",
-   "vendor_id:integer",
-   "vendor_name:string"
-  ],
-  "MatterFabricList": [
-   "fabrics:array\u003c$ref:MatterFabric\u003e"
-  ],
-  "MatterFabricRemovedPayload": [
-   "fabric_index:integer"
-  ],
-  "MatterFactoryResetRequest": [
-   "confirm:string"
-  ],
-  "MatterMdnsDiagnostics": [
+  "Mdns": [
    "advertising:boolean",
-   "findings:array\u003c$ref:MatterMdnsFinding\u003e",
-   "services:array\u003c$ref:MatterMdnsService\u003e"
+   "findings:array\u003c$ref:MdnsFinding\u003e",
+   "services:array\u003c$ref:MdnsService\u003e"
   ],
-  "MatterMdnsFinding": [
+  "MdnsFinding": [
    "code:string",
    "message:string",
    "service:string",
-   "severity:string"
+   "severity:$ref:NodeMdnsFindingSeverity"
   ],
-  "MatterMdnsService": [
+  "MdnsService": [
    "addresses:array\u003cstring\u003e",
    "host_name:string",
    "instance_name:string",
@@ -1702,51 +1695,27 @@
    "subtypes:array\u003cstring\u003e",
    "txt:object"
   ],
-  "MatterSession": [
-   "fabric_index:integer",
-   "idle_seconds:integer",
-   "is_pase:boolean",
-   "last_activity:string",
-   "last_peer_activity:string",
-   "local_node_id:string",
-   "peer_idle_seconds:integer",
-   "peer_node_id:string",
-   "session_id:integer",
-   "subscriptions:integer"
-  ],
-  "MatterSessionList": [
-   "occupancy:$ref:MatterSessionOccupancy",
-   "sessions:array\u003c$ref:MatterSession\u003e"
-  ],
-  "MatterSessionOccupancy": [
-   "capacity:integer",
-   "free:integer",
-   "live:integer",
-   "reserved:integer"
-  ],
-  "MatterSetupPayload": [
-   "discriminator:integer",
-   "manual_code:string",
-   "passcode:integer",
-   "product_id:integer",
-   "qr_code:string",
-   "vendor_id:integer"
-  ],
-  "MatterStatus": [
-   "advertising:boolean",
-   "commissioning_window_duration_seconds:integer",
-   "commissioning_window_open:boolean",
-   "enabled:boolean",
-   "enabled_count:integer",
-   "endpoint_count:integer",
-   "fabric_count:integer",
-   "listen_addr:string",
-   "listening:boolean"
-  ],
+  "NodeDiagnosticEventKind": [],
+  "NodeDiagnosticEventSeverity": [],
+  "NodeEndpointsChangedPayload": [],
+  "NodeMdnsFindingSeverity": [],
+  "NodePairingSource": [],
   "NodeRef": [
    "central:string",
    "parent_path:string",
    "path:string"
+  ],
+  "NodeVerdictState": [],
+  "NodeWarning": [
+   "code:string",
+   "message:string",
+   "since:string"
+  ],
+  "Occupancy": [
+   "capacity:integer",
+   "free:integer",
+   "live:integer",
+   "reserved:integer"
   ],
   "OpenEditSessionRequest": [
    "key:string",
@@ -1762,6 +1731,15 @@
    "reason:string",
    "sent:unknown",
    "unique_id:string"
+  ],
+  "Pairing": [
+   "discriminator:integer",
+   "duration_seconds:integer",
+   "manual_code:string",
+   "passcode:integer",
+   "qr_code:string",
+   "source:$ref:NodePairingSource",
+   "window_open:boolean"
   ],
   "PairingAnswer": [
    "expires_in:integer",
@@ -2230,6 +2208,24 @@
    "timestamp:string",
    "type:string"
   ],
+  "Session": [
+   "fabric_index:integer",
+   "idle_seconds:integer",
+   "is_pase:boolean",
+   "last_activity:string",
+   "last_peer_activity:string",
+   "local_node_id:integer",
+   "local_node_id_hex:string",
+   "peer_idle_seconds:integer",
+   "peer_node_id:integer",
+   "peer_node_id_hex:string",
+   "session_id:integer",
+   "subscriptions:integer"
+  ],
+  "SessionList": [
+   "occupancy:$ref:Occupancy",
+   "sessions:array\u003c$ref:Session\u003e"
+  ],
   "SetActiveProfileRequest": [
    "profile:string"
   ],
@@ -2294,6 +2290,22 @@
    "anonymise:boolean",
    "duration_seconds:integer",
    "enabled:boolean"
+  ],
+  "Status": [
+   "advertising:boolean",
+   "commissioning_window_duration_seconds:integer",
+   "commissioning_window_open:boolean",
+   "csrf_token:string",
+   "enabled:boolean",
+   "enabled_count:integer",
+   "endpoint_count:integer",
+   "exposure:boolean",
+   "fabric_count:integer",
+   "health_note:string",
+   "healthy:boolean",
+   "listen_addr:string",
+   "listening:boolean",
+   "warnings:array\u003c$ref:NodeWarning\u003e"
   ],
   "SuitableMemberEntry": [
    "address:string",
@@ -2709,6 +2721,11 @@
    "interface:string",
    "parameter:string"
   ],
+  "Update": [
+   "enabled:boolean",
+   "key:string",
+   "name:string"
+  ],
   "UpdateFirmwareResponse": [
    "duty_cycle_warning:integer",
    "status:string"
@@ -2723,6 +2740,9 @@
    "name:string",
    "receiver_address:string",
    "sender_address:string"
+  ],
+  "UpdateList": [
+   "items:array\u003c$ref:Update\u003e"
   ],
   "UploadBackupRequest": [
    "file:string"
@@ -2765,6 +2785,13 @@
    "rows:integer",
    "value_json_bytes:integer"
   ],
+  "Verdict": [
+   "clusters:array\u003cinteger\u003e",
+   "device_type:integer",
+   "device_type_name:string",
+   "reason:string",
+   "state:$ref:NodeVerdictState"
+  ],
   "VisibilityConfig": [
    "un_ignore:array\u003cstring\u003e"
   ],
@@ -2806,6 +2833,20 @@
    "schedule_enabled:object",
    "schedule_type:string",
    "unique_id:string"
+  ],
+  "Window": [
+   "discriminator:integer",
+   "duration_seconds:integer",
+   "manual_code:string",
+   "passcode:integer",
+   "qr_code:string"
+  ],
+  "WindowEvent": [
+   "discriminator:integer",
+   "duration_seconds:integer"
+  ],
+  "WindowRequest": [
+   "duration_seconds:integer"
   ],
   "WiringSeam": [
    "after:array\u003cstring\u003e",

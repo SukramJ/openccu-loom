@@ -22,8 +22,8 @@ import (
 // the `chiptool` build tag.
 //
 // What is verified:
-//   - GET /api/v1/matter/status returns 200 with {"enabled":false}.
-//   - No 5xx in any of the matter/* endpoints that do not require a
+//   - GET /api/v1/node/status returns 200 with {"enabled":false}.
+//   - No 5xx in any of the node/* endpoints that do not require a
 //     running Matter stack.
 //
 // The full Matter boot (Endpoint 0 ServerList, BasicInformation.Reachable,
@@ -39,16 +39,16 @@ func TestE2EMatterBoot(t *testing.T) {
 		t.Fatalf("login: %v", err)
 	}
 
-	// /api/v1/matter/status must be reachable and report enabled:false.
-	req, _ := h.REST().NewRequest(http.MethodGet, "/api/v1/matter/status", nil)
+	// /api/v1/node/status must be reachable and report enabled:false.
+	req, _ := h.REST().NewRequest(http.MethodGet, "/api/v1/node/status", nil)
 	resp, err := h.REST().Do(req)
 	if err != nil {
-		t.Fatalf("GET /api/v1/matter/status: %v", err)
+		t.Fatalf("GET /api/v1/node/status: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 500 {
 		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("/api/v1/matter/status: 5xx status=%d body=%s", resp.StatusCode, body)
+		t.Fatalf("/api/v1/node/status: 5xx status=%d body=%s", resp.StatusCode, body)
 	}
 	if resp.StatusCode == http.StatusOK {
 		var payload struct {
@@ -56,28 +56,28 @@ func TestE2EMatterBoot(t *testing.T) {
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&payload); err == nil {
 			if payload.Enabled {
-				t.Errorf("/api/v1/matter/status: enabled=true but Matter was not configured in harness")
+				t.Errorf("/api/v1/node/status: enabled=true but Matter was not configured in harness")
 			} else {
-				t.Log("/api/v1/matter/status: enabled=false — expected for default harness config")
+				t.Log("/api/v1/node/status: enabled=false — expected for default harness config")
 			}
 		}
 	}
 
-	// /api/v1/matter/fabrics — read-only list — must not return 500.
+	// /api/v1/node/fabrics — read-only list — must not return 500.
 	// When Matter is disabled the daemon returns 503 (service_unready)
 	// for endpoints that require an active bridge. 503 is acceptable;
 	// only true server errors (500, 502, 504) are failures here.
-	req2, _ := h.REST().NewRequest(http.MethodGet, "/api/v1/matter/fabrics", nil)
+	req2, _ := h.REST().NewRequest(http.MethodGet, "/api/v1/node/fabrics", nil)
 	resp2, err := h.REST().Do(req2)
 	if err != nil {
-		t.Fatalf("GET /api/v1/matter/fabrics: %v", err)
+		t.Fatalf("GET /api/v1/node/fabrics: %v", err)
 	}
 	defer resp2.Body.Close()
 	if resp2.StatusCode == http.StatusInternalServerError ||
 		resp2.StatusCode == http.StatusBadGateway ||
 		resp2.StatusCode == http.StatusGatewayTimeout {
 		body, _ := io.ReadAll(resp2.Body)
-		t.Fatalf("/api/v1/matter/fabrics: unexpected server error status=%d body=%s", resp2.StatusCode, body)
+		t.Fatalf("/api/v1/node/fabrics: unexpected server error status=%d body=%s", resp2.StatusCode, body)
 	}
-	t.Logf("/api/v1/matter/fabrics: status=%d (expected 200 or 503 when Matter disabled)", resp2.StatusCode)
+	t.Logf("/api/v1/node/fabrics: status=%d (expected 200 or 503 when Matter disabled)", resp2.StatusCode)
 }

@@ -486,43 +486,16 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// SetCentralName resolution.
 		CentralName:      singleCentralName(d.reg),
 		OpenAPIValidator: openapiValidator,
-		// Matter REST surface — fabric-list reads through to the
-		// matter store; setup-payload reflects the bridge's
-		// configured discriminator + passcode + vendor + product;
-		// the commissioning-window opener routes
-		// `POST /api/v1/matter/commissioning/window` through the
-		// bridge's [matterbridge.CommissioningWindowOpener]. An
-		// ephemeral provider is installed alongside it, so an opened
-		// window mints a fresh passcode, discriminator and verifier
-		// rather than reusing the configured PASE credentials.
-		MatterFabricStore:           d.matter.fabricStore,
-		MatterSessionLister:         d.matter.sessionLister,
-		MatterMdnsReporter:          d.matter.mdnsReporter,
-		MatterEndpointInspector:     d.matter.endpointInspector,
-		MatterCompatibilityReporter: d.matter.compatReporter,
-		MatterDiagnosticEvents:      d.matter.diagEvents,
-		// WithDefaults keeps the setup payload aligned with the bridge
-		// runtime: QR / manual code must carry the SAME discriminator the
-		// mDNS record advertises, or commissioners filter the bridge out.
-		MatterCommissioning: func() handlers.MatterCommissioning {
-			mcfg := cfg.North.Matter.WithDefaults()
-			return handlers.MatterCommissioning{
-				Discriminator: mcfg.Discriminator,
-				Passcode:      mcfg.Commissioning.Passcode,
-				VendorID:      mcfg.VendorID,
-				ProductID:     mcfg.ProductID,
-			}
-		}(),
-		MatterCommissioningOpener: d.matter.opener,
-		MatterStatusReader:        d.matter.statusReader,
-		MatterFabricRevoker:       d.matter.fabricRevoker,
-		MatterFabricPurger:        d.matter.fabricPurger,
-		MatterCommissioningCloser: d.matter.closer,
-		MatterExposureStore:       d.matter.exposureStore,
-		MatterCandidateProvider:   d.matter.candidates,
-		MatterEventPublisher:      d.matter.pub,
-		MatterTopologyReassembler: d.matter.reassembler,
-		MatterAuditRecorder:       d.auditRec,
+		// The node page family's API (go-fabric-ui): the options
+		// wireMatterRuntime built over the node facade and loom's exposure
+		// provider. The zero value (bridge disabled) mounts the family as
+		// disabled — GET /node/status answers enabled false.
+		NodeUI: d.matter.nodeUI,
+		IsAdmin: func(r *http.Request) bool {
+			id, ok := auth.IdentityFrom(r.Context())
+			return ok && id.HasRole(auth.RoleAdmin)
+		},
+		MatterAuditRecorder: d.auditRec,
 		// Visibility / un-ignore surface — notes/concepts/ui/unignore-concept.md.
 		VisibilityUnIgnoreStore:     d.visibilityUnIgnoreStore,
 		VisibilityCentralLister:     d.visibilityAdapter,
@@ -835,7 +808,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		// assistant answering "is the bridge paired", "when was the last
 		// backup" or "is an update pending" reads exactly what the operator
 		// sees in the UI rather than a second, drifting projection.
-		Matter:      d.matter.statusReader,
+		Matter:      d.matter.status,
 		Backups:     d.backupAdapter,
 		AddonUpdate: addonUpdateServiceFrom(d.addonUpdater),
 		// The eight fleet read seams, built from the same daemon values the

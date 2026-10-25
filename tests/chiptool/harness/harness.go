@@ -440,7 +440,8 @@ func (b *Bridge) AuthHeader() string {
 	return "Basic " + creds
 }
 
-// MatterStatusResponse is the parsed body of GET /api/v1/matter/status.
+// MatterStatusResponse is the parsed body of GET /api/v1/node/status
+// (go-fabric-ui's Status; the fields the harness reads).
 // The harness uses it during bring-up; tests use it to assert on
 // listening/advertising state.
 type MatterStatusResponse struct {
@@ -459,7 +460,7 @@ type MatterStatusResponse struct {
 // on success.
 func (b *Bridge) MatterStatus(t *testing.T) MatterStatusResponse {
 	t.Helper()
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, b.RESTBase()+"/api/v1/matter/status", http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, b.RESTBase()+"/api/v1/node/status", http.NoBody)
 	if err != nil {
 		t.Fatalf("build matter/status request: %v", err)
 	}
@@ -506,103 +507,65 @@ func (b *Bridge) RESTPost(t *testing.T, path string, payload any) (body []byte, 
 }
 
 // EnableAllExposures asks the daemon for every mappable Matter
-// candidate (`GET /api/v1/matter/exposable`) and bulk-flips them to
-// `enabled=true` via the POST /api/v1/matter/exposable/bulk handler.
-// The bridge reassembles the topology after the upsert, so the
-// suite's read/subscribe tests find non-empty bridged endpoints to
-// talk to.
+// candidate (`GET /api/v1/node/exposure`, go-fabric-ui's selection over
+// loom's exposure provider) and flips them to `enabled=true` with one
+// `PUT /api/v1/node/exposure` batch. The handler reassembles the
+// topology after the apply, so the suite's read/subscribe tests find
+// non-empty bridged endpoints to talk to.
 //
 // Returns the number of rows it flipped on. Returns an error when
-// the GET or POST fails — the caller decides whether to fatal.
+// the GET or PUT fails — the caller decides whether to fatal.
 func (b *Bridge) EnableAllExposures(ctx context.Context) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		b.RESTBase()+"/api/v1/matter/exposable", http.NoBody)
+	items, err := b.fetchExposableCtx(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("build list request: %w", err)
+		return 0, err
 	}
-	req.Header.Set("Authorization", b.AuthHeader())
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("GET /matter/exposable: %w", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("GET /matter/exposable: status=%d body=%s", resp.StatusCode, body)
-	}
-
-	var list struct {
-		Items []struct {
-			CentralName   string `json:"central_name"`
-			DeviceAddress string `json:"device_address"`
-			ChannelNo     int    `json:"channel_no"`
-			DPKind        string `json:"dp_kind"`
-			DPKey         string `json:"dp_key"`
-			Enabled       bool   `json:"enabled"`
-			Mappable      string `json:"mappable"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(body, &list); err != nil {
-		return 0, fmt.Errorf("parse exposable list: %w", err)
-	}
-
 	type updateItem struct {
-		CentralName   string `json:"central_name"`
-		DeviceAddress string `json:"device_address"`
-		ChannelNo     int    `json:"channel_no"`
-		DPKind        string `json:"dp_kind"`
-		DPKey         string `json:"dp_key"`
-		Enabled       bool   `json:"enabled"`
+		Key     string `json:"key"`
+		Enabled bool   `json:"enabled"`
 	}
-	var items []updateItem
-	for _, c := range list.Items {
+	var updates []updateItem
+	for _, c := range items {
 		if c.Enabled {
 			continue
 		}
 		// Flip on mappable AND partially_mappable. `unmappable` rows
-		// have no Matter-side cluster mapping; flipping them would
-		// just produce 400 on the next reassemble.
+		// have no Matter-side cluster mapping; the provider refuses to
+		// enable them (400).
 		if c.Mappable == "unmappable" {
 			continue
 		}
-		items = append(items, updateItem{
-			CentralName:   c.CentralName,
-			DeviceAddress: c.DeviceAddress,
-			ChannelNo:     c.ChannelNo,
-			DPKind:        c.DPKind,
-			DPKey:         c.DPKey,
-			Enabled:       true,
-		})
+		updates = append(updates, updateItem{Key: c.Key, Enabled: true})
 	}
-	if len(items) == 0 {
+	if len(updates) == 0 {
 		return 0, nil
 	}
 
-	payload, err := json.Marshal(map[string]any{"items": items})
+	payload, err := json.Marshal(map[string]any{"items": updates})
 	if err != nil {
-		return 0, fmt.Errorf("marshal bulk: %w", err)
+		return 0, fmt.Errorf("marshal batch: %w", err)
 	}
-	postReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		b.RESTBase()+"/api/v1/matter/exposable/bulk", bytes.NewReader(payload))
+	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		b.RESTBase()+"/api/v1/node/exposure", bytes.NewReader(payload))
 	if err != nil {
-		return 0, fmt.Errorf("build bulk request: %w", err)
+		return 0, fmt.Errorf("build batch request: %w", err)
 	}
-	postReq.Header.Set("Authorization", b.AuthHeader())
-	postReq.Header.Set("Content-Type", "application/json")
-	postResp, err := (&http.Client{Timeout: 10 * time.Second}).Do(postReq)
+	putReq.Header.Set("Authorization", b.AuthHeader())
+	putReq.Header.Set("Content-Type", "application/json")
+	putResp, err := (&http.Client{Timeout: 10 * time.Second}).Do(putReq)
 	if err != nil {
-		return 0, fmt.Errorf("POST bulk: %w", err)
+		return 0, fmt.Errorf("PUT exposure: %w", err)
 	}
-	defer func() { _ = postResp.Body.Close() }()
-	if postResp.StatusCode < 200 || postResp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(postResp.Body)
-		return 0, fmt.Errorf("POST bulk: status=%d body=%s", postResp.StatusCode, raw)
+	defer func() { _ = putResp.Body.Close() }()
+	if putResp.StatusCode < 200 || putResp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(putResp.Body)
+		return 0, fmt.Errorf("PUT exposure: status=%d body=%s", putResp.StatusCode, raw)
 	}
-	return len(items), nil
+	return len(updates), nil
 }
 
 // RESTGet GETs a JSON body and decodes it into `into`. Used by the
-// matter/exposable + matter/fabrics tests.
+// node/exposure + node/fabrics tests.
 func (b *Bridge) RESTGet(t *testing.T, path string, into any) int {
 	t.Helper()
 	return b.restGetCtx(context.Background(), t, path, into)
@@ -668,11 +631,11 @@ func (b *Bridge) waitForHealth(deadline time.Duration) error {
 	}
 }
 
-// waitForMatterListening polls /api/v1/matter/status until
+// waitForMatterListening polls /api/v1/node/status until
 // listening=true or deadline. The matter UDP bind happens after
 // health flips green so a tight bring-up sequence still works.
 func (b *Bridge) waitForMatterListening(deadline time.Duration) error {
-	url := b.RESTBase() + "/api/v1/matter/status"
+	url := b.RESTBase() + "/api/v1/node/status"
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	expire := time.NewTimer(deadline)

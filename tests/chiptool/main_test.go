@@ -78,7 +78,7 @@ func requireBridge(t *testing.T) *harness.Bridge {
 		// the bridge stays empty (no exposures = no bridged
 		// endpoints), and the per-cluster tests SKIP via
 		// discoverEndpointsWith. A failure here (currently observed:
-		// /matter/exposable returns 500 on some daemon builds) is
+		// /node/exposure returns 500 on some daemon builds) is
 		// logged but does NOT abort the suite — the dependent tests
 		// degrade to SKIP, the rest still run.
 		expCtx, expCancel := context.WithTimeout(context.Background(), 15*time.Second)

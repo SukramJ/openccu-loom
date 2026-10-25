@@ -298,7 +298,7 @@ test.describe('Documentation screenshots (light mode)', () => {
 
   test('Matter view with QR + manual pairing code', async ({ page }) => {
     // Matter bridge enabled with an open commissioning window.
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -307,20 +307,22 @@ test.describe('Documentation screenshots (light mode)', () => {
           fabric_count: 1,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: true,
           commissioning_window_duration_seconds: 300,
         },
       }),
     );
-    // Setup payload carries the real QR (MT:…) + 11-digit manual code,
-    // which MatterPair renders into the SVG QR + the code line.
-    await page.route('**/api/v1/matter/setup-payload', (route) =>
+    // The pairing document carries the real QR (MT:…) + 11-digit manual
+    // code, which the pairing page renders into the SVG QR + the code line.
+    await page.route('**/api/v1/node/pairing', (route) =>
       route.fulfill({
         json: {
+          window_open: true,
+          source: 'window',
+          duration_seconds: 300,
           discriminator: 3840,
           passcode: 20202021,
-          vendor_id: 65521,
-          product_id: 32768,
           qr_code: 'MT:Y.K9042C00KA0648G00',
           manual_code: '34970112332',
         },

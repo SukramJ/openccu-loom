@@ -1,0 +1,9 @@
+{
+  "advertising": false,
+  "commissioning_window_open": false,
+  "enabled": false,
+  "endpoint_count": 0,
+  "exposure": false,
+  "fabric_count": 0,
+  "listening": false
+}

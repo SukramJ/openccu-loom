@@ -278,7 +278,7 @@ Examples:
 | `central.{name}.*` | CentralUnit lifecycle | `central.home.*` |
 | `system.{central}.*` | aggregated system-status / health | `system.home.*` |
 | `hub.{central}.*` | CCU programs + system variables | `hub.home.*` |
-| `matter.*` | Matter bridge lifecycle (commissioning, fabrics, allowlist) | `matter.*` |
+| `node.*` | the Matter bridge's node (go-fabric-ui's events: fabrics, the commissioning window, the endpoints, the exposure selection) | `node.*` |
 
 `{central}` is the CCU name as defined in the daemon's config
 (`cfg.Centrals[*].Name`); single-central setups can use the literal
@@ -296,23 +296,24 @@ generated [WebSocket reference](../reference/websocket.md#broadcasts)
 renders every broadcast with its topic pattern, payload schema and
 description, grouped by category.
 
-`matter.exposable_changed` always carries the affected rows under
-`items`: one entry for a single-row `PUT /api/v1/matter/exposable`, the
-whole batch for `POST /api/v1/matter/exposable/bulk`. One operator
-action is one broadcast, so a client mirroring the allowlist applies
-every entry of the envelope rather than expecting one frame per row.
+The `node.*` broadcasts are go-fabric-ui's events (the same six the
+handler's own stream `GET /api/v1/node/stream` carries), published onto
+the hub under the `node.` prefix with the stream's payload unchanged:
+`node.fabric_added` and `node.fabric_removed` carry a `FabricEvent`,
+`node.window_opened` and `node.window_closed` a `WindowEvent`,
+`node.exposure_changed` an `ExposureEvent` with the changed items' keys,
+and `node.endpoints_changed` an empty object — reload
+`GET /api/v1/node/endpoints`.
 
-`matter.commissioning_window_opened` **redacts the pairing credential**:
-`passcode` is `0` and `qr_code` / `manual_code` are empty. Subscribing
-to a topic requires no role, so the credential that commissions the
-bridge onto a new fabric never leaves the admin-gated
-`POST /api/v1/matter/commissioning/window` response. The broadcast
-carries `discriminator` and `duration_seconds`, which is what a client
-needs to show that a window is open and when it closes.
+`node.window_opened` **carries no credential**: only the discriminator.
+Subscribing to a topic requires no role, so the passcode and the
+pairing codes that commission the bridge onto a new fabric never leave
+the admin-gated `POST /api/v1/node/pairing/window` and
+`GET /api/v1/node/pairing` responses.
 
-Matter broadcast frames set `type` to the full dotted broadcast name —
+Node broadcast frames set `type` to the full dotted broadcast name —
 the same convention core broadcasts use (e.g. `type:
-"matter.exposable_changed"` on topic `matter.exposable_changed`,
+"node.fabric_added"` on topic `node.fabric_added`,
 `type: "datapoint.value_changed"` on topic
 `device.{address}.channels.{channel}.data_points.{parameter}`). The
 `wsapi.json` `name` field reflects the topic in both cases.
@@ -322,7 +323,7 @@ the same convention core broadcasts use (e.g. `type:
 To avoid colliding with future broadcast additions, external clients
 should treat the following prefixes as **reserved**:
 
-- `device.*`, `central.*`, `system.*`, `hub.*`, `matter.*` (currently
+- `device.*`, `central.*`, `system.*`, `hub.*`, `node.*` (currently
   in use)
 - `recovery.*`, `connection.*`, `client.*`, `connectivity.*`,
   `scheduler.*`, `data.*`, `rpc.*`, `cache.*`, `health.*`,

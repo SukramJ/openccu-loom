@@ -5,12 +5,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sync"
 	"testing"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric-ui/fabricui"
 	matterstore "github.com/SukramJ/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -79,49 +78,7 @@ func TestMatterStatusAdapter_EnabledTrue_BridgeNil_ReturnsOnlyEnabled(t *testing
 
 // ── matterFabricRevokerAdapter ────────────────────────────────────────────────
 
-func TestRevokeFabric_NilReceiver_ReturnsError(t *testing.T) {
-	t.Parallel()
-	var a *matterFabricRevokerAdapter
-	err := a.RevokeFabric(context.Background(), 1)
-	if err == nil {
-		t.Fatal("expected error for nil receiver")
-	}
-}
-
-func TestRevokeFabric_NilStore_ReturnsError(t *testing.T) {
-	t.Parallel()
-	a := &matterFabricRevokerAdapter{node: nil}
-	err := a.RevokeFabric(context.Background(), 1)
-	if err == nil {
-		t.Fatal("expected error for nil store")
-	}
-	if !errors.Is(err, matterbridge.ErrCommissioningWindowNotConfigured) {
-		t.Errorf("expected ErrCommissioningWindowNotConfigured, got %v", err)
-	}
-}
-
 // ── matterCommissioningCloserAdapter ─────────────────────────────────────────
-
-func TestCloseCommissioningWindow_NilReceiver_ReturnsError(t *testing.T) {
-	t.Parallel()
-	var a *matterCommissioningCloserAdapter
-	err := a.CloseCommissioningWindow(context.Background())
-	if err == nil {
-		t.Fatal("expected error for nil receiver")
-	}
-}
-
-func TestCloseCommissioningWindow_NilWindow_ReturnsError(t *testing.T) {
-	t.Parallel()
-	a := &matterCommissioningCloserAdapter{window: nil}
-	err := a.CloseCommissioningWindow(context.Background())
-	if err == nil {
-		t.Fatal("expected error for nil window")
-	}
-	if !errors.Is(err, matterbridge.ErrCommissioningWindowNotConfigured) {
-		t.Errorf("expected ErrCommissioningWindowNotConfigured, got %v", err)
-	}
-}
 
 // ── matterCandidateProviderAdapter ───────────────────────────────────────────
 
@@ -189,9 +146,10 @@ func TestMatterStatusAdapter_Advertising_Propagated(t *testing.T) {
 	}
 }
 
-// revokerBundle boots the bridge and returns the revoker wireMatterRuntime
-// builds over it, with the fabric-removed observer captured.
-func revokerBundle(t *testing.T, central string) (*matterBridgeBundle, *matterFabricRevokerAdapter, *[]uint8) {
+// revokerBundle boots the bridge and returns it with the fabric-removed
+// events of go-fabric-ui's source captured — the source the WebSocket
+// bridge and the node pages' stream read.
+func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, removed *[]uint8) {
 	t.Helper()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
@@ -202,31 +160,35 @@ func revokerBundle(t *testing.T, central string) (*matterBridgeBundle, *matterFa
 	reg := buildTestRegistry(t, central)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle = startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}
 	t.Cleanup(bundle.stop)
-	var removed []uint8
+	var seen []uint8
 	var mu sync.Mutex
-	bundle.fabricEvents.set(nil, func(fabricIndex uint8) {
+	bundle.events.Subscribe(func(ev fabricui.Event) {
+		if ev.Type != fabricui.EventFabricRemoved {
+			return
+		}
+		f, _ := ev.Data.(fabricui.FabricEvent)
 		mu.Lock()
-		removed = append(removed, fabricIndex)
+		seen = append(seen, f.FabricIndex)
 		mu.Unlock()
 	})
-	return bundle, &matterFabricRevokerAdapter{node: bundle.node}, &removed
+	return bundle, &seen
 }
 
-// TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes: the REST revoke
-// removes the fabric through the node facade, so the RemoveFabric
-// command's own fan-out runs and ends in the daemon's fabric-removed
-// observer — the WebSocket frame's source. Removing the row alone read
+// TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes: the operator's
+// revoke (go-fabric-ui's DELETE /node/fabrics/{index}) removes the fabric
+// through the node facade, so the RemoveFabric command's own fan-out runs
+// and ends in go-fabric-ui's event source — the WebSocket frame's source. Removing the row alone read
 // as a success on every surface while the unpaired controller kept its
 // live CASE session, its subscription and its operational record until
 // the daemon restarted.
 func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 	t.Parallel()
-	bundle, a, removed := revokerBundle(t, "ccu-revoke")
+	bundle, removed := revokerBundle(t, "ccu-revoke")
 	ctx := context.Background()
 	idx, err := bundle.store.AddFabric(ctx, matterstore.FabricRecord{
 		FabricID:      0x1122,
@@ -237,11 +199,11 @@ func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddFabric: %v", err)
 	}
-	if err := a.RevokeFabric(ctx, idx); err != nil {
-		t.Fatalf("RevokeFabric: %v", err)
+	if err := bundle.node.RemoveFabric(ctx, idx); err != nil {
+		t.Fatalf("RemoveFabric: %v", err)
 	}
 	if _, err := bundle.store.GetFabric(ctx, idx); err == nil {
-		t.Error("fabric row survived RevokeFabric")
+		t.Error("fabric row survived RemoveFabric")
 	}
 	if got := *removed; len(got) != 1 || got[0] != idx {
 		t.Errorf("the fabric-removed observer ran for %v, want exactly [%d] — the controller keeps its session and the SPA never hears otherwise", got, idx)
@@ -253,9 +215,9 @@ func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 // fabric-removed to controllers that are still paired on other fabrics.
 func TestRevokeFabricOfAnUnknownIndexRunsNoFanOut(t *testing.T) {
 	t.Parallel()
-	_, a, removed := revokerBundle(t, "ccu-revoke-missing")
-	if err := a.RevokeFabric(context.Background(), 7); err == nil {
-		t.Fatal("RevokeFabric for an unknown index returned nil; want an error")
+	bundle, removed := revokerBundle(t, "ccu-revoke-missing")
+	if err := bundle.node.RemoveFabric(context.Background(), 7); err == nil {
+		t.Fatal("RemoveFabric for an unknown index returned nil; want an error")
 	}
 	if got := *removed; len(got) != 0 {
 		t.Errorf("the fabric-removed observer ran for %v for a fabric that was never there", got)

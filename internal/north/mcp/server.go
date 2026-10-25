@@ -178,13 +178,6 @@ type WarningsSource interface {
 	Active() []warnings.Warning
 }
 
-// MatterStatusReader is an alias for the narrow facade GET
-// /matter/status reads through (internal/north/rest/handlers). Reusing
-// it rather than declaring a second copy keeps the two adapters
-// consuming the same seam, so a daemon that wires REST's Matter status
-// reader also lights up get_matter_status for free.
-type MatterStatusReader = handlers.MatterStatusReader
-
 // AddonUpdateService is an alias for the narrow facade the REST addon
 // self-update routes read and act through (internal/north/rest/handlers).
 // get_addon_update_status only ever calls Status(); the write half

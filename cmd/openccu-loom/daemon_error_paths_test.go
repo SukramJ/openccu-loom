@@ -249,9 +249,8 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 
 	before := bundle.node.Root().OperationalCredentials.MatterDataVersion()
 
-	a := &matterFabricRevokerAdapter{node: bundle.node}
-	if err := a.RevokeFabric(ctx, idx); err != nil {
-		t.Fatalf("RevokeFabric: %v", err)
+	if err := bundle.node.RemoveFabric(ctx, idx); err != nil {
+		t.Fatalf("RemoveFabric: %v", err)
 	}
 
 	after := bundle.node.Root().OperationalCredentials.MatterDataVersion()

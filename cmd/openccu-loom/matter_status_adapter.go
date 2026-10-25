@@ -13,13 +13,15 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 )
 
-// matterStatusReaderAdapter implements [handlers.MatterStatusReader]
-// against the node facade and the exposure store. The node knows the
+// matterStatusReaderAdapter implements [mcp.MatterStatusReader] against
+// the node facade and the exposure store, for the assistant's
+// `get_matter_status` and the daemon's health probe. The node knows the
 // listen address, the served topology and the fabrics; the exposure store
-// knows the operator's allowlist.
+// knows the operator's allowlist. The operator's REST status is
+// go-fabric-ui's (GET /api/v1/node/status) over the same node.
 type matterStatusReaderAdapter struct {
 	enabled bool
 	node    *node.Node
@@ -35,23 +37,23 @@ type matterStatusConfig struct {
 	advertising bool
 }
 
-// MatterStatus implements [handlers.MatterStatusReader].
-func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.MatterStatusResponse {
-	res := handlers.MatterStatusResponse{Enabled: r.enabled}
+// MatterStatus implements [mcp.MatterStatusReader].
+func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) mcp.MatterStatus {
+	res := mcp.MatterStatus{Enabled: r.enabled}
 	if !r.enabled || r.node == nil {
 		return res
 	}
 	res.ListenAddr = r.node.LocalAddr()
 	res.Listening = res.ListenAddr != ""
 	// The served topology's bridged devices, without the root and the
-	// Aggregator: the SPA renders the count as "bridged Matter devices".
+	// Aggregator: the count of bridged Matter devices.
 	res.EndpointCount = len(r.node.Topology().Devices)
 	if r.cfg != nil {
 		res.Advertising = r.cfg.advertising
 	}
 	if r.window != nil {
 		// IsOpen rather than the AdministratorCommissioning snapshot: the
-		// node's own window — the operator's REST window, the window an
+		// node's own window — the operator's window, the window an
 		// uncommissioned node opens at start — reads WindowNotOpen on the
 		// cluster, as matter.js keeps those attributes for administrator
 		// windows alone, and the status surface would call a live window
@@ -73,61 +75,10 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 	return res
 }
 
-// matterFabricRevokerAdapter removes fabrics for the REST revoke and the
-// factory reset through the node facade: node.RemoveFabric is the
-// RemoveFabric command's own path — the fabric's rows go and the same
-// fan-out runs (the Leave event, the CASE identity and the operational
-// record withdrawn, the sessions and subscriptions closed, the group
-// state, the node's own window reopened once the last fabric is gone),
-// followed by the daemon's fabric-removed observer. Deleting the row
-// alone left the removed controller's CASE session and subscription
-// alive, and the next pair retry collided on the same session id with
-// `aesccm: authentication failed`.
-type matterFabricRevokerAdapter struct {
-	node *node.Node
-}
-
-// RevokeFabric implements [handlers.MatterFabricRevoker].
-func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricIndex uint8) error {
-	if a == nil || a.node == nil {
-		return node.ErrCommissioningWindowNotConfigured
-	}
-	return a.node.RemoveFabric(ctx, fabricIndex)
-}
-
-func (a *matterFabricRevokerAdapter) ListFabricIndexes(ctx context.Context) ([]uint8, error) {
-	if a == nil || a.node == nil {
-		return nil, node.ErrCommissioningWindowNotConfigured
-	}
-	records, err := a.node.FabricInfos(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]uint8, 0, len(records))
-	for _, r := range records {
-		out = append(out, r.FabricIndex)
-	}
-	return out, nil
-}
-
-// matterCommissioningCloserAdapter implements
-// [handlers.MatterCommissioningCloser].
-type matterCommissioningCloserAdapter struct {
-	window *node.CommissioningWindow
-}
-
-// CloseCommissioningWindow implements
-// [handlers.MatterCommissioningCloser].
-func (a *matterCommissioningCloserAdapter) CloseCommissioningWindow(ctx context.Context) error {
-	if a == nil || a.window == nil {
-		return node.ErrCommissioningWindowNotConfigured
-	}
-	return a.window.RevokeWindow(ctx)
-}
-
 // matterCandidateProviderAdapter walks the daemon's central registry and
-// returns the eligibility candidate list for the allowlist UI. The registry is
-// walked on every call, so freshly-discovered devices surface immediately.
+// returns the eligibility candidate list for the exposure provider
+// (matteradapter.ExposureProviderConfig.Candidates). The registry is walked
+// on every call, so freshly-discovered devices surface immediately.
 //
 // cfg is the config the daemon booted with, not a live view: nothing mutates
 // North.Matter after boot, so a saved expose_secondary_channels change is
@@ -139,12 +90,12 @@ type matterCandidateProviderAdapter struct {
 	cfg *config.Config
 }
 
-// MatterCandidates implements [handlers.MatterCandidateProvider]. It calls
-// [matteradapter.CollectCandidates] directly (rather than through a stored
-// closure) so the production reachability graph can trace the Matter
-// eligibility entry points from this method — the reachability analyzer seeds
-// the REST handler that invokes this as an entry point but cannot follow an
-// indirect call through a func-typed struct field.
+// MatterCandidates calls [matteradapter.CollectCandidates] directly (rather
+// than through a stored closure) so the production reachability graph can
+// trace the Matter eligibility entry points from this method — the
+// reachability analyzer seeds the handler that invokes this as an entry
+// point but cannot follow an indirect call through a func-typed struct
+// field.
 func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []matteradapter.Candidate {
 	if a == nil || a.reg == nil || a.cfg == nil {
 		return nil

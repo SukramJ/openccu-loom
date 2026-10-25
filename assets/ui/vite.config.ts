@@ -35,8 +35,11 @@ export default defineConfig(({ command }) => ({
         // Split third-party code into its own long-lived chunk so the
         // app chunk stays small and browser caches survive app-only
         // redeploys. bits-ui + lucide icons dominate vendor weight.
+        // @sukramj/fabric-ui is exempt: it carries the Matter pages, and in
+        // the vendor chunk they would load on every view instead of with the
+        // lazily imported Matter route.
         manualChunks(id) {
-          if (id.includes('node_modules')) {
+          if (id.includes('node_modules') && !id.includes('/@sukramj/fabric-ui/')) {
             return 'vendor';
           }
           return undefined;
@@ -57,6 +60,19 @@ export default defineConfig(({ command }) => ({
         ws: true,
       },
     },
+  },
+  // @sukramj/fabric-ui ships Svelte/TypeScript sources, among them
+  // `.svelte.ts` rune modules. The dev server's dependency optimizer hands
+  // those to vite-plugin-svelte's optimize-module step, which compiles them
+  // without stripping the type syntax first and fails on the first inline
+  // `type` import — the dev server then dies at startup. Excluded, the
+  // package is compiled on request by the regular plugin pipeline, as the
+  // production build already does. Its one CommonJS dependency is
+  // pre-bundled explicitly, because an excluded package's dependencies are
+  // not discovered by the optimizer's scan.
+  optimizeDeps: {
+    exclude: ['@sukramj/fabric-ui'],
+    include: ['@sukramj/fabric-ui > qrcode'],
   },
   resolve: {
     alias: {

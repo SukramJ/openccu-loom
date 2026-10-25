@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric/im"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -61,7 +62,7 @@ func TestMatterBootEventsAreReadableAfterWiring(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil,
+		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil,
 	)
 	// Cancel here rather than in a t.Cleanup of its own. Cleanups run LIFO, and
@@ -80,11 +81,11 @@ func TestMatterBootEventsAreReadableAfterWiring(t *testing.T) {
 		}
 	})
 
-	inspector, ok := wiring.endpointInspector.(matterEndpointInspector)
-	if !ok || inspector.node == nil {
-		t.Fatalf("matter runtime did not produce a node (inspector=%T); without it this pin asserts nothing", wiring.endpointInspector)
+	n, ok := wiring.nodeUI.Node.(*node.Node)
+	if !ok || n == nil {
+		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}
-	bridge := inspector.node.Bridge()
+	bridge := n.Bridge()
 
 	for _, tc := range []struct {
 		name    string

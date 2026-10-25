@@ -382,8 +382,8 @@ func (mcpParityVisibility) List(context.Context, string) ([]sqlitestore.UnIgnore
 
 type mcpParityMatterStatus struct{}
 
-func (mcpParityMatterStatus) MatterStatus(context.Context) handlers.MatterStatusResponse {
-	return handlers.MatterStatusResponse{}
+func (mcpParityMatterStatus) MatterStatus(context.Context) mcp.MatterStatus {
+	return mcp.MatterStatus{}
 }
 
 type mcpParityBackups struct{}

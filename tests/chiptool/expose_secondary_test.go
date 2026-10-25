@@ -45,14 +45,8 @@ func TestExposeSecondaryChannels_ValveFanOut(t *testing.T) {
 	wantChannels := []int{3, unmappableIrrigationPrimaryChannel, 5, 6}
 
 	t.Run("candidates/all-valve-channels-exposed", func(t *testing.T) {
-		var candidates struct {
-			Items []negativeExposableRow `json:"items"`
-		}
-		if s := b.RESTGet(t, "/api/v1/matter/exposable", &candidates); s != 200 {
-			t.Fatalf("GET /matter/exposable: status=%d", s)
-		}
 		got := map[int]bool{}
-		for _, it := range candidates.Items {
+		for _, it := range b.FetchExposable(t) {
 			if it.DeviceAddress == wsm && it.DPKey == "STATE" && it.Mappable == "mappable" {
 				got[it.ChannelNo] = true
 			}

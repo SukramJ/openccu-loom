@@ -105,8 +105,8 @@ type centralOrchestrator struct {
 	// Matter runtime is stood up; nil while the bridge is disabled or never
 	// came up. purgeCentralState uses it to drop a removed central's
 	// allowlist rows, which otherwise survive the removal and inflate
-	// GET /api/v1/matter/status's enabled_count for endpoints that can no
-	// longer exist.
+	// the enabled count of GET /api/v1/node/status for endpoints that can
+	// no longer exist.
 	matterExposureStore *matterendpoint.Store
 	// matterRetire collects a removed central's Matter endpoint numbers:
 	// the central's partition of the node's Aggregator is retired, so the

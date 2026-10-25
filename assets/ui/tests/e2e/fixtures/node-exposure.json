@@ -1,0 +1,74 @@
+{
+  "items": [
+    {
+      "key": "ccu-01|0001D3C99C5C4E|4|custom|switch",
+      "name": "Bücherregal",
+      "group": "Bücherregal",
+      "enabled": true,
+      "source": "override",
+      "fields": {
+        "central": "ccu-01",
+        "device": "Bücherregal",
+        "channel": "4",
+        "kind": "custom",
+        "key": "switch",
+        "parameter": "STATE"
+      },
+      "verdict": {
+        "state": "mappable",
+        "device_type": 266,
+        "device_type_name": "On/Off Plug-in Unit",
+        "clusters": [
+          6
+        ],
+        "reason": ""
+      }
+    },
+    {
+      "key": "ccu-01|000A1D89A3F2B1|1|custom|climate",
+      "name": "Wohnzimmer Thermostat",
+      "group": "Wohnzimmer Thermostat",
+      "enabled": false,
+      "source": "rule",
+      "fields": {
+        "central": "ccu-01",
+        "device": "Wohnzimmer Thermostat",
+        "channel": "1",
+        "kind": "custom",
+        "key": "climate",
+        "parameter": "ACTUAL_TEMPERATURE"
+      },
+      "verdict": {
+        "state": "partially_mappable",
+        "device_type": 769,
+        "device_type_name": "Thermostat",
+        "clusters": [
+          513
+        ],
+        "reason": "the boost mode is not mapped"
+      }
+    },
+    {
+      "key": "ccu-01|000A1D89A3F2B1|0|generic|operating_voltage",
+      "name": "Wohnzimmer Thermostat Spannung",
+      "group": "Wohnzimmer Thermostat",
+      "enabled": false,
+      "source": "rule",
+      "fields": {
+        "central": "ccu-01",
+        "device": "Wohnzimmer Thermostat",
+        "channel": "0",
+        "kind": "generic",
+        "key": "operating_voltage",
+        "parameter": "OPERATING_VOLTAGE"
+      },
+      "verdict": {
+        "state": "unmappable",
+        "device_type": 0,
+        "device_type_name": "",
+        "clusters": [],
+        "reason": "no cluster covers an operating voltage"
+      }
+    }
+  ]
+}

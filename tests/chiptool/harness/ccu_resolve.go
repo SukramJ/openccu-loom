@@ -7,43 +7,121 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
-// exposureItem mirrors the subset of the REST GET
-// /api/v1/matter/exposable row shape (MatterExposureResponse in
-// internal/north/rest/handlers/matter_exposures.go) the send/receive
-// suite needs. Duplicated here rather than imported — the harness
-// talks to the daemon-under-test only through its REST/chip-tool
-// surface, never by importing daemon-internal packages.
-type exposureItem struct {
-	DeviceAddress string   `json:"device_address"`
-	ChannelNo     int      `json:"channel_no"`
-	DPKind        string   `json:"dp_kind"`
-	DPKey         string   `json:"dp_key"`
-	Enabled       bool     `json:"enabled"`
-	Mappable      string   `json:"mappable"`
-	Clusters      []uint32 `json:"clusters,omitempty"`
+// ExposureItem is one row of go-fabric-ui's selection list
+// (GET /api/v1/node/exposure) as the chip-tool suite reads it: the
+// item's key, loom's source-key columns (`fields` central / device /
+// channel / kind / key) and the verdict. Decoded here from the wire
+// shape rather than imported — the harness talks to the daemon-under-test
+// only through its REST/chip-tool surface, never by importing
+// daemon-internal packages.
+type ExposureItem struct {
+	Key           string
+	DeviceAddress string
+	ChannelNo     int
+	DPKind        string
+	DPKey         string
+	Enabled       bool
+	// Mappable is the verdict's state: mappable | partially_mappable |
+	// unmappable.
+	Mappable string
+	Clusters []uint32
 }
 
-// fetchExposable GETs the current exposable list. Returns an error
+// nodeItem is go-fabric-ui's Item on the wire.
+type nodeItem struct {
+	Key     string            `json:"key"`
+	Enabled bool              `json:"enabled"`
+	Fields  map[string]string `json:"fields"`
+	Verdict struct {
+		State    string   `json:"state"`
+		Clusters []uint32 `json:"clusters"`
+	} `json:"verdict"`
+}
+
+func (n nodeItem) item() ExposureItem {
+	ch, _ := strconv.Atoi(n.Fields["channel"])
+	return ExposureItem{
+		Key:           n.Key,
+		DeviceAddress: n.Fields["device"],
+		ChannelNo:     ch,
+		DPKind:        n.Fields["kind"],
+		DPKey:         n.Fields["key"],
+		Enabled:       n.Enabled,
+		Mappable:      n.Verdict.State,
+		Clusters:      n.Verdict.Clusters,
+	}
+}
+
+// FetchExposable GETs the current selection list and fails the test on
+// anything but 200.
+func (b *Bridge) FetchExposable(t *testing.T) []ExposureItem {
+	t.Helper()
+	items, err := b.fetchExposable(context.Background(), t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return items
+}
+
+// fetchExposable GETs the current selection list. Returns an error
 // when the daemon does not answer 200 so callers can decide whether
 // to Fatal or degrade to a skip.
-func (b *Bridge) fetchExposable(ctx context.Context, t *testing.T) ([]exposureItem, error) {
+func (b *Bridge) fetchExposable(ctx context.Context, t *testing.T) ([]ExposureItem, error) {
 	t.Helper()
 	var list struct {
-		Items []exposureItem `json:"items"`
+		Items []nodeItem `json:"items"`
 	}
-	status := b.restGetCtx(ctx, t, "/api/v1/matter/exposable", &list)
+	status := b.restGetCtx(ctx, t, "/api/v1/node/exposure", &list)
 	if status != http.StatusOK {
-		return nil, fmt.Errorf("GET /matter/exposable: status=%d", status)
+		return nil, fmt.Errorf("GET /node/exposure: status=%d", status)
 	}
-	return list.Items, nil
+	out := make([]ExposureItem, 0, len(list.Items))
+	for _, it := range list.Items {
+		out = append(out, it.item())
+	}
+	return out, nil
+}
+
+// fetchExposableCtx is fetchExposable without a testing.T, for the
+// harness's own bring-up.
+func (b *Bridge) fetchExposableCtx(ctx context.Context) ([]ExposureItem, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.RESTBase()+"/api/v1/node/exposure", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("build list request: %w", err)
+	}
+	req.Header.Set("Authorization", b.AuthHeader())
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET /node/exposure: %w", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET /node/exposure: status=%d body=%s", resp.StatusCode, body)
+	}
+	var list struct {
+		Items []nodeItem `json:"items"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil {
+		return nil, fmt.Errorf("parse selection list: %w", err)
+	}
+	out := make([]ExposureItem, 0, len(list.Items))
+	for _, it := range list.Items {
+		out = append(out, it.item())
+	}
+	return out, nil
 }
 
 // ResolveCCUAddress resolves a bridged Matter endpoint back to its
@@ -51,7 +129,7 @@ func (b *Bridge) fetchExposable(ctx context.Context, t *testing.T) ([]exposureIt
 // BridgedDeviceBasicInformation.SerialNumber off the wire — the
 // bridge stamps SerialNumber with the source device's address (see
 // go-fabric endpoint/materialize.go) — then
-// cross-references GET /api/v1/matter/exposable for the enabled row
+// cross-references GET /api/v1/node/exposure for the enabled row
 // whose device_address AND cluster match, returning that row's
 // channel address plus dp_key.
 //
@@ -95,7 +173,7 @@ func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID
 	// device root, is what godevccu's GetValue/SetValue/
 	// SimulateDeviceEvent accept — the bare device address is rejected
 	// with `paramset "VALUES" not found on "VCU…"`.
-	var matches []exposureItem
+	var matches []ExposureItem
 	for _, it := range items {
 		if !it.Enabled || it.DeviceAddress != addr {
 			continue

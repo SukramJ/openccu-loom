@@ -791,6 +791,27 @@ func loadOpenAPISpec(t *testing.T) *openapi3.T {
 // justification — this is not a blanket escape hatch. Keys are "METHOD path"
 // (path without the /api/v1 server prefix); a bare path (no method) exempts
 // every method on it.
+// mountedSubtrees names the path prefixes under which the router mounts
+// a handler of its own (chi Mount, which the walk sees as one catch-all
+// `<prefix>/*` under every method) and the guard that holds that
+// handler's route table to the spec instead — this walk cannot see inside
+// a mounted http.Handler. Keyed by the first path segment with its
+// slashes ("/node/").
+var mountedSubtrees = map[string]string{
+	"/node/": "go-fabric-ui's node page family (router.go nodeUIHandler, fabricui.Mount); " +
+		"its operations are held to assets/openapi.yaml by TestNodeContractMatchesPinnedGoFabricUI",
+}
+
+// subtreeOf is the first segment of path with both slashes: "/node/status"
+// and "/node/*" are both "/node/".
+func subtreeOf(path string) string {
+	tail := strings.TrimPrefix(path, "/")
+	if i := strings.Index(tail, "/"); i >= 0 {
+		return "/" + tail[:i] + "/"
+	}
+	return "/" + tail + "/"
+}
+
 var routerOpenAPIExemptions = map[string]string{
 	// /events is mounted with chi's method-agnostic Handle (router.go:
 	// `pr.Handle("/events", d.WSHandler)`), not Get, because the RFC 6455
@@ -867,6 +888,11 @@ func TestRESTRouterMatchesOpenAPISpec(t *testing.T) {
 
 	var undocumented []string
 	for path, methods := range mounted {
+		if _, sub := mountedSubtrees[subtreeOf(path)]; sub {
+			// The catch-all of a mounted handler; its route table is
+			// held to the spec by the guard the map names.
+			continue
+		}
 		docOps, isDocumented := documented[path]
 		for method := range methods {
 			key := method + " " + path
@@ -898,6 +924,9 @@ func TestRESTRouterMatchesOpenAPISpec(t *testing.T) {
 	var unmounted []string
 	for path, methods := range documented {
 		if _, exempt := routerOpenAPIExemptions[path]; exempt {
+			continue
+		}
+		if _, sub := mountedSubtrees[subtreeOf(path)]; sub {
 			continue
 		}
 		mountedOps, isMounted := mounted[path]

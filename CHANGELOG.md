@@ -8,6 +8,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Matter: the pages and their API come from go-fabric-ui.** The Matter
+  view's pages — Status, Pair, Fabrics, Selection, Endpoints, Diagnostics
+  — are the node page family of
+  [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui) (`@sukramj/fabric-ui`
+  0.1.1 in the SPA, `github.com/SukramJ/go-fabric-ui` 0.1.1 serving the
+  API), shared by every daemon built on go-fabric. What stays in this
+  repository is loom's own: which CCU channels are exposable and how they
+  are named (the exposure provider in `internal/north/matteradapter`),
+  the WebSocket bridge of the node's events, and the MCP / health status
+  seam. The pages' theme tokens and the Home Assistant theme bridge come
+  from the package as well. go-fabric is at v0.12.1.
+- **REST API 14.0.0 (breaking).** The `/api/v1/matter/*` routes are gone;
+  the Matter bridge is served under `/api/v1/node/*` with go-fabric-ui's
+  contract (`contract/openapi.yaml` of that module, copied into
+  `assets/openapi.yaml` and held in sync by a contract test): status,
+  fabrics, pairing (`GET /node/pairing` serves the codes, `POST
+  /node/pairing/window` opens a window), endpoints, sessions, mDNS,
+  compatibility, events, the exposure selection (`GET /node/exposure`,
+  `POST /node/exposure/preview`, `PUT /node/exposure` with items keyed by
+  loom's source key `central|address|channel|kind|key`) and maintenance.
+  Admin routes answer 403 to a viewer or operator as before.
+- **WebSocket 2.0 (breaking).** The `matter.*` broadcasts are replaced by
+  the node's events under `node.*`: `node.fabric_added`,
+  `node.fabric_removed`, `node.window_opened`, `node.window_closed`,
+  `node.endpoints_changed`, `node.exposure_changed`, with go-fabric-ui's
+  payloads (`FabricEvent`, `WindowEvent`, an empty object,
+  `ExposureEvent`). `node.window_opened` carries the discriminator only.
+- **Database:** migration 051 adds `matter_icd_registrations`, the table
+  go-fabric v0.12 keeps for ICD Management's registered Check-In clients
+  (go-fabric store migration v7), so the store's schema parity holds.
+- **Audit.** An exposure change records `matter_exposure_bulk` with the
+  request's principal, followed by the `matter_force_sync` of the
+  reassembly it caused. A removed fabric — by the operator through the
+  node routes or by the controller itself — records
+  `matter_fabric_revoke` with the actor `node`, because go-fabric-ui's
+  routes hand no principal on to the host.
+
 - **The operating lock has no card in the SPA any more.** HmIP thermostats
   (eTRV, BWTH, ALPHA-IP-RBG), the HmIP-DLD / DLP keypads, HmIP-FAL and
   HmIP-WGT carry their global operating lock (`GLOBAL_BUTTON_LOCK`) as a

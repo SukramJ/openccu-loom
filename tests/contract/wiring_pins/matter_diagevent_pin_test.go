@@ -27,18 +27,18 @@ func TestABridgeWithoutARingStillServesAnEmptyTrace(t *testing.T) {
 	}
 }
 
-// TestTheBridgeIsTheRESTSurfacesEventReporter: the pairing trace ring is
-// attached by go-fabric's node facade before the bridge serves its first
-// datagram (node.New, AttachDiagnosticEvents); what the daemon owns is
-// exposing that bridge as the REST events reporter. A reporter built over
-// anything else would serve an empty trace while the bridge records.
-func TestTheBridgeIsTheRESTSurfacesEventReporter(t *testing.T) {
+// TestTheNodeIsTheEventsRouteSource: the pairing trace ring is attached
+// by go-fabric's node facade before the bridge serves its first datagram
+// (node.New, AttachDiagnosticEvents); GET /api/v1/node/events is
+// go-fabric-ui's, reading Node.DiagnosticEvents of the node the daemon
+// hands it. What the daemon owns is handing over that node and no other
+// — a route built over anything else would serve an empty trace while
+// the bridge records. The hand-over is pinned with the rest of the node
+// page family's options in matter_node_ui_test.go; this pin keeps the
+// trace's own half: the facade's events are the bridge's.
+func TestTheNodeIsTheEventsRouteSource(t *testing.T) {
 	src := collapseSpaces(readMatterComposition(t))
-	if !strings.Contains(src, "wiring.diagEvents = mb") {
-		t.Fatal("wireMatterRuntime does not expose the live bridge as the diagnostic events reporter")
-	}
-	mount := collapseSpaces(readRestMount(t))
-	if !strings.Contains(mount, "MatterDiagnosticEvents: d.matter.diagEvents") {
-		t.Fatal("the REST router never receives the diagnostic events reporter")
+	if !strings.Contains(src, "Node: bundle.node,") {
+		t.Fatal("wireMatterRuntime does not hand go-fabric-ui the node whose bridge records the trace")
 	}
 }

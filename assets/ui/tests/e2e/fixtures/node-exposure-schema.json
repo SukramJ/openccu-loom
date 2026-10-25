@@ -1,0 +1,51 @@
+{
+  "columns": [
+    {
+      "key": "central",
+      "label": "Central",
+      "filter": true
+    },
+    {
+      "key": "device",
+      "label": "Device",
+      "filter": false
+    },
+    {
+      "key": "channel",
+      "label": "Channel",
+      "filter": false
+    },
+    {
+      "key": "kind",
+      "label": "Kind",
+      "filter": true
+    },
+    {
+      "key": "key",
+      "label": "Key",
+      "filter": false
+    },
+    {
+      "key": "parameter",
+      "label": "Parameter",
+      "filter": false
+    }
+  ],
+  "filters": [
+    {
+      "field": "kind",
+      "label": "Kind",
+      "options": [
+        {
+          "value": "custom",
+          "label": "Custom"
+        },
+        {
+          "value": "generic",
+          "label": "Generic"
+        }
+      ]
+    }
+  ],
+  "groups": true
+}

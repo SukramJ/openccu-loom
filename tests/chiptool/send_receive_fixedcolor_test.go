@@ -73,19 +73,24 @@ func TestSendReceive_FixedColor(t *testing.T) {
 	// The BSL bridges two fixed-colour channels (8 and 12); the endpoint
 	// inspector names the channel each endpoint serves, so the CCU-side
 	// checks read the right one.
+	// go-fabric-ui's endpoint list names the endpoint's stable key in
+	// `source.key`: loom's source key, `central|address|channel|kind|key`.
 	var inspector struct {
 		Endpoints []struct {
-			EndpointID     uint16 `json:"endpoint_id"`
-			ChannelAddress string `json:"channel_address"`
+			EndpointID uint16            `json:"endpoint_id"`
+			Source     map[string]string `json:"source"`
 		} `json:"endpoints"`
 	}
-	if status := b.RESTGet(t, "/api/v1/matter/endpoints", &inspector); status != 200 {
-		t.Fatalf("GET /api/v1/matter/endpoints: status %d", status)
+	if status := b.RESTGet(t, "/api/v1/node/endpoints", &inspector); status != 200 {
+		t.Fatalf("GET /api/v1/node/endpoints: status %d", status)
 	}
 	var address string
 	for _, e := range inspector.Endpoints {
-		if e.EndpointID == ep {
-			address = e.ChannelAddress
+		if e.EndpointID != ep {
+			continue
+		}
+		if parts := strings.Split(e.Source["key"], "|"); len(parts) == 5 {
+			address = parts[1] + ":" + parts[2]
 		}
 	}
 	if address == "" {
