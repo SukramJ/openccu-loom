@@ -190,6 +190,7 @@ nav:
           - ADR 0083 — mqtt-smarthome topic convention: adr/0083-mqtt-smarthome-topic-convention.md
           - ADR 0084 — Matter device layer and node facade: adr/0084-matter-device-layer-and-node-facade.md
           - ADR 0085 — Apache-2.0 and the CLA: adr/0085-apache-2-and-the-cla.md
+          - ADR 0086 — The Matter pages from go-fabric-ui: adr/0086-matter-pages-from-go-fabric-ui.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

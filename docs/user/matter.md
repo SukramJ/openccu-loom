@@ -32,7 +32,7 @@ north:
       passcode: 20202021
 ```
 
-The bridge listens on UDP port **5540** by default. With a **passcode** under `north.matter.commissioning.passcode`, the pairing codes are fixed and always available. Left at `0`, the bridge runs on a random passcode nobody holds: there are no fixed pairing codes (`GET /api/v1/matter/setup-payload` answers 503), and you pair by opening a commissioning window in the web UI, which shows one-time codes for that window.
+The bridge listens on UDP port **5540** by default. With a **passcode** under `north.matter.commissioning.passcode`, the pairing codes are fixed and always available. Left at `0`, the bridge runs on a random passcode nobody holds: there are no fixed pairing codes, and you pair by opening a commissioning window in the web UI, which shows one-time codes for that window.
 
 If you configured your own attestation files (`north.matter.attestation.*`) and they do not load, the bridge keeps serving every controller already paired but refuses every new pairing until the files are fixed and the daemon restarts. You see it in three places: the **Diagnostics** view lists the health component `matter.bridge` as unhealthy with the note *commissioning disabled: the configured attestation chain does not load*, opening a commissioning window answers `409 Conflict` with the same reason, and the daemon log names the cause (message `matter.bridge.attestation`). Without own attestation files this does not apply.
 
@@ -55,14 +55,16 @@ To pair, your phone app needs either the **setup QR code** or the **11-digit man
 
 ## The Matter view
 
-The **Matter** view (shown only while the bridge is enabled) has four tabs:
+The **Matter** view (shown only while the bridge is enabled) has six tabs. The pages are the node page family of [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui), shared by every daemon built on go-fabric; what is OpenCCU-Loom's own is the list of exposable CCU channels and their names.
 
-- **Expose** — pick which devices the bridge advertises (see [Choosing which devices are exposed](#choosing-which-devices-are-exposed)).
-- **Fabrics** — every controller ecosystem the bridge is paired with, by vendor, label, fabric number and node ID. **Remove** unpairs one controller; the others keep working. Under **Maintenance**, **Re-sync topology** rebuilds the exposed endpoints from the current devices while every controller keeps its pairing, and **Remove all pairings** returns the bridge to its unpaired state — every controller then has to add it again. **Share bridge with another controller** leads to the **Pair** tab.
+- **Status** — whether the bridge listens and advertises, how many endpoints it serves, how many controllers are paired, and whether a commissioning window is open.
 - **Pair** — open a commissioning window with its QR code, manual code and countdown, and close it again early.
-- **Diagnostics** — whether the bridge advertises correctly on the network, the connected controllers, the exposed endpoints, how each paired ecosystem treats the exposed device types, and recent bridge events.
+- **Fabrics** — every controller ecosystem the bridge is paired with, by vendor, label, fabric number and node ID. **Remove** unpairs one controller; the others keep working. Under **Maintenance**, **Reassemble** rebuilds the exposed endpoints from the current devices while every controller keeps its pairing, and **Factory reset** returns the bridge to its unpaired state — every controller then has to add it again.
+- **Selection** — pick which devices the bridge advertises (see [Choosing which devices are exposed](#choosing-which-devices-are-exposed)). A change is previewed before it is applied; the bridge reassembles its endpoints right after.
+- **Endpoints** — the bridged endpoints a controller sees, with their device types and clusters.
+- **Diagnostics** — whether the bridge advertises correctly on the network, the connected controllers' sessions, how each paired ecosystem treats the exposed device types, and recent bridge events.
 
-Removing a fabric, removing all pairings, re-syncing and opening or closing a commissioning window need an administrator account. The same actions are available over the REST API under `/api/v1/matter/` — see the [REST reference](../reference/rest.md).
+Removing a fabric, the factory reset, reassembling, changing the selection and opening or closing a commissioning window need an administrator account, as does reading the pairing codes. The same actions are available over the REST API under `/api/v1/node/` — see the [REST reference](../reference/rest.md).
 
 ## Pairing step by step
 
