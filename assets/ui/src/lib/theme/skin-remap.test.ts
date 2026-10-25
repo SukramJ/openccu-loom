@@ -6,13 +6,21 @@ import { describe, it, expect } from "vitest";
 // happy-dom's getComputedStyle does not load or cascade the app's actual
 // stylesheet (no CSSOM), so it cannot resolve `var(--color-slate-500)` or
 // the HA-skin var()-with-fallback chain the way a real browser would. The
-// reliable check is therefore against the compiled source of app.css
-// itself — this still fails the moment the palette-remap block or the
-// refreshed HA fallbacks regress or get deleted. Resolved against the
-// Vite/vitest project root (assets/ui/), not import.meta.url, because the
-// test file is transformed and does not keep a stable file:// URL.
-const appCssPath = resolve(process.cwd(), "src/app.css");
-const appCss = readFileSync(appCssPath, "utf-8");
+// reliable check is therefore against the stylesheet source itself — this
+// still fails the moment the palette-remap block or the refreshed HA
+// fallbacks regress or get deleted. The tokens live in
+// @sukramj/fabric-ui's tokens.css, which app.css imports; checking the
+// pinned package file catches a package bump that changes the skin. Paths
+// resolve against the Vite/vitest project root (assets/ui/), not
+// import.meta.url, because the test file is transformed and does not keep
+// a stable file:// URL.
+const appCssSource = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8");
+// Comments are stripped: the package's header comment names the selectors
+// it holds, which would otherwise match as the start of a block.
+const appCss = readFileSync(
+  resolve(process.cwd(), "node_modules/@sukramj/fabric-ui/src/lib/theme/tokens.css"),
+  "utf-8",
+).replace(/\/\*[\s\S]*?\*\//g, "");
 
 // Isolate the html[data-skin="ha"] palette-remap block (the one containing
 // --color-slate-*) from the earlier html[data-skin="ha"] consumption-token
@@ -37,7 +45,11 @@ function extractSkinHaBlocks(css: string): string[] {
   return blocks;
 }
 
-describe("HA skin palette remap (app.css)", () => {
+describe("HA skin palette remap (fabric-ui tokens.css)", () => {
+  it("is imported by app.css", () => {
+    expect(appCssSource).toContain('@import "@sukramj/fabric-ui/theme/tokens.css";');
+  });
+
   const haBlocks = extractSkinHaBlocks(appCss);
   const paletteRemapBlock = haBlocks.find((b) => b.includes("--color-slate-500"));
   const tokenBlock = haBlocks.find((b) => b.includes("--ha-primary-color:"));

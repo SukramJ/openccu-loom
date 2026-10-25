@@ -4,50 +4,17 @@
 // :root, and by tracking HA's light/dark choice via the parent
 // background luminance. Outside HA (standalone, the openccu-lite shell,
 // any other iframe — see isEmbedded) the bridge is inert and
-// the static HA-default literals in app.css [data-skin="ha"] apply.
+// the static HA-default literals of the fabric-ui tokens.css
+// [data-skin="ha"] (imported by app.css) apply.
 
+// The pure helpers (the variable list, colour parsing, luminance) come from
+// @sukramj/fabric-ui, which ported them from this file. The frame detection
+// and everything that reads it stay here: the package's isEmbedded does not
+// know the openccu-lite shell, and its resolveSkin / startHaBridge call that
+// isEmbedded internally, so re-exporting them would dress the lite shell as
+// Home Assistant.
+import { HA_THEME_VARS, parseRgb, relativeLuminance } from "@sukramj/fabric-ui/theme";
 import { liteShell } from "./lite-shell.svelte";
-
-// HA theme variables copied from the parent document onto our root. The
-// --ha-* consumption tokens in app.css read these via var(--…, fallback),
-// so a live value here overrides the HA-default literal.
-const HA_THEME_VARS = [
-  "--primary-color",
-  "--accent-color",
-  "--primary-background-color",
-  "--secondary-background-color",
-  "--card-background-color",
-  "--primary-text-color",
-  "--secondary-text-color",
-  "--disabled-text-color",
-  "--divider-color",
-  "--error-color",
-  "--warning-color",
-  "--success-color",
-  "--info-color",
-  "--ha-card-border-radius",
-  "--ha-card-box-shadow",
-  "--app-header-background-color",
-  "--app-header-text-color",
-  "--sidebar-background-color",
-  "--rgb-primary-color",
-  "--text-primary-color",
-  // Higher-fidelity mirrors. The static per-skin palette remap in app.css
-  // (--color-* scale) is intentionally NOT bridged — the bridge covers the
-  // --ha-* semantic tokens for live custom-theme fidelity; the palette
-  // remap stays static per skin.
-  "--ha-font-family-body",
-  "--header-height",
-  "--rgb-accent-color",
-  "--rgb-primary-text-color",
-  "--rgb-error-color",
-  "--rgb-success-color",
-  "--rgb-info-color",
-  "--shadow-color",
-  "--ha-color-text-primary",
-  "--ha-color-text-secondary",
-  "--ha-color-surface-default",
-];
 
 // The path segment Home Assistant's Supervisor serves an add-on's Ingress
 // under (`/api/hassio_ingress/<token>/…`, see $lib/api/base).
@@ -82,42 +49,6 @@ export function isEmbedded(): boolean {
 // otherwise the operator's stored choice stands.
 export function resolveSkin(stored: "loom" | "ha"): "loom" | "ha" {
   return isEmbedded() ? "ha" : stored;
-}
-
-// Parse a CSS colour string into [r,g,b] (0–255) or null if unrecognised.
-// Handles #rgb, #rrggbb and rgb()/rgba().
-function parseRgb(value: string): [number, number, number] | null {
-  const v = value.trim();
-  if (!v) return null;
-  if (v[0] === "#") {
-    let hex = v.slice(1);
-    if (hex.length === 3) {
-      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-    }
-    if (hex.length >= 6) {
-      const r = parseInt(hex.slice(0, 2), 16);
-      const g = parseInt(hex.slice(2, 4), 16);
-      const b = parseInt(hex.slice(4, 6), 16);
-      if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
-        return [r, g, b];
-      }
-    }
-    return null;
-  }
-  const m = v.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
-  if (m) {
-    return [Number(m[1]), Number(m[2]), Number(m[3])];
-  }
-  return null;
-}
-
-// WCAG relative luminance (0 = black, 1 = white) for an sRGB triple.
-function relativeLuminance([r, g, b]: [number, number, number]): number {
-  const lin = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
 // Start mirroring the live HA theme. No-op (returns a no-op cleanup)
@@ -178,7 +109,7 @@ export function startHaBridge(): () => void {
     };
   } catch {
     // Cross-origin parent (or any access failure) — static HA defaults
-    // from app.css [data-skin="ha"] apply; nothing to tear down.
+    // from tokens.css [data-skin="ha"] apply; nothing to tear down.
     return () => {};
   }
 }

@@ -189,7 +189,8 @@ direct dependencies declared in [`go.mod`](./go.mod) include:
 | Module | License (family) |
 | --- | --- |
 | `filippo.io/nistec` | BSD-3-Clause |
-| `github.com/SukramJ/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.6.0) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
+| `github.com/SukramJ/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.12.1) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
+| `github.com/SukramJ/go-fabric-ui` | Apache-2.0 — the node page family's HTTP handlers (`fabricui`), mounted under `/api/v1/node`; the module also carries its built standalone bundle, which this daemon does not serve |
 | `github.com/SukramJ/go-hamqtt` | MIT |
 | `github.com/SukramJ/go-ha-catalog` | MIT |
 | `github.com/SukramJ/godevccu` | MIT |
@@ -235,3 +236,28 @@ public API for the operations that handshake needs.
 - License: BSD-3-Clause — the upstream text is reproduced at
   [`licenses/LICENSE-filippo.io-nistec.txt`](./licenses/LICENSE-filippo.io-nistec.txt),
   and its third clause names Google LLC and its contributors.
+
+---
+
+## SPA npm dependencies bundled into the binary
+
+The Svelte SPA under [`assets/ui/`](./assets/ui/) is built by Vite and
+embedded into the binary, so the npm packages its bundle compiles in are
+redistributed with it. Their licenses are permissive (MIT / ISC /
+Apache-2.0). The packages below are listed because they came in with the
+Matter pages; the exact versions are pinned in
+[`assets/ui/package-lock.json`](./assets/ui/package-lock.json).
+
+| Package | License (family) |
+| --- | --- |
+| `@sukramj/fabric-ui` | Apache-2.0 — the Matter node pages (status, pairing, fabrics, selection, endpoints, diagnostics), their UI kit, the `--ha-*` design tokens and the theme helpers; shipped as Svelte / TypeScript sources and compiled by the SPA build |
+| `@lucide/svelte` | ISC — `@sukramj/fabric-ui` pins its own copy alongside the SPA's |
+| `clsx` | MIT |
+| `qrcode` | MIT — draws the pairing QR code |
+| `tailwind-merge` | MIT |
+
+- `@sukramj/fabric-ui` source: <https://github.com/SukramJ/go-fabric-ui>
+  (`ui/`), copyright SukramJ; license text at
+  [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
+- The MIT texts are covered by [`licenses/MIT.txt`](./licenses/MIT.txt); the
+  ISC license of `@lucide/svelte` travels in its package's `LICENSE` file.

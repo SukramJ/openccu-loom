@@ -88,21 +88,6 @@ import type {
   PairingView,
 } from "./types";
 import type {
-  MatterBulkUpdateRequest,
-  MatterBulkUpdateResponse,
-  MatterCommissioningWindow,
-  MatterExposableResponse,
-  MatterExposureUpdate,
-  MatterCompatibility,
-  MatterDiagnosticEventList,
-  MatterEndpointsResponse,
-  MatterFabricsResponse,
-  MatterMdnsDiagnostics,
-  MatterSessionsResponse,
-  MatterSetupPayload,
-  MatterStatus,
-} from "./matter-types";
-import type {
   UnIgnoreCandidateList,
   UnIgnoreListResponse,
   UnIgnoreUpdateRequest,
@@ -229,6 +214,25 @@ function csrfToken(): string {
     }
   }
   return "";
+}
+
+/**
+ * A fetch with the SPA's session semantics, for clients that build their
+ * own URLs (the @sukramj/fabric-ui Matter pages): same-origin credentials,
+ * the double-submit CSRF header on mutating methods and the stale-session
+ * hand-off on a 401 — the same three things request() does. Status
+ * handling and body parsing stay with the caller.
+ */
+export async function loomFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const headers: Record<string, string> = { ...((init.headers as Record<string, string>) ?? {}) };
+  if (!SAFE_METHODS.has(method)) {
+    const token = csrfToken();
+    if (token) headers[CSRF_HEADER] = token;
+  }
+  const res = await fetch(input, { ...init, credentials: "same-origin", headers });
+  if (res.status === 401) onUnauthorized?.();
+  return res;
 }
 
 /**
@@ -1801,75 +1805,6 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(seconds ? { seconds } : {}),
-    });
-  },
-  // --- Matter bridge -------------------------------------------
-  matterStatus() {
-    return request<MatterStatus>(`/matter/status`);
-  },
-  matterFabrics() {
-    return request<MatterFabricsResponse>(`/matter/fabrics`);
-  },
-  matterSessions() {
-    return request<MatterSessionsResponse>(`/matter/sessions`);
-  },
-  matterMdns() {
-    return request<MatterMdnsDiagnostics>(`/matter/mdns`);
-  },
-  matterEndpoints() {
-    return request<MatterEndpointsResponse>(`/matter/endpoints`);
-  },
-  matterCompatibility() {
-    return request<MatterCompatibility>(`/matter/compatibility`);
-  },
-  matterDiagnosticEvents() {
-    return request<MatterDiagnosticEventList>(`/matter/events`);
-  },
-  deleteMatterFabric(id: number) {
-    return request<void>(`/matter/fabrics/${id}`, { method: "DELETE" });
-  },
-  matterForceSync() {
-    return request<void>(`/matter/force-sync`, { method: "POST" });
-  },
-  matterFactoryReset() {
-    // The daemon requires the action to be named, so a replayed or
-    // mis-scripted POST cannot unpair an installation. The Config UI
-    // sends it after its own confirm dialog.
-    return request<void>(`/matter/factory-reset`, {
-      method: "POST",
-      body: JSON.stringify({ confirm: "remove-all-fabrics" }),
-    });
-  },
-  matterExposable() {
-    return request<MatterExposableResponse>(`/matter/exposable`);
-  },
-  putMatterExposure(update: MatterExposureUpdate) {
-    return request<void>(`/matter/exposable`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(update),
-    });
-  },
-  bulkMatterExposure(req: MatterBulkUpdateRequest) {
-    return request<MatterBulkUpdateResponse>(`/matter/exposable/bulk`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req),
-    });
-  },
-  matterSetupPayload() {
-    return request<MatterSetupPayload>(`/matter/setup-payload`);
-  },
-  openCommissioningWindow(duration_seconds: number) {
-    return request<MatterCommissioningWindow>(`/matter/commissioning/window`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ duration_seconds }),
-    });
-  },
-  closeCommissioningWindow() {
-    return request<void>(`/matter/commissioning/window/close`, {
-      method: "POST",
     });
   },
   // --- Visibility / un_ignore ---------------------------------

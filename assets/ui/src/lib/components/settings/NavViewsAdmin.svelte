@@ -10,7 +10,7 @@
   import { onMount } from "svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
-  import { matterStore } from "$lib/stores/matter.svelte";
+  import { fabricUI } from "$lib/stores/fabric-node.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { gateFeature } from "$lib/nav";
   import { featureName } from "$lib/features";
@@ -136,7 +136,7 @@
   // off however the profile is configured, so the preview must not
   // promise it. These are the same two sources the navigation reads, so
   // the preview and the sidebar cannot disagree.
-  const matterEnabled = $derived(matterStore.status?.enabled === true);
+  const matterEnabled = $derived(fabricUI.node.status?.enabled === true);
   // The history gate asks for both tokens, matching the Diagrams view:
   // charting needs recorded data, saving a definition needs the app
   // database. Offering the row for hiding a view that cannot render is a

@@ -764,22 +764,29 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Matter. The diagnostics tab reads five sibling endpoints whose
-  // shapes differ from the status document, so one handler branches on
-  // the path rather than layering overlapping page.route patterns —
-  // those work only in the right registration order (Playwright prefers
-  // the most recently added), which is easy to break by moving a block.
-  const matterFixtures: Record<string, string> = {
-    sessions: 'matter-sessions.json',
-    mdns: 'matter-mdns.json',
-    endpoints: 'matter-endpoints.json',
-    compatibility: 'matter-compatibility.json',
-    events: 'matter-events.json',
-    fabrics: 'matter-fabrics.json',
+  // Matter node (the @sukramj/fabric-ui pages). The diagnostics page reads
+  // five sibling endpoints whose shapes differ from the status document,
+  // so one handler branches on the path below /node/ rather than layering
+  // overlapping page.route patterns — those work only in the right
+  // registration order (Playwright prefers the most recently added),
+  // which is easy to break by moving a block. Anything unmapped answers
+  // with the status document, as the status route is the one every page
+  // reads first.
+  const nodeFixtures: Record<string, string> = {
+    status: 'node-status.json',
+    fabrics: 'node-fabrics.json',
+    sessions: 'node-sessions.json',
+    mdns: 'node-mdns.json',
+    endpoints: 'node-endpoints.json',
+    compatibility: 'node-compatibility.json',
+    events: 'node-events.json',
+    exposure: 'node-exposure.json',
+    'exposure/schema': 'node-exposure-schema.json',
   };
-  await page.route('**/api/v1/matter/**', (route) => {
-    const leaf = new URL(route.request().url()).pathname.split('/').pop() ?? '';
-    route.fulfill({ json: fixture(matterFixtures[leaf] ?? 'matter-status.json') });
+  await page.route('**/api/v1/node/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const sub = path.slice(path.indexOf('/node/') + '/node/'.length);
+    route.fulfill({ json: fixture(nodeFixtures[sub] ?? 'node-status.json') });
   });
 
   // Admin

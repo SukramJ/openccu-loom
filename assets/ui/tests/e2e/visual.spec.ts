@@ -97,7 +97,7 @@ test.describe('Visual regression - light mode', () => {
     // would add a sidebar entry to every other baseline. Override the
     // status document for this test alone; a route registered after
     // mockAllApis takes precedence.
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -106,6 +106,7 @@ test.describe('Visual regression - light mode', () => {
           fabric_count: 2,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: false,
           commissioning_window_duration_seconds: 0,
         },
@@ -131,7 +132,7 @@ test.describe('Visual regression - light mode', () => {
   test('MatterFabrics light', async ({ page }) => {
     // Matter is off in the shared fixture and the surface registry hides
     // the view; the status document is overridden for this test alone.
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -140,6 +141,7 @@ test.describe('Visual regression - light mode', () => {
           fabric_count: 2,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: false,
           commissioning_window_duration_seconds: 0,
         },
@@ -161,7 +163,7 @@ test.describe('Visual regression - light mode', () => {
   // first-time pairing. The open-window state carries a live countdown
   // and is deliberately not baselined — the pixels move every second.
   test('MatterPair light', async ({ page }) => {
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -170,6 +172,7 @@ test.describe('Visual regression - light mode', () => {
           fabric_count: 2,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: false,
           commissioning_window_duration_seconds: 0,
         },
@@ -177,7 +180,7 @@ test.describe('Visual regression - light mode', () => {
     );
     await page.goto('http://localhost:5173/app/#/matter/pair');
     await page.waitForSelector('#main');
-    await page.getByText('Controllers already holding this bridge').waitFor();
+    await page.getByText('Controllers already holding this node').waitFor();
     await page.waitForTimeout(500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-pair-light.png');
@@ -265,7 +268,7 @@ test.describe('Visual regression - dark mode', () => {
     // would add a sidebar entry to every other baseline. Override the
     // status document for this test alone; a route registered after
     // mockAllApis takes precedence.
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -274,6 +277,7 @@ test.describe('Visual regression - dark mode', () => {
           fabric_count: 2,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: false,
           commissioning_window_duration_seconds: 0,
         },
@@ -299,7 +303,7 @@ test.describe('Visual regression - dark mode', () => {
   test('MatterFabrics dark', async ({ page }) => {
     // Matter is off in the shared fixture and the surface registry hides
     // the view; the status document is overridden for this test alone.
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -308,6 +312,7 @@ test.describe('Visual regression - dark mode', () => {
           fabric_count: 2,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: false,
           commissioning_window_duration_seconds: 0,
         },
@@ -329,7 +334,7 @@ test.describe('Visual regression - dark mode', () => {
   // first-time pairing. The open-window state carries a live countdown
   // and is deliberately not baselined — the pixels move every second.
   test('MatterPair dark', async ({ page }) => {
-    await page.route('**/api/v1/matter/status', (route) =>
+    await page.route('**/api/v1/node/status', (route) =>
       route.fulfill({
         json: {
           enabled: true,
@@ -338,6 +343,7 @@ test.describe('Visual regression - dark mode', () => {
           fabric_count: 2,
           enabled_count: 4,
           advertising: true,
+          exposure: true,
           commissioning_window_open: false,
           commissioning_window_duration_seconds: 0,
         },
@@ -345,7 +351,7 @@ test.describe('Visual regression - dark mode', () => {
     );
     await page.goto('http://localhost:5173/app/#/matter/pair');
     await page.waitForSelector('#main');
-    await page.getByText('Controllers already holding this bridge').waitFor();
+    await page.getByText('Controllers already holding this node').waitFor();
     await page.waitForTimeout(500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-pair-dark.png');

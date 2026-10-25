@@ -35,8 +35,11 @@ export default defineConfig(({ command }) => ({
         // Split third-party code into its own long-lived chunk so the
         // app chunk stays small and browser caches survive app-only
         // redeploys. bits-ui + lucide icons dominate vendor weight.
+        // @sukramj/fabric-ui is exempt: it carries the Matter pages, and in
+        // the vendor chunk they would load on every view instead of with the
+        // lazily imported Matter route.
         manualChunks(id) {
-          if (id.includes('node_modules')) {
+          if (id.includes('node_modules') && !id.includes('/@sukramj/fabric-ui/')) {
             return 'vendor';
           }
           return undefined;

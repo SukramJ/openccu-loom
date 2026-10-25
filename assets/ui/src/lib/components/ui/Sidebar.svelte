@@ -8,7 +8,7 @@
   import { liteShell } from "$lib/theme/lite-shell.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { messagesStore } from "$lib/stores/messages.svelte";
-  import { matterStore } from "$lib/stores/matter.svelte";
+  import { fabricUI } from "$lib/stores/fabric-node.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
@@ -30,10 +30,10 @@
     // for the session so the count stays live on every route, not just
     // the message list.
     messagesStore.ensureStream();
-    // Probe Matter status once so the sidebar knows whether to show
-    // the Bridges cluster. No polling — the store will refresh on
-    // navigation to the Matter route.
-    void matterStore.loadStatus();
+    // Probe the Matter node status once so the sidebar knows whether to
+    // show the Bridges cluster. No polling — the Matter route shares the
+    // same node store and refreshes it on navigation.
+    void fabricUI.node.loadStatus();
     // Daemon version for the footer line; cached for the session.
     void infoStore.ensure();
   });
@@ -89,7 +89,7 @@
     setNavCollapsed(!collapsed);
   }
 
-  const matterEnabled = $derived(matterStore.status?.enabled === true);
+  const matterEnabled = $derived(fabricUI.node.status?.enabled === true);
   // The Diagrams view charts measurement history and stores its definitions
   // in the app database, and it refuses to render without both. The nav item
   // has to ask the same question, or it offers a destination the view then

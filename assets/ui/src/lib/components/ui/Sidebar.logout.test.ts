@@ -31,8 +31,8 @@ vi.mock("$lib/stores/installMode.svelte", () => ({
 vi.mock("$lib/stores/messages.svelte", () => ({
   messagesStore: { total: 0, ensureStream: vi.fn(), release: vi.fn() },
 }));
-vi.mock("$lib/stores/matter.svelte", () => ({
-  matterStore: { status: null, loadStatus: vi.fn(async () => {}) },
+vi.mock("$lib/stores/fabric-node.svelte", () => ({
+  fabricUI: { node: { status: null, loadStatus: vi.fn(async () => {}) } },
 }));
 vi.mock("$lib/stores/info.svelte", () => ({
   infoStore: { info: null, ensure: vi.fn(async () => {}) },

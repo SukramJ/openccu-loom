@@ -1,7 +1,16 @@
 {
   "ecosystems": [
-    { "ecosystem": "apple", "vendor_id": 4996, "fabric_index": 1, "label": "Home" },
-    { "ecosystem": "google", "vendor_id": 24582, "fabric_index": 2 }
+    {
+      "ecosystem": "apple",
+      "vendor_id": 4996,
+      "fabric_index": 1,
+      "label": "Home"
+    },
+    {
+      "ecosystem": "google",
+      "vendor_id": 24582,
+      "fabric_index": 2
+    }
   ],
   "endpoint_count": 4,
   "findings": [
