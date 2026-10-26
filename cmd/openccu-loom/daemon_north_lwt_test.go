@@ -49,7 +49,7 @@ func TestConfiguredLastWillMatchesTheBridgePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LastWill: %v", err)
 	}
-	will := northTCPConfig(cfg, slog.Default()).Will
+	will := mustNorthTCPConfig(t, cfg, slog.Default()).Will
 	if will == nil {
 		t.Fatal("the composition root configures no last will at all: a hard crash then leaves " +
 			"every entity available forever, showing the last value it ever saw")

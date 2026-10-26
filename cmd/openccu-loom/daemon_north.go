@@ -5,11 +5,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -496,7 +498,10 @@ type mqttStack struct {
 // hand-rebuilds `mqtt.Will{Topic: buildLWTTopic(cfg), …}` agrees with a
 // second copy of itself and sees none of that;
 // TestConfiguredLastWillMatchesTheBridgePolicy reads this function's output.
-func northTCPConfig(cfg *config.Config, logger *slog.Logger) mqtt.TCPConfig {
+//
+// It also carries the broker TLS configuration (see [mqttTLSConfig]); the
+// error is that function's.
+func northTCPConfig(cfg *config.Config, logger *slog.Logger) (mqtt.TCPConfig, error) {
 	// MQTT 5.0 is the transport default; operators pin
 	// north.mqtt.protocol_version to "3.1.1" for brokers without
 	// v5 support (no silent downgrade on the wire).
@@ -512,11 +517,16 @@ func northTCPConfig(cfg *config.Config, logger *slog.Logger) mqtt.TCPConfig {
 			slog.String("effect", "using MQTT 5.0"))
 		protoVersion = mqtt.ProtocolV50
 	}
+	tlsCfg, err := mqttTLSConfig(cfg.North.MQTT, logger)
+	if err != nil {
+		return mqtt.TCPConfig{}, err
+	}
 	return mqtt.TCPConfig{
 		BrokerURL: cfg.North.MQTT.BrokerURL,
 		ClientID:  cfg.North.MQTT.ClientID,
 		Username:  cfg.North.MQTT.Username,
 		Password:  cfg.North.MQTT.Password,
+		TLSConfig: tlsCfg,
 		Will: &mqtt.Will{
 			Topic: buildLWTTopic(cfg),
 			// `<base>/connected` = 0: mqtt-smarthome 2.0 §3.1's "not
@@ -528,7 +538,35 @@ func northTCPConfig(cfg *config.Config, logger *slog.Logger) mqtt.TCPConfig {
 		CleanStart:      true,
 		ProtocolVersion: protoVersion,
 		Logger:          logger,
+	}, nil
+}
+
+// mqttTLSConfig is the broker TLS configuration for m, or nil on a
+// plaintext broker_url — the scheme selects TLS, and [config.Config.Validate]
+// has already refused tls_ca_file / tls_insecure_skip_verify on one. The
+// certificate is verified for the broker's host name, against tls_ca_file
+// when set and the system roots otherwise.
+//
+// Validation loaded the CA bundle once; it is loaded again here because the
+// file may have changed or vanished since, and a connection that cannot use
+// it must fail rather than quietly fall back to the system roots.
+func mqttTLSConfig(m config.NorthMQTT, logger *slog.Logger) (*tls.Config, error) {
+	u, err := url.Parse(m.BrokerURL)
+	if err != nil {
+		return nil, fmt.Errorf("mqtt: broker_url: %w", err)
 	}
+	if !config.MQTTTLSScheme(u.Scheme) {
+		return nil, nil
+	}
+	tlsCfg, err := mqtt.NewClientTLSConfigWithCA(u.Hostname(), m.TLSCAFile, m.TLSInsecureSkipVerify)
+	if err != nil {
+		return nil, fmt.Errorf("mqtt: tls_ca_file: %w", err)
+	}
+	if m.TLSInsecureSkipVerify {
+		logger.Warn("mqtt.tls.insecure_skip_verify",
+			slog.String("effect", "the broker certificate is NOT verified; anyone on the path can impersonate the broker and read the credentials"))
+	}
+	return tlsCfg, nil
 }
 
 // sweepSubscriberFor returns the subscribe client the bridge's retained-store
@@ -566,9 +604,18 @@ func sweepSubscriberFor(sweep *mqtt.SweepSubscriber, fallback mqtt.Client) mqtt.
 // alone stays green when buildMQTT mutates the struct after calling it, which
 // is the whole hazard. TestTheSweepConnectionCarriesNoLastWill is what turns
 // the paragraph above from a comment into a checked statement.
-func sweepTCPConfig(m config.NorthMQTT, proto mqtt.ProtocolVersion, logger *slog.Logger) mqtt.TCPConfig {
+//
+// tlsCfg is the command plane's broker TLS configuration (nil on a plaintext
+// broker): the sweep connection dials the same broker and must trust it the
+// same way. It gets its own clone, so the two clients never share a mutable
+// *tls.Config.
+func sweepTCPConfig(m config.NorthMQTT, proto mqtt.ProtocolVersion, tlsCfg *tls.Config, logger *slog.Logger) mqtt.TCPConfig {
+	if tlsCfg != nil {
+		tlsCfg = tlsCfg.Clone()
+	}
 	return mqtt.TCPConfig{
 		BrokerURL:       m.BrokerURL,
+		TLSConfig:       tlsCfg,
 		ClientID:        sweepClientID(m.ClientID),
 		Username:        m.Username,
 		Password:        m.Password,
@@ -768,7 +815,8 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 }
 
 // buildMQTT assembles one MQTT stack generation (client, bridge, lifecycle)
-// from cfg. Returns nil when MQTT is disabled.
+// from cfg. Returns nil when MQTT is disabled, and an error only when the
+// broker TLS configuration cannot be built (see [mqttTLSConfig]).
 //
 // centralNames resolves the centrals the daemon currently serves. It is a
 // function, not a slice, because a CCU adopted at runtime never reaches
@@ -778,9 +826,9 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 //
 // maintenance carries the daemon-side halves of the maintenance topics; the
 // zero value refuses the log-level and restart commands.
-func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool, centralNames func() []string, maintenance mqttMaintenanceHooks) *mqttStack {
+func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool, centralNames func() []string, maintenance mqttMaintenanceHooks) (*mqttStack, error) {
 	if !cfg.North.MQTT.Enabled {
-		return nil
+		return nil, nil
 	}
 	if centralNames == nil {
 		centralNames = func() []string { return configuredCentralNames(cfg) }
@@ -806,7 +854,10 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// wiring without a broker.
 		client = mqtt.NewNoopClient()
 	} else {
-		tcpCfg := northTCPConfig(cfg, logger)
+		tcpCfg, err := northTCPConfig(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
 		protoVersion := tcpCfg.ProtocolVersion
 		tcp := mqtt.NewTCPClient(tcpCfg)
 		client = tcp
@@ -815,7 +866,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// factory below, so the config a test reads there is the same struct
 		// value the sweep client is constructed from rather than a parallel
 		// copy of it.
-		stack.sweepTCP = sweepTCPConfig(cfg.North.MQTT, protoVersion, logger)
+		stack.sweepTCP = sweepTCPConfig(cfg.North.MQTT, protoVersion, tcpCfg.TLSConfig, logger)
 		sweepSub = mqtt.NewSweepSubscriber(func() (mqtt.Client, mqtt.Connector) {
 			// A fresh client per connection, so a sweep that failed to
 			// unsubscribe cannot hand its stranded filter to the next one.
@@ -892,7 +943,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		})
 		stack.lifecycle = lc
 	}
-	return stack
+	return stack, nil
 }
 
 // buildLWTTopic returns the retained LWT/online topic for the bridge,

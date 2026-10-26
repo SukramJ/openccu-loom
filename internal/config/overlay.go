@@ -36,6 +36,8 @@ import (
 //   - OPENCCU_LOOM_REST_OPENAPI_VALIDATE     → c.North.REST.OpenAPIValidate (bool)
 //   - OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH    → c.North.REST.OpenAPISpecPath
 //   - OPENCCU_LOOM_MQTT_BROKER_URL           → c.North.MQTT.BrokerURL
+//   - OPENCCU_LOOM_MQTT_TLS_CA_FILE          → c.North.MQTT.TLSCAFile
+//   - OPENCCU_LOOM_MQTT_TLS_INSECURE_SKIP_VERIFY → c.North.MQTT.TLSInsecureSkipVerify (bool)
 //   - OPENCCU_LOOM_UI_EMBEDDED               → c.North.UI.Embedded (bool)
 //   - OPENCCU_LOOM_UI_EMBEDDED_SCOPE         → c.North.UI.EmbeddedScope
 //
@@ -65,6 +67,10 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) error {
 	overlayBoolPtr(getenv, "OPENCCU_LOOM_REST_OPENAPI_VALIDATE", &c.North.REST.OpenAPIValidate)
 	overlayString(getenv, "OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH", &c.North.REST.OpenAPISpecPath)
 	overlayString(getenv, "OPENCCU_LOOM_MQTT_BROKER_URL", &c.North.MQTT.BrokerURL)
+	overlayString(getenv, "OPENCCU_LOOM_MQTT_TLS_CA_FILE", &c.North.MQTT.TLSCAFile)
+	if err := overlayBool(getenv, "OPENCCU_LOOM_MQTT_TLS_INSECURE_SKIP_VERIFY", &c.North.MQTT.TLSInsecureSkipVerify); err != nil {
+		return err
+	}
 	overlayBoolPtr(getenv, "OPENCCU_LOOM_UI_EMBEDDED", &c.North.UI.Embedded)
 	// Validation rejects an unrecognised value at boot, so a typo here
 	// surfaces rather than silently reading as the default.
@@ -140,6 +146,26 @@ func overlayInt(getenv func(string) string, key string, dst *int) error {
 		return fmt.Errorf("config: env %s: invalid integer %q: %w", key, v, err)
 	}
 	*dst = n
+	return nil
+}
+
+// overlayBool applies the bool-valued env override named key onto dst.
+// Unlike [overlayBoolPtr] a present-but-unparsable value is an error naming
+// key: the knobs it serves are security switches, where a typo silently
+// read as "keep the YAML value" is the wrong failure.
+func overlayBool(getenv func(string) string, key string, dst *bool) error {
+	v := strings.TrimSpace(getenv(key))
+	if v == "" {
+		return nil
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		*dst = true
+	case "0", "false", "no", "off":
+		*dst = false
+	default:
+		return fmt.Errorf("config: env %s: invalid boolean %q", key, v)
+	}
 	return nil
 }
 

@@ -23,7 +23,7 @@ func TestBuildMQTT_Disabled_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.MQTT.Enabled = false
 	logger := slog.Default()
-	if got := buildMQTT(cfg, logger, nil, nil, nil, mqttMaintenanceHooks{}); got != nil {
+	if got := mustBuildMQTT(t, cfg, logger, nil, nil, nil, mqttMaintenanceHooks{}); got != nil {
 		t.Errorf("expected nil when MQTT disabled, got %v", got)
 	}
 }
@@ -34,7 +34,7 @@ func TestBuildMQTT_EnabledNoBroker_ReturnsStackWithNoopClient(t *testing.T) {
 	cfg.North.MQTT.Enabled = true
 	cfg.North.MQTT.BrokerURL = "" // no broker → noop client
 	logger := slog.Default()
-	got := buildMQTT(cfg, logger, nil, nil, nil, mqttMaintenanceHooks{})
+	got := mustBuildMQTT(t, cfg, logger, nil, nil, nil, mqttMaintenanceHooks{})
 	if got == nil {
 		t.Fatal("expected non-nil stack when MQTT enabled without broker")
 	}
@@ -54,7 +54,7 @@ func TestBuildMQTT_EnabledWithBroker_ReturnsStackWithLifecycle(t *testing.T) {
 	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883" // unreachable but valid URL
 	cfg.North.MQTT.ClientID = "openccu-loom-test"
 	logger := slog.Default()
-	got := buildMQTT(cfg, logger, nil, nil, nil, mqttMaintenanceHooks{})
+	got := mustBuildMQTT(t, cfg, logger, nil, nil, nil, mqttMaintenanceHooks{})
 	if got == nil {
 		t.Fatal("expected non-nil stack when MQTT enabled with broker")
 	}
@@ -77,7 +77,7 @@ func TestBuildMQTT_BrokerPath_CleanupPassesGetASubscriber(t *testing.T) {
 	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883" // unreachable but valid URL
 	cfg.North.MQTT.ClientID = "openccu-loom-test"
 	cfg.North.MQTT.RawEnabled = true
-	got := buildMQTT(cfg, slog.Default(), nil, nil, nil, mqttMaintenanceHooks{})
+	got := mustBuildMQTT(t, cfg, slog.Default(), nil, nil, nil, mqttMaintenanceHooks{})
 	if got == nil {
 		t.Fatal("expected non-nil stack")
 	}
@@ -115,7 +115,7 @@ func TestBuildMQTT_RetainedSweepKnowsEveryConfiguredCentral(t *testing.T) {
 	cfg.North.MQTT.TopicBase = "openccu-loom"
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}, {Name: "Haus CCÜ"}}
 
-	got := buildMQTT(cfg, slog.Default(), nil, nil, nil, mqttMaintenanceHooks{})
+	got := mustBuildMQTT(t, cfg, slog.Default(), nil, nil, nil, mqttMaintenanceHooks{})
 	if got == nil {
 		t.Fatal("expected non-nil stack")
 	}
@@ -165,7 +165,7 @@ func TestBuildMQTT_RetainedSweepFollowsARuntimeAdoptedCentral(t *testing.T) {
 	// The live fleet, as the registry would report it after an adopt.
 	fleet := make([]string, 0, 2)
 	fleet = append(fleet, "ccu-01")
-	got := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return fleet }, mqttMaintenanceHooks{})
+	got := mustBuildMQTT(t, cfg, slog.Default(), nil, nil, func() []string { return fleet }, mqttMaintenanceHooks{})
 	if got == nil {
 		t.Fatal("expected non-nil stack")
 	}

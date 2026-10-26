@@ -162,7 +162,7 @@ func TestMQTTMaintenanceHooksReachTheBridgeConfig(t *testing.T) {
 	full := config.Default()
 	full.North.MQTT.Enabled = true
 	full.North.MQTT.Maintenance = config.NorthMQTTMaintenance{Enabled: &off}
-	stack := buildMQTT(full, slog.Default(), nil, nil, nil, hooks)
+	stack := mustBuildMQTT(t, full, slog.Default(), nil, nil, nil, hooks)
 	if stack == nil {
 		t.Fatal("expected a stack with MQTT enabled")
 	}

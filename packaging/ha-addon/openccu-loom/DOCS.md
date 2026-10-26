@@ -70,6 +70,16 @@ sure the callback ports are reachable from your CCU's network.
 All other daemon settings (centrals, MQTT, auth, Matter) are configured
 through the Config UI after the add-on starts.
 
+### MQTT over TLS
+
+Use a `tls://`, `ssl://` or `mqtts://` broker URL (MQTT settings in the Config
+UI) to connect over TLS; the broker certificate is verified for the URL's host.
+For a broker whose certificate a private CA issued, set **Broker CA file**
+(`north.mqtt.tls_ca_file`) to the CA bundle's absolute path. Home Assistant's
+`/ssl` folder is mapped read-only, so e.g. `/ssl/ca.crt` works. **Skip broker
+certificate verification** exists as a last resort and is logged as a warning
+at every connect.
+
 ## Persistent data
 
 Everything written to `/data` inside the container persists across add-on

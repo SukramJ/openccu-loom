@@ -188,6 +188,8 @@ and API tokens, navigation profiles) are not part of this list.
 | `north.mqtt.raw_enabled` | `bool` |  | basic | no | Publish per-data-point state under &lt;topic_base&gt;/status/&lt;central&gt;/... — the raw topic plane non-HA consumers subscribe to. Discovery needs it: switching Discovery on turns this on too, since Discovery payloads only point at raw-plane topics. |
 | `north.mqtt.retain_cleanup_window_ms` | `int` |  | expert | no | How long (in milliseconds) the daemon waits for the broker to deliver all retained messages before processing the retain-cleanup eviction list; zero falls back to 2000 ms. |
 | `north.mqtt.sub_devices_enabled` | `bool` |  | basic | no | Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA. |
+| `north.mqtt.tls_ca_file` | `string` |  | expert | no | Absolute path of a PEM CA bundle the broker certificate is verified against instead of the system roots — for a broker whose certificate a private CA issued. Requires a tls://, ssl:// or mqtts:// broker URL; a missing or unusable file is refused on save. |
+| `north.mqtt.tls_insecure_skip_verify` | `bool` |  | expert | no | Dangerous: do not verify the broker certificate at all, so anyone on the network path can impersonate the broker and read the credentials. Requires a TLS broker URL, cannot be combined with the CA file, and is logged as a warning. Prefer the CA file. |
 | `north.mqtt.topic_base` | `string` |  | basic | no | Prefix every raw-plane and Discovery topic with this string. Change it when running multiple daemons against one broker. |
 | `north.mqtt.username` | `string` |  | basic | no | Broker username for authenticated brokers. Leave empty for anonymous brokers. |
 

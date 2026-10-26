@@ -51,7 +51,7 @@ func TestTheBridgeRoutesItsSweepsThroughTheSweepConnection(t *testing.T) {
 	t.Parallel()
 	cfg := northSweepTestConfig()
 
-	stack := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
+	stack := mustBuildMQTT(t, cfg, slog.Default(), nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
 	if stack == nil {
 		t.Fatal("buildMQTT returned nil with MQTT enabled")
 	}
@@ -108,13 +108,13 @@ func TestTheSweepConnectionCarriesNoLastWill(t *testing.T) {
 	cfg := northSweepTestConfig()
 	logger := slog.Default()
 
-	main := northTCPConfig(cfg, logger)
+	main := mustNorthTCPConfig(t, cfg, logger)
 	if main.Will == nil {
 		t.Fatal("the main connection carries no will, so this test cannot tell an absent will " +
 			"from an absent policy")
 	}
 
-	stack := buildMQTT(cfg, logger, nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
+	stack := mustBuildMQTT(t, cfg, logger, nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
 	if stack == nil {
 		t.Fatal("buildMQTT returned nil with MQTT enabled")
 	}

@@ -60,6 +60,8 @@
   "north.mqtt.raw_enabled": "bool",
   "north.mqtt.retain_cleanup_window_ms": "int,omitempty",
   "north.mqtt.sub_devices_enabled": "bool",
+  "north.mqtt.tls_ca_file": "string,omitempty",
+  "north.mqtt.tls_insecure_skip_verify": "bool,omitempty",
   "north.mqtt.topic_base": "string",
   "north.mqtt.username": "string",
   "north.rest.auth.basic_enabled": "*bool,omitempty",

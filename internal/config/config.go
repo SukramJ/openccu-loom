@@ -22,6 +22,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	gomqtt "github.com/SukramJ/go-mqtt"
+
 	"github.com/SukramJ/go-fabric/secure/spake2"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -1608,6 +1610,23 @@ type NorthMQTT struct {
 	// surfaces a named error, and this knob is the fix.
 	ProtocolVersion string `yaml:"protocol_version,omitempty" json:"protocol_version,omitempty" cfg:"expert"`
 
+	// TLSCAFile names a PEM CA bundle the broker certificate is verified
+	// against instead of the system roots — for a broker whose certificate
+	// a private CA issued. TLS itself is selected by the broker_url scheme
+	// (tls, ssl, mqtts), so this requires one; an absolute path is required
+	// for the reason api_token_file needs one. [Config.Validate] loads the
+	// bundle, so a missing or unusable file is refused at boot and on a
+	// Config-UI save with an error naming it rather than surfacing as a
+	// reconnect loop. The file is read when the connection is built, so a
+	// replaced bundle takes effect on the next restart or MQTT reload.
+	TLSCAFile string `yaml:"tls_ca_file,omitempty" json:"tls_ca_file,omitempty" cfg:"expert"`
+	// TLSInsecureSkipVerify disables the verification of the broker
+	// certificate. Dangerous — anyone on the path can impersonate the broker
+	// and read the credentials — so it is never a default, is logged as a
+	// warning whenever a connection is built, requires a TLS broker_url and
+	// cannot be combined with tls_ca_file.
+	TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify,omitempty" json:"tls_insecure_skip_verify,omitempty" cfg:"expert"`
+
 	// SubDevicesEnabled splits multi-channel-group devices into one
 	// HA device per channel group. Each sub-device's MQTT discovery
 	// stamps `device.identifiers = "<topic_base>_<addr>-<group_no>"`
@@ -2773,12 +2792,58 @@ func validatePublicURL(raw string) error {
 	return nil
 }
 
+// MQTTTLSScheme reports whether a broker_url scheme selects TLS: the
+// spellings go-mqtt dials as TLS.
+func MQTTTLSScheme(scheme string) bool {
+	switch scheme {
+	case "tls", "ssl", "mqtts":
+		return true
+	}
+	return false
+}
+
+// validateMQTTTLS checks tls_ca_file and tls_insecure_skip_verify against
+// the parsed broker_url. Both refine a TLS connection, so on a plaintext
+// scheme they are refused, as centrals[].tls_fingerprint is without tls —
+// an operator who set one expects the connection to be encrypted. The CA
+// bundle is loaded through the same go-mqtt constructor the daemon dials
+// with, so validation and the connection cannot disagree about a file.
+func validateMQTTTLS(m *NorthMQTT, u *url.URL) error {
+	if m.TLSCAFile == "" && !m.TLSInsecureSkipVerify {
+		return nil
+	}
+	key := "tls_ca_file"
+	if m.TLSCAFile == "" {
+		key = "tls_insecure_skip_verify"
+	}
+	if !MQTTTLSScheme(u.Scheme) {
+		return fmt.Errorf("config: mqtt.%s: requires a TLS broker_url (tls://, ssl:// or mqtts://), got scheme %q", key, u.Scheme)
+	}
+	if m.TLSCAFile == "" {
+		return nil
+	}
+	if m.TLSInsecureSkipVerify {
+		return errors.New("config: mqtt.tls_ca_file: cannot be combined with tls_insecure_skip_verify — verify against the CA or not at all")
+	}
+	if !filepath.IsAbs(m.TLSCAFile) {
+		return fmt.Errorf("config: mqtt.tls_ca_file: an absolute path is required, got %q", m.TLSCAFile)
+	}
+	if _, err := gomqtt.NewClientTLSConfigWithCA(u.Hostname(), m.TLSCAFile, false); err != nil {
+		return fmt.Errorf("config: mqtt.tls_ca_file: %w", err)
+	}
+	return nil
+}
+
 // validateMQTT enforces MQTT-block invariants when MQTT is enabled.
 //
 // Required when enabled:
 //   - mqtt.broker_url — must be non-empty and parse as a valid URL whose
 //     scheme is one of tcp, mqtt, tls, ssl, mqtts (empty scheme is also
 //     accepted for bare host:port shorthand).
+//
+// Checked when set (see [validateMQTTTLS]):
+//   - mqtt.tls_ca_file / mqtt.tls_insecure_skip_verify — a TLS scheme,
+//     not both, and a loadable absolute CA bundle.
 //
 // Optional but range-checked:
 //   - mqtt.topic_base — must be non-empty (filled by applyDefaults so
@@ -2807,6 +2872,9 @@ func validateMQTT(m *NorthMQTT) error {
 	}
 	if u.Hostname() == "" {
 		return errors.New("config: mqtt.broker_url: host must not be empty")
+	}
+	if err := validateMQTTTLS(m, u); err != nil {
+		return err
 	}
 	if m.TopicBase == "" {
 		return errors.New("config: mqtt.topic_base: required")
