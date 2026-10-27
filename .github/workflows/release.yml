@@ -117,6 +117,15 @@ jobs:
           fi
           echo "Release notes for ${VERSION}:" >&2
           cat RELEASE_NOTES.md >&2
+      # Stable releases open with the one-line sponsoring note in
+      # .github/SPONSORING.md; a vX.Y.Z-suffix tag, which goreleaser's
+      # `prerelease: auto` publishes as a prerelease, does not.
+      - name: Prepend sponsoring note
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          set -euo pipefail
+          { cat .github/SPONSORING.md; cat RELEASE_NOTES.md; } > notes.tmp
+          mv notes.tmp RELEASE_NOTES.md
       - name: run goreleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
