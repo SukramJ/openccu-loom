@@ -3,7 +3,11 @@
 
 package mqtt
 
-import gomqtt "github.com/SukramJ/go-mqtt"
+import (
+	"crypto/tls"
+
+	gomqtt "github.com/SukramJ/go-mqtt"
+)
 
 // The MQTT transport — wire codec, TCP/TLS adapter, and the reconnecting
 // lifecycle — lives in the standalone github.com/SukramJ/go-mqtt module,
@@ -95,6 +99,15 @@ func NewBreaker(pub Publisher, cfg BreakerConfig) *Breaker { return gomqtt.NewBr
 // shape to a [MessageHandler].
 func LegacyHandler(fn func(topic string, payload []byte, retained bool)) MessageHandler {
 	return gomqtt.LegacyHandler(fn)
+}
+
+// NewClientTLSConfigWithCA builds the broker TLS configuration: verified
+// for serverName against the PEM bundle caFile when one is named (the system
+// roots otherwise), or not verified at all when insecureSkipVerify is set.
+// The two are mutually exclusive, and an unusable caFile is an error naming
+// it.
+func NewClientTLSConfigWithCA(serverName, caFile string, insecureSkipVerify bool) (*tls.Config, error) {
+	return gomqtt.NewClientTLSConfigWithCA(serverName, caFile, insecureSkipVerify)
 }
 
 // NewTCPClient constructs a broker-backed MQTT client.

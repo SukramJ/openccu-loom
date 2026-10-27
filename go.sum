@@ -8,8 +8,8 @@ github.com/SukramJ/go-ha-catalog v0.3.1 h1:wo8CN+r4QHFCIBftSJMCHzYzmnkbs2FjEbnfj
 github.com/SukramJ/go-ha-catalog v0.3.1/go.mod h1:GWdkU683HaEB23e2RWabRZinYPIbWq6wyRQ+iBbMP5s=
 github.com/SukramJ/go-hamqtt v0.38.0 h1:iWP2ncZVCVxQN07aUKV3tQh4H3SGd4dZiyFHVBUjrFE=
 github.com/SukramJ/go-hamqtt v0.38.0/go.mod h1:Uo3do9IfzH/lJnUovxLN0kTbLr1ky9gRyEmNu3/KW00=
-github.com/SukramJ/go-mqtt v1.6.0 h1:8qGuMm4BFM5xB0Lb8+GeHkTceiYDQ1YWqsmdXkQ6nKo=
-github.com/SukramJ/go-mqtt v1.6.0/go.mod h1:5d2rA0gppys68MuhP8RoCtb/yorzYwVFP3Myb1HhsaA=
+github.com/SukramJ/go-mqtt v1.7.0 h1:7yjVrUrlWD3u2hjqQkT3gEGoE+YMIUiSmQ+vU/7Ouxc=
+github.com/SukramJ/go-mqtt v1.7.0/go.mod h1:aZERJuvzn/l627LZUkbZaGh8zhZnfIDcI2tbYM9oxzY=
 github.com/SukramJ/go-openccu-data v0.3.0 h1:XF9QQy3otMTuvjvcGiV0vwi0/GTapC/vvmYEPwdsgXk=
 github.com/SukramJ/go-openccu-data v0.3.0/go.mod h1:H6EmkW8BglTusAYguH653yQ66xHdJMzsvdUotPQlvq0=
 github.com/SukramJ/godevccu v0.10.1 h1:n9oTXQ5X5cY+7cNVW1Riw6/CBExvr5IFlQOg4aH7pv4=

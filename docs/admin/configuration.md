@@ -112,6 +112,8 @@ that are unset leave the YAML value intact.
 | `OPENCCU_LOOM_REST_OPENAPI_VALIDATE` | OpenAPI request validation | bool |
 | `OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH` | external OpenAPI spec path | path |
 | `OPENCCU_LOOM_MQTT_BROKER_URL` | `north.mqtt.broker_url` | string |
+| `OPENCCU_LOOM_MQTT_TLS_CA_FILE` | `north.mqtt.tls_ca_file` | path |
+| `OPENCCU_LOOM_MQTT_TLS_INSECURE_SKIP_VERIFY` | `north.mqtt.tls_insecure_skip_verify` | bool |
 | `OPENCCU_LOOM_SECRET_KEY` | at-rest master key (see [Secrets](#secrets)) | base64 |
 | `OPENCCU_LOOM_MQTT_PASSWORD` | MQTT broker password (runtime only) | string |
 | `OPENCCU_LOOM_OIDC_CLIENT_SECRET` | OIDC client secret (runtime only) | string |

@@ -37,7 +37,7 @@ require (
 	github.com/SukramJ/go-fabric-ui v0.1.1
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.38.0
-	github.com/SukramJ/go-mqtt v1.6.0
+	github.com/SukramJ/go-mqtt v1.7.0
 	github.com/SukramJ/go-openccu-data v0.3.0
 	github.com/SukramJ/godevccu v0.10.1
 	github.com/getkin/kin-openapi v0.152.0

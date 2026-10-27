@@ -63,6 +63,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **MQTT: a private CA, or explicitly no verification, for a TLS broker.**
+  `north.mqtt.tls_ca_file` names a PEM CA bundle (absolute path) the broker
+  certificate is verified against instead of the system roots;
+  `north.mqtt.tls_insecure_skip_verify` turns verification off (logged as a
+  warning whenever the connection is built). Both require a `tls://`,
+  `ssl://` or `mqtts://` `broker_url` and cannot be combined; the CA bundle
+  is loaded at validation, so a missing or unusable file is refused at boot
+  and on a Config-UI save with an error naming it. Both broker connections —
+  the command plane and the retained-store sweeps — use them, verified for
+  the broker URL's host. Environment overrides
+  `OPENCCU_LOOM_MQTT_TLS_CA_FILE` / `OPENCCU_LOOM_MQTT_TLS_INSECURE_SKIP_VERIFY`
+  (a malformed boolean is a boot error). The add-on maps `/ssl` read-only for
+  the CA. go-mqtt is at v1.7.0.
+
 - **REST API 13.10.0.** `capabilities.button` on a lock custom data point
   marks the operating lock, so a client can tell it from a door lock
   without parsing the name. Additive; every other field is unchanged.

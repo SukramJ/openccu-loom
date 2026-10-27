@@ -116,7 +116,7 @@ func TestInfoCentralsSeeACentralAdoptedAfterTheStackWasBuilt(t *testing.T) {
 	cfg.Centrals = []config.CentralConfig{{Name: "boot-ccu"}}
 	reg := buildTestRegistry(t, "boot-ccu")
 
-	stack := buildMQTT(cfg, slog.Default(), nil, nil,
+	stack := mustBuildMQTT(t, cfg, slog.Default(), nil, nil,
 		func() []string { return liveCentralNames(cfg, reg) }, mqttMaintenanceHooks{})
 	if stack == nil {
 		t.Fatal("expected a stack with MQTT enabled")

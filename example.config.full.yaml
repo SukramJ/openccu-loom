@@ -316,8 +316,21 @@ north:
     enabled: false
 
     # Broker URL. Schemes: tcp | mqtt | tls | ssl | mqtts.
+    # tls / ssl / mqtts connect over TLS, verifying the broker certificate
+    # for the URL's host against the system roots (or tls_ca_file).
     # Required when enabled: true.
     broker_url: "tcp://localhost:1883"
+
+    # PEM CA bundle (absolute path) the broker certificate is verified
+    # against instead of the system roots — for a broker whose certificate
+    # a private CA issued. Requires a TLS broker_url; a missing or unusable
+    # file is refused at boot.  [default: ""]
+    # tls_ca_file: "/etc/openccu-loom/mqtt-ca.crt"
+
+    # DANGEROUS: do not verify the broker certificate at all. Requires a
+    # TLS broker_url, cannot be combined with tls_ca_file, logged as a
+    # warning.  [default: false]
+    # tls_insecure_skip_verify: false
 
     # MQTT client ID (must be unique per broker).
     client_id: "openccu-loom"

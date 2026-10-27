@@ -682,7 +682,10 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 	maintenance := s.maintenance
 	s.mu.Unlock()
 	runCtx := s.runContext(ctx)
-	stack := buildMQTT(cfg, s.logger, col, hidden, names, maintenance)
+	stack, err := buildMQTT(cfg, s.logger, col, hidden, names, maintenance)
+	if err != nil {
+		return nil, fmt.Errorf("mqtt.supervisor.build: %w", err)
+	}
 	if stack == nil {
 		return nil, errors.New("mqtt.supervisor.build: buildMQTT returned nil with MQTT enabled")
 	}

@@ -36,8 +36,11 @@ panel_title: "OpenCCU-Loom"
 # host, so a port mapping does nothing. The ports are instead operator-selectable
 # via the options below (passed to the daemon as env overrides in run.sh).
 
+# /ssl is mapped read-only so the CA bundle of a TLS broker (Home Assistant's
+# certificates live there) can be named in north.mqtt.tls_ca_file.
 map:
   - addon_config:rw
+  - ssl:ro
 
 options:
   log_level: info

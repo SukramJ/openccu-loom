@@ -1401,6 +1401,9 @@ const EN: Catalog = {
   "config.field.north.mqtt.discovery_retract_unscoped":
     "Clear discovery configs from before the topic base scope",
   "config.field.north.mqtt.protocol_version": "MQTT protocol version",
+  "config.field.north.mqtt.tls_ca_file": "Broker CA file",
+  "config.field.north.mqtt.tls_insecure_skip_verify":
+    "Skip broker certificate verification",
   "config.field.north.mqtt.sub_devices_enabled":
     "One HA device per channel group",
   "config.field.north.matter.enabled": "Enable Matter bridge",
@@ -1627,6 +1630,10 @@ const EN: Catalog = {
     "Publish one retained document per device instead of one per entity. Your entities keep their IDs, history, areas and automations either way — Home Assistant keys them on the unique id, not on the topic. Switching this migrates every retained config on the broker, and switching it back migrates them again, so change it deliberately rather than in passing.",
   "config.help.north.mqtt.protocol_version":
     'MQTT wire dialect: "5" (default) or "3.1.1" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.',
+  "config.help.north.mqtt.tls_ca_file":
+    "Absolute path of a PEM CA bundle the broker certificate is verified against instead of the system roots — for a broker whose certificate a private CA issued. Requires a tls://, ssl:// or mqtts:// broker URL; a missing or unusable file is refused on save.",
+  "config.help.north.mqtt.tls_insecure_skip_verify":
+    "Dangerous: do not verify the broker certificate at all, so anyone on the network path can impersonate the broker and read the credentials. Requires a TLS broker URL, cannot be combined with the CA file, and is logged as a warning. Prefer the CA file.",
   "config.help.north.mqtt.sub_devices_enabled":
     "Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA.",
   "config.help.north.matter.enabled":
@@ -5615,6 +5622,9 @@ const DE: Catalog = {
   "config.field.north.mqtt.discovery_retract_unscoped":
     "Discovery-Configs von vor dem Topic-Base-Scope aufräumen",
   "config.field.north.mqtt.protocol_version": "MQTT-Protokollversion",
+  "config.field.north.mqtt.tls_ca_file": "CA-Datei des Brokers",
+  "config.field.north.mqtt.tls_insecure_skip_verify":
+    "Broker-Zertifikat nicht prüfen",
   "config.field.north.mqtt.sub_devices_enabled":
     "Ein HA-Gerät pro Kanal-Gruppe",
   "config.field.north.matter.enabled": "Matter-Bridge aktiv",
@@ -5845,6 +5855,10 @@ const DE: Catalog = {
     "Veröffentlicht ein retained Dokument pro Gerät statt eines pro Entity. Die Entities behalten so oder so ihre IDs, Historie, Bereiche und Automationen — Home Assistant schlüsselt sie auf der unique_id, nicht auf dem Topic. Das Umschalten migriert jede retained Config auf dem Broker, das Zurückschalten erneut; also bewusst ändern, nicht nebenbei.",
   "config.help.north.mqtt.protocol_version":
     'MQTT-Dialekt: "5" (Standard) oder "3.1.1" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.',
+  "config.help.north.mqtt.tls_ca_file":
+    "Absoluter Pfad eines PEM-CA-Bundles, gegen das das Broker-Zertifikat statt gegen die System-Zertifikate geprüft wird — für einen Broker mit Zertifikat einer privaten CA. Erfordert eine tls://-, ssl://- oder mqtts://-Broker-URL; eine fehlende oder unbrauchbare Datei wird beim Speichern abgelehnt.",
+  "config.help.north.mqtt.tls_insecure_skip_verify":
+    "Gefährlich: Das Broker-Zertifikat wird gar nicht geprüft, jeder auf dem Netzwerkpfad kann sich als Broker ausgeben und die Zugangsdaten mitlesen. Erfordert eine TLS-Broker-URL, ist nicht mit der CA-Datei kombinierbar und wird als Warnung protokolliert. Besser die CA-Datei verwenden.",
   "config.help.north.mqtt.sub_devices_enabled":
     "Multi-Channel-Group-Geräte als ein HA-Gerät pro Kanal-Gruppe rendern. Zeigt Parent + N Children in HA.",
   "config.help.north.matter.enabled":
