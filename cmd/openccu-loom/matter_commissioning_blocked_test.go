@@ -38,7 +38,7 @@ func TestMatterRuntimeShutsCommissioningOnABrokenAttestationChain(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	wiring, closers, teardown := wireMatterRuntime(
 		ctx, cfg, reg, openTestLoomDB(t), tracker, nil, nil, nil,
-		slog.New(slog.DiscardHandler), nil,
+		slog.New(slog.DiscardHandler), nil, nil,
 	)
 	t.Cleanup(func() {
 		cancel()

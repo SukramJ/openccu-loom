@@ -18,7 +18,7 @@ import (
 // the composition root fills, with the fields the daemon deliberately
 // leaves at their zero value.
 type compositionRootSeam struct {
-	pkg       string // the identifier as it is spelled at the fill site, so an import alias counts
+	pkg       string // the identifier as it is spelled at the fill site, so an import alias counts; "" for a type of the fill site's own package
 	typeName  string
 	declDir   string
 	fillFile  string
@@ -94,6 +94,16 @@ var compositionRootSeams = []compositionRootSeam{
 		},
 	},
 	{
+		// Listing a candidate builds its device, and a source keeps the
+		// device it built first: an adapter without the bridge's build
+		// options pins every thermostat to the surface without its opt-ins
+		// whenever the eligibility listing runs before the first assembly.
+		pkg: "", typeName: "matterCandidateProviderAdapter",
+		declDir:  "cmd/openccu-loom",
+		fillFile: "cmd/openccu-loom/daemon_matter.go",
+		minDecl:  3,
+	},
+	{
 		pkg: "handlers", typeName: "SetupService",
 		declDir:  "internal/north/rest/handlers",
 		fillFile: "cmd/openccu-loom/daemon_rest_mount.go",
@@ -131,7 +141,7 @@ func TestCompositionRootHandsOverEveryDeclaredField(t *testing.T) {
 
 	for _, seam := range compositionRootSeams {
 		t.Run(seam.pkg+"."+seam.typeName, func(t *testing.T) {
-			declared := declaredStructFields(t, filepath.Join(root, seam.declDir), seam.typeName)
+			declared := declaredStructFields(t, filepath.Join(root, seam.declDir), seam.typeName, seam.pkg == "")
 			if len(declared) < seam.minDecl {
 				t.Fatalf("read only %d fields from %s.%s in %s, expected at least %d — "+
 					"the parse is wrong, and a guard that reads too few fields passes by measuring nothing",
@@ -200,8 +210,10 @@ func TestCompositionRootHandsOverEveryDeclaredField(t *testing.T) {
 // declaredStructFields returns every field name the named struct declares
 // in the given package directory, flattening grouped declarations
 // (`A, B SomeType`) and skipping embedded fields, which have no name to
-// hand over.
-func declaredStructFields(t *testing.T, dir, typeName string) []string {
+// hand over. Only exported fields can be handed over from another
+// package; samePackage counts every field, for a type the fill site
+// declares itself.
+func declaredStructFields(t *testing.T, dir, typeName string, samePackage bool) []string {
 	t.Helper()
 
 	entries, err := os.ReadDir(dir)
@@ -231,7 +243,7 @@ func declaredStructFields(t *testing.T, dir, typeName string) []string {
 			}
 			for _, f := range st.Fields.List {
 				for _, nm := range f.Names {
-					if nm.IsExported() {
+					if samePackage || nm.IsExported() {
 						fields = append(fields, nm.Name)
 					}
 				}
@@ -263,11 +275,16 @@ func filledLiteralFields(t *testing.T, file, pkg, typeName string) (filled, nill
 		if !ok {
 			return true
 		}
-		sel, ok := cl.Type.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != typeName {
-			return true
-		}
-		if id, ok := sel.X.(*ast.Ident); !ok || id.Name != pkg {
+		switch typ := cl.Type.(type) {
+		case *ast.SelectorExpr:
+			if id, ok := typ.X.(*ast.Ident); !ok || pkg == "" || id.Name != pkg || typ.Sel.Name != typeName {
+				return true
+			}
+		case *ast.Ident:
+			if pkg != "" || typ.Name != typeName {
+				return true
+			}
+		default:
 			return true
 		}
 		for _, el := range cl.Elts {

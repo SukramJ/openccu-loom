@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // fakeClusterServer is a minimal [contract.ClusterServer] whose only
@@ -91,7 +92,7 @@ func (o *opaqueDP) DataPointKey() hmtypes.DataPointKey { return o.key }
 func TestCollectCandidates_NilDevice(t *testing.T) {
 	t.Parallel()
 	devices := []*device.Device{nil}
-	got := matteradapter.CollectCandidates("central1", devices, false)
+	got := matteradapter.CollectCandidates("central1", devices, false, interfaces.MatterBuildOptions{})
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for nil device, got %d", len(got))
 	}
@@ -101,7 +102,7 @@ func TestCollectCandidates_NilDevice(t *testing.T) {
 // returns an empty slice.
 func TestCollectCandidates_EmptyDeviceList(t *testing.T) {
 	t.Parallel()
-	got := matteradapter.CollectCandidates("central1", nil, false)
+	got := matteradapter.CollectCandidates("central1", nil, false, interfaces.MatterBuildOptions{})
 	if len(got) != 0 {
 		t.Errorf("expected 0, got %d", len(got))
 	}
@@ -115,7 +116,7 @@ func TestCollectCandidates_DeviceNoChannels(t *testing.T) {
 		Address: "A1:0",
 		Model:   "HmIP-TEST",
 	})
-	got := matteradapter.CollectCandidates("c1", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c1", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for device with no channels, got %d", len(got))
 	}
@@ -130,7 +131,7 @@ func TestCollectCandidates_DeviceWithEmptyChannel(t *testing.T) {
 		Model:   "HmIP-TEST",
 	})
 	d.AddChannel("A2:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	got := matteradapter.CollectCandidates("c2", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c2", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for empty channel, got %d", len(got))
 	}
@@ -154,7 +155,7 @@ func TestCollectCandidates_CustomDP_Mappable(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := matteradapter.CollectCandidates("central", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("central", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -186,7 +187,7 @@ func TestCollectCandidates_CalculatedDP_Mappable(t *testing.T) {
 	}
 	ch.AttachCalculatedDataPoint(dp)
 
-	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -210,7 +211,7 @@ func TestCollectCandidates_OpaqueDP_Skipped(t *testing.T) {
 		key: hmtypes.DataPointKey{Parameter: "OPAQUE"},
 	})
 
-	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 0 {
 		t.Fatalf("expected 0 candidates for opaque DP, got %d: %+v", len(got), got)
 	}
@@ -255,7 +256,7 @@ func TestCollectCandidates_NameDPKey(t *testing.T) {
 	dp := &namedDP{name: "my-light", devType: 0x0100, cluster: 0x0006}
 	ch.SetCustomDataPoint(dp)
 
-	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -275,7 +276,7 @@ func TestCollectCandidates_UnknownDPKey(t *testing.T) {
 	dp := &unknownDP{devType: 0x0100, cluster: 0x0006}
 	ch.SetCustomDataPoint(dp)
 
-	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -306,7 +307,7 @@ func TestCollectCandidates_GenericDP_Mappable(t *testing.T) {
 	}
 	ch.Put(dp) // adds to VALUES paramset → DataPoints()
 
-	got := matteradapter.CollectCandidates("central", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("central", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate for generic DP, got %d", len(got))
 	}
@@ -324,7 +325,7 @@ func TestCollectCandidates_NilChannel(t *testing.T) {
 	// device.New doesn't expose a way to inject a nil channel directly;
 	// use a device with no channels (already covered) and verify no panic.
 	d := device.New(device.Config{Address: "I1:0"})
-	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates, got %d", len(got))
 	}
@@ -346,7 +347,7 @@ func TestCollectCandidates_DisplayNameFallbackToAddress(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}

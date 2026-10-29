@@ -94,7 +94,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}

@@ -33,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // matterTCPConfig maps config.NorthMatter.TCP onto the bridge's TCP
@@ -104,6 +105,10 @@ type matterBridgeBundle struct {
 	sync      func(context.Context) error
 	retire    func(ctx context.Context, centralName string) error
 	forget    func(centralName, address string)
+	// build is what every device source builds its Matter device under;
+	// the assembler and the eligibility listing take the same value,
+	// since a source keeps the device it built first.
+	build interfaces.MatterBuildOptions
 	// events is go-fabric-ui's event source: the daemon publishes its own
 	// reassemblies into it, and the handler's SSE stream and the WebSocket
 	// bridge (wireMatterNodeEvents) read from it. The node's fabric and
@@ -269,7 +274,7 @@ func matterAttestation(mc config.NorthMatter, logger *slog.Logger) node.Attestat
 // leaves the handle untouched for the caller to keep using. The facade is
 // handed the two stores, never the handle ([node.Store.DB] would apply
 // go-fabric's schema; the daemon carries it in its own migrations).
-func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger) *matterBridgeBundle { //nolint:funlen // composition/wiring: long sequential setup
+func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, schedules interfaces.ClimateScheduleWriter) *matterBridgeBundle { //nolint:funlen // composition/wiring: long sequential setup
 	if cfg == nil || !cfg.North.Matter.Enabled {
 		return nil
 	}
@@ -391,11 +396,18 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// deleted is forgotten through the endpoint store, which finds its
 	// stored keys by address. Group membership, scene tables and
 	// commissioner-written NodeLabels are the node's own state there.
+	// A thermostat's week programs reach the CCU through the schedules
+	// domain the REST schedule editor writes through.
+	matterBuild := interfaces.MatterBuildOptions{
+		ThermostatSchedules: mc.ThermostatSchedules,
+		ClimateSchedules:    schedules,
+	}
 	assembler := matteradapter.New(matteradapter.Config{
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
 		IncludeMeasurements:     mc.IncludeMeasurements,
 		Labels:                  labels,
 		ChannelLabel:            channelLabel,
+		Build:                   matterBuild,
 	}, logger)
 	reconciler := matteradapter.NewReconciler(n.Aggregator(), assembler, identity, logger)
 	syncModel := func(ctx context.Context) error { return reconciler.Sync(ctx, walk(ctx)) }
@@ -491,6 +503,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		sync:                    syncModel,
 		retire:                  reconciler.Retire,
 		forget:                  reconciler.QueueForget,
+		build:                   matterBuild,
 		events:                  uiEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
@@ -815,9 +828,9 @@ func newMatterCentralHook(
 // itself — the commissioning window with its fail-safe, verifier installer
 // and CM=2 announcement, the PartsList providers, the StartUp / BootReason
 // events, the fabric fan-out — is not repeated here (ADR 0084 phase 3).
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub, schedules interfaces.ClimateScheduleWriter) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
-	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger)
+	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger, schedules)
 	if bundle == nil {
 		return wiring, closers, teardown
 	}
@@ -906,7 +919,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// while it is open. A broken attestation chain refuses every window
 	// through the facade (node.ErrCommissioningBlocked), as it refuses a
 	// commissioner's AdministratorCommissioning.
-	candidates := &matterCandidateProviderAdapter{reg: reg, cfg: cfg}
+	candidates := &matterCandidateProviderAdapter{reg: reg, cfg: cfg, build: bundle.build}
 	wiring.nodeUI = fabricui.Options{
 		Node: bundle.node,
 		Exposure: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{

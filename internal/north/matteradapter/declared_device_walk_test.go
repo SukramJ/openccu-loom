@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // genericSwitchDevice returns a device whose one channel carries a generic
@@ -48,11 +49,11 @@ func genericSwitchDevice(addr string, p hmenum.Parameter) *device.Device {
 // nothing of it could be exposed, so no row names a reason.
 func TestCandidatesOfAGenericSwitch(t *testing.T) {
 	t.Parallel()
-	state := matteradapter.CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000201", hmenum.ParameterState)}, false)
+	state := matteradapter.CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000201", hmenum.ParameterState)}, false, interfaces.MatterBuildOptions{})
 	if len(state) != 1 || state[0].Verdict.State != eligibility.StateMappable || state[0].Verdict.DeviceType != 0x010A {
 		t.Fatalf("STATE candidates = %+v, want one mappable OnOffPlugInUnit row", state)
 	}
-	if other := matteradapter.CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000202", hmenum.ParameterOnTime)}, false); len(other) != 0 {
+	if other := matteradapter.CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000202", hmenum.ParameterOnTime)}, false, interfaces.MatterBuildOptions{}); len(other) != 0 {
 		t.Fatalf("ON_TIME candidates = %+v, want none: a switch on a parameter other than STATE projects no device", other)
 	}
 }

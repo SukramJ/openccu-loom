@@ -34,7 +34,7 @@ func windowBundle(t *testing.T, central string, mutate func(*config.Config)) (*m
 	reg := buildTestRegistry(t, central)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}

@@ -957,6 +957,19 @@ type NorthMatter struct {
 	// carry derived sensors regardless of this flag.
 	IncludeMeasurements bool `yaml:"include_measurements" json:"include_measurements" cfg:"expert"`
 
+	// ThermostatSchedules serves three more things on every bridged
+	// thermostat: whether it heats right now (ThermostatRunningState),
+	// whether it follows its week program (TemperatureSetpointHold: Off is
+	// HM AUTO, On is MANU) and the week programs themselves
+	// (MatterScheduleConfiguration — read, switched and written).
+	//
+	// Off by default until Apple Home and Google Home are verified with
+	// it: Apple has aborted a pairing over an endpoint that announced a
+	// cluster it did not know, and how either ecosystem takes the
+	// schedule feature is unmeasured. Off leaves the thermostat surface
+	// exactly as it was.
+	ThermostatSchedules bool `yaml:"thermostat_schedules" json:"thermostat_schedules" cfg:"expert"`
+
 	// VendorID is the bridge's IANA-assigned vendor identifier.
 	// Defaults to 0xFFF1 (the test/development vendor block) when unset
 	// — never ship that value in production.

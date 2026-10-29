@@ -186,7 +186,7 @@ func TestMatterStatusReaderAdapter_WindowNonNil_SetsWindowOpenFalse(t *testing.T
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -228,7 +228,7 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -279,7 +279,7 @@ func TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration(t *testin
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}

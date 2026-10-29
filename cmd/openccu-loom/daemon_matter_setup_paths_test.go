@@ -49,7 +49,7 @@ func TestStartMatterBridge_DevRotateUniqueIDs_DoesNotPanic(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -74,7 +74,7 @@ func TestStartMatterBridge_ConcurrentPairings_Armed(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -100,7 +100,7 @@ func TestStartMatterBridge_NilDB_ReturnsNil(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle != nil {
 		bundle.stop()
 		t.Error("expected nil bundle when the shared db handle is nil")
@@ -111,7 +111,7 @@ func TestStartMatterBridge_NilDB_ReturnsNil(t *testing.T) {
 
 func TestStartMatterBridge_NilCfg_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	bundle := startMatterBridge(context.Background(), nil, nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(context.Background(), nil, nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle != nil {
 		t.Error("expected nil for nil cfg")
 	}
@@ -121,7 +121,7 @@ func TestStartMatterBridge_Disabled_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = false
-	bundle := startMatterBridge(context.Background(), cfg, nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(context.Background(), cfg, nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle != nil {
 		t.Error("expected nil when matter disabled")
 	}
@@ -146,7 +146,7 @@ func TestStartMatterBridge_EphemeralWindow_ConcurrentPairings(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -172,7 +172,7 @@ func TestStartMatterBridge_EphemeralWindow_Singleton(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -200,7 +200,7 @@ func TestStartMatterBridge_EmptyDataDir_StillStartsWithSharedDB(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle — DataDir is no longer consulted by startMatterBridge")
 	}

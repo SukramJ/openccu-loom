@@ -29,7 +29,7 @@ func TestMatterStatusAdapter_WithLiveBridge_Enabled(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping live bridge test")
 	}
@@ -81,7 +81,7 @@ func TestMatterStatusAdapter_WithStore_EmptyFabrics(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping store test")
 	}

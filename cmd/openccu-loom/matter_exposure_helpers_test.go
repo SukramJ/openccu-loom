@@ -18,13 +18,16 @@ import (
 // enables devices through the exposure endpoints. The allowlist gates the
 // first assembly (startMatterBridge wires the checker before the node
 // starts), so a pin that needs bridged endpoints enables them first.
+// Listing a candidate builds its device, and a source keeps the device it
+// built first, so the listing takes the bridge's build options as the
+// daemon's own eligibility listing does.
 func exposeEveryCandidate(ctx context.Context, t *testing.T, bundle *matterBridgeBundle, reg *central.Registry) {
 	t.Helper()
 	for _, u := range reg.List() {
 		if u == nil || u.ModelRegistry == nil {
 			continue
 		}
-		candidates := matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), true)
+		candidates := matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), true, bundle.build)
 		for i := range candidates {
 			key := candidates[i].Key
 			if err := bundle.identity.UpsertExposure(ctx, matterendpoint.ExposureRecord{Key: key, Enabled: true, Actor: "test"}); err != nil {
