@@ -37,9 +37,10 @@ var reSetActiveScheduleStatus = regexp.MustCompile(`Received Command Response St
 func TestThermostatSchedules_FlagOn(t *testing.T) {
 	chipBin := harness.RequireChipTool(t)
 	b := harness.Start(t, chipBin, harness.Options{
-		CASEEnabled:         true,
-		ThermostatSchedules: true,
-		Devices:             []string{"HmIP-BWTH"},
+		CASEEnabled:                   true,
+		ThermostatHoldAndRunningState: true,
+		ThermostatSchedules:           true,
+		Devices:                       []string{"HmIP-BWTH"},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()

@@ -117,9 +117,14 @@ type Options struct {
 	// a custom entity's secondary actor channels and its group-STATE channel.
 	ExposeSecondaryChannels bool
 
+	// ThermostatHoldAndRunningState surfaces the
+	// `north.matter.thermostat_hold_and_running_state` expert knob: a
+	// thermostat's running state and setpoint hold.
+	ThermostatHoldAndRunningState bool
+
 	// ThermostatSchedules surfaces the `north.matter.thermostat_schedules`
-	// expert knob: a thermostat's running state, setpoint hold and week
-	// programs (MatterScheduleConfiguration).
+	// expert knob: a thermostat's week programs
+	// (MatterScheduleConfiguration).
 	ThermostatSchedules bool
 
 	// StartupDeadline overrides the default 30 s wait for the
@@ -211,23 +216,24 @@ func startCommon(b *Bridge, opts Options) (*Bridge, func(), error) {
 	b.cfgPath = filepath.Join(b.dataDir, "config.yaml")
 
 	cfgYAML := buildChipToolConfigYAML(chipToolConfigInputs{
-		DataDir:                 b.dataDir,
-		RESTListen:              fmt.Sprintf(":%d", restPort),
-		CallbackPort:            b.callbackPort,
-		BinPort:                 b.binPort,
-		MatterListen:            b.matterAddr,
-		MatterMDNS:              mdns,
-		MatterPasscode:          ChipDefaultPasscode,
-		MatterDiscriminator:     ChipDefaultDiscriminator,
-		CASEEnabled:             opts.CASEEnabled,
-		BridgeNodeID:            BridgeNodeID,
-		BridgeFabricID:          BridgeFabricID,
-		DevRotateUniqueIDs:      opts.DevRotateUniqueIDs,
-		ExposeSecondaryChannels: opts.ExposeSecondaryChannels,
-		ThermostatSchedules:     opts.ThermostatSchedules,
-		CCUHost:                 "127.0.0.1",
-		CCUXMLRPC:               b.CCU.XMLRPCPort(),
-		CCUJSONRPC:              b.CCU.JSONRPCPort(),
+		DataDir:                       b.dataDir,
+		RESTListen:                    fmt.Sprintf(":%d", restPort),
+		CallbackPort:                  b.callbackPort,
+		BinPort:                       b.binPort,
+		MatterListen:                  b.matterAddr,
+		MatterMDNS:                    mdns,
+		MatterPasscode:                ChipDefaultPasscode,
+		MatterDiscriminator:           ChipDefaultDiscriminator,
+		CASEEnabled:                   opts.CASEEnabled,
+		BridgeNodeID:                  BridgeNodeID,
+		BridgeFabricID:                BridgeFabricID,
+		DevRotateUniqueIDs:            opts.DevRotateUniqueIDs,
+		ExposeSecondaryChannels:       opts.ExposeSecondaryChannels,
+		ThermostatHoldAndRunningState: opts.ThermostatHoldAndRunningState,
+		ThermostatSchedules:           opts.ThermostatSchedules,
+		CCUHost:                       "127.0.0.1",
+		CCUXMLRPC:                     b.CCU.XMLRPCPort(),
+		CCUJSONRPC:                    b.CCU.JSONRPCPort(),
 	})
 	if err := os.WriteFile(b.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		rollback()
@@ -672,23 +678,24 @@ func (b *Bridge) waitForMatterListening(deadline time.Duration) error {
 // chipToolConfigInputs collects every value the chiptool harness
 // needs to write a complete daemon config.
 type chipToolConfigInputs struct {
-	DataDir                 string
-	RESTListen              string
-	CallbackPort            int
-	BinPort                 int
-	MatterListen            string
-	MatterMDNS              string
-	MatterPasscode          uint32
-	MatterDiscriminator     uint16
-	CASEEnabled             bool
-	BridgeNodeID            uint64
-	BridgeFabricID          uint64
-	DevRotateUniqueIDs      bool
-	ExposeSecondaryChannels bool
-	ThermostatSchedules     bool
-	CCUHost                 string
-	CCUXMLRPC               int
-	CCUJSONRPC              int
+	DataDir                       string
+	RESTListen                    string
+	CallbackPort                  int
+	BinPort                       int
+	MatterListen                  string
+	MatterMDNS                    string
+	MatterPasscode                uint32
+	MatterDiscriminator           uint16
+	CASEEnabled                   bool
+	BridgeNodeID                  uint64
+	BridgeFabricID                uint64
+	DevRotateUniqueIDs            bool
+	ExposeSecondaryChannels       bool
+	ThermostatHoldAndRunningState bool
+	ThermostatSchedules           bool
+	CCUHost                       string
+	CCUXMLRPC                     int
+	CCUJSONRPC                    int
 }
 
 // buildChipToolConfigYAML returns a complete openccu-loom config
@@ -764,7 +771,8 @@ func buildChipToolConfigYAML(in chipToolConfigInputs) string {
 	fmt.Fprintf(&b, "      fabric_id: %d\n", caseFabric)
 	fmt.Fprintf(&b, "    dev_rotate_unique_ids: %s\n", rotate)
 	fmt.Fprintf(&b, "    expose_secondary_channels: %s\n", exposeSecondary)
-	fmt.Fprintf(&b, "    thermostat_schedules: %t\n", in.ThermostatSchedules)
+	fmt.Fprintf(&b, "    thermostat_hold_and_running_state: %t\n    thermostat_schedules: %t\n",
+		in.ThermostatHoldAndRunningState, in.ThermostatSchedules)
 
 	fmt.Fprintf(&b, "centrals:\n")
 	fmt.Fprintf(&b, "  - name: ccu-chiptool\n")

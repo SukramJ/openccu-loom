@@ -34,7 +34,8 @@ func TestThermostatScheduleWriterIsTheSchedulesDomain(t *testing.T) {
 	matter := collapseSpaces(readMatterComposition(t))
 	for _, want := range []struct{ what, expr string }{
 		{"the runtime's writer to the bridge", "bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger, schedules)"},
-		{"the flag to the build options", "ThermostatSchedules: mc.ThermostatSchedules,"},
+		{"the hold flag to the build options", "ThermostatHoldAndRunningState: mc.ThermostatHoldAndRunningState,"},
+		{"the schedules flag to the build options", "ThermostatSchedules: mc.ThermostatSchedules,"},
 		{"the writer to the build options", "ClimateSchedules: schedules,"},
 		{"the build options to the assembler", "Build: matterBuild,"},
 	} {

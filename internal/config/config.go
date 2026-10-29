@@ -957,17 +957,30 @@ type NorthMatter struct {
 	// carry derived sensors regardless of this flag.
 	IncludeMeasurements bool `yaml:"include_measurements" json:"include_measurements" cfg:"expert"`
 
-	// ThermostatSchedules serves three more things on every bridged
-	// thermostat: whether it heats right now (ThermostatRunningState),
-	// whether it follows its week program (TemperatureSetpointHold: Off is
-	// HM AUTO, On is MANU) and the week programs themselves
-	// (MatterScheduleConfiguration — read, switched and written).
+	// ThermostatHoldAndRunningState serves two more attributes on every
+	// bridged thermostat: whether it heats right now
+	// (ThermostatRunningState) and whether it follows its week program
+	// (TemperatureSetpointHold: Off is HM AUTO, On is MANU), two optional
+	// attributes of the Thermostat cluster.
 	//
 	// Off by default until Apple Home and Google Home are verified with
-	// it: Apple has aborted a pairing over an endpoint that announced a
-	// cluster it did not know, and how either ecosystem takes the
-	// schedule feature is unmeasured. Off leaves the thermostat surface
-	// exactly as it was.
+	// it. Off leaves the thermostat surface exactly as it was.
+	// Switching it — on or off — changes the thermostat's surface, and
+	// Apple Home has been observed to need the bridge paired again after
+	// such a change. It is kept apart from ThermostatSchedules so each can
+	// be tried alone.
+	ThermostatHoldAndRunningState bool `yaml:"thermostat_hold_and_running_state" json:"thermostat_hold_and_running_state" cfg:"expert"`
+
+	// ThermostatSchedules serves a thermostat's week programs as the
+	// MatterScheduleConfiguration feature: read, switched and written.
+	// matter.js models the feature but does not implement it.
+	//
+	// Off by default. Off leaves the thermostat surface exactly as it was.
+	// Switching it — on or off — changes the thermostat's surface, and
+	// Apple Home has been observed to need the bridge paired again after
+	// such a change. With both this and ThermostatHoldAndRunningState on
+	// (one switch then), an Apple Home pairing failed outright; which part
+	// Apple refuses is not measured.
 	ThermostatSchedules bool `yaml:"thermostat_schedules" json:"thermostat_schedules" cfg:"expert"`
 
 	// VendorID is the bridge's IANA-assigned vendor identifier.

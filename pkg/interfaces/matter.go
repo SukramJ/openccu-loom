@@ -48,9 +48,13 @@ type MatterDeviceSource interface {
 // passes the same options; the zero value is the surface without any
 // opt-in.
 type MatterBuildOptions struct {
-	// ThermostatSchedules serves a thermostat's running state, its
-	// setpoint hold and its week programs (MatterScheduleConfiguration).
-	// Mirrors config.NorthMatter.ThermostatSchedules.
+	// ThermostatHoldAndRunningState serves a thermostat's running state
+	// and its setpoint hold. Mirrors
+	// config.NorthMatter.ThermostatHoldAndRunningState.
+	ThermostatHoldAndRunningState bool
+	// ThermostatSchedules serves a thermostat's week programs
+	// (MatterScheduleConfiguration). Mirrors
+	// config.NorthMatter.ThermostatSchedules.
 	ThermostatSchedules bool
 	// ClimateSchedules writes a week program a controller committed; nil
 	// refuses every commit.

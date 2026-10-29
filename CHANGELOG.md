@@ -6,8 +6,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.95.0] - 2026-10-29
+
+### Release summary
+
+**The thermostat opt-in of 0.94.0 is two switches.** With it on, Apple Home loaded no data and refused a new pairing; the heating state and hold now have their own switch, apart from the week programs, so each can be tried alone. Both stay off by default. REST API 15.0.0 is breaking for generated clients only: the WebSocket envelope's `kind` is the named schema `WsEnvelopeKind`, and the JSON is unchanged.
+
 ### Changed
 
+- **Matter: the thermostat opt-in is two switches.** With
+  `north.matter.thermostat_schedules` on, Apple Home loaded no data and
+  refused a new pairing, and switching it off again needed the bridge paired
+  anew. `north.matter.thermostat_schedules` now serves the week programs
+  (MatterScheduleConfiguration) alone; the new
+  `north.matter.thermostat_hold_and_running_state` serves the heating state
+  and the setpoint hold. Both stay off by default, and both help texts warn
+  that switching them can make Apple Home need the bridge paired again. A
+  configuration that had `thermostat_schedules` on keeps the week programs
+  and loses the hold and running state until the new switch is set.
 - **REST API 15.0.0 (breaking for generated clients only).** The WebSocket
   envelope's `kind` (`initial` / `change` / `refresh`) is the named schema
   `WsEnvelopeKind` instead of an inline enum. The JSON is unchanged. A

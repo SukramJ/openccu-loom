@@ -198,9 +198,10 @@ func (c *Climate) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device,
 
 // MatterDeviceWith implements [interfaces.MatterConfiguredDeviceSource]:
 // [Climate.MatterDevice] under the bridge's build options. With
-// ThermostatSchedules the Thermostat also serves the running state, the
-// setpoint hold and the week programs (matter_schedule.go); without it the
-// surface is the one [Climate.MatterDevice] describes.
+// ThermostatHoldAndRunningState the Thermostat also serves the running
+// state and the setpoint hold, with ThermostatSchedules the week programs
+// (matter_schedule.go); without either the surface is the one
+// [Climate.MatterDevice] describes.
 func (c *Climate) MatterDeviceWith(opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
 	return c.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		var initial thermostatspec.Patch
