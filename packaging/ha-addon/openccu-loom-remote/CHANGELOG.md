@@ -4,7 +4,7 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
-# 0.94.1
+# 0.95.0
 
 - **Thermostat options split in two (Matter).** With the 0.94.0 option
   `north.matter.thermostat_schedules` on, Apple Home loaded no data and a
@@ -14,6 +14,9 @@ top-level CHANGELOG.md. Newest version first.
   default. Switching either can make Apple Home need the bridge paired
   again. If you had `thermostat_schedules` on and Apple Home stopped
   working: switch it off, restart, and pair the bridge again.
+- **API clients:** REST API 15.0.0. The WebSocket envelope's `kind` is now
+  a named type (`WsEnvelopeKind`); the JSON on the wire is unchanged. Only
+  generated clients that imported the old numbered type need an update.
 
 # 0.94.0
 
