@@ -336,6 +336,14 @@ func matterEndpointRestartRules() []RestartRule {
 			},
 		},
 		{
+			// A thermostat builds its Matter device once, with the
+			// attributes this selects, and keeps it for as long as it lives.
+			Path: "north.matter.thermostat_hold_and_running_state",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.ThermostatHoldAndRunningState != e.North.Matter.ThermostatHoldAndRunningState
+			},
+		},
+		{
 			// A thermostat builds its Matter device once, with the feature
 			// set this selects, and keeps it for as long as it lives.
 			Path: "north.matter.thermostat_schedules",

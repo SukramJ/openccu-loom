@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Matter: the thermostat opt-in is two switches.** With
+  `north.matter.thermostat_schedules` on, Apple Home loaded no data and
+  refused a new pairing, and switching it off again needed the bridge paired
+  anew. `north.matter.thermostat_schedules` now serves the week programs
+  (MatterScheduleConfiguration) alone; the new
+  `north.matter.thermostat_hold_and_running_state` serves the heating state
+  and the setpoint hold. Both stay off by default, and both help texts warn
+  that switching them can make Apple Home need the bridge paired again. A
+  configuration that had `thermostat_schedules` on keeps the week programs
+  and loses the hold and running state until the new switch is set.
+
 ## [0.94.0] - 2026-10-29
 
 ### Release summary

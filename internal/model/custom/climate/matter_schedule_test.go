@@ -115,7 +115,40 @@ func buildWith(t *testing.T, c *Climate, build interfaces.MatterBuildOptions) *t
 	return srv
 }
 
-var schedulesOn = interfaces.MatterBuildOptions{ThermostatSchedules: true}
+var schedulesOn = interfaces.MatterBuildOptions{ThermostatHoldAndRunningState: true, ThermostatSchedules: true}
+
+// TestMatterHoldAndRunningStateAloneServeNoSchedules pins the split: the
+// hold flag serves the hold and the running state and leaves MSCH off.
+func TestMatterHoldAndRunningStateAloneServeNoSchedules(t *testing.T) {
+	r, _, _ := scheduleRig(t, &climateLoader{sched: twoProgramSchedule()}, true)
+	srv := buildWith(t, r.climate, interfaces.MatterBuildOptions{ThermostatHoldAndRunningState: true})
+	for _, attr := range []uint32{thermostatspec.AttrTemperatureSetpointHold, thermostatspec.AttrThermostatRunningState} {
+		if !slices.Contains(srv.MatterAttributes(), attr) {
+			t.Errorf("attribute 0x%04X not served with the hold flag", attr)
+		}
+	}
+	if slices.Contains(srv.MatterAttributes(), thermostatspec.AttrSchedules) {
+		t.Error("Schedules served with the hold flag alone")
+	}
+	if fm := readFeatureMap(t, srv); fm&uint32(thermostatspec.FeatureMatterScheduleConfiguration) != 0 {
+		t.Errorf("FeatureMap 0x%X carries MSCH with the hold flag alone", fm)
+	}
+}
+
+// TestMatterSchedulesAloneServeNoHold pins the other half: the schedules
+// flag serves MSCH and neither the hold nor the running state.
+func TestMatterSchedulesAloneServeNoHold(t *testing.T) {
+	r, _, _ := scheduleRig(t, &climateLoader{sched: twoProgramSchedule()}, true)
+	srv := buildWith(t, r.climate, interfaces.MatterBuildOptions{ThermostatSchedules: true})
+	if fm := readFeatureMap(t, srv); fm&uint32(thermostatspec.FeatureMatterScheduleConfiguration) == 0 {
+		t.Errorf("FeatureMap 0x%X lacks MSCH with the schedules flag", fm)
+	}
+	for _, attr := range []uint32{thermostatspec.AttrTemperatureSetpointHold, thermostatspec.AttrThermostatRunningState} {
+		if slices.Contains(srv.MatterAttributes(), attr) {
+			t.Errorf("attribute 0x%04X served with the schedules flag alone", attr)
+		}
+	}
+}
 
 // TestMatterThermostatSchedulesOffServesNoneOfIt pins the opt-in: built
 // without it, the Thermostat serves neither the hold, nor the running

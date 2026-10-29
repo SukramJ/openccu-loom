@@ -22,9 +22,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// The opt-in thermostat surface (north.matter.thermostat_schedules):
-// ThermostatRunningState, TemperatureSetpointHold and the
-// MatterScheduleConfiguration feature, served on go-fabric's Thermostat
+// The opt-in thermostat surface: ThermostatRunningState and
+// TemperatureSetpointHold (north.matter.thermostat_hold_and_running_state)
+// and the MatterScheduleConfiguration feature
+// (north.matter.thermostat_schedules), served on go-fabric's Thermostat
 // server (cluster/thermo). matter.js models MSCH but does not implement it
 // (packages/node/src/behaviors/thermostat/ThermostatServer.ts:82 at
 // 862ad75f); go-fabric's server follows connectedhomeip's
@@ -84,14 +85,15 @@ var matterWeekdays = [7]struct {
 // climate week profile with at least one program.
 func (c *Climate) matterExtrasFor(build interfaces.MatterBuildOptions) *matterExtras {
 	x := &matterExtras{}
-	if !build.ThermostatSchedules {
-		return x
+	if build.ThermostatHoldAndRunningState {
+		x.hold = c.Capabilities.SupportsAuto
+		x.running = c.HasActivitySource()
 	}
-	x.hold = c.Capabilities.SupportsAuto
-	x.running = c.HasActivitySource()
-	if wp := c.climateWeekProfile(); wp != nil {
-		x.schedules = true
-		x.writer = build.ClimateSchedules
+	if build.ThermostatSchedules {
+		if wp := c.climateWeekProfile(); wp != nil {
+			x.schedules = true
+			x.writer = build.ClimateSchedules
+		}
 	}
 	return x
 }

@@ -1290,7 +1290,9 @@ the re-learn named in the changelog; decided per type, not for the fleet.
 ### BD-Matter-Thermostat-HoldAsAuto — HM AUTO is TemperatureSetpointHold Off, a week program is a built-in schedule
 
 **Where:** `internal/model/custom/climate/matter_schedule.go`, behind
-`north.matter.thermostat_schedules` (default off).
+two switches, both default off: `north.matter.thermostat_hold_and_running_state`
+(TemperatureSetpointHold and ThermostatRunningState) and
+`north.matter.thermostat_schedules` (MatterScheduleConfiguration).
 
 **Mapping:** TemperatureSetpointHold Off is HM AUTO (follow the week
 program), On every other mode; a hold write becomes `Climate.SetMode` AUTO
@@ -1321,7 +1323,13 @@ it (`packages/node/src/behaviors/thermostat/ThermostatServer.ts:82` at
 grid and setpoints off 0.5 °C (loom's own write path does not round —
 the profile reload after the write shows what the CCU stored), and what
 Apple Home and Google Home show for the hold and the schedules — the
-reason for the default-off flag.
+reason for the default-off switches.
+
+**Measured with Apple Home (owner, 0.94.0, one switch for all three
+parts):** switched on later, Apple Home loaded no data, and a new pairing
+failed. Switching it off and restarting was not enough: only pairing the
+bridge again brought Apple Home back. Which part Apple refuses is not
+measured; the switch was split so each half can be tried alone.
 
 ### BD-Matter-LevelControl-NativeRamp — the light's LevelControl runs on go-fabric's hand-off path, the dimmer ramps itself
 

@@ -21,10 +21,13 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -78,9 +81,10 @@ func flatClimateSchedule() *schedule.Climate {
 
 // bootThermostatBridge starts the daemon's Matter bridge over one HmIP
 // thermostat whose channel carries a loaded two-program week profile,
-// with north.matter.thermostat_schedules set to schedules, and exposes it.
-// It returns the bundle and the thermostat's endpoint.
-func bootThermostatBridge(t *testing.T, schedules bool, writer *recordingScheduleWriter) (context.Context, *matterBridgeBundle, uint16) {
+// with north.matter.thermostat_hold_and_running_state set to hold and
+// north.matter.thermostat_schedules to schedules, and exposes it. It
+// returns the bundle and the thermostat's endpoint.
+func bootThermostatBridge(t *testing.T, hold, schedules bool, writer *recordingScheduleWriter) (context.Context, *matterBridgeBundle, uint16) {
 	t.Helper()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
@@ -91,6 +95,7 @@ func bootThermostatBridge(t *testing.T, schedules bool, writer *recordingSchedul
 	cfg.North.Matter.CASE.NodeID = thermoSchedDeviceNode
 	cfg.North.Matter.CASE.FabricID = thermoSchedFabricID
 	cfg.North.Matter.Discriminator = thermoSchedDiscrim
+	cfg.North.Matter.ThermostatHoldAndRunningState = hold
 	cfg.North.Matter.ThermostatSchedules = schedules
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}}}}
@@ -105,6 +110,12 @@ func bootThermostatBridge(t *testing.T, schedules bool, writer *recordingSchedul
 	}
 	dev := device.New(device.Config{Address: "BWTH0001", Name: "Wandthermostat"})
 	ch := dev.AddChannel("BWTH0001:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	// LEVEL is the activity source a valve thermostat carries; without one
+	// the climate serves no running state.
+	ch.Put(generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: "BWTH0001:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterLevel)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	}))
 	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
 		ChannelAddress: "BWTH0001:1", ScheduleType: weekprofile.ScheduleTypeClimate,
 		MinTemp: 5, MaxTemp: 30, ProfileCount: 2,
@@ -155,26 +166,36 @@ func readThermostat(ctx context.Context, bundle *matterBridgeBundle, ep uint16, 
 	return res[0].Status, res[0].Value.Value
 }
 
-// TestMatterThermostatSchedulesFollowTheConfigFlag pins
+// TestMatterThermostatSchedulesFollowTheConfigFlags pins
+// north.matter.thermostat_hold_and_running_state and
 // north.matter.thermostat_schedules through the daemon's Matter start path,
-// one case per value: off serves the thermostat as before — no MSCH bit, no
-// hold, no schedules — and on serves all three.
-func TestMatterThermostatSchedulesFollowTheConfigFlag(t *testing.T) {
-	for _, on := range []bool{false, true} {
-		t.Run(fmt.Sprintf("thermostat_schedules=%v", on), func(t *testing.T) {
-			ctx, bundle, ep := bootThermostatBridge(t, on, nil)
+// one case per value of each: both off serve the thermostat as before; the
+// hold flag alone serves the hold and the running state and no MSCH; the
+// schedules flag alone serves MSCH and no hold. Each half is tried with
+// Apple Home on its own, so neither may pull the other in.
+func TestMatterThermostatSchedulesFollowTheConfigFlags(t *testing.T) {
+	for _, tc := range []struct{ hold, schedules bool }{{false, false}, {true, false}, {false, true}} {
+		t.Run(fmt.Sprintf("hold=%v,schedules=%v", tc.hold, tc.schedules), func(t *testing.T) {
+			ctx, bundle, ep := bootThermostatBridge(t, tc.hold, tc.schedules, nil)
 			st, fm := readThermostat(ctx, bundle, ep, 0xFFFC)
 			if st != im.StatusSuccess {
 				t.Fatalf("FeatureMap read = %v", st)
 			}
 			msch := toUint32(fm)&uint32(thermostatspec.FeatureMatterScheduleConfiguration) != 0
-			if msch != on {
-				t.Errorf("FeatureMap 0x%X: MSCH = %v, want %v", toUint32(fm), msch, on)
+			if msch != tc.schedules {
+				t.Errorf("FeatureMap 0x%X: MSCH = %v, want %v", toUint32(fm), msch, tc.schedules)
 			}
-			for _, attr := range []uint32{thermostatspec.AttrTemperatureSetpointHold, thermostatspec.AttrSchedules} {
-				st, _ := readThermostat(ctx, bundle, ep, attr)
-				if served := st == im.StatusSuccess; served != on {
-					t.Errorf("attribute 0x%04X read %v, want served = %v", attr, st, on)
+			for _, a := range []struct {
+				attr uint32
+				want bool
+			}{
+				{thermostatspec.AttrTemperatureSetpointHold, tc.hold},
+				{thermostatspec.AttrThermostatRunningState, tc.hold},
+				{thermostatspec.AttrSchedules, tc.schedules},
+			} {
+				st, _ := readThermostat(ctx, bundle, ep, a.attr)
+				if served := st == im.StatusSuccess; served != a.want {
+					t.Errorf("attribute 0x%04X read %v, want served = %v", a.attr, st, a.want)
 				}
 			}
 		})
@@ -193,7 +214,7 @@ func toUint32(v any) uint32 {
 // was handed, with the changed program only.
 func TestMatterThermostatScheduleCommitReachesTheWriter(t *testing.T) {
 	writer := &recordingScheduleWriter{}
-	ctx, bundle, ep := bootThermostatBridge(t, true, writer)
+	ctx, bundle, ep := bootThermostatBridge(t, false, true, writer)
 
 	cmr := bridgetest.Dial(t, bundle.node.Bridge().LocalAddr(), bridgetest.Options{
 		Passcode: thermoSchedPasscode, Discriminator: thermoSchedDiscrim,

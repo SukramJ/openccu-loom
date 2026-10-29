@@ -399,8 +399,9 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// A thermostat's week programs reach the CCU through the schedules
 	// domain the REST schedule editor writes through.
 	matterBuild := interfaces.MatterBuildOptions{
-		ThermostatSchedules: mc.ThermostatSchedules,
-		ClimateSchedules:    schedules,
+		ThermostatHoldAndRunningState: mc.ThermostatHoldAndRunningState,
+		ThermostatSchedules:           mc.ThermostatSchedules,
+		ClimateSchedules:              schedules,
 	}
 	assembler := matteradapter.New(matteradapter.Config{
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
