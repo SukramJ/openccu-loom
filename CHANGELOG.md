@@ -6,6 +6,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **REST API 15.0.0 (breaking for generated clients only).** The WebSocket
+  envelope's `kind` (`initial` / `change` / `refresh`) is the named schema
+  `WsEnvelopeKind` instead of an inline enum. The JSON is unchanged. A
+  generator numbered the inline form by its position among the other
+  `kind` enums, so every removed or added one renamed it. The `/matter/*`
+  routes gone in 14.0.0 turned the Python client's `Kind2` into the alarm
+  countdown's kind. Generated clients now get one stable name; code that
+  imported a numbered `Kind…` for the event kind moves to `WsEnvelopeKind`.
+
 ## [0.94.0] - 2026-10-29
 
 ### Release summary

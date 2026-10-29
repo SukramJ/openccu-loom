@@ -8305,6 +8305,14 @@ export interface components {
             pattern: string;
         };
         /**
+         * @description Event-family discriminator. `change` is the default
+         *     and dominant case; `initial` is set on the first
+         *     observation of a data point (e.g. during cold-start
+         *     replay); `refresh` is reserved for periodic re-emits.
+         * @enum {string}
+         */
+        WsEnvelopeKind: "initial" | "change" | "refresh";
+        /**
          * @description Shape of every WebSocket frame the daemon emits. Broadcast
          *     frames carry the `topic` field; command-reply frames omit
          *     `topic`. The `type` field is the discriminator that selects
@@ -8330,14 +8338,7 @@ export interface components {
              *     to resume the stream.
              */
             seq: number;
-            /**
-             * @description Event-family discriminator. `change` is the default
-             *     and dominant case; `initial` is set on the first
-             *     observation of a data point (e.g. during cold-start
-             *     replay); `refresh` is reserved for periodic re-emits.
-             * @enum {string}
-             */
-            kind: "initial" | "change" | "refresh";
+            kind: components["schemas"]["WsEnvelopeKind"];
             /** @description Routing key the client subscribed to. Absent on command replies. */
             topic?: string;
             /** @description Event-type discriminator (e.g. `datapoint.value_changed`). */
