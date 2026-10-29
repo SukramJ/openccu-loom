@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 14.1.0
+  version: 15.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -11973,6 +11973,14 @@ components:
     # references the per-event payload schemas by name via the
     # `payload` field on broadcast entries.
 
+    WsEnvelopeKind:
+      type: string
+      enum: [initial, change, refresh]
+      description: |
+        Event-family discriminator. `change` is the default
+        and dominant case; `initial` is set on the first
+        observation of a data point (e.g. during cold-start
+        replay); `refresh` is reserved for periodic re-emits.
     WsEnvelope:
       type: object
       description: |
@@ -12003,13 +12011,7 @@ components:
             reconnect with `{op:"subscribe", topics:[...], since:N}`
             to resume the stream.
         kind:
-          type: string
-          enum: [initial, change, refresh]
-          description: |
-            Event-family discriminator. `change` is the default
-            and dominant case; `initial` is set on the first
-            observation of a data point (e.g. during cold-start
-            replay); `refresh` is reserved for periodic re-emits.
+          $ref: '#/components/schemas/WsEnvelopeKind'
         topic:
           type: string
           description: Routing key the client subscribed to. Absent on command replies.

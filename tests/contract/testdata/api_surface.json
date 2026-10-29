@@ -1,5 +1,5 @@
 {
- "api_version": "14.1.0",
+ "api_version": "15.0.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -2863,13 +2863,14 @@
    "why:string"
   ],
   "WsEnvelope": [
-   "kind:string",
+   "kind:$ref:WsEnvelopeKind",
    "payload:unknown",
    "seq:integer",
    "topic:string",
    "ts:string",
    "type:string"
   ],
+  "WsEnvelopeKind": [],
   "types.json:DataPointKey": [
    "channel_no:integer",
    "device_address:string",

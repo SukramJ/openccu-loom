@@ -6,11 +6,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.94.1] - 2026-10-29
+## [0.95.0] - 2026-10-29
 
 ### Release summary
 
-**The thermostat opt-in of 0.94.0 is two switches.** With it on, Apple Home loaded no data and refused a new pairing; the heating state and hold now have their own switch, apart from the week programs, so each can be tried alone. Both stay off by default. REST API 14.1.0, unchanged.
+**The thermostat opt-in of 0.94.0 is two switches.** With it on, Apple Home loaded no data and refused a new pairing; the heating state and hold now have their own switch, apart from the week programs, so each can be tried alone. Both stay off by default. REST API 15.0.0 is breaking for generated clients only: the WebSocket envelope's `kind` is the named schema `WsEnvelopeKind`, and the JSON is unchanged.
 
 ### Changed
 
@@ -24,6 +24,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that switching them can make Apple Home need the bridge paired again. A
   configuration that had `thermostat_schedules` on keeps the week programs
   and loses the hold and running state until the new switch is set.
+- **REST API 15.0.0 (breaking for generated clients only).** The WebSocket
+  envelope's `kind` (`initial` / `change` / `refresh`) is the named schema
+  `WsEnvelopeKind` instead of an inline enum. The JSON is unchanged. A
+  generator numbered the inline form by its position among the other
+  `kind` enums, so every removed or added one renamed it. The `/matter/*`
+  routes gone in 14.0.0 turned the Python client's `Kind2` into the alarm
+  countdown's kind. Generated clients now get one stable name; code that
+  imported a numbered `Kind…` for the event kind moves to `WsEnvelopeKind`.
 
 ## [0.94.0] - 2026-10-29
 
