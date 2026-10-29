@@ -532,10 +532,11 @@ func TestAssemble_ButtonGroupAllowlistPerMember(t *testing.T) {
 }
 
 // TestAssemble_ButtonGroupReplacesLegacyPerPressRows verifies the
-// deterministic store transition: persisted per-parameter endpoint
-// rows from the previous composition vanish from the assembled set and
-// are garbage-collected on a model-complete assembly, replaced by the
-// single consolidated row.
+// deterministic store transition: persisted per-parameter endpoint rows
+// from the previous composition vanish from the assembled set, replaced by
+// the single consolidated row. The legacy rows stay stored — a stored key
+// keeps its number until it is forgotten, and they carry the device's
+// address, so the forget of the deleted device frees them with the rest.
 func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -565,19 +566,24 @@ func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	}
 
 	a := matteradapter.New(validConfig(), nil)
-	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{
-		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
-	}); err != nil {
+	top, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{
+		{CentralName: "ccu1", Devices: []*device.Device{dev}},
+	})
+	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
 
-	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
-		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); !errors.Is(err, endpoint.ErrNotFound) {
-			t.Errorf("legacy row %s must be garbage-collected, got err=%v", param, err)
-		}
+	bridged := top.Bridged()
+	if len(bridged) != 1 || srcKey(t, bridged[0]).DPKey != matteradapter.ButtonGroupDPKey {
+		t.Fatalf("assembled %d endpoints, want the one consolidated BUTTON endpoint: %+v", len(bridged), bridged)
 	}
 	if _, err := fs.GetEndpoint(ctx, legacyKey(matteradapter.ButtonGroupDPKey)); err != nil {
 		t.Errorf("consolidated BUTTON row must be persisted, got err=%v", err)
+	}
+	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
+		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); err != nil {
+			t.Errorf("legacy row %s must stay stored until the device is forgotten, got err=%v", param, err)
+		}
 	}
 }
 
@@ -678,58 +684,13 @@ func TestAssemble_FreshIDForNewSource(t *testing.T) {
 
 // ─── GC ──────────────────────────────────────────────────────────────
 
-func TestAssemble_GCRemovesVanishedSources(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	dev1 := newDevice("GC0001", "DevA")
-	ch1 := addChannel(dev1, "GC0001:1", 1)
-	src1 := &stubEndpointSource{key: dpKey("GC0001:1", "LIGHT"), deviceType: 0x0100}
-	ch1.SetCustomDataPoint(src1)
-
-	dev2 := newDevice("GC0002", "DevB")
-	ch2 := addChannel(dev2, "GC0002:1", 1)
-	src2 := &stubEndpointSource{key: dpKey("GC0002:1", "LIGHT"), deviceType: 0x0100}
-	ch2.SetCustomDataPoint(src2)
-
-	fs := newFakeStore()
-	a := matteradapter.New(validConfig(), nil)
-
-	// Run 1: both. ModelComplete vouches that the device list is the
-	// full fleet, so the assembler may treat absent rows as vanished.
-	snapBoth := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
-	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{snapBoth}); err != nil {
-		t.Fatalf("first Assemble: %v", err)
-	}
-
-	// Run 2: only dev1 (dev2 vanishes).
-	snap1Only := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
-	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{snap1Only}); err != nil {
-		t.Fatalf("second Assemble: %v", err)
-	}
-
-	// The store should contain only one entry for "ccu1".
-	rows, err := fs.ListEndpoints(ctx, "ccu1")
-	if err != nil {
-		t.Fatalf("ListEndpoints: %v", err)
-	}
-	if len(rows) != 1 {
-		t.Errorf("store has %d rows for ccu1, want 1 (dev2 should be GC'd)", len(rows))
-	}
-	if len(rows) == 1 {
-		if got := fakeKey(rows[0].Key).DeviceAddress; got != "GC0001" {
-			t.Errorf("remaining row has DeviceAddress=%q, want GC0001", got)
-		}
-	}
-}
-
-// TestAssemble_GCSkipsCentralWithIncompleteModel is the boot-wipe
+// TestAssemble_EmptyBootAssemblyKeepsStoredNumbers is the boot-wipe
 // regression: the daemon assembles the topology at start, before the
 // readiness-gated CCU device load, so a registered central presents an
 // EMPTY device list. That assembly must not delete the central's
 // persisted endpoint-ID rows — otherwise every restart renumbers the
 // bridged fleet and controllers lose their cached accessory mapping.
-func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
+func TestAssemble_EmptyBootAssemblyKeepsStoredNumbers(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -742,7 +703,7 @@ func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
 	a := matteradapter.New(validConfig(), nil)
 
 	// Run 1 (previous daemon life): full model — persists the row.
-	full := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
+	full := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
 	top1, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{full})
 	if err != nil {
 		t.Fatalf("first Assemble: %v", err)
@@ -750,9 +711,9 @@ func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
 	wantID := top1.Bridged()[0].ID
 
 	// Run 2 (boot of the next daemon life): the central is registered
-	// but its device load has not completed — empty Devices, not
-	// model-complete. The persisted row must survive.
-	boot := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	// but its device load has not completed — empty Devices. The
+	// persisted row must survive.
+	boot := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil}
 	top2, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{boot})
 	if err != nil {
 		t.Fatalf("boot Assemble: %v", err)
@@ -780,73 +741,6 @@ func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
 	}
 	if bridged[0].ID != wantID {
 		t.Errorf("endpoint ID changed across the boot assemble: was %d, now %d", wantID, bridged[0].ID)
-	}
-}
-
-// TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly locks the
-// second half of the boot-wipe fix: exempting model-incomplete
-// snapshots must not disable GC permanently — once the central signals
-// model-complete again, genuinely vanished devices are still reaped.
-func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	dev1 := newDevice("RDY0001", "DevA")
-	ch1 := addChannel(dev1, "RDY0001:1", 1)
-	src1 := &stubEndpointSource{key: dpKey("RDY0001:1", "LIGHT"), deviceType: 0x0100}
-	ch1.SetCustomDataPoint(src1)
-
-	dev2 := newDevice("RDY0002", "DevB")
-	ch2 := addChannel(dev2, "RDY0002:1", 1)
-	src2 := &stubEndpointSource{key: dpKey("RDY0002:1", "LIGHT"), deviceType: 0x0100}
-	ch2.SetCustomDataPoint(src2)
-
-	fs := newFakeStore()
-	a := matteradapter.New(validConfig(), nil)
-
-	// Run 1 (previous daemon life): both devices persisted.
-	both := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
-	top1, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{both})
-	if err != nil {
-		t.Fatalf("first Assemble: %v", err)
-	}
-	var wantDev1ID uint16
-	for _, ep := range top1.Bridged() {
-		if srcKey(t, ep).DeviceAddress == "RDY0001" {
-			wantDev1ID = ep.ID
-		}
-	}
-
-	// Run 2 (boot): model incomplete — both rows survive.
-	boot := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
-	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{boot}); err != nil {
-		t.Fatalf("boot Assemble: %v", err)
-	}
-	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 2 {
-		t.Fatalf("boot assemble deleted persisted rows: store has %d rows for ccu1, want 2", len(rows))
-	}
-
-	// Run 3 (ready reassemble): dev2 was genuinely removed while the
-	// daemon was down. GC must reap it now that the model is complete,
-	// and dev1 must keep its persisted ID.
-	onlyDev1 := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
-	top3, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{onlyDev1})
-	if err != nil {
-		t.Fatalf("ready Assemble: %v", err)
-	}
-	rows, err := fs.ListEndpoints(ctx, "ccu1")
-	if err != nil {
-		t.Fatalf("ListEndpoints: %v", err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("store has %d rows for ccu1, want 1 (dev2 should be GC'd after ready)", len(rows))
-	}
-	if got := fakeKey(rows[0].Key).DeviceAddress; got != "RDY0001" {
-		t.Errorf("remaining row has DeviceAddress=%q, want RDY0001", got)
-	}
-	bridged := top3.Bridged()
-	if len(bridged) != 1 || bridged[0].ID != wantDev1ID {
-		t.Errorf("dev1 endpoint ID changed across the boot assemble: want %d, got %+v", wantDev1ID, bridged)
 	}
 }
 

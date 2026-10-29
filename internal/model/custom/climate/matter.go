@@ -384,3 +384,16 @@ func (s climateThermoSink) SetSystemMode(ctx context.Context, mode uint8) error 
 func (s climateThermoSink) SetSetpoint(ctx context.Context, _ uint32, value int16, _ []thermostatspec.SetpointChange) error {
 	return s.c.SetTemperature(ctx, matterToCelsius(value), matterDispatchPriority)
 }
+
+// errHoldNotServed refuses a TemperatureSetpointHold write. The Climate does
+// not serve the hold (its Initial leaves TemperatureSetpointHold unset), so
+// the server never admits such a write; the refusal keeps an accidental
+// declaration from storing a hold the CCU never saw.
+var errHoldNotServed = errors.New("climate: TemperatureSetpointHold is not served")
+
+// SetTemperatureSetpointHold implements [thermostatspec.Sink]. The server
+// calls it only for a thermostat that serves the hold, which a Climate does
+// not, so it refuses with FAILURE.
+func (s climateThermoSink) SetTemperatureSetpointHold(context.Context, uint8) error {
+	return errHoldNotServed
+}

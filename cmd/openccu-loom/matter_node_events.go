@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -51,19 +52,49 @@ var nodeTopics = map[string]string{
 // (RemoveFabric by the controller itself).
 const nodeAuditActor = "node"
 
-// wireMatterNodeEvents bridges go-fabric-ui's event source onto the
+// matterNodeObserved is what the bridge observes the node through;
+// *node.Node is one.
+type matterNodeObserved interface {
+	Observe(o node.Observers) (unsubscribe func())
+	Window() node.WindowSnapshot
+}
+
+// wireMatterNodeEvents bridges the node page family's events onto the
 // WebSocket hub, one topic per event type, and records a removed fabric
 // in the audit ledger. It returns the unsubscribe function.
+//
+// The events arrive on two paths. The endpoint and exposure changes are
+// published into go-fabric-ui's event source (src) by the daemon and the
+// exposure route. The fabric and window transitions are not: go-fabric-ui
+// observes the node for each open SSE stream alone and puts nothing into
+// src, so the bridge observes the node itself (n) through go-fabric-ui's
+// own conversion, fabricui.NodeObservers — publishing them into src
+// instead would hand every SSE stream each transition twice.
 //
 // A fabric removal is the one node write whose principal the ledger
 // cannot name: go-fabric-ui's routes (DELETE /node/fabrics/{index}, the
 // factory reset) and a controller's own RemoveFabric both reach here as
 // the same observer event, so the entry carries [nodeAuditActor].
-func wireMatterNodeEvents(src *fabricui.Events, hub *ws.Hub, rec audit.Recorder) func() {
-	if src == nil {
-		return func() {}
+func wireMatterNodeEvents(src *fabricui.Events, n matterNodeObserved, hub *ws.Hub, rec audit.Recorder) func() {
+	sink := matterNodeEventSink(hub, rec)
+	var unsubs []func()
+	if src != nil {
+		unsubs = append(unsubs, src.Subscribe(sink))
 	}
-	return src.Subscribe(func(ev fabricui.Event) {
+	if n != nil {
+		unsubs = append(unsubs, n.Observe(fabricui.NodeObservers(sink, n.Window().Open)))
+	}
+	return func() {
+		for _, u := range unsubs {
+			u()
+		}
+	}
+}
+
+// matterNodeEventSink publishes one node event under its hub topic and
+// records a removed fabric in the audit ledger.
+func matterNodeEventSink(hub *ws.Hub, rec audit.Recorder) func(fabricui.Event) {
+	return func(ev fabricui.Event) {
 		topic, known := nodeTopics[ev.Type]
 		if hub != nil && known {
 			hub.Publish(ws.Event{
@@ -80,5 +111,5 @@ func wireMatterNodeEvents(src *fabricui.Events, hub *ws.Hub, rec audit.Recorder)
 			}
 			rec.Record(audit.Entry{User: nodeAuditActor, Action: audit.ActionMatterFabricRevoke, Note: note})
 		}
-	})
+	}
 }

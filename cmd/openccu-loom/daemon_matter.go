@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
@@ -31,7 +30,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
-	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -100,15 +98,17 @@ type matterBridgeBundle struct {
 	// the exposure allowlist above all — lives on this side of the
 	// boundary and is reached through here. sync describes the model and
 	// applies the changes to the Aggregator (matteradapter.Reconciler);
-	// retire collects a removed central's endpoint numbers.
+	// retire collects a removed central's endpoint numbers; forget queues a
+	// device the CCU deleted, so the next sync frees its numbers.
 	assembler *matteradapter.Assembler
 	sync      func(context.Context) error
 	retire    func(ctx context.Context, centralName string) error
-	// events is go-fabric-ui's event source: the node's fabric and window
-	// transitions reach it through the observers wired at [node.New]
-	// (fabricui.Events.Observers), the daemon publishes its own reassemblies
-	// into it, and the handler's SSE stream and the WebSocket bridge
-	// (wireMatterNodeEvents) read from it.
+	forget    func(centralName, address string)
+	// events is go-fabric-ui's event source: the daemon publishes its own
+	// reassemblies into it, and the handler's SSE stream and the WebSocket
+	// bridge (wireMatterNodeEvents) read from it. The node's fabric and
+	// window transitions do not pass through it: each SSE stream and the
+	// bridge observe the node themselves (node.Node.Observe).
 	events *fabricui.Events
 	// configuredCommissioning reports whether the operator configured a
 	// valid setup passcode. Without one the operator's window runs on
@@ -248,8 +248,8 @@ func matterAttestation(mc config.NorthMatter, logger *slog.Logger) node.Attestat
 // startMatterBridge constructs and starts the Matter bridge when
 // matter.enabled is set: the daemon's own responsibilities — the enable
 // and database gate, the endpoint-identity and exposure store, the
-// per-central readiness latch, the localized channel word, the topology
-// assembler, the attestation material, the health
+// localized channel word, the topology assembler and its reconciler, the
+// attestation material, the health
 // probe and gauges — around go-fabric's node facade, which performs the
 // stack-generic bring-up in its documented order (ADR 0084 phase 3).
 // Returns the bundle and a stop function the caller defers; both are nil
@@ -305,20 +305,15 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			slog.String("hint", "per-boot UniqueID salt active — accessory recognition will fail across restarts; toggle north.matter.dev_rotate_unique_ids=false for production"))
 	}
 
-	// Latch per-central southbound readiness BEFORE the first assembly
-	// (the facade's Start) so the snapshotter can stamp
-	// [endpoint.Snapshot.ModelComplete]. The boot-time assembly runs before
-	// the readiness-gated CCU device load, so every registered central
-	// briefly presents an empty ModelRegistry; without the latch the
-	// assembler's vanished-source GC would read that as "all devices
-	// removed" and wipe the persisted endpoint-ID rows on every boot,
-	// renumbering the bridged fleet for paired controllers.
-	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
-	walk := matterSnapshotter(reg, readiness)
+	// The boot-time assembly (the facade's Start) runs before the
+	// readiness-gated CCU device load, so every registered central first
+	// describes no device. That costs no endpoint number: the Aggregator
+	// keeps a stored number until the key is forgotten, so the fleet comes
+	// back under its numbers once the devices load.
+	walk := matterSnapshotter(reg)
 
 	fail := func(event string, err error) *matterBridgeBundle {
 		logger.Warn(event, slog.String("err", err.Error()))
-		unwireReadiness()
 		return nil
 	}
 
@@ -383,12 +378,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Locales:                    matterLocales(cfg.Locale),
 		SupportedFabrics:           matterSupportedFabrics,
 		DisableTimeSynchronization: !mc.TimeSyncEnabled(),
-		// The fabric and window observers are go-fabric-ui's: the node page
-		// family's stream and loom's WebSocket topics both report a
-		// controller commissioning the node from here (go-fabric-ui's
-		// embedding guide: "node.Config.Observers is set before node.New").
-		Observers: uiEvents.Observers(node.Observers{}),
-		Logger:    logger,
+		Logger:                     logger,
 	})
 	if err != nil {
 		return fail("matter.bridge.node", err)
@@ -396,9 +386,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// The daemon owns the device walk: it knows the device model, the
 	// operator's exposure allowlist and the locale, none of which the
 	// Matter subtree may see. The node assembles what the walk describes:
-	// its Aggregator holds the endpoints, one partition per central with
-	// the central's own completeness, and the reconciler keeps it in step
-	// with the model. Group membership, scene tables and
+	// its Aggregator holds the endpoints, one partition per central, and
+	// the reconciler keeps it in step with the model. A device the CCU
+	// deleted is forgotten through the endpoint store, which finds its
+	// stored keys by address. Group membership, scene tables and
 	// commissioner-written NodeLabels are the node's own state there.
 	assembler := matteradapter.New(matteradapter.Config{
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
@@ -406,7 +397,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Labels:                  labels,
 		ChannelLabel:            channelLabel,
 	}, logger)
-	reconciler := matteradapter.NewReconciler(n.Aggregator(), assembler, logger)
+	reconciler := matteradapter.NewReconciler(n.Aggregator(), assembler, identity, logger)
 	syncModel := func(ctx context.Context) error { return reconciler.Sync(ctx, walk(ctx)) }
 	// The allowlist checker is wired before the first sync, so the
 	// bridge only ever serves sources the operator has explicitly
@@ -420,10 +411,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// the user would see a generic add-failed error even though the
 	// cryptographic handshake completed.
 	assembler.SetExposureChecker(identity)
-	// The boot-time set: every central the registry holds now, each one
-	// model-incomplete until its readiness latches, so no stored endpoint
-	// number is collected before the central's devices are loaded. Start
-	// assembles the set; later syncs ride the reassembly triggers.
+	// The boot-time set: every central the registry holds now; one whose
+	// devices have not loaded yet describes nothing and keeps its stored
+	// numbers. Start assembles the set; later syncs ride the reassembly
+	// triggers.
 	if err := syncModel(ctx); err != nil {
 		logger.Warn("matter.bridge.sync.boot", slog.String("err", err.Error()))
 	}
@@ -482,7 +473,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	stop := func() { //nolint:contextcheck // shutdown path must not inherit the (potentially cancelled) daemon ctx
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		unwireReadiness()
 		// The facade's Stop runs the daemon's shutdown order: the
 		// operational time stored once more, BasicInformation ShutDown,
 		// the PASE providers, the CASE reaper, the subscription engine,
@@ -500,6 +490,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		assembler:               assembler,
 		sync:                    syncModel,
 		retire:                  reconciler.Retire,
+		forget:                  reconciler.QueueForget,
 		events:                  uiEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
@@ -527,10 +518,9 @@ type matterWiring struct {
 	// calls it after the central's rows are purged.
 	retire func(ctx context.Context, centralName string) error
 	// centralHook wires a runtime-adopted central into the running bridge
-	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Nil when
-	// the bridge is disabled; the live-adopt orchestrator skips it then. The
-	// model-complete latch is not part of it — that rides a registry
-	// observer, which reaches boot-time and adopted centrals alike.
+	// (reassemble-on-ready, hot-plug lifecycle with the forget of a deleted
+	// device, reachable forward). Nil when the bridge is disabled; the
+	// live-adopt orchestrator skips it then.
 	centralHook matterCentralHook
 }
 
@@ -620,14 +610,23 @@ func subscribeMatterReadyTrigger(bus *events.Bus, trigger func()) func() {
 // into the same debounced reassemble pipeline: a device hot-plugged (or
 // deleted) after its central's bring-up must surface as a bridged
 // endpoint without a daemon restart — Reassemble handles endpoint add,
-// GC and the PartsList subscription notification. Events arriving before
-// the central is southbound-ready are skipped: the boot ingest fires one
-// DeviceCreatedEvent per device and the ready trigger already covers
-// that batch with a single reassemble. Create events are at-least-once
-// (the CCU re-announces its inventory on reconnect); the debounce
-// coalesces such bursts and a no-change reassemble is cheap in-memory
-// work. Returns the unsubscribe closers (empty when nothing to wire).
-func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func()) []func() {
+// removal and the PartsList subscription notification. Events arriving
+// before the central is southbound-ready are skipped: the boot ingest
+// fires one DeviceCreatedEvent per device and the ready trigger already
+// covers that batch with a single reassemble. Create events are
+// at-least-once (the CCU re-announces its inventory on reconnect); the
+// debounce coalesces such bursts and a no-change reassemble is cheap
+// in-memory work.
+//
+// A device the CCU deleted is also handed to forget
+// ([matteradapter.Reconciler.QueueForget]) before the trigger fires, so
+// the sync it causes frees the device's endpoint numbers; a device that
+// is merely not described keeps them. The cache-clear re-init's teardown
+// removes every device without the operator deleting any
+// ([hmevent.DeviceRemovedEvent.ModelTeardown]) and forgets none. forget
+// may be nil. Returns the unsubscribe closers (empty when nothing to
+// wire).
+func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func(), forget func(centralName, address string)) []func() {
 	if u == nil || u.EventBus == nil || trigger == nil {
 		return nil
 	}
@@ -638,7 +637,12 @@ func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func()) []fu
 	}
 	return []func(){
 		u.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) { fire() }),
-		u.EventBus.Subscribe(func(hmevent.DeviceRemovedEvent) { fire() }),
+		u.EventBus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
+			if forget != nil && !e.ModelTeardown {
+				forget(e.CentralName, e.Address)
+			}
+			fire()
+		}),
 		// A rename is a topology change too, even though the set of devices is
 		// unchanged: the accessory's NodeLabel is built from the device's name,
 		// so without this a device renamed in the CCU WebUI keeps its old name
@@ -664,119 +668,6 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 	if err := reassemble(ctx); err != nil {
 		logger.Warn("matter.reassemble_on_ready.failed", slog.String("err", err.Error()))
 	}
-}
-
-// matterCentralReadiness latches which centrals have completed their initial
-// southbound bring-up (the readiness-gated CCU device load). The Matter
-// snapshotter consults it to stamp [endpoint.Snapshot.ModelComplete] so the
-// assembler's vanished-source GC only trusts centrals whose ModelRegistry is
-// authoritative — a central still waiting on its CCU must keep its persisted
-// endpoint-ID rows (see [endpoint.Snapshot.ModelComplete]).
-//
-// Ready survives mid-life CCU reconnects — the loaded model does too, so the
-// registry view stays authoritative once the initial load has completed. It is
-// dropped in exactly one place: when a central leaves the registry (see
-// [wireMatterCentralReadiness]), because the next unit registered under that
-// name starts with an empty model again. Safe for concurrent use — the snapshotter
-// reads from the bridge's assembly path while the event-bus dispatch writes.
-type matterCentralReadiness struct {
-	mu    sync.RWMutex
-	ready map[string]struct{}
-}
-
-func newMatterCentralReadiness() *matterCentralReadiness {
-	return &matterCentralReadiness{ready: make(map[string]struct{})}
-}
-
-// markReady latches centralName as model-complete.
-func (r *matterCentralReadiness) markReady(centralName string) {
-	r.mu.Lock()
-	r.ready[centralName] = struct{}{}
-	r.mu.Unlock()
-}
-
-// clearReady drops centralName's latch, returning it to model-incomplete.
-// A nil receiver is a no-op so the teardown path stays unconditional.
-func (r *matterCentralReadiness) clearReady(centralName string) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	delete(r.ready, centralName)
-	r.mu.Unlock()
-}
-
-// isReady reports whether centralName has completed its initial device load.
-func (r *matterCentralReadiness) isReady(centralName string) bool {
-	r.mu.RLock()
-	_, ok := r.ready[centralName]
-	r.mu.RUnlock()
-	return ok
-}
-
-// wireMatterCentralReadiness latches per-central readiness for every central
-// the registry carries — the ones already registered and every one registered
-// later — and returns the tracker plus the observer removal.
-//
-// It is a registry observer and not a walk because the latch is the one piece
-// of per-central Matter state that does NOT ride the central's own EventBus:
-// Unit.Stop drops the subscription, nothing drops the latch. A central removed
-// at runtime therefore left it set, and the next unit registered under that
-// name starts with an empty ModelRegistry — the stale latch stamps that empty
-// snapshot ModelComplete, the assembler reads every persisted endpoint of the
-// central as vanished and deletes it, and the refill renumbers the whole fleet
-// so controllers lose every accessory of that CCU. [central.Registry.Unregister]
-// runs the observer's unwire, so a boot-registered and a runtime-adopted
-// central clear the latch through the same path.
-//
-// Failure direction is deliberate: a central whose ready event is never
-// observed stays "model-incomplete", which only defers the assembler's
-// vanished-source GC for that central — persisted endpoint IDs are never
-// deleted on stale information.
-func wireMatterCentralReadiness(reg *central.Registry) (readiness *matterCentralReadiness, remove func()) {
-	readiness = newMatterCentralReadiness()
-	if reg == nil {
-		return readiness, func() {}
-	}
-	return readiness, reg.OnRegisterDeclared(wiring.Seam{
-		Name:         "matter.central_readiness",
-		Collaborator: "*matterCentralReadiness",
-		Phase:        wiring.PhasePerCentral,
-		Why:          "no central is ever latched model-complete, so every bridge snapshot stays incomplete and endpoint garbage collection never runs",
-	}, func(u *central.Unit) func() {
-		unsub := wireMatterCentralReadinessForUnit(readiness, u)
-		name := u.Name()
-		return func() {
-			if unsub != nil {
-				unsub()
-			}
-			readiness.clearReady(name)
-		}
-	})
-}
-
-// wireMatterCentralReadinessForUnit latches one central's readiness into the
-// tracker: it subscribes to the unit's CentralSouthboundReadyEvent for
-// go-forward transitions, then seeds from the unit's queryable latched flag
-// ([central.Unit.IsSouthboundReady]). The seed closes the boot-window race:
-// southbound bring-up goroutines start before the Matter bridge wires its
-// subscriptions, so a fast CCU (or a runtime-adopted central) can fire its
-// ready event before this subscription exists — the event never re-fires, and
-// without the seed the central would stay model-incomplete (GC deferred) for
-// the whole process lifetime. Seeding AFTER subscribing means every
-// interleaving is covered: a pre-subscription event is caught by the seed, a
-// post-seed event by the subscription, and one in between by both.
-func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *central.Unit) func() {
-	if readiness == nil || u == nil || u.EventBus == nil {
-		return nil
-	}
-	unsub := u.EventBus.Subscribe(func(e hmevent.CentralSouthboundReadyEvent) {
-		readiness.markReady(e.CentralName)
-	})
-	if u.IsSouthboundReady() {
-		readiness.markReady(u.Name())
-	}
-	return unsub
 }
 
 // matterReassembler is the node page family's topology reassembly
@@ -805,10 +696,8 @@ func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder
 // matterSnapshotter builds the model walk behind the reconciler: one
 // [matteradapter.DeviceSnapshot] per registered central, read live from
 // the central registry so runtime-added centrals surface on the next
-// sync. Each snapshot's ModelComplete flag is stamped
-// from the readiness latch; a nil readiness marks every central
-// model-incomplete (the GC-off fail-safe).
-func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) func(context.Context) []matteradapter.DeviceSnapshot {
+// sync.
+func matterSnapshotter(reg *central.Registry) func(context.Context) []matteradapter.DeviceSnapshot {
 	return func(_ context.Context) []matteradapter.DeviceSnapshot {
 		var out []matteradapter.DeviceSnapshot
 		for _, u := range reg.List() {
@@ -816,9 +705,8 @@ func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness)
 				continue
 			}
 			out = append(out, matteradapter.DeviceSnapshot{
-				CentralName:   u.Name(),
-				Devices:       releasedDevicesOf(u),
-				ModelComplete: readiness != nil && readiness.isReady(u.Name()),
+				CentralName: u.Name(),
+				Devices:     releasedDevicesOf(u),
 			})
 		}
 		return out
@@ -879,18 +767,13 @@ func wireMatterDeviceReachableForward(u *central.Unit, notify func(centralName, 
 // wired into the bridge exactly like a boot-time one; the returned unwire
 // drops the subscriptions on live remove. Nil when the Matter bridge is
 // disabled.
-//
-// The readiness latch is deliberately NOT part of this hook: it is the only
-// per-central Matter state that outlives the unit's EventBus, so it rides the
-// registry observer in [wireMatterCentralReadiness], which covers boot-time
-// and runtime-adopted centrals in one place and clears the latch when the
-// central leaves the registry.
 type matterCentralHook func(u *central.Unit) (unwire func())
 
 // newMatterCentralHook builds the per-central Matter wiring hook from the
 // bridge-start artefacts.
 func newMatterCentralHook(
 	reassembleTrigger func(),
+	forget func(centralName, address string),
 	notifyReachable func(centralName, address string, reachable bool),
 ) matterCentralHook {
 	return func(u *central.Unit) func() {
@@ -903,7 +786,7 @@ func newMatterCentralHook(
 		}
 		// Hot-plugged / removed devices on the adopted central feed the
 		// same debounced reassemble as the boot-time centrals.
-		unsubs = append(unsubs, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger)...)
+		unsubs = append(unsubs, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger, forget)...)
 		// A model already loaded before the hook ran (ready event fired in
 		// the adopt window) needs a reassemble kick too — the event that
 		// would have triggered it is gone.
@@ -932,7 +815,7 @@ func newMatterCentralHook(
 // itself — the commissioning window with its fail-safe, verifier installer
 // and CM=2 announcement, the PartsList providers, the StartUp / BootReason
 // events, the fabric fan-out — is not repeated here (ADR 0084 phase 3).
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) { //nolint:gocritic // importShadow: see the note above
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
 	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger)
 	if bundle == nil {
@@ -983,12 +866,12 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// same debounced reassemble so runtime-paired (or deleted) CCU
 	// devices appear as (or vanish from) bridged endpoints live.
 	for _, u := range reg.List() {
-		closers = append(closers, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger)...)
+		closers = append(closers, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger, bundle.forget)...)
 	}
 	// Per-central hook for the live-adopt orchestrator: a runtime-added
 	// central gets the same reassemble-on-ready and reachable-forward
 	// wiring as the boot-time centrals above.
-	wiring.centralHook = newMatterCentralHook(reassembleTrigger, mb.NotifyDeviceReachable)
+	wiring.centralHook = newMatterCentralHook(reassembleTrigger, bundle.forget, mb.NotifyDeviceReachable)
 
 	// Every reassembly — the ready trigger, hot-plug, the operator's
 	// selection, the maintenance route — ends in the event source, so the
@@ -998,7 +881,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	mb.SetOnReassembled(func(int) {
 		bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
 	})
-	closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))
+	closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))
 
 	wiring.status = &matterStatusReaderAdapter{
 		enabled:   mcfg.Enabled,

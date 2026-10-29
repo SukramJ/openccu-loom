@@ -159,7 +159,7 @@ func TestAssemble_IdentifyRunsAcrossReassemblyAndStopsWhenTheEndpointVanishes(t 
 	}
 
 	// (2) X itself vanishes: its countdown must stop with it.
-	if _, err = assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{{CentralName: central, ModelComplete: true}}); err != nil {
+	if _, err = assembleDevicesWith(ctx, a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{{CentralName: central}}); err != nil {
 		t.Fatalf("Assemble #3: %v", err)
 	}
 	goleak.VerifyNone(t, ignore)

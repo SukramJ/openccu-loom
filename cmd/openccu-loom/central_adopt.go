@@ -93,12 +93,11 @@ type centralOrchestrator struct {
 	// DELETE then answered 404 and only a daemon restart removed it.
 	lifecycleLocks map[string]*sync.Mutex
 	// matterHook wires an adopted central into the running Matter bridge
-	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Set via
+	// (reassemble-on-ready, hot-plug lifecycle with the forget of a deleted
+	// device, reachable forward). Set via
 	// [centralOrchestrator.setMatterCentralHook] after the Matter runtime
 	// is stood up (the orchestrator is constructed first); nil while the
-	// bridge is disabled or never came up. The bridge's model-complete latch
-	// is NOT part of it — that rides a registry observer, which covers boot
-	// and adopt alike.
+	// bridge is disabled or never came up.
 	matterHook matterCentralHook
 	// matterExposureStore is the Matter exposure allowlist (matter_exposures
 	// table). Set via [centralOrchestrator.setMatterExposureStore] after the
@@ -259,9 +258,7 @@ func (o *centralOrchestrator) perCentralHooks() []perCentralHook {
 	}
 
 	// The Matter hook carries no detach half: everything it attaches is a
-	// subscription on the unit's own EventBus, and the readiness latch that
-	// outlives the unit rides a registry observer which clears itself when
-	// the central leaves the registry.
+	// subscription on the unit's own EventBus.
 	if matterHook != nil {
 		add(perCentralHook{attach: matterHook})
 	}

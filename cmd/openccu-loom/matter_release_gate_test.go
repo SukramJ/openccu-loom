@@ -61,7 +61,7 @@ func TestMatterSnapshotOmitsUnreleasedDevices(t *testing.T) {
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	snap := matterSnapshotter(reg, nil)
+	snap := matterSnapshotter(reg)
 
 	got := addressesOf(devicesIn(snap(ctx)))
 	if len(got) != 1 || got[0] != "REL00002" {

@@ -14,11 +14,10 @@ import (
 // ErrKeyNotDecodable is returned when a source key's rendering does not
 // split back into the same key. go-fabric's sqlitestore persists only the
 // rendering and lists rows back through [DecodeSourceKey]; a key that does
-// not survive that round trip would come back as a foreign key, look
-// vanished to the assembler's garbage collection, and lose its endpoint
-// number on the next model-complete assembly. Refusing the write makes that
-// one source fail loudly instead of silently re-identifying it under a
-// paired controller.
+// not survive that round trip would come back as a foreign key: no lookup
+// by central or device would find it again, so its endpoint number could
+// never be forgotten. Refusing the write makes that one source fail loudly
+// instead of silently re-identifying it under a paired controller.
 var ErrKeyNotDecodable = errors.New("matter endpoint store: source key does not decode back to itself")
 
 // GetEndpoint implements [fabricendpoint.Store]. It returns
@@ -37,6 +36,25 @@ func (s *Store) GetEndpoint(ctx context.Context, key fabricendpoint.SourceKey) (
 // = no filter), their keys rebuilt by [DecodeSourceKey].
 func (s *Store) ListEndpoints(ctx context.Context, scope string) ([]fabricendpoint.Record, error) {
 	return s.endpoints.ListEndpoints(ctx, scope)
+}
+
+// DeviceKeys returns the stored keys of one device of one central: every
+// record of the central's scope whose key names deviceAddress, its parts
+// included. A device the walk no longer describes keeps its records until
+// they are forgotten, so this is how its keys are found after the model
+// dropped it — across a restart too.
+func (s *Store) DeviceKeys(ctx context.Context, centralName, deviceAddress string) ([]SourceKey, error) {
+	recs, err := s.ListEndpoints(ctx, centralName)
+	if err != nil {
+		return nil, err
+	}
+	var out []SourceKey
+	for _, rec := range recs {
+		if k, ok := rec.Key.(SourceKey); ok && k.CentralName == centralName && k.DeviceAddress == deviceAddress {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 // UpsertEndpointAssigning implements [fabricendpoint.Store]: it writes rec,

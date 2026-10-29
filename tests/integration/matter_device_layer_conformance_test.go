@@ -73,7 +73,7 @@ func buildCategoryFleetTopology(t *testing.T) *endpoint.Topology {
 	cfg := smokeValidConfig(t)
 	cfg.IncludeMeasurements = true
 	return assembleSmoke(t, matteradapter.New(cfg, nil), newSmokeFakeStore(), smokeEndpointConfig(t), []matteradapter.DeviceSnapshot{
-		{CentralName: "ccu1", Devices: devs, ModelComplete: true},
+		{CentralName: "ccu1", Devices: devs},
 	})
 }
 

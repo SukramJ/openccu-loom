@@ -33,9 +33,8 @@ func assembleGolden(t *testing.T) *endpoint.Topology {
 	t.Helper()
 	a := matteradapter.New(goldenConfig(t), slog.New(slog.DiscardHandler))
 	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), goldenEndpointConfig(t), []matteradapter.DeviceSnapshot{{
-		CentralName:   goldenCentralName,
-		Devices:       goldenFleet(t),
-		ModelComplete: true,
+		CentralName: goldenCentralName,
+		Devices:     goldenFleet(t),
 	}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)

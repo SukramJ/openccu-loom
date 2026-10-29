@@ -82,9 +82,8 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 	identity := loomendpoint.New(db)
 	walk := func(_ context.Context) []matteradapter.DeviceSnapshot {
 		return []matteradapter.DeviceSnapshot{{
-			CentralName:   "ccu1",
-			Devices:       []*device.Device{dev},
-			ModelComplete: true,
+			CentralName: "ccu1",
+			Devices:     []*device.Device{dev},
 		}}
 	}
 	assembler := matteradapter.New(matteradapter.Config{}, nil)
@@ -104,7 +103,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		}
 		snaps := make([]matterendpoint.Snapshot, 0, len(described))
 		for _, d := range described {
-			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
 		}
 		return inner.Assemble(ctx, snaps)
 	}

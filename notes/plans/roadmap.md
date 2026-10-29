@@ -67,8 +67,9 @@ replace it, and the metrics that say whether it worked.
 
   And one named gap: a mark has to be an unconditional boot boundary, so a
   constraint relative to an optional subsystem's start is not expressible. The
-  Matter bridge's per-central readiness latch, which must precede its first
-  assembly, is the instance. Closing it means marks that may be absent, and
+  instance it was named for — the Matter bridge's per-central readiness latch,
+  which had to precede its first assembly — left with go-fabric v0.13; the gap
+  stays. Closing it means marks that may be absent, and
   then a third answer beside satisfied and violated — see the ADR's
   consequences for why that is a shape to avoid rather than reach for.
 

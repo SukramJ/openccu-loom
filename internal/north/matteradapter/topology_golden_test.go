@@ -543,9 +543,8 @@ func TestAssembledTopologyMatchesGolden(t *testing.T) {
 
 	a := matteradapter.New(goldenConfig(t), slog.New(slog.DiscardHandler))
 	top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), goldenEndpointConfig(t), []matteradapter.DeviceSnapshot{{
-		CentralName:   goldenCentralName,
-		Devices:       goldenFleet(t),
-		ModelComplete: true,
+		CentralName: goldenCentralName,
+		Devices:     goldenFleet(t),
 	}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)

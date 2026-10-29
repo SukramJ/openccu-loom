@@ -291,7 +291,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`nodeTopicFabricAdded = "node.fabric_added"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		Tokens:    []string{`nodeTopicFabricAdded = "node.fabric_added"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "unsubs = append(unsubs, n.Observe(fabricui.NodeObservers(sink, n.Window().Open)))", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))"},
 		WireValue: "node." + fabricui.EventFabricAdded,
 	},
 	"node.fabric_removed": {
@@ -299,7 +299,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`nodeTopicFabricRemoved = "node.fabric_removed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		Tokens:    []string{`nodeTopicFabricRemoved = "node.fabric_removed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "unsubs = append(unsubs, n.Observe(fabricui.NodeObservers(sink, n.Window().Open)))", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))"},
 		WireValue: "node." + fabricui.EventFabricRemoved,
 	},
 	"node.window_opened": {
@@ -307,7 +307,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`nodeTopicWindowOpened = "node.window_opened"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		Tokens:    []string{`nodeTopicWindowOpened = "node.window_opened"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "unsubs = append(unsubs, n.Observe(fabricui.NodeObservers(sink, n.Window().Open)))", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))"},
 		WireValue: "node." + fabricui.EventWindowOpened,
 	},
 	"node.window_closed": {
@@ -315,7 +315,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`nodeTopicWindowClosed = "node.window_closed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))"},
+		Tokens:    []string{`nodeTopicWindowClosed = "node.window_closed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "unsubs = append(unsubs, n.Observe(fabricui.NodeObservers(sink, n.Window().Open)))", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))"},
 		WireValue: "node." + fabricui.EventWindowClosed,
 	},
 	"node.endpoints_changed": {
@@ -323,7 +323,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`nodeTopicEndpointsChanged = "node.endpoints_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))", "bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged"},
+		Tokens:    []string{`nodeTopicEndpointsChanged = "node.endpoints_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))", "bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged"},
 		WireValue: "node." + fabricui.EventEndpointsChanged,
 	},
 	"node.exposure_changed": {
@@ -331,7 +331,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_node_events.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`nodeTopicExposureChanged = "node.exposure_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))", "Events:           bundle.events,"},
+		Tokens:    []string{`nodeTopicExposureChanged = "node.exposure_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))", "Events:           bundle.events,"},
 		WireValue: "node." + fabricui.EventExposureChanged,
 	},
 	"pairing.requests_changed": {

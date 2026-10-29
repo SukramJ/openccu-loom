@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 14.0.0
+  version: 14.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -16230,6 +16230,8 @@ components:
         advertising: { type: boolean }
         commissioning_window_open: { type: boolean }
         commissioning_window_duration_seconds: { type: integer }
+        window_kind: { $ref: "#/components/schemas/NodeWindowKind" }
+        window_deadline: { type: string, format: date-time, description: "When the open window's timer closes it, on the node's clock; absent while no window is open." }
         exposure: { type: boolean, description: Whether the host serves a selection. }
         csrf_token: { type: string, description: The admin token of token mode; absent when the host decides admin rights. }
         warnings:
@@ -16303,6 +16305,7 @@ components:
         parent_endpoint_id: { type: integer }
         device_type: { type: integer }
         device_type_name: { type: string }
+        device_type_revision: { type: integer, description: The revision the endpoint's Descriptor serves for its device type; absent for a type the schema does not know. }
         reachable: { type: boolean }
         name: { type: string }
         source:
@@ -16476,6 +16479,10 @@ components:
         name: { type: string }
         group: { type: string }
         fields: { type: object, additionalProperties: { type: string } }
+        lists:
+          type: object
+          description: "Optional. The values of list-valued (multi) fields, by field key: one entry per value, no separator semantics, so a value may contain a comma. Wins over the comma-separated fields entry of the same key."
+          additionalProperties: { type: array, items: { type: string } }
         verdict: { $ref: "#/components/schemas/Verdict" }
         enabled: { type: boolean }
         source: { type: string, description: "Where the verdict comes from, in the host's words." }
@@ -16548,6 +16555,10 @@ components:
       type: string
       description: go-fabric's eligibility state of an exposable item.
       enum: [mappable, partially_mappable, unmappable]
+    NodeWindowKind:
+      type: string
+      description: Which window is open — the node's own on its configured credentials, a basic one on fresh credentials, an administrator's enhanced one; absent without a node.
+      enum: [none, own, basic, enhanced]
     NodeEndpointsChangedPayload:
       type: object
       description: >-

@@ -476,6 +476,28 @@ and **the profile holds the device** built from them.
   store built on the shared handle, since the daemon carries go-fabric's
   schema in its own migrations.
 
+## Amendment — go-fabric v0.13: a number is kept until it is forgotten
+
+go-fabric v0.13.0 removes `MarkComplete` from the Aggregator, its
+partitions and batches, and with it `endpoint.Snapshot.ModelComplete`: a
+stored key keeps its endpoint number until the host calls `Forget` or
+retires the partition, as matter.js keeps every stored number until its
+store is erased (go-fabric `CHANGELOG.md`, 0.13.0), and a removed key's
+number is given to no other device (0.12.2). The completeness the
+readiness latch supplied has nothing left to decide, so the latch is
+gone, and the boot-time assembly of a central whose devices have not
+loaded yet costs no number.
+
+The reconciler removes an endpoint the walk no longer describes and keeps
+its number — a device unexposed, hidden or not loaded yet comes back
+under it. It forgets a device only when the CCU deleted it: a
+`DeviceRemovedEvent` without `ModelTeardown` queues the device
+(`Reconciler.QueueForget`), and the next sync frees the numbers of every
+stored key carrying its address (`matterendpoint.Store.DeviceKeys`), in a
+batch of its own before it applies the walk, so the same address paired
+again is numbered afresh. A device deleted while the daemon was down
+raises no such event and keeps its numbers. Pinned on go-fabric v0.14.0.
+
 ## Consequences
 
 - `internal/north/matteradapter` loses the implicit "which clusters does a

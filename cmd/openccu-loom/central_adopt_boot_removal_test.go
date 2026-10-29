@@ -158,7 +158,7 @@ func TestRemovingABootCentralDetachesTheDomainsWithoutReAttaching(t *testing.T) 
 	// The Matter hook has no name-keyed detach, so its side effect is
 	// observed where production would feel it: the debounced reassemble.
 	reassembles := 0
-	orch.setMatterCentralHook(newMatterCentralHook(func() { reassembles++ }, nil))
+	orch.setMatterCentralHook(newMatterCentralHook(func() { reassembles++ }, nil, nil))
 	orch.setEventSourceCentralHook(func(u *central.Unit) func() {
 		attached["event-source"]++
 		return nil
