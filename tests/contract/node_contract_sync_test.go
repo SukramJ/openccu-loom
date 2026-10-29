@@ -5,8 +5,10 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -24,9 +26,12 @@ import (
 // is documented here with the same operationId and the same response
 // codes, nothing under /node is documented here that the module does not
 // serve, and every schema the module's contract defines exists here under
-// its name (Warning as NodeWarning, Problem as loom's own). A go-fabric-ui
-// bump that adds a route or a field turns this red until the copy is
-// refreshed; a hand edit of the copy turns it red at once.
+// its name (Warning as NodeWarning, Problem as loom's own). A schema only the
+// module's other route families reach — the controller family, which loom
+// does not serve (fabricui.Options.Controller stays nil) — is no part of the
+// /node contract and is not required. A go-fabric-ui bump that adds a route
+// or a field turns this red until the copy is refreshed; a hand edit of the
+// copy turns it red at once.
 func TestNodeContractMatchesPinnedGoFabricUI(t *testing.T) {
 	t.Parallel()
 
@@ -77,7 +82,11 @@ func TestNodeContractMatchesPinnedGoFabricUI(t *testing.T) {
 		}
 	}
 
+	nodeReach, otherReach := schemasReachedFrom(module, true), schemasReachedFrom(module, false)
 	for name := range module.Components.Schemas {
+		if otherReach[name] && !nodeReach[name] {
+			continue
+		}
 		local := name
 		switch name {
 		case "Warning":
@@ -134,6 +143,79 @@ func loadGoFabricUIContract(t *testing.T) *openapi3.T {
 		t.Fatalf("load go-fabric-ui contract: %v", err)
 	}
 	return doc
+}
+
+// componentRef matches a reference into the contract's components.
+var componentRef = regexp.MustCompile(`#/components/(schemas|responses|parameters|requestBodies)/([A-Za-z0-9_.-]+)`)
+
+// namedSchema matches a schema named in a description. A stream operation
+// answers `type: string` and states its payload schemas only in its
+// description, in backticks (go-fabric-ui contract/openapi.yaml, the
+// /node/stream and /controller/stream operations).
+var namedSchema = regexp.MustCompile("`([A-Za-z][A-Za-z0-9]*)`")
+
+// schemasReachedFrom names the component schemas the operations under
+// /node/ (node true) or under every other path (node false) reach, through
+// responses, parameters, request bodies and nested schemas, and the
+// payload schemas a description names. The walk reads the "$ref" strings
+// of each operation's JSON form and the backticked names that are
+// component schemas, so it follows exactly what the contract file states.
+func schemasReachedFrom(doc *openapi3.T, node bool) map[string]bool {
+	type ref struct{ kind, name string }
+	var queue []ref
+	enqueue := func(v any) {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return
+		}
+		for _, m := range componentRef.FindAllStringSubmatch(string(raw), -1) {
+			queue = append(queue, ref{m[1], m[2]})
+		}
+		for _, m := range namedSchema.FindAllStringSubmatch(string(raw), -1) {
+			if _, ok := doc.Components.Schemas[m[1]]; ok {
+				queue = append(queue, ref{"schemas", m[1]})
+			}
+		}
+	}
+	for path, item := range doc.Paths.Map() {
+		if strings.HasPrefix(path, "/node/") != node {
+			continue
+		}
+		for _, o := range item.Operations() {
+			enqueue(o)
+		}
+		enqueue(item.Parameters)
+	}
+	seen := map[ref]bool{}
+	schemas := map[string]bool{}
+	for len(queue) > 0 {
+		r := queue[0]
+		queue = queue[1:]
+		if seen[r] {
+			continue
+		}
+		seen[r] = true
+		switch r.kind {
+		case "schemas":
+			schemas[r.name] = true
+			if s := doc.Components.Schemas[r.name]; s != nil {
+				enqueue(s.Value)
+			}
+		case "responses":
+			if v := doc.Components.Responses[r.name]; v != nil {
+				enqueue(v.Value)
+			}
+		case "parameters":
+			if v := doc.Components.Parameters[r.name]; v != nil {
+				enqueue(v.Value)
+			}
+		case "requestBodies":
+			if v := doc.Components.RequestBodies[r.name]; v != nil {
+				enqueue(v.Value)
+			}
+		}
+	}
+	return schemas
 }
 
 func responseCodes(o *openapi3.Operation) string {

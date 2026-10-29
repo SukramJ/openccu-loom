@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"testing"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
 // TestMatterStatusAdapter_NilBridge_Returns_Disabled verifies that when
@@ -146,10 +146,10 @@ func TestMatterStatusAdapter_Advertising_Propagated(t *testing.T) {
 	}
 }
 
-// revokerBundle boots the bridge and returns it with the fabric-removed
-// events of go-fabric-ui's source captured — the source the WebSocket
-// bridge and the node pages' stream read.
-func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, removed *[]uint8) {
+// revokerBundle boots the bridge and returns it with the fabric indexes
+// of the node.fabric_removed frames the WebSocket bridge published — the
+// frames the SPA reads.
+func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, removed func() []uint8) {
 	t.Helper()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
@@ -165,24 +165,26 @@ func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, re
 		t.Fatal("startMatterBridge returned nil")
 	}
 	t.Cleanup(bundle.stop)
-	var seen []uint8
-	var mu sync.Mutex
-	bundle.events.Subscribe(func(ev fabricui.Event) {
-		if ev.Type != fabricui.EventFabricRemoved {
-			return
+	// The production bridge over the bundle's node, as wireMatterRuntime
+	// wires it: go-fabric-ui routes no fabric transition through its event
+	// source, so the bridge's own node observer is what reaches the hub.
+	hub := ws.NewHub()
+	t.Cleanup(wireMatterNodeEvents(bundle.events, bundle.node, hub, nil))
+	return bundle, func() []uint8 {
+		frames := hub.Replay(0, func(topic string) bool { return topic == nodeTopicFabricRemoved }).Events
+		seen := make([]uint8, 0, len(frames))
+		for _, frame := range frames {
+			f, _ := frame.Payload.(fabricui.FabricEvent)
+			seen = append(seen, f.FabricIndex)
 		}
-		f, _ := ev.Data.(fabricui.FabricEvent)
-		mu.Lock()
-		seen = append(seen, f.FabricIndex)
-		mu.Unlock()
-	})
-	return bundle, &seen
+		return seen
+	}
 }
 
 // TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes: the operator's
 // revoke (go-fabric-ui's DELETE /node/fabrics/{index}) removes the fabric
 // through the node facade, so the RemoveFabric command's own fan-out runs
-// and ends in go-fabric-ui's event source — the WebSocket frame's source. Removing the row alone read
+// and ends in the WebSocket bridge's node.fabric_removed frame. Removing the row alone read
 // as a success on every surface while the unpaired controller kept its
 // live CASE session, its subscription and its operational record until
 // the daemon restarted.
@@ -205,7 +207,7 @@ func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 	if _, err := bundle.store.GetFabric(ctx, idx); err == nil {
 		t.Error("fabric row survived RemoveFabric")
 	}
-	if got := *removed; len(got) != 1 || got[0] != idx {
+	if got := removed(); len(got) != 1 || got[0] != idx {
 		t.Errorf("the fabric-removed observer ran for %v, want exactly [%d] — the controller keeps its session and the SPA never hears otherwise", got, idx)
 	}
 }
@@ -219,7 +221,7 @@ func TestRevokeFabricOfAnUnknownIndexRunsNoFanOut(t *testing.T) {
 	if err := bundle.node.RemoveFabric(context.Background(), 7); err == nil {
 		t.Fatal("RemoveFabric for an unknown index returned nil; want an error")
 	}
-	if got := *removed; len(got) != 0 {
+	if got := removed(); len(got) != 0 {
 		t.Errorf("the fabric-removed observer ran for %v for a fabric that was never there", got)
 	}
 }

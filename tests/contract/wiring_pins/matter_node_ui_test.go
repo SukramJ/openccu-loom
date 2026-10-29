@@ -38,15 +38,12 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 			t.Errorf("wireMatterRuntime never hands go-fabric-ui %s (%q)", want.what, want.expr)
 		}
 	}
-	// The node's own fabric and window transitions reach the pages only
-	// through observers chained at node.New (go-fabric-ui
-	// docs/embedding.md): a later registration does not exist.
-	if !strings.Contains(matter, "Observers: uiEvents.Observers(node.Observers{}),") {
-		t.Error("the node's observers are not go-fabric-ui's — a controller commissioning the bridge reaches no page and no WebSocket topic")
-	}
-	// The WebSocket hub is fed from the same source the SSE stream reads.
-	if !strings.Contains(matter, "closers = append(closers, wireMatterNodeEvents(bundle.events, wsHub, auditRec))") {
-		t.Error("the node events never reach the WebSocket hub — the SPA, which reads the hub rather than the SSE stream, sees none of them")
+	// The WebSocket hub is fed from the event source the SSE stream reads
+	// and from the node itself: go-fabric-ui observes the node for each
+	// open SSE stream alone, so the fabric and window transitions reach the
+	// hub only through the bridge's own observer on the bundle's node.
+	if !strings.Contains(matter, "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))") {
+		t.Error("the node events never reach the WebSocket hub — the SPA, which reads the hub rather than the SSE stream, hears no commissioning, no fabric removal and no window")
 	}
 	// A reassembly the handler did not trigger (a central becoming ready,
 	// hot-plug) still announces itself.

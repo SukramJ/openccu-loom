@@ -12,13 +12,41 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   view's pages — Status, Pair, Fabrics, Selection, Endpoints, Diagnostics
   — are the node page family of
   [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui) (`@sukramj/fabric-ui`
-  0.1.1 in the SPA, `github.com/SukramJ/go-fabric-ui` 0.1.1 serving the
+  0.2.3 in the SPA, `github.com/SukramJ/go-fabric-ui` 0.2.4 serving the
   API), shared by every daemon built on go-fabric. What stays in this
   repository is loom's own: which CCU channels are exposable and how they
   are named (the exposure provider in `internal/north/matteradapter`),
   the WebSocket bridge of the node's events, and the MCP / health status
   seam. The pages' theme tokens and the Home Assistant theme bridge come
-  from the package as well. go-fabric is at v0.12.1.
+  from the package as well. go-fabric is at v0.14.0.
+- **Matter: a bridged device keeps its endpoint number until the CCU
+  deletes it.** go-fabric v0.13 keeps a stored endpoint number until the
+  host forgets the key, rather than collecting it once a central's model
+  is complete. A device that is unexposed, hidden, or not loaded yet —
+  every central describes nothing before its CCU is ready — comes back
+  under the number it had. A device the CCU deletes is forgotten: its
+  numbers and those of its parts are freed, so the same address paired
+  again is a new accessory to Apple Home and Google Home. The cache-clear
+  re-init, which removes every device without the operator deleting one,
+  forgets nothing. The per-central readiness latch that guarded the old
+  collection is gone.
+- **Matter: the thermostat's TemperatureSetpointHold is not served.**
+  go-fabric v0.13.3 adds the hold to the Thermostat Sink; loom's climate
+  profiles implement the method and refuse a write, and declare no hold,
+  so no controller sees the attribute. Mapping the hold (Off = HM AUTO,
+  On = HM MANU) follows with the week-program work (#1008).
+- **Matter: the node's fabric and window events reach the WebSocket
+  hub from the node itself.** go-fabric-ui 0.2 hands the node's
+  transitions to its own SSE streams alone, so loom's WebSocket bridge
+  now observes the node through go-fabric-ui's `NodeObservers` (0.2.4)
+  for `node.fabric_added`, `node.fabric_removed`, `node.window_opened`
+  and `node.window_closed`, with the stream's payloads, and records a
+  removed fabric in the audit ledger as before.
+- **REST API 14.1.0.** `GET /api/v1/node/status` answers `window_kind`
+  and `window_deadline`, `GET /api/v1/node/endpoints` answers
+  `device_type_revision`, and an exposure item may carry `lists`
+  (go-fabric-ui 0.1.2 and 0.1.3; loom's selection has no list-valued
+  column and leaves it empty).
 - **REST API 14.0.0 (breaking).** The `/api/v1/matter/*` routes are gone;
   the Matter bridge is served under `/api/v1/node/*` with go-fabric-ui's
   contract (`contract/openapi.yaml` of that module, copied into

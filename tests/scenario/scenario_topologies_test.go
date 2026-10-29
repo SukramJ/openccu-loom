@@ -58,7 +58,7 @@ func newScenarioSnapshotter(snapshots []matteradapter.DeviceSnapshot) (bridge.Sn
 		}
 		snaps := make([]matterendpoint.Snapshot, 0, len(described))
 		for _, d := range described {
-			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
 		}
 		return inner.Assemble(ctx, snaps)
 	}, epStore, nil
@@ -160,8 +160,8 @@ func buildTwoCentralsTopology() (*scenarioTopology, error) {
 	devA := mkCentral("ccuA", "ONOFFA01", 1)
 	devB := mkCentral("ccuB", "ONOFFB01", 1)
 	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
-		{CentralName: "ccuA", Devices: []*device.Device{devA}, ModelComplete: true},
-		{CentralName: "ccuB", Devices: []*device.Device{devB}, ModelComplete: true},
+		{CentralName: "ccuA", Devices: []*device.Device{devA}},
+		{CentralName: "ccuB", Devices: []*device.Device{devB}},
 	})
 	if err != nil {
 		return nil, err
@@ -233,7 +233,7 @@ func buildFabricScopedReaderTopology() (*scenarioTopology, error) {
 	ch := dev.AddChannel(chAddr, 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
-		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
+		{CentralName: "ccu1", Devices: []*device.Device{dev}},
 	})
 	if err != nil {
 		return nil, err
@@ -265,7 +265,7 @@ func buildManyTempSensorsTopology() (*scenarioTopology, error) {
 		sources[chAddr+"/ACTUAL_TEMPERATURE"] = src
 	}
 	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
-		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
+		{CentralName: "ccu1", Devices: []*device.Device{dev}},
 	})
 	if err != nil {
 		return nil, err
@@ -445,7 +445,7 @@ func buildSingleOnOffEndpointSourceTopology() (*scenarioTopology, error) {
 	ch.AttachCalculatedDataPoint(src)
 
 	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
-		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
+		{CentralName: "ccu1", Devices: []*device.Device{dev}},
 	})
 	if err != nil {
 		return nil, err
@@ -506,7 +506,7 @@ func buildSingleTempSensorTopology() (*scenarioTopology, error) {
 	ch.AttachCalculatedDataPoint(src)
 
 	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
-		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
+		{CentralName: "ccu1", Devices: []*device.Device{dev}},
 	})
 	if err != nil {
 		return nil, err

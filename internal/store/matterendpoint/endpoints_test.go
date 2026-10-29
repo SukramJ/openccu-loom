@@ -425,3 +425,46 @@ func TestEndpoints_ListNoFilter(t *testing.T) {
 		t.Errorf("len=%d want 3", len(list))
 	}
 }
+
+// ---- DeviceKeys ----
+
+// TestDeviceKeysSelectsOneDeviceOfOneCentral holds the lookup a deleted
+// device's endpoint numbers are forgotten through: every stored key of the
+// device in its central, and nothing of a sibling device or of the same
+// address under another central.
+func TestDeviceKeysSelectsOneDeviceOfOneCentral(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+	s := matterendpoint.New(db)
+	ctx := context.Background()
+
+	want := []matterendpoint.SourceKey{
+		testKey("c1", "DEV0000001", 1, matterendpoint.DPKindCustom, "switch"),
+		testKey("c1", "DEV0000001", 2, matterendpoint.DPKindCustom, "switch"),
+	}
+	others := []matterendpoint.SourceKey{
+		testKey("c1", "DEV0000002", 1, matterendpoint.DPKindCustom, "switch"),
+		testKey("c2", "DEV0000001", 1, matterendpoint.DPKindCustom, "switch"),
+	}
+	for _, k := range append(append([]matterendpoint.SourceKey{}, want...), others...) {
+		if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: k, DeviceType: 0x010A}); err != nil {
+			t.Fatalf("UpsertEndpointAssigning(%s): %v", k, err)
+		}
+	}
+
+	got, err := s.DeviceKeys(ctx, "c1", "DEV0000001")
+	if err != nil {
+		t.Fatalf("DeviceKeys: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("DeviceKeys = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("DeviceKeys[%d] = %s, want %s", i, got[i], want[i])
+		}
+	}
+	if none, err := s.DeviceKeys(ctx, "c1", "DEV0000099"); err != nil || len(none) != 0 {
+		t.Errorf("DeviceKeys(unknown device) = %v, %v; want none, nil", none, err)
+	}
+}

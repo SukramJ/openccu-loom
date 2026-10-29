@@ -72137,6 +72137,9 @@
               "readPriv": "O",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -72173,6 +72176,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -132107,6 +132113,9 @@
               "readPriv": "O",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -132160,6 +132169,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -135142,6 +135154,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -135419,6 +135434,9 @@
               "readPriv": "V",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -135540,6 +135558,9 @@
               "readPriv": "O",
               "writePriv": "O",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -135944,6 +135965,9 @@
               "readPriv": "V",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -136053,6 +136077,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -136110,6 +136137,9 @@
               "readPriv": "O",
               "writePriv": "O",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -136181,6 +136211,9 @@
               "readPriv": "O",
               "writePriv": "O",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -136340,6 +136373,9 @@
               "readPriv": "O",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -136431,6 +136467,9 @@
               "readPriv": "O",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -136481,6 +136520,9 @@
               "rw": "R",
               "readPriv": "O",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -136542,6 +136584,9 @@
               "rw": "R",
               "readPriv": "O",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -136741,6 +136786,9 @@
               "writePriv": "M",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -136779,6 +136827,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -137097,6 +137148,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -137138,6 +137192,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -145563,6 +145620,9 @@
               "writePriv": "A",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -145625,6 +145685,9 @@
               "readPriv": "V",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -145669,6 +145732,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -145710,6 +145776,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -145763,6 +145832,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -145804,6 +145876,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -145848,6 +145923,9 @@
               "readPriv": "A",
               "writePriv": "A",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -145895,6 +145973,9 @@
               "readPriv": "A",
               "writePriv": "A",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -145962,6 +146043,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -146040,6 +146124,9 @@
               "readPriv": "A",
               "writePriv": "A",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -146141,6 +146228,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -146182,6 +146272,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -146235,6 +146328,9 @@
               "writePriv": "O",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -146276,6 +146372,9 @@
               "rw": "RW",
               "readPriv": "V",
               "writePriv": "O"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -146320,6 +146419,9 @@
               "readPriv": "A",
               "writePriv": "A",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -146676,6 +146778,9 @@
               "writePriv": "A",
               "fabric": "F"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -146802,6 +146907,9 @@
               "readPriv": "V",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -146845,6 +146953,9 @@
               "readPriv": "O",
               "writePriv": "O",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -146890,6 +147001,9 @@
               "readPriv": "V",
               "writePriv": "O"
             },
+            "quality": {
+              "largeMessage": true
+            },
             "fields": [
               {
                 "id": 0,
@@ -146930,6 +147044,9 @@
               "readPriv": "A",
               "writePriv": "A",
               "fabric": "F"
+            },
+            "quality": {
+              "largeMessage": true
             },
             "fields": [
               {
@@ -149339,6 +149456,545 @@
           }
         ]
       }
+    }
+  ],
+  "definitions": [
+    {
+      "name": "WebRtcTransportDefinitions",
+      "datatypes": [
+        {
+          "name": "ICECandidateStruct",
+          "type": "struct",
+          "metatype": "object",
+          "primitive": "struct",
+          "fields": [
+            {
+              "id": 0,
+              "name": "Candidate",
+              "type": "string",
+              "metatype": "string",
+              "primitive": "string",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 1,
+              "name": "SdpMid",
+              "type": "string",
+              "metatype": "string",
+              "primitive": "string",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "quality": {
+                "nullable": true
+              },
+              "constraint": {
+                "text": "min 1",
+                "min": 1
+              }
+            },
+            {
+              "id": 2,
+              "name": "SdpmLineIndex",
+              "type": "uint16",
+              "metatype": "integer",
+              "primitive": "uint16",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "quality": {
+                "nullable": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "ICEServerStruct",
+          "type": "struct",
+          "metatype": "object",
+          "primitive": "struct",
+          "fields": [
+            {
+              "id": 0,
+              "name": "Urls",
+              "type": "list",
+              "metatype": "array",
+              "primitive": "list",
+              "entry": {
+                "type": "string",
+                "metatype": "string",
+                "primitive": "string"
+              },
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "constraint": {
+                "text": "max 10[max 2000]",
+                "max": 10,
+                "entry": {
+                  "text": "max 2000",
+                  "max": 2000
+                }
+              }
+            },
+            {
+              "id": 1,
+              "name": "Username",
+              "type": "string",
+              "metatype": "string",
+              "primitive": "string",
+              "conformance": {
+                "text": "O",
+                "ast": {
+                  "type": "O"
+                }
+              },
+              "constraint": {
+                "text": "max 508",
+                "max": 508
+              }
+            },
+            {
+              "id": 2,
+              "name": "Credential",
+              "type": "string",
+              "metatype": "string",
+              "primitive": "string",
+              "conformance": {
+                "text": "O",
+                "ast": {
+                  "type": "O"
+                }
+              },
+              "constraint": {
+                "text": "max 512",
+                "max": 512
+              }
+            },
+            {
+              "id": 3,
+              "name": "Caid",
+              "type": "TlsCertificateManagement.TLSCAID",
+              "metatype": "integer",
+              "primitive": "uint16",
+              "scope": "cluster",
+              "conformance": {
+                "text": "O",
+                "ast": {
+                  "type": "O"
+                }
+              },
+              "constraint": {
+                "text": "0 to 65534",
+                "min": 0,
+                "max": 65534
+              }
+            }
+          ]
+        },
+        {
+          "name": "WebRTCEndReasonEnum",
+          "type": "enum8",
+          "metatype": "enum",
+          "primitive": "uint8",
+          "fields": [
+            {
+              "id": 0,
+              "name": "IceFailed",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 1,
+              "name": "IceTimeout",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 2,
+              "name": "UserHangup",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 3,
+              "name": "UserBusy",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 4,
+              "name": "Replaced",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 5,
+              "name": "NoUserMedia",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 6,
+              "name": "InviteTimeout",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 7,
+              "name": "AnsweredElsewhere",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 8,
+              "name": "OutOfResources",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 9,
+              "name": "MediaTimeout",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 10,
+              "name": "LowPower",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 11,
+              "name": "PrivacyMode",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            },
+            {
+              "id": 12,
+              "name": "UnknownReason",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "WebRTCSessionID",
+          "type": "uint16",
+          "metatype": "integer",
+          "primitive": "uint16",
+          "fields": []
+        },
+        {
+          "name": "WebRTCSessionStruct",
+          "type": "struct",
+          "metatype": "object",
+          "primitive": "struct",
+          "fields": [
+            {
+              "id": 0,
+              "name": "Id",
+              "type": "WebRTCSessionID",
+              "metatype": "integer",
+              "primitive": "uint16",
+              "scope": "cluster",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "access": {
+                "fabric": "F"
+              }
+            },
+            {
+              "id": 1,
+              "name": "PeerNodeId",
+              "type": "node-id",
+              "metatype": "integer",
+              "primitive": "uint64",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "access": {
+                "fabric": "F"
+              }
+            },
+            {
+              "id": 2,
+              "name": "PeerEndpointId",
+              "type": "endpoint-no",
+              "metatype": "integer",
+              "primitive": "uint16",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "access": {
+                "fabric": "F"
+              }
+            },
+            {
+              "id": 3,
+              "name": "StreamUsage",
+              "type": "StreamUsageEnum",
+              "metatype": "enum",
+              "primitive": "uint8",
+              "scope": "global",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "access": {
+                "fabric": "F"
+              }
+            },
+            {
+              "id": 4,
+              "name": "VideoStreamId",
+              "type": "CameraAvStreamManagement.VideoStreamID",
+              "metatype": "integer",
+              "primitive": "uint16",
+              "scope": "cluster",
+              "conformance": {
+                "text": "O, D",
+                "ast": {
+                  "type": "otherwise",
+                  "param": [
+                    {
+                      "type": "O"
+                    },
+                    {
+                      "type": "D"
+                    }
+                  ]
+                }
+              },
+              "access": {
+                "fabric": "F"
+              },
+              "quality": {
+                "nullable": true
+              }
+            },
+            {
+              "id": 5,
+              "name": "AudioStreamId",
+              "type": "CameraAvStreamManagement.AudioStreamID",
+              "metatype": "integer",
+              "primitive": "uint16",
+              "scope": "cluster",
+              "conformance": {
+                "text": "O, D",
+                "ast": {
+                  "type": "otherwise",
+                  "param": [
+                    {
+                      "type": "O"
+                    },
+                    {
+                      "type": "D"
+                    }
+                  ]
+                }
+              },
+              "access": {
+                "fabric": "F"
+              },
+              "quality": {
+                "nullable": true
+              }
+            },
+            {
+              "id": 6,
+              "name": "MetadataEnabled",
+              "type": "bool",
+              "metatype": "boolean",
+              "primitive": "bool",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "access": {
+                "fabric": "F"
+              }
+            },
+            {
+              "id": 7,
+              "name": "VideoStreams",
+              "type": "list",
+              "metatype": "array",
+              "primitive": "list",
+              "entry": {
+                "type": "CameraAvStreamManagement.VideoStreamID",
+                "metatype": "integer",
+                "primitive": "uint16",
+                "scope": "cluster",
+                "access": {
+                  "fabric": "F"
+                }
+              },
+              "conformance": {
+                "text": "O.a+",
+                "ast": {
+                  "type": "choice",
+                  "param": {
+                    "name": "a",
+                    "expr": {
+                      "type": "O"
+                    },
+                    "num": 1,
+                    "orMore": true
+                  }
+                }
+              },
+              "access": {
+                "fabric": "F"
+              },
+              "constraint": {
+                "text": "1 to 16",
+                "min": 1,
+                "max": 16
+              }
+            },
+            {
+              "id": 8,
+              "name": "AudioStreams",
+              "type": "list",
+              "metatype": "array",
+              "primitive": "list",
+              "entry": {
+                "type": "CameraAvStreamManagement.AudioStreamID",
+                "metatype": "integer",
+                "primitive": "uint16",
+                "scope": "cluster",
+                "access": {
+                  "fabric": "F"
+                }
+              },
+              "conformance": {
+                "text": "O.a+",
+                "ast": {
+                  "type": "choice",
+                  "param": {
+                    "name": "a",
+                    "expr": {
+                      "type": "O"
+                    },
+                    "num": 1,
+                    "orMore": true
+                  }
+                }
+              },
+              "access": {
+                "fabric": "F"
+              },
+              "constraint": {
+                "text": "1 to 16",
+                "min": 1,
+                "max": 16
+              }
+            },
+            {
+              "id": 254,
+              "name": "FabricIndex",
+              "type": "FabricIndex",
+              "metatype": "integer",
+              "primitive": "uint8",
+              "conformance": {
+                "text": "M",
+                "ast": {
+                  "type": "M"
+                }
+              },
+              "access": {
+                "fabric": "F"
+              },
+              "constraint": {
+                "text": "1 to 254",
+                "min": 1,
+                "max": 254
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -48,6 +49,7 @@ func switchDevice(addr, name string) *device.Device {
 type reconcilerSite struct {
 	node *node.Node
 	rec  *matteradapter.Reconciler
+	asm  *matteradapter.Assembler
 	ctx  context.Context
 }
 
@@ -59,7 +61,7 @@ func newReconcilerSite(t *testing.T) *reconcilerSite {
 	asm := matteradapter.New(matteradapter.Config{}, slog.New(slog.DiscardHandler))
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
-	return &reconcilerSite{node: n, rec: matteradapter.NewReconciler(n.Aggregator(), asm, slog.New(slog.DiscardHandler)), ctx: ctx}
+	return &reconcilerSite{node: n, rec: matteradapter.NewReconciler(n.Aggregator(), asm, nil, slog.New(slog.DiscardHandler)), ctx: ctx, asm: asm}
 }
 
 func (s *reconcilerSite) sync(t *testing.T, snaps ...matteradapter.DeviceSnapshot) {
@@ -112,36 +114,113 @@ func TestReconcilerAddsRenamesAndRemovesUnderTheCentralsPartition(t *testing.T) 
 	}
 }
 
-// TestReconcilerCollectsOnlyACompleteCentralsVanishedNumbers pins the
-// partition per central: a device removed from a central whose model is
-// complete gives its endpoint number up (a later add of the same key is
-// numbered afresh), while a device removed from a central still loading
-// keeps it (the same key comes back under the same number) — whatever the
-// other central's completeness.
-func TestReconcilerCollectsOnlyACompleteCentralsVanishedNumbers(t *testing.T) {
+// TestReconcilerKeepsAVanishedDevicesNumber pins the partition per
+// central without a forget: a device the walk stops describing — unexposed,
+// hidden, or a central still waiting on its CCU — comes back under the
+// number it had, in every central.
+func TestReconcilerKeepsAVanishedDevicesNumber(t *testing.T) {
 	t.Parallel()
 	s := newReconcilerSite(t)
-	done, loading := switchDevice("SW0000011", "Done"), switchDevice("SW0000021", "Loading")
-	snapDone := matteradapter.DeviceSnapshot{CentralName: "done", Devices: []*device.Device{done}, ModelComplete: true}
-	snapLoading := matteradapter.DeviceSnapshot{CentralName: "loading", Devices: []*device.Device{loading}}
-	s.sync(t, snapDone, snapLoading)
-	doneNumber, _, _ := s.served("SW0000011")
-	loadingNumber, _, _ := s.served("SW0000021")
+	s.sync(t,
+		matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{switchDevice("SW0000011", "One")}},
+		matteradapter.DeviceSnapshot{CentralName: "ccu2", Devices: []*device.Device{switchDevice("SW0000021", "Two")}})
+	one, _, _ := s.served("SW0000011")
+	two, _, _ := s.served("SW0000021")
 
-	// Both devices vanish from their walks.
-	s.sync(t,
-		matteradapter.DeviceSnapshot{CentralName: "done", ModelComplete: true},
-		matteradapter.DeviceSnapshot{CentralName: "loading"})
-	// Both come back; a fresh key's number tells whether the old one
-	// was collected: the next number is above every number in use.
-	s.sync(t,
-		matteradapter.DeviceSnapshot{CentralName: "done", Devices: []*device.Device{switchDevice("SW0000011", "Done")}, ModelComplete: true},
-		matteradapter.DeviceSnapshot{CentralName: "loading", Devices: []*device.Device{switchDevice("SW0000021", "Loading")}})
-	if n, _, _ := s.served("SW0000021"); n != loadingNumber {
-		t.Fatalf("the loading central's device came back as endpoint %d, want its retained %d", n, loadingNumber)
+	s.sync(t, matteradapter.DeviceSnapshot{CentralName: "ccu1"}, matteradapter.DeviceSnapshot{CentralName: "ccu2"})
+	if _, _, ok := s.served("SW0000011"); ok {
+		t.Fatal("SW0000011 is still served although the walk no longer describes it")
 	}
-	if n, _, _ := s.served("SW0000011"); n == doneNumber {
-		t.Fatalf("the complete central's device came back as endpoint %d: its vanished number was not collected", n)
+	s.sync(t,
+		matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{switchDevice("SW0000011", "One")}},
+		matteradapter.DeviceSnapshot{CentralName: "ccu2", Devices: []*device.Device{switchDevice("SW0000021", "Two")}})
+	if n, _, _ := s.served("SW0000011"); n != one {
+		t.Fatalf("ccu1's device came back as endpoint %d, want its kept %d", n, one)
+	}
+	if n, _, _ := s.served("SW0000021"); n != two {
+		t.Fatalf("ccu2's device came back as endpoint %d, want its kept %d", n, two)
+	}
+}
+
+// TestReconcilerForgetsADeletedDevice pins QueueForget: the next sync frees
+// the deleted device's number, so the same address paired again is
+// numbered afresh, while a sibling device of the central and a device of
+// the same address under another central keep theirs.
+func TestReconcilerForgetsADeletedDevice(t *testing.T) {
+	t.Parallel()
+	s := newReconcilerSite(t)
+	full := func() []matteradapter.DeviceSnapshot {
+		return []matteradapter.DeviceSnapshot{
+			{CentralName: "ccu1", Devices: []*device.Device{switchDevice("SW0000051", "Deleted"), switchDevice("SW0000052", "Sibling")}},
+			{CentralName: "ccu2", Devices: []*device.Device{switchDevice("SW0000051", "Same address")}},
+		}
+	}
+	s.sync(t, full()...)
+	deleted, _, _ := s.served("ccu1|SW0000051")
+	sibling, _, _ := s.served("SW0000052")
+	other, _, _ := s.served("ccu2|SW0000051")
+
+	// The CCU deletes the device: the model drops it and the event queues
+	// the forget ahead of the sync it triggers.
+	s.rec.QueueForget("ccu1", "SW0000051")
+	s.sync(t,
+		matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{switchDevice("SW0000052", "Sibling")}},
+		matteradapter.DeviceSnapshot{CentralName: "ccu2", Devices: []*device.Device{switchDevice("SW0000051", "Same address")}})
+	if _, _, ok := s.served("ccu1|SW0000051"); ok {
+		t.Fatal("the deleted device is still served")
+	}
+
+	s.sync(t, full()...)
+	if n, _, ok := s.served("ccu1|SW0000051"); !ok || n == deleted {
+		t.Fatalf("the device paired again is endpoint %d (served=%v), want a fresh number, not %d", n, ok, deleted)
+	}
+	if n, _, _ := s.served("SW0000052"); n != sibling {
+		t.Fatalf("the sibling moved from endpoint %d to %d", sibling, n)
+	}
+	if n, _, _ := s.served("ccu2|SW0000051"); n != other {
+		t.Fatalf("the same address under ccu2 moved from endpoint %d to %d", other, n)
+	}
+}
+
+// keysFromTopology is a DeviceKeyLister over keys recorded from a served
+// topology: what the endpoint store answers for a device it holds rows of.
+type keysFromTopology map[string][]matterendpoint.SourceKey
+
+func (k keysFromTopology) DeviceKeys(_ context.Context, centralName, deviceAddress string) ([]matterendpoint.SourceKey, error) {
+	return k[centralName+"|"+deviceAddress], nil
+}
+
+// TestReconcilerForgetsAStoredKeyItDoesNotHold pins the store lookup behind
+// QueueForget: a reconciler that never held the deleted device — the daemon
+// restarted after the device left the model — still frees its stored number
+// through the DeviceKeyLister.
+func TestReconcilerForgetsAStoredKeyItDoesNotHold(t *testing.T) {
+	t.Parallel()
+	s := newReconcilerSite(t)
+	s.sync(t, matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{switchDevice("SW0000061", "Deleted")}})
+	deleted, _, _ := s.served("SW0000061")
+	keys := keysFromTopology{}
+	for _, d := range s.node.Topology().Devices {
+		if k, ok := d.Key.(matterendpoint.SourceKey); ok && k.DeviceAddress == "SW0000061" {
+			keys["ccu1|SW0000061"] = append(keys["ccu1|SW0000061"], k)
+		}
+	}
+	if len(keys) == 0 {
+		t.Fatal("the served topology carries no key of SW0000061")
+	}
+	// The device leaves the model; its number stays reserved.
+	s.sync(t, matteradapter.DeviceSnapshot{CentralName: "ccu1"})
+
+	restarted := matteradapter.NewReconciler(s.node.Aggregator(), s.asm, keys, slog.New(slog.DiscardHandler))
+	restarted.QueueForget("ccu1", "SW0000061")
+	if err := restarted.Sync(s.ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1"}}); err != nil {
+		t.Fatalf("Sync with the forget: %v", err)
+	}
+	if err := restarted.Sync(s.ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{switchDevice("SW0000061", "Deleted")}}}); err != nil {
+		t.Fatalf("Sync with the device paired again: %v", err)
+	}
+	if n, _, ok := s.served("SW0000061"); !ok || n == deleted {
+		t.Fatalf("the device paired again is endpoint %d (served=%v), want a fresh number, not %d", n, ok, deleted)
 	}
 }
 

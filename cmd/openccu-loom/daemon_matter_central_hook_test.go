@@ -10,9 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-
-	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -41,20 +38,13 @@ func (r *reachableRecorder) snapshot() []reachableCall {
 	return append([]reachableCall(nil), r.calls...)
 }
 
-// TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter drives the
-// live-adopt shape end to end, through the two halves production wires: the
-// registry observer that owns the readiness latch and the per-central hook
-// that owns the reassemble pipeline. An adopted central firing its
-// CentralSouthboundReadyEvent must (a) latch the tracker the snapshotter
-// reads, so its snapshot stamps ModelComplete, and (b) run the reassemble
-// callback through the shared debounce pipeline. Without both an adopted
-// central stays model-incomplete forever and its persisted exposures never
-// assemble.
-func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.T) {
+// TestMatterCentralHook_AdoptedCentralReadyEventReassembles drives the
+// live-adopt shape: an adopted central firing its CentralSouthboundReadyEvent
+// must run the reassemble callback through the shared debounce pipeline, or
+// its persisted exposures never assemble.
+func TestMatterCentralHook_AdoptedCentralReadyEventReassembles(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-boot", "ccu-adopted")
-	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
-	t.Cleanup(unwireReadiness)
 
 	var reassembles atomic.Int32
 	reassembled := make(chan struct{}, 8)
@@ -67,7 +57,7 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 		return nil
 	}, 20*time.Millisecond, discardLogger())
 
-	hook := newMatterCentralHook(trigger, nil)
+	hook := newMatterCentralHook(trigger, nil, nil)
 	adopted, _ := reg.Get("ccu-adopted")
 	unwire := hook(adopted)
 	if unwire == nil {
@@ -75,28 +65,10 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 	}
 	t.Cleanup(unwire)
 
-	if readiness.isReady("ccu-adopted") {
-		t.Fatal("adopted central must start model-incomplete before its ready event")
-	}
-
 	adopted.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-adopted",
 	})
-
-	if !readiness.isReady("ccu-adopted") {
-		t.Error("adopted central not latched after its southbound-ready event")
-	}
-	byName := map[string]matteradapter.DeviceSnapshot{}
-	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
-		byName[s.CentralName] = s
-	}
-	if !byName["ccu-adopted"].ModelComplete {
-		t.Error("adopted central: snapshot ModelComplete = false after ready event, want true")
-	}
-	if byName["ccu-boot"].ModelComplete {
-		t.Error("boot central: ModelComplete = true without ready event, want false")
-	}
 
 	select {
 	case <-reassembled:
@@ -119,7 +91,7 @@ func TestMatterCentralHook_KicksAnAlreadyReadyCentral(t *testing.T) {
 	adopted.MarkSouthboundReady() // ready before the hook exists
 
 	var triggers atomic.Int32
-	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil)
+	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil, nil)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -141,7 +113,7 @@ func TestMatterCentralHook_ForwardsAvailabilityChanges(t *testing.T) {
 	adopted, _ := reg.Get("ccu-adopted")
 
 	rec := &reachableRecorder{}
-	hook := newMatterCentralHook(nil, rec.notify)
+	hook := newMatterCentralHook(nil, nil, rec.notify)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -183,7 +155,7 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 
 	var triggers atomic.Int32
 	rec := &reachableRecorder{}
-	hook := newMatterCentralHook(func() { triggers.Add(1) }, rec.notify)
+	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil, rec.notify)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -214,70 +186,40 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 // without an event bus) must yield a nil unwire instead of panicking.
 func TestMatterCentralHook_NilUnitIsNoop(t *testing.T) {
 	t.Parallel()
-	hook := newMatterCentralHook(func() {}, nil)
+	hook := newMatterCentralHook(func() {}, nil, nil)
 	if unwire := hook(nil); unwire != nil {
 		t.Error("hook(nil unit) returned a non-nil unwire, want nil")
 	}
 }
 
-// TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete pins the
-// teardown half of the readiness latch.
-//
-// The latch decides whether the assembler's vanished-source GC trusts a
-// central's device list. Removing a central and registering a fresh unit
-// under the same name — a re-add, or the SPA's disable/enable toggle — hands
-// the snapshotter a unit whose ModelRegistry is still empty, because
-// reg.Register runs long before the readiness-gated CCU load. With the
-// removed central's latch still set, that empty snapshot is stamped
-// ModelComplete, the GC reads every persisted endpoint as vanished and
-// deletes it, and the refill renumbers the fleet: controllers key their
-// accessory cache on the endpoint number, so Apple Home / Google Home lose
-// every accessory of that CCU.
-func TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete(t *testing.T) {
+// TestMatterCentralHook_ForgetsADeviceTheCCUDeleted pins the forget the hook
+// wires on an adopted central: a device the CCU deleted is handed to forget,
+// so its endpoint numbers are freed, while the cache-clear re-init's
+// teardown — every device removed without the operator deleting any —
+// forgets nothing.
+func TestMatterCentralHook_ForgetsADeviceTheCCUDeleted(t *testing.T) {
 	t.Parallel()
-	const name = "ccu-readopted"
-
-	reg := buildTestRegistry(t, name)
-	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
-	t.Cleanup(unwireReadiness)
-	hook := newMatterCentralHook(func() {}, nil)
-
-	first, _ := reg.Get(name)
-	unwire := hook(first)
+	reg := buildTestRegistry(t, "ccu-adopted")
+	var mu sync.Mutex
+	var forgotten []string
+	hook := newMatterCentralHook(func() {}, func(centralName, address string) {
+		mu.Lock()
+		forgotten = append(forgotten, centralName+"|"+address)
+		mu.Unlock()
+	}, nil)
+	adopted, _ := reg.Get("ccu-adopted")
+	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire for a unit with an event bus")
 	}
-	first.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: name,
-	})
-	if !readiness.isReady(name) {
-		t.Fatal("precondition: the central must be latched after its ready event")
-	}
+	t.Cleanup(unwire)
 
-	// Live remove: the orchestrator runs the hook's unwire, then the unit
-	// leaves the registry.
-	unwire()
-	reg.Unregister(name)
+	adopted.EventBus.Publish(hmevent.DeviceRemovedEvent{Base: hmevent.NewBase(), CentralName: "ccu-adopted", Address: "TEARDOWN01", ModelTeardown: true})
+	adopted.EventBus.Publish(hmevent.DeviceRemovedEvent{Base: hmevent.NewBase(), CentralName: "ccu-adopted", Address: "DELETED001"})
 
-	// Re-adopt: a brand-new unit under the same name, model not loaded yet.
-	replacement, err := central.New(central.Config{Name: name})
-	if err != nil {
-		t.Fatalf("central.New: %v", err)
-	}
-	if err := reg.Register(replacement); err != nil {
-		t.Fatalf("reg.Register: %v", err)
-	}
-	t.Cleanup(hook(replacement))
-
-	for _, snap := range matterSnapshotter(reg, readiness)(context.Background()) {
-		if snap.CentralName != name {
-			continue
-		}
-		if snap.ModelComplete {
-			t.Fatalf("re-adopted central reports ModelComplete with %d devices loaded; "+
-				"the vanished-source GC would delete every persisted endpoint id",
-				len(snap.Devices))
-		}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(forgotten) != 1 || forgotten[0] != "ccu-adopted|DELETED001" {
+		t.Fatalf("forgotten = %v, want only ccu-adopted|DELETED001", forgotten)
 	}
 }

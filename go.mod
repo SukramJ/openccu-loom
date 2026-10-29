@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	filippo.io/nistec v0.0.4 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
@@ -13,6 +14,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
+	github.com/oapi-codegen/runtime v1.7.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b // indirect
@@ -33,8 +35,8 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.12.1
-	github.com/SukramJ/go-fabric-ui v0.1.1
+	github.com/SukramJ/go-fabric v0.14.0
+	github.com/SukramJ/go-fabric-ui v0.2.4
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.38.0
 	github.com/SukramJ/go-mqtt v1.7.0

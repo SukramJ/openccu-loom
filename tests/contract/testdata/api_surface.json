@@ -1,5 +1,5 @@
 {
- "api_version": "14.0.0",
+ "api_version": "14.1.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1247,6 +1247,7 @@
    "clusters:array\u003c$ref:Cluster\u003e",
    "device_type:integer",
    "device_type_name:string",
+   "device_type_revision:integer",
    "endpoint_id:integer",
    "name:string",
    "parent_endpoint_id:integer",
@@ -1585,6 +1586,7 @@
    "fields:object",
    "group:string",
    "key:string",
+   "lists:object",
    "name:string",
    "source:string",
    "verdict:$ref:Verdict"
@@ -1711,6 +1713,7 @@
    "message:string",
    "since:string"
   ],
+  "NodeWindowKind": [],
   "Occupancy": [
    "capacity:integer",
    "free:integer",
@@ -2305,7 +2308,9 @@
    "healthy:boolean",
    "listen_addr:string",
    "listening:boolean",
-   "warnings:array\u003c$ref:NodeWarning\u003e"
+   "warnings:array\u003c$ref:NodeWarning\u003e",
+   "window_deadline:string",
+   "window_kind:$ref:NodeWindowKind"
   ],
   "SuitableMemberEntry": [
    "address:string",

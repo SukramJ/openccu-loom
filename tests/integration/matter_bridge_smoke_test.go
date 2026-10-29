@@ -186,7 +186,7 @@ func assembleSmoke(t *testing.T, a *matteradapter.Assembler, store endpoint.Stor
 	}
 	out := make([]endpoint.Snapshot, 0, len(described))
 	for _, d := range described {
-		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
 	}
 	top, err := inner.Assemble(ctx, out)
 	if err != nil {

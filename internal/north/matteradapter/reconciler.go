@@ -12,6 +12,8 @@ import (
 
 	"github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/node"
+
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
 
 // Reconciler keeps the node's Aggregator in step with the device model:
@@ -22,11 +24,13 @@ import (
 // per endpoint (node.Partition.Batch).
 //
 // A central is a partition: the scope the endpoint store files its
-// endpoint numbers under, with its own completeness, so a central whose
-// initial device load has finished collects its vanished endpoints while
-// a central still loading keeps its stored numbers (go-fabric #229). A
-// central removed from the configuration is retired ([Reconciler.Retire]),
-// which collects its stored numbers once.
+// endpoint numbers under (go-fabric #229). An endpoint the walk no longer
+// describes is removed from the partition but keeps its stored number, so
+// a device that is only unexposed, hidden or not loaded yet — a central
+// still waiting on its CCU describes nothing — comes back under the same
+// number. A number is freed in two places only: a device the CCU deleted
+// is forgotten ([Reconciler.QueueForget]), and a central removed from the
+// configuration is retired ([Reconciler.Retire]).
 //
 // An endpoint is held as the spec the walk described, wrapped as the
 // Aggregator's endpoint; a described spec that differs from the held one
@@ -38,12 +42,27 @@ import (
 type Reconciler struct {
 	agg    *node.Aggregator
 	asm    *Assembler
+	keys   DeviceKeyLister
 	logger *slog.Logger
 
 	// mu serialises syncs: two concurrent walks would otherwise race on
 	// held and apply their diffs against the same previous state.
 	mu   sync.Mutex
 	held map[string]map[string]*heldEndpoint // scope → key → held
+
+	// forgetMu guards forget apart from mu, so [Reconciler.QueueForget]
+	// never waits for a sync in progress: it is called from the event
+	// bus's dispatch.
+	forgetMu sync.Mutex
+	forget   map[string]map[string]struct{} // scope → device address
+}
+
+// DeviceKeyLister finds the stored endpoint keys of one device of one
+// central, parts included; *matterendpoint.Store is one. It is how a
+// deleted device's keys are found once the walk no longer describes it,
+// a restart in between included.
+type DeviceKeyLister interface {
+	DeviceKeys(ctx context.Context, centralName, deviceAddress string) ([]matterendpoint.SourceKey, error)
 }
 
 // heldEndpoint is what the Aggregator holds for one key, with the
@@ -100,12 +119,93 @@ func identityOf(spec endpoint.Spec) endpointIdentity {
 }
 
 // NewReconciler returns a reconciler over agg, describing the model with
-// asm. logger may be nil.
-func NewReconciler(agg *node.Aggregator, asm *Assembler, logger *slog.Logger) *Reconciler {
+// asm and finding a deleted device's stored keys through keys. keys may be
+// nil: a forgotten device then frees only the keys the reconciler holds.
+// logger may be nil.
+func NewReconciler(agg *node.Aggregator, asm *Assembler, keys DeviceKeyLister, logger *slog.Logger) *Reconciler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Reconciler{agg: agg, asm: asm, logger: logger, held: map[string]map[string]*heldEndpoint{}}
+	return &Reconciler{
+		agg: agg, asm: asm, keys: keys, logger: logger,
+		held:   map[string]map[string]*heldEndpoint{},
+		forget: map[string]map[string]struct{}{},
+	}
+}
+
+// QueueForget marks a device the CCU deleted: the next [Reconciler.Sync]
+// frees the endpoint numbers stored for it and its parts before it applies
+// the walk, so a device paired again at the same address is numbered anew,
+// as any new device is. It never blocks on a sync; the caller triggers one.
+func (r *Reconciler) QueueForget(centralName, deviceAddress string) {
+	if centralName == "" || deviceAddress == "" {
+		return
+	}
+	r.forgetMu.Lock()
+	defer r.forgetMu.Unlock()
+	devs := r.forget[centralName]
+	if devs == nil {
+		devs = map[string]struct{}{}
+		r.forget[centralName] = devs
+	}
+	devs[deviceAddress] = struct{}{}
+}
+
+// takeForget hands over and clears the queued devices.
+func (r *Reconciler) takeForget() map[string]map[string]struct{} {
+	r.forgetMu.Lock()
+	defer r.forgetMu.Unlock()
+	out := r.forget
+	r.forget = map[string]map[string]struct{}{}
+	return out
+}
+
+// forgetDevices frees the stored numbers of the queued devices of one
+// central, in a batch of its own ahead of the walk's: a device described
+// again in the same sync is then added under a fresh number rather than
+// erased after it was added. A key comes from the store and from what the
+// reconciler holds, so a device forgotten before it was ever stored is
+// dropped as well. r.mu is held.
+func (r *Reconciler) forgetDevices(ctx context.Context, scope string, devs map[string]struct{}) error {
+	held := r.held[scope]
+	keys := map[string]endpoint.SourceKey{}
+	var errs []error
+	for addr := range devs {
+		if r.keys != nil {
+			stored, err := r.keys.DeviceKeys(ctx, scope, addr)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("stored keys of %s: %w", addr, err))
+			}
+			for _, k := range stored {
+				keys[k.String()] = k
+			}
+		}
+		for key, h := range held {
+			if h.ep.spec.DeviceAddress == addr {
+				keys[key] = h.ep.spec.StableKey
+			}
+		}
+	}
+	if len(keys) == 0 {
+		return errors.Join(errs...)
+	}
+	err := r.agg.Partition(scope).Batch(ctx, func(b *node.Batch) error {
+		var errs []error
+		for key, k := range keys {
+			if err := b.Forget(k); err != nil {
+				errs = append(errs, fmt.Errorf("forget %s: %w", key, err))
+				continue
+			}
+			delete(held, key)
+		}
+		return errors.Join(errs...)
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+	r.logger.Info("matter.reconciler.forget",
+		slog.String("central", scope), slog.Int("devices", len(devs)), slog.Int("keys", len(keys)))
+	return errors.Join(errs...)
 }
 
 // Sync describes snapshots and applies the changes to the Aggregator, one
@@ -116,11 +216,16 @@ func NewReconciler(agg *node.Aggregator, asm *Assembler, logger *slog.Logger) *R
 func (r *Reconciler) Sync(ctx context.Context, snapshots []DeviceSnapshot) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	var errs []error
+	for scope, devs := range r.takeForget() {
+		if err := r.forgetDevices(ctx, scope, devs); err != nil {
+			errs = append(errs, fmt.Errorf("matteradapter: central %q: %w", scope, err))
+		}
+	}
 	described, err := r.asm.DescribeDevices(ctx, snapshots)
 	if err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
-	var errs []error
 	for _, d := range described {
 		if err := r.syncCentral(ctx, d); err != nil {
 			errs = append(errs, fmt.Errorf("matteradapter: central %q: %w", d.Scope, err))
@@ -177,9 +282,6 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 				continue
 			}
 			delete(held, key)
-		}
-		if d.ModelComplete {
-			b.MarkComplete()
 		}
 		return errors.Join(errs...)
 	})

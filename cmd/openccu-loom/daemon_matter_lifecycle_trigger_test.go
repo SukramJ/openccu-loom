@@ -20,7 +20,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_ReadyUnitFiresOnCreateAndRemove(t
 	unit.MarkSouthboundReady()
 
 	fired := 0
-	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
+	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ }, nil)
 	t.Cleanup(func() {
 		for _, unsub := range unsubs {
 			unsub()
@@ -54,7 +54,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_NotReadyUnitSkipsTrigger(t *testi
 	unit, _ := reg.Get("ccu-a")
 
 	fired := 0
-	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
+	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ }, nil)
 	t.Cleanup(func() {
 		for _, unsub := range unsubs {
 			unsub()
@@ -85,7 +85,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing
 	unit.MarkSouthboundReady()
 
 	fired := 0
-	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
+	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ }, nil)
 	if len(unsubs) != 4 {
 		t.Fatalf("unsubs = %d, want 4 (DeviceCreated + DeviceRemoved + DeviceMetadataChanged + DeviceReleased)", len(unsubs))
 	}
@@ -113,13 +113,13 @@ func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing
 func TestSubscribeMatterDeviceLifecycleTrigger_NilInputsReturnNil(t *testing.T) {
 	t.Parallel()
 
-	if unsubs := subscribeMatterDeviceLifecycleTrigger(nil, func() {}); unsubs != nil {
+	if unsubs := subscribeMatterDeviceLifecycleTrigger(nil, func() {}, nil); unsubs != nil {
 		t.Errorf("unsubs = %v for nil unit, want nil", unsubs)
 	}
 
 	reg := buildTestRegistry(t, "ccu-a")
 	unit, _ := reg.Get("ccu-a")
-	if unsubs := subscribeMatterDeviceLifecycleTrigger(unit, nil); unsubs != nil {
+	if unsubs := subscribeMatterDeviceLifecycleTrigger(unit, nil, nil); unsubs != nil {
 		t.Errorf("unsubs = %v for nil trigger, want nil", unsubs)
 	}
 }
@@ -139,7 +139,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_FiresOnRename(t *testing.T) {
 	unit.MarkSouthboundReady()
 
 	fired := 0
-	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
+	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ }, nil)
 	t.Cleanup(func() {
 		for _, unsub := range unsubs {
 			unsub()

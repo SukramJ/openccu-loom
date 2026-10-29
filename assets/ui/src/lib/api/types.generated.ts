@@ -11363,6 +11363,12 @@ export interface components {
             advertising: boolean;
             commissioning_window_open: boolean;
             commissioning_window_duration_seconds?: number;
+            window_kind?: components["schemas"]["NodeWindowKind"];
+            /**
+             * Format: date-time
+             * @description When the open window's timer closes it, on the node's clock; absent while no window is open.
+             */
+            window_deadline?: string;
             /** @description Whether the host serves a selection. */
             exposure: boolean;
             /** @description The admin token of token mode; absent when the host decides admin rights. */
@@ -11432,6 +11438,8 @@ export interface components {
             parent_endpoint_id: number;
             device_type: number;
             device_type_name: string;
+            /** @description The revision the endpoint's Descriptor serves for its device type; absent for a type the schema does not know. */
+            device_type_revision?: number;
             reachable: boolean;
             name: string;
             /** @description Opaque identity of the host's source; `key` is the endpoint's stable key. */
@@ -11561,6 +11569,10 @@ export interface components {
             fields: {
                 [key: string]: string;
             };
+            /** @description Optional. The values of list-valued (multi) fields, by field key: one entry per value, no separator semantics, so a value may contain a comma. Wins over the comma-separated fields entry of the same key. */
+            lists?: {
+                [key: string]: string[];
+            };
             verdict: components["schemas"]["Verdict"];
             enabled: boolean;
             /** @description Where the verdict comes from, in the host's words. */
@@ -11614,6 +11626,11 @@ export interface components {
          * @enum {string}
          */
         NodeVerdictState: "mappable" | "partially_mappable" | "unmappable";
+        /**
+         * @description Which window is open — the node's own on its configured credentials, a basic one on fresh credentials, an administrator's enhanced one; absent without a node.
+         * @enum {string}
+         */
+        NodeWindowKind: "none" | "own" | "basic" | "enhanced";
         /** @description The payload of the `node.endpoints_changed` broadcast: empty. The node reassembled its bridged endpoints; a subscriber reloads GET /node/endpoints. */
         NodeEndpointsChangedPayload: Record<string, never>;
     };

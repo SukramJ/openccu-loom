@@ -50,12 +50,12 @@ func TestForeignSourceKeyIsRejected(t *testing.T) {
 // TestRecordScopeMustMatchItsKey pins that a record whose Scope
 // contradicts its key's central is refused.
 //
-// The central is part of the primary key AND the column garbage
-// collection partitions on. If the two could disagree, a row would be
-// written into one central's partition while claiming to belong to
-// another, and the next model-complete assembly of whichever central
-// listed it would delete it as vanished — silently renumbering that
-// device on every boot.
+// The central is part of the primary key AND the column every lookup by
+// central partitions on — the partition the Aggregator files a central's
+// numbers under, DeviceKeys, a central's retirement. If the two could
+// disagree, a row would be written into one central's partition while
+// claiming to belong to another: the forget of a deleted device would miss
+// it, and retiring the other central would erase a number still in use.
 func TestRecordScopeMustMatchItsKey(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -35,13 +35,12 @@ func TestGoldenFleetAnswersAControllerOverCASE(t *testing.T) {
 	site := fabrictest.NewSite(t, fabrictest.Options{})
 	pair := site.CommissionedPair(fabrictest.PairOptions{})
 	n := pair.Device.Node()
-	reconciler := matteradapter.NewReconciler(n.Aggregator(), asm, slog.New(slog.DiscardHandler))
+	reconciler := matteradapter.NewReconciler(n.Aggregator(), asm, nil, slog.New(slog.DiscardHandler))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := reconciler.Sync(ctx, []matteradapter.DeviceSnapshot{{
-		CentralName:   goldenCentralName,
-		Devices:       goldenFleet(t),
-		ModelComplete: true,
+		CentralName: goldenCentralName,
+		Devices:     goldenFleet(t),
 	}}); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}

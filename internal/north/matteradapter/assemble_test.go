@@ -41,7 +41,7 @@ func describeSnapshots(ctx context.Context, a *matteradapter.Assembler, snapshot
 	}
 	out := make([]endpoint.Snapshot, 0, len(described))
 	for _, d := range described {
-		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints, ModelComplete: d.ModelComplete})
+		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
 	}
 	return out, nil
 }

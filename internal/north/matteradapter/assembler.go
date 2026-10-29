@@ -185,20 +185,13 @@ type DeviceSnapshot struct {
 	// Devices is the list of model devices visible on this central at
 	// snapshot time. nil-safe — an empty slice produces zero endpoints.
 	Devices []*device.Device
-	// ModelComplete reports whether this central's initial device load
-	// has finished. A complete central's partition of the Aggregator is
-	// marked complete, so its stored endpoints absent from the walk are
-	// collected; before that they are retained.
-	ModelComplete bool
 }
 
 // Described is one central's fleet as the walk describes it: the
-// endpoints the central projects, under the central's scope, and whether
-// its model is complete.
+// endpoints the central projects, under the central's scope.
 type Described struct {
-	Scope         string
-	Endpoints     []endpoint.Spec
-	ModelComplete bool
+	Scope     string
+	Endpoints []endpoint.Spec
 }
 
 // DescribeDevices walks the model fleets in snapshots and describes every
@@ -225,7 +218,7 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 	if names == nil {
 		names = newModelNameResolver(snap.Devices, a.cfg.Labels, a.channelLabel())
 	}
-	out := Described{Scope: snap.CentralName, ModelComplete: snap.ModelComplete}
+	out := Described{Scope: snap.CentralName}
 	for _, dev := range snap.Devices {
 		if dev == nil {
 			continue
@@ -615,9 +608,10 @@ func (a *Assembler) makeElectricalGroupSpec(
 // per-parameter fan-out inside a button channel.
 //
 // Older per-parameter rows (dp_key = "PRESS_SHORT", …) no longer
-// appear in the assembled set and are garbage-collected on the next
-// model-complete assembly; the consolidated endpoint is allocated a
-// fresh endpoint id, so controllers re-learn button devices once.
+// appear in the assembled set; they stay stored until the device is
+// forgotten ([Reconciler.QueueForget] finds them by its address). The
+// consolidated endpoint is allocated a fresh endpoint id, so controllers
+// re-learn button devices once.
 const ButtonGroupDPKey = "BUTTON"
 
 // makeButtonGroupSpec describes the single GenericSwitch endpoint for

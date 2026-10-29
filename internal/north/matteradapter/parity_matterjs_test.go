@@ -256,9 +256,10 @@ func TestParityMatterJS_AggregatorTopology_PartsListContainsBridgedIDs(t *testin
 // allocated") and assignNumber() reuses the stored number; the only release
 // path is eraseStoreForEndpoint, invoked from
 // packages/node/src/node/server/ServerEndpointInitializer.ts eraseDescendant
-// on explicit endpoint deletion. An assembly run over a central whose model
-// is not yet complete must therefore behave like matter.js's "unknown
-// endpoints initialize before known endpoints" case — numbers stay reserved.
+// on explicit endpoint deletion. An assembly run without the source — the
+// boot-time shape, before the central's devices load — must therefore keep
+// the number reserved. The explicit deletion is the reconciler's forget of a
+// device the CCU deleted (TestReconcilerForgetsADeletedDevice).
 func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -273,31 +274,23 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 	fs := newFakeStore()
 	a := matteradapter.New(validConfig(), nil)
 
-	full := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
+	full := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
 	top1, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{full})
 	if err != nil {
 		t.Fatalf("Assemble(full): %v", err)
 	}
 	assigned := top1.Bridged()[0].ID
 
-	// A model-incomplete assembly (the boot-time shape) keeps the number
-	// reserved even though the source is currently absent.
-	incomplete := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
-	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{incomplete}); err != nil {
-		t.Fatalf("Assemble(incomplete): %v", err)
+	// An assembly without the source keeps the number reserved, however
+	// often it runs.
+	absent := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil}
+	for range 2 {
+		if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{absent}); err != nil {
+			t.Fatalf("Assemble(absent): %v", err)
+		}
 	}
 	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 1 || rows[0].EndpointID != assigned {
-		t.Fatalf("persisted endpoint number not reserved across incomplete assembly: rows=%v", rows)
-	}
-
-	// Only a model-complete assembly without the source (the explicit
-	// removal case) releases the number.
-	removed := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: true}
-	if _, err := assembleDevicesWith(ctx, a, fs, testEndpointConfig(), []matteradapter.DeviceSnapshot{removed}); err != nil {
-		t.Fatalf("Assemble(removed): %v", err)
-	}
-	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 0 {
-		t.Fatalf("explicit removal did not release the endpoint number: rows=%v", rows)
+		t.Fatalf("persisted endpoint number not reserved across assemblies without the source: rows=%v", rows)
 	}
 }
 
