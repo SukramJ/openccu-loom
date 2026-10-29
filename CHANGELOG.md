@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.94.0] - 2026-10-29
+
+### Release summary
+
+**The Matter pages and their API now come from go-fabric-ui, on go-fabric
+v0.14.0, and HmIP thermostats can bring their week programs, AUTO/MANU and
+heating state to Matter (opt-in, experimental).** A bridged device keeps its
+endpoint number until the CCU deletes it. MQTT gains a private CA for TLS
+brokers. REST API 14.1.0 and WebSocket 2.0 are breaking: the
+`/api/v1/matter/*` routes moved to `/api/v1/node/*` and the `matter.*`
+broadcasts to `node.*`. Nothing needs to be re-paired.
+
 ### Changed
 
 - **Matter: the pages and their API come from go-fabric-ui.** The Matter

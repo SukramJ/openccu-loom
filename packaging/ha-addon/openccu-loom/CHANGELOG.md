@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.94.0
+
+- **Matter pages from go-fabric-ui.** Status, Pair, Fabrics, Selection,
+  Endpoints and Diagnostics are now the shared pages of go-fabric-ui; the
+  Matter library is at go-fabric v0.14.0. Nothing needs to be re-paired.
+- **Thermostat week programs over Matter (experimental, off by default).**
+  With the expert option `north.matter.thermostat_schedules`, an HmIP
+  thermostat also tells Matter whether it is heating, whether it follows
+  its week program (AUTO) or holds a setpoint (manual), and offers its
+  week programs: a controller can switch the active one and edit them,
+  and an edit is written to the CCU. Apple Home and Google Home are not
+  verified with it yet.
+- **Matter endpoint numbers stay.** A device keeps its number while it is
+  hidden, unexposed or its CCU is still loading; only a device deleted on
+  the CCU gives its number up.
+- **MQTT over TLS with your own CA.** `north.mqtt.tls_ca_file` verifies
+  the broker against a CA bundle (the add-on maps `/ssl` read-only);
+  `north.mqtt.tls_insecure_skip_verify` turns verification off.
+- **The operating lock** of thermostats and keypads no longer shows up as
+  a lock tile in the UI, and on Matter its name says it is the button lock.
+- **API clients:** the REST Matter routes moved from `/api/v1/matter/*`
+  to `/api/v1/node/*` (REST API 14.1.0) and the WebSocket `matter.*`
+  events are now `node.*` (WebSocket 2.0). Clients using them need an
+  update.
+
 ## 0.93.0
 
 - **Matter bridge on go-fabric v0.10.2.** The bridge now runs on the

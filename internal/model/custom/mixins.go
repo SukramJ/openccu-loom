@@ -345,11 +345,11 @@ func NewStateSwitch(address, centralName string, w Writer) *generic.Switch {
 	})
 }
 
-// StateChangeTimer is a light-weight debouncer used by custom data
-// points that emit a burst of transient state changes (e.g. dimmer
-// while ramping). Consumers call Schedule to register a pending
-// transition; the previously scheduled transition is cancelled if it
-// has not yet fired.
+// StateChangeTimer is a light-weight debouncer for a custom data point
+// that emits a burst of transient state changes (e.g. a dimmer while
+// ramping): Schedule registers a pending transition and cancels the
+// previously scheduled one if it has not fired yet. No profile uses it;
+// it is listed in notes/parity/dead-code-production-only.json.
 type StateChangeTimer struct {
 	mu    sync.Mutex
 	timer *time.Timer

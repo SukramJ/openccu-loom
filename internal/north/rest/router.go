@@ -39,7 +39,8 @@ import (
 //  2. Nil → 503 service_unready. The route IS mounted but the handler
 //     inspects the field internally and writes a 503 Problem+JSON body.
 //     Used where the OpenAPI spec documents the endpoint as always-present
-//     but optionally wired. Examples: NodeUI.Node (GET /node/status),
+//     but optionally wired. Examples: NodeUI.Node (every node route but
+//     GET /node/status, which answers 200 with `enabled: false`),
 //     ConfigExport (GET and POST /config/export|import),
 //     ChannelFlags (PUT .../channels/{no}/flags).
 //
