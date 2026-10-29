@@ -68,6 +68,12 @@ type Config struct {
 	// handler. Supplying one is how an owner with a different model keeps
 	// its own names on the Matter plane instead of having them re-derived.
 	NameResolver NameResolver
+	// Build is what a device source builds its device under — the
+	// operator's opt-ins and the ports they need. The eligibility listing
+	// builds the same devices and takes the same value
+	// ([CollectCandidates]), because a source keeps the device it built
+	// first.
+	Build interfaces.MatterBuildOptions
 }
 
 // NameResolver is this daemon's naming authority for endpoint labels.
@@ -469,7 +475,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 				// parameters (a generic Switch serves STATE alone), so the
 				// projection is probed before the allowlist and the spec —
 				// with its persisted-label read — is described after it.
-				if src.projects(a.sourceOptions(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key)) {
+				if src.projects(a.sourceOptions(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key), a.cfg.Build) {
 					allowed, err := allow(matterendpoint.DPKindGeneric, key)
 					if err != nil {
 						return nil, err
@@ -722,13 +728,23 @@ func projectionOf(dp any) (projection, bool) {
 	return projection{}, false
 }
 
+// buildDevice is src's device, built under build when the source's device
+// depends on it. Every path that builds a device goes through here, so a
+// source sees the same options whichever path builds it first.
+func buildDevice(src interfaces.MatterDeviceSource, opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
+	if c, ok := src.(interfaces.MatterConfiguredDeviceSource); ok {
+		return c.MatterDeviceWith(opts, build)
+	}
+	return src.MatterDevice(opts)
+}
+
 // projects reports whether the source projects an endpoint at all: a
 // device source once its device is built with opts (the build is kept by
 // the source, so the later spec reuses it), a server source when it
 // serves a cluster.
-func (p projection) projects(opts fabricdevice.Options) bool {
+func (p projection) projects(opts fabricdevice.Options, build interfaces.MatterBuildOptions) bool {
 	if p.device != nil {
-		d, err := p.device.MatterDevice(opts)
+		d, err := buildDevice(p.device, opts, build)
 		return err == nil && d != nil
 	}
 	return len(p.source.MatterClusterServers()) > 0
@@ -829,14 +845,14 @@ func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *d
 // kit refuses, yields no endpoint — there is no hand-built fallback,
 // because the servers exist only inside the device.
 func (a *Assembler) declaredDeviceSpec(in specInput, src interfaces.MatterDeviceSource) (endpoint.Spec, bool) {
-	d, err := src.MatterDevice(fabricdevice.Options{
+	d, err := buildDevice(src, fabricdevice.Options{
 		StableKey:      in.key,
 		Name:           in.friendlyName,
 		Vendor:         bridgedVendorName,
 		DeviceAddress:  in.dev.Address,
 		ChannelAddress: in.ch.Address,
 		Reachable:      in.dev.Available,
-	})
+	}, a.cfg.Build)
 	if err != nil {
 		// Once per key: the source retries the build on every assembly,
 		// and the finding does not change between two of them.

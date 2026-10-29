@@ -336,6 +336,14 @@ func matterEndpointRestartRules() []RestartRule {
 			},
 		},
 		{
+			// A thermostat builds its Matter device once, with the feature
+			// set this selects, and keeps it for as long as it lives.
+			Path: "north.matter.thermostat_schedules",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.ThermostatSchedules != e.North.Matter.ThermostatSchedules
+			},
+		},
+		{
 			Path: "north.matter.enable_time_sync",
 			Differs: func(b, e *Config) bool {
 				return b.North.Matter.TimeSyncEnabled() != e.North.Matter.TimeSyncEnabled()

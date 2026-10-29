@@ -193,6 +193,15 @@ func (c *Climate) matterThermoFeatures() thermostatspec.Feature {
 // the wire package for revival once a canonical Matter Schedules cluster
 // ships in matter.js or the spec.
 func (c *Climate) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+	return c.MatterDeviceWith(opts, interfaces.MatterBuildOptions{})
+}
+
+// MatterDeviceWith implements [interfaces.MatterConfiguredDeviceSource]:
+// [Climate.MatterDevice] under the bridge's build options. With
+// ThermostatSchedules the Thermostat also serves the running state, the
+// setpoint hold and the week programs (matter_schedule.go); without it the
+// surface is the one [Climate.MatterDevice] describes.
+func (c *Climate) MatterDeviceWith(opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
 	return c.matterDevice.Device(func() (*fabricdevice.Device, error) {
 		var initial thermostatspec.Patch
 		features := c.matterThermoFeatures()
@@ -211,16 +220,18 @@ func (c *Climate) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device,
 				}
 			}
 		}
-		d, err := generic.NewMatterDevice(c, matterDeviceTypeThermostat, opts,
-			thermostatspec.Declare{
-				Features: features,
-				Initial:  initial,
-				Sink:     climateThermoSink{c: c},
-			},
-			tuidef.Declare{})
+		decl := thermostatspec.Declare{
+			Features: features,
+			Initial:  initial,
+			Sink:     climateThermoSink{c: c},
+		}
+		extras := c.matterExtrasFor(build)
+		c.applyMatterExtras(extras, &decl)
+		d, err := generic.NewMatterDevice(c, matterDeviceTypeThermostat, opts, decl, tuidef.Declare{})
 		if err != nil {
 			return nil, err
 		}
+		c.matterServes.Store(extras)
 		srv := thermostatInboundOf(d)
 		if c.setpoint != nil {
 			_ = c.setpoint.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterSetpoint(srv) })
@@ -236,6 +247,7 @@ func (c *Climate) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device,
 		c.syncMatterSetpoint(srv)
 		c.syncMatterLocalTemperature(srv)
 		c.syncMatterModeTo(srv)
+		c.wireMatterExtras(extras)
 		return d, nil
 	})
 }
@@ -302,13 +314,15 @@ func (c *Climate) syncMatterLocalTemperature(srv thermostatInbound) {
 	srv.SetLocalTemperature(&v)
 }
 
-// syncMatterModeTo stores the device's current mode on srv.
+// syncMatterModeTo stores the device's current mode on srv, and the
+// setpoint hold it implies when the device serves the hold.
 func (c *Climate) syncMatterModeTo(srv thermostatInbound) {
 	m, observed := c.Mode()
 	if !observed {
 		return
 	}
 	srv.SetSystemMode(c.systemModeFromHmMode(m, c.matterThermoFeatures()))
+	c.syncMatterHold(srv)
 }
 
 // syncMatterMode stores the device's current mode on the Thermostat
@@ -385,15 +399,21 @@ func (s climateThermoSink) SetSetpoint(ctx context.Context, _ uint32, value int1
 	return s.c.SetTemperature(ctx, matterToCelsius(value), matterDispatchPriority)
 }
 
-// errHoldNotServed refuses a TemperatureSetpointHold write. The Climate does
-// not serve the hold (its Initial leaves TemperatureSetpointHold unset), so
-// the server never admits such a write; the refusal keeps an accidental
-// declaration from storing a hold the CCU never saw.
+// errHoldNotServed refuses a TemperatureSetpointHold write on a Climate
+// built without the hold. The server admits such a write only when the
+// hold is served, so the refusal keeps an accidental declaration from
+// storing a hold the CCU never saw.
 var errHoldNotServed = errors.New("climate: TemperatureSetpointHold is not served")
 
-// SetTemperatureSetpointHold implements [thermostatspec.Sink]. The server
-// calls it only for a thermostat that serves the hold, which a Climate does
-// not, so it refuses with FAILURE.
-func (s climateThermoSink) SetTemperatureSetpointHold(context.Context, uint8) error {
-	return errHoldNotServed
+// SetTemperatureSetpointHold implements [thermostatspec.Sink]: Off resumes
+// the week program (HM AUTO), On holds the current setpoint (HM MANU,
+// [ModeHeat] — the mode a single-setpoint HM thermostat holds in).
+func (s climateThermoSink) SetTemperatureSetpointHold(ctx context.Context, hold uint8) error {
+	if !s.c.matterExtrasServed().hold {
+		return errHoldNotServed
+	}
+	if thermostatspec.TemperatureSetpointHoldEnum(hold) == thermostatspec.TemperatureSetpointHoldSetpointHoldOff {
+		return s.c.SetMode(ctx, ModeAuto, matterDispatchPriority)
+	}
+	return s.c.SetMode(ctx, ModeHeat, matterDispatchPriority)
 }

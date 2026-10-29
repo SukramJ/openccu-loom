@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 553.
+Guards without a doc comment: 8 of 554.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -537,6 +537,7 @@ Guards without a doc comment: 8 of 553.
 | TestNodePageFamilyIsWiredThroughTheCompositionRoot | wiring_pins/matter_node_ui_test.go | TestNodePageFamilyIsWiredThroughTheCompositionRoot pins the composition root's half of the Matter pages: go-fabric-ui's handler serves the node routes, and it serves them only as well as the options wireMatterRuntime fills. |
 | TestMatterPartitionRetirementIsWiredThroughTheCompositionRoot | wiring_pins/matter_partition_retire_test.go | TestMatterPartitionRetirementIsWiredThroughTheCompositionRoot pins the seam a removed central's Matter endpoint numbers are collected through: the reconciler's Retire reaches the bundle, the bundle's retire reaches the REST/WS wiring, and the composition root hands it to the central orchestrator whose removeCentral calls it. |
 | TestAPhysicalPressReachesTheMatterEventLog | wiring_pins/matter_switch_press_wiring_test.go | TestAPhysicalPressReachesTheMatterEventLog pins the one seam that carries a button from the CCU to a commissioner: the reassemble wiring that subscribes a bridged GenericSwitch cluster to its endpoint's press source. |
+| TestThermostatScheduleWriterIsTheSchedulesDomain | wiring_pins/matter_thermostat_schedules_test.go | TestThermostatScheduleWriterIsTheSchedulesDomain pins the composition root's half of a Matter week-program commit: the writer the bridge hands every thermostat is the schedules domain the REST schedule editor writes through, and the operator's flag reaches the build options. |
 | TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
 | TestPin_DeferredCreationToggle_AppliedOnReload | wiring_pins/pending_devices_gate_test.go | TestPin_DeferredCreationToggle_AppliedOnReload pins that a live config edit actually reaches the per-central handler. |
 | TestPin_DeferredCreationToggle_ManagerBound | wiring_pins/pending_devices_gate_test.go | TestPin_DeferredCreationToggle_ManagerBound pins the other half: the reload path can only reach the handles if the composition root hands them over. |

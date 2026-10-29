@@ -97,7 +97,7 @@ func startWithAttestation(t *testing.T, mutate func(a *config.NorthMatterAttesta
 	mutate(&cfg.North.Matter.Attestation)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-attestation"), openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-attestation"), openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil; a chain that does not load must leave the bridge running")
 	}

@@ -1420,6 +1420,8 @@ const EN: Catalog = {
     "Expose secondary channels",
   "config.field.north.matter.include_measurements":
     "Expose derived sensors",
+  "config.field.north.matter.thermostat_schedules":
+    "Thermostat schedules and hold",
   "config.field.north.matter.mdns_advertise": "mDNS advertiser",
   "config.field.north.matter.dev_rotate_unique_ids":
     "Rotate unique IDs each boot (dev)",
@@ -1658,6 +1660,8 @@ const EN: Catalog = {
     "Off by default: a multi-channel device (switch, dimmer, cover, lock, siren, valve) projects a single Matter endpoint from its primary channel. Enable to also expose its secondary virtual-receiver actor channels as separate endpoints. Matter only — MQTT, HA-Discovery and REST always carry every channel.",
   "config.help.north.matter.include_measurements":
     "Off by default: sensors the daemon calculates rather than reads — apparent temperature, dew point, dew-point spread, enthalpy, frost point, vapor concentration, operating-voltage level and derived binary state — are not sent to Matter. Enable to expose them as measurement endpoints alongside the device itself. The exposure list offers these data points either way, because it reports what the model can project; one you allowlisted while this was off starts appearing the moment you turn it on. Matter only — MQTT, HA-Discovery and REST always carry derived sensors.",
+  "config.help.north.matter.thermostat_schedules":
+    "Off by default. Enable to send three more things for every thermostat to Matter: whether it is heating right now, whether it follows its week program (setpoint hold off = AUTO, on = manual), and the week programs themselves — a controller can read them, switch the active one and edit them, and an edit is written to the CCU. Experimental: Apple Home and Google Home are not yet verified with it. Takes effect after a restart.",
   "config.help.north.matter.mdns_advertise":
     "mDNS advertiser implementation. Unset defaults to `zeroconf`, which publishes the operational + commissionable records on the network — required for pairing by QR code. `noop` keeps the records in-memory only (tests / out-of-band discovery); commissioners cannot discover the bridge in that mode.",
   "config.help.north.matter.dev_rotate_unique_ids":
@@ -5641,6 +5645,8 @@ const DE: Catalog = {
     "Sekundärkanäle exponieren",
   "config.field.north.matter.include_measurements":
     "Berechnete Sensoren exponieren",
+  "config.field.north.matter.thermostat_schedules":
+    "Thermostat-Wochenprogramme und Halten",
   "config.field.north.matter.mdns_advertise": "mDNS-Advertiser",
   "config.field.north.matter.dev_rotate_unique_ids":
     "UniqueID pro Boot rotieren (Dev)",
@@ -5883,6 +5889,8 @@ const DE: Catalog = {
     "Standardmäßig aus: Ein Mehrkanalgerät (Schalter, Dimmer, Rollladen, Schloss, Sirene, Ventil) projiziert einen einzelnen Matter-Endpoint aus seinem Primärkanal. Aktivieren, um auch die sekundären Aktor-Kanäle als eigene Endpoints zu exponieren. Nur Matter — MQTT, HA-Discovery und REST führen immer alle Kanäle.",
   "config.help.north.matter.include_measurements":
     "Standardmäßig aus: Sensoren, die der Daemon berechnet statt ausliest — gefühlte Temperatur, Taupunkt, Taupunktdifferenz, Enthalpie, Frostpunkt, Wasserdampfkonzentration, Betriebsspannungspegel und abgeleiteter Binärzustand — gehen nicht an Matter. Aktivieren, um sie als Messwert-Endpoints neben dem Gerät selbst zu exponieren. Die Freigabeliste bietet diese Datenpunkte ohnehin an, denn sie zeigt, was das Modell projizieren kann; ein bei ausgeschaltetem Schalter freigegebener Datenpunkt erscheint, sobald Sie ihn einschalten. Nur Matter — MQTT, HA-Discovery und REST führen berechnete Sensoren immer.",
+  "config.help.north.matter.thermostat_schedules":
+    "Standardmäßig aus. Aktivieren, um für jedes Thermostat drei weitere Dinge an Matter zu senden: ob es gerade heizt, ob es seinem Wochenprogramm folgt (Halten aus = AUTO, an = manuell) und die Wochenprogramme selbst — ein Controller kann sie lesen, das aktive umschalten und sie bearbeiten; eine Änderung wird auf die CCU geschrieben. Experimentell: Apple Home und Google Home sind damit noch nicht verifiziert. Wirkt nach einem Neustart.",
   "config.help.north.matter.mdns_advertise":
     "mDNS-Advertiser-Implementierung. Ohne Wert gilt `zeroconf`: operational + commissionable Records werden im Netz veröffentlicht — Voraussetzung für das Koppeln per QR-Code. `noop` hält die Records nur in-memory (Tests / Out-of-band-Discovery); Commissioner finden die Bridge dann nicht.",
   "config.help.north.matter.dev_rotate_unique_ids":

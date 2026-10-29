@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // matterStatusReaderAdapter implements [mcp.MatterStatusReader] against
@@ -88,6 +89,9 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) mcp.Matter
 type matterCandidateProviderAdapter struct {
 	reg *central.Registry
 	cfg *config.Config
+	// build is the bridge's [matteradapter.Config.Build]: listing a
+	// candidate builds its device, and the source keeps the first build.
+	build interfaces.MatterBuildOptions
 }
 
 // MatterCandidates calls [matteradapter.CollectCandidates] directly (rather
@@ -105,7 +109,7 @@ func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []m
 		if u == nil || u.ModelRegistry == nil {
 			continue
 		}
-		out = append(out, matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), a.cfg.North.Matter.ExposeSecondaryChannels)...)
+		out = append(out, matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), a.cfg.North.Matter.ExposeSecondaryChannels, a.build)...)
 	}
 	return out
 }

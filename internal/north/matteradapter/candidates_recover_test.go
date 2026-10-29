@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // panickingCustomDP models a structurally-incomplete device — e.g. a custom
@@ -55,7 +56,7 @@ func TestCollectCandidates_SkipsPanickingDevice(t *testing.T) {
 				t.Fatalf("CollectCandidates panicked on a broken device instead of skipping it: %v", r)
 			}
 		}()
-		got = matteradapter.CollectCandidates("central", []*device.Device{broken, healthy}, false)
+		got = matteradapter.CollectCandidates("central", []*device.Device{broken, healthy}, false, interfaces.MatterBuildOptions{})
 	}()
 
 	if len(got) != 1 {

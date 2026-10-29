@@ -117,6 +117,11 @@ type Options struct {
 	// a custom entity's secondary actor channels and its group-STATE channel.
 	ExposeSecondaryChannels bool
 
+	// ThermostatSchedules surfaces the `north.matter.thermostat_schedules`
+	// expert knob: a thermostat's running state, setpoint hold and week
+	// programs (MatterScheduleConfiguration).
+	ThermostatSchedules bool
+
 	// StartupDeadline overrides the default 30 s wait for the
 	// /api/v1/health endpoint to start returning 200.
 	StartupDeadline time.Duration
@@ -219,6 +224,7 @@ func startCommon(b *Bridge, opts Options) (*Bridge, func(), error) {
 		BridgeFabricID:          BridgeFabricID,
 		DevRotateUniqueIDs:      opts.DevRotateUniqueIDs,
 		ExposeSecondaryChannels: opts.ExposeSecondaryChannels,
+		ThermostatSchedules:     opts.ThermostatSchedules,
 		CCUHost:                 "127.0.0.1",
 		CCUXMLRPC:               b.CCU.XMLRPCPort(),
 		CCUJSONRPC:              b.CCU.JSONRPCPort(),
@@ -679,6 +685,7 @@ type chipToolConfigInputs struct {
 	BridgeFabricID          uint64
 	DevRotateUniqueIDs      bool
 	ExposeSecondaryChannels bool
+	ThermostatSchedules     bool
 	CCUHost                 string
 	CCUXMLRPC               int
 	CCUJSONRPC              int
@@ -757,6 +764,7 @@ func buildChipToolConfigYAML(in chipToolConfigInputs) string {
 	fmt.Fprintf(&b, "      fabric_id: %d\n", caseFabric)
 	fmt.Fprintf(&b, "    dev_rotate_unique_ids: %s\n", rotate)
 	fmt.Fprintf(&b, "    expose_secondary_channels: %s\n", exposeSecondary)
+	fmt.Fprintf(&b, "    thermostat_schedules: %t\n", in.ThermostatSchedules)
 
 	fmt.Fprintf(&b, "centrals:\n")
 	fmt.Fprintf(&b, "  - name: ccu-chiptool\n")

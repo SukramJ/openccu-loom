@@ -118,7 +118,7 @@ func TestStartMatterBridge_DisabledReturnsNil(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := t.Context()
 
-	if bundle := startMatterBridge(ctx, cfg, reg, nil, health.NewTracker(), nil, logger); bundle != nil {
+	if bundle := startMatterBridge(ctx, cfg, reg, nil, health.NewTracker(), nil, logger, nil); bundle != nil {
 		t.Error("expected nil bundle when Matter is disabled")
 	}
 }
@@ -140,7 +140,7 @@ func TestStartMatterBridge_EnabledReturnsBridge(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle when Matter is enabled")
 	}
@@ -176,7 +176,7 @@ func TestStartMatterBridge_PASEDisabledByDefault(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle")
 	}
@@ -208,7 +208,7 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle; check logs:\n" + buf.String())
 	}

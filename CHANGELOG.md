@@ -30,11 +30,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   re-init, which removes every device without the operator deleting one,
   forgets nothing. The per-central readiness latch that guarded the old
   collection is gone.
-- **Matter: the thermostat's TemperatureSetpointHold is not served.**
-  go-fabric v0.13.3 adds the hold to the Thermostat Sink; loom's climate
-  profiles implement the method and refuse a write, and declare no hold,
-  so no controller sees the attribute. Mapping the hold (Off = HM AUTO,
-  On = HM MANU) follows with the week-program work (#1008).
 - **Matter: the node's fabric and window events reach the WebSocket
   hub from the node itself.** go-fabric-ui 0.2 hands the node's
   transitions to its own SSE streams alone, so loom's WebSocket bridge
@@ -90,6 +85,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sync; nothing needs to be re-paired.
 
 ### Added
+
+- **Matter: week programs, AUTO/MANU and the running state of HmIP
+  thermostats** (`north.matter.thermostat_schedules`, expert, default off;
+  #1008). With the flag on, every bridged thermostat also serves
+  ThermostatRunningState (Heat while it heats, from the relay STATE or the
+  valve LEVEL), TemperatureSetpointHold (Off = HM AUTO, On = MANU; a write
+  switches the mode) and its week programs as MatterScheduleConfiguration:
+  one built-in schedule per program, SetActiveScheduleRequest switches the
+  active program (and the device into AUTO), and a controller's edit is
+  written to the CCU through the same path as the schedule editor. Without
+  MQTT, the bridge reads each thermostat's week profile once at start.
+  Experimental: Apple Home and Google Home are not verified with it yet,
+  and the flag off leaves the thermostat exactly as before. The mapping is
+  recorded as `BD-Matter-Thermostat-HoldAsAuto` in
+  `notes/parity/by_design.md`.
 
 - **MQTT: a private CA, or explicitly no verification, for a TLS broker.**
   `north.mqtt.tls_ca_file` names a PEM CA bundle (absolute path) the broker

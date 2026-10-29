@@ -4,11 +4,14 @@
 package interfaces
 
 import (
+	"context"
 	"strings"
 
 	contract "github.com/SukramJ/go-fabric/contract"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/schema"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // The Matter port contracts live in
@@ -37,6 +40,36 @@ type MatterDeviceSource interface {
 	MatterDeviceType() uint16
 	// MatterDevice is the source's device.
 	MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error)
+}
+
+// MatterBuildOptions are the bridge settings a device source builds its
+// device under. The source keeps the device it built first, so every
+// path that builds one — the assembly and the eligibility listing —
+// passes the same options; the zero value is the surface without any
+// opt-in.
+type MatterBuildOptions struct {
+	// ThermostatSchedules serves a thermostat's running state, its
+	// setpoint hold and its week programs (MatterScheduleConfiguration).
+	// Mirrors config.NorthMatter.ThermostatSchedules.
+	ThermostatSchedules bool
+	// ClimateSchedules writes a week program a controller committed; nil
+	// refuses every commit.
+	ClimateSchedules ClimateScheduleWriter
+}
+
+// MatterConfiguredDeviceSource is a [MatterDeviceSource] whose device
+// depends on [MatterBuildOptions]. A builder that knows the options calls
+// MatterDeviceWith; MatterDevice builds with the zero options.
+type MatterConfiguredDeviceSource interface {
+	MatterDeviceSource
+	MatterDeviceWith(opts fabricdevice.Options, build MatterBuildOptions) (*fabricdevice.Device, error)
+}
+
+// ClimateScheduleWriter writes one week program of a thermostat to its
+// CCU: profile is the key "P1".."P6", and only that program's slots are
+// written.
+type ClimateScheduleWriter interface {
+	PutClimateProfile(ctx context.Context, deviceAddress, profile string, p hmapi.ClimateProfile) error
 }
 
 // MatterClusterServer is a compatibility alias for [contract.ClusterServer].

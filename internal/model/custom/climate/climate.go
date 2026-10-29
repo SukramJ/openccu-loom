@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -159,6 +160,10 @@ type Climate struct {
 	// matterDevice holds the Thermostat device the Matter projection
 	// serves, built once per Climate (matter.go).
 	matterDevice generic.MatterDeviceHolder
+	// matterServes is what that device serves beyond the base surface
+	// (matter_schedule.go), stored before the device's hooks are wired
+	// and never changed after; nil until the device is built.
+	matterServes atomic.Pointer[matterExtras]
 
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. It is keyed on the setpoint
@@ -908,6 +913,7 @@ func (c *Climate) OnActivity(a Activity) {
 	c.activity = a
 	c.hasActivity = true
 	c.mu.Unlock()
+	c.syncMatterRunningState()
 }
 
 // --- ingestion ---
@@ -2084,6 +2090,7 @@ func (c *Climate) OnHeatingCooling(mode string) {
 	c.hasHC = true
 	c.muHC.Unlock()
 	c.syncMatterMode()
+	c.syncMatterSchedules()
 }
 
 // IsHeating reports whether the device is in heating mode (rather than

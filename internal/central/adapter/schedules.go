@@ -26,7 +26,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
+
+var _ interfaces.ClimateScheduleWriter = (*SchedulesDomain)(nil)
 
 // SchedulesDomain implements interfaces.ScheduleService. It reads/
 // writes climate week profiles from/to the MASTER paramset of a
@@ -257,6 +260,26 @@ func (s *SchedulesDomain) PutClimateScheduleAuto(
 		return nil, err
 	}
 	return s.PutClimateSchedule(ctx, deviceAddress, channelNo, sched)
+}
+
+// PutClimateProfile implements [interfaces.ClimateScheduleWriter]: one
+// climate week program written through [SchedulesDomain.PutClimateScheduleAuto],
+// so it takes the schema, descriptor filter and false-positive handling an
+// SPA save takes. Only profile's slots are in the patch. A time the write
+// had to correct is an error, because the caller holds the program it sent
+// and would keep a different one than the device.
+func (s *SchedulesDomain) PutClimateProfile(ctx context.Context, deviceAddress, profile string, p hmapi.ClimateProfile) error {
+	corrections, err := s.PutClimateScheduleAuto(ctx, deviceAddress, &hmapi.ClimateSchedule{
+		Kind:     "climate",
+		Profiles: map[string]hmapi.ClimateProfile{profile: p},
+	})
+	if err != nil {
+		return err
+	}
+	if len(corrections) > 0 {
+		return fmt.Errorf("schedules: %s %s: %d schedule times were corrected", deviceAddress, profile, len(corrections))
+	}
+	return nil
 }
 
 // SetActiveProfileAuto resolves the schedule channel before writing

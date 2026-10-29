@@ -1287,6 +1287,42 @@ conformance guard carries the finding as a declared entry.
 for the device types whose composition mandates it, in its own change with
 the re-learn named in the changelog; decided per type, not for the fleet.
 
+### BD-Matter-Thermostat-HoldAsAuto — HM AUTO is TemperatureSetpointHold Off, a week program is a built-in schedule
+
+**Where:** `internal/model/custom/climate/matter_schedule.go`, behind
+`north.matter.thermostat_schedules` (default off).
+
+**Mapping:** TemperatureSetpointHold Off is HM AUTO (follow the week
+program), On every other mode; a hold write becomes `Climate.SetMode` AUTO
+or HEAT (MANU). SystemMode keeps reporting Heat for AUTO: Matter's Auto
+means AutoMode, independent dual setpoints with a deadband
+(`thermostat-cluster.element.ts:100-104`), which a single-setpoint HM
+thermostat cannot keep — the hold is the attribute that carries "follows
+its program". Each week program P1..PN is one built-in Heat schedule (Cool
+on a hybrid device while it cools; ScheduleTypes carries both there), its
+ScheduleHandle the program number as one byte; a transition starts every
+segment of a weekday, the gaps at the base temperature included, and
+weekdays with identical segments share one DayOfWeek bitmap.
+NumberOfScheduleTransitionPerDay is 13, the CCU's slot count
+(`schedule.MaxClimateSlots`). SetActiveScheduleRequest becomes
+`Climate.SetProfile`, which also brings the device into AUTO. A committed
+Schedules list writes each changed program through
+`SchedulesDomain.PutClimateProfile` as a full 00:00–24:00 day per weekday;
+a day without a 00:00 transition starts at the setpoint the week left off
+at. An away day and a day needing more than 13 slots are refused.
+ThermostatRunningState's Heat / Cool bit is `Climate.Activity`.
+
+**matter.js:** models MatterScheduleConfiguration but does not implement
+it (`packages/node/src/behaviors/thermostat/ThermostatServer.ts:82` at
+862ad75f); go-fabric's server follows connectedhomeip's
+`ThermostatClusterSchedules.cpp` (go-fabric `cluster/thermo/schedules.go`).
+
+**Unverified:** whether the CCU accepts transition times off a 5-minute
+grid and setpoints off 0.5 °C (loom's own write path does not round —
+the profile reload after the write shows what the CCU stored), and what
+Apple Home and Google Home show for the hold and the schedules — the
+reason for the default-off flag.
+
 ### BD-Matter-LevelControl-NativeRamp — the light's LevelControl runs on go-fabric's hand-off path, the dimmer ramps itself
 
 **Where:** `internal/model/custom/light/matter_level.go` (the light

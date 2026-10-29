@@ -62,7 +62,10 @@ type Candidate struct {
 // Genuinely standalone DPs — buttons (event), measurements / battery
 // (data_point), a channel-0 maintenance sensor — are always collected. This
 // is Matter-only; every other north-bound surface still enumerates all channels.
-func CollectCandidates(centralName string, devices []*device.Device, exposeSecondary bool) []Candidate {
+//
+// build is the assembler's [Config.Build]: classifying a source builds its
+// device, and the source keeps the first one built.
+func CollectCandidates(centralName string, devices []*device.Device, exposeSecondary bool, build interfaces.MatterBuildOptions) []Candidate {
 	var out []Candidate
 	for _, dev := range devices {
 		if dev == nil {
@@ -75,13 +78,13 @@ func CollectCandidates(centralName string, devices []*device.Device, exposeSecon
 			if !exposeSecondary && ch.IsCustomDPSecondaryChannel() {
 				continue
 			}
-			collectChannelCandidates(centralName, dev, ch, exposeSecondary, &out)
+			collectChannelCandidates(centralName, dev, ch, exposeSecondary, build, &out)
 		}
 	}
 	return out
 }
 
-func collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, exposeSecondary bool, out *[]Candidate) {
+func collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, exposeSecondary bool, build interfaces.MatterBuildOptions, out *[]Candidate) {
 	// Operator-hidden channels (G12) are dropped from Matter exposure
 	// entirely, mirroring the operation-list hide on the REST/SPA surface.
 	if ch.IsHidden() {
@@ -132,7 +135,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 			DPKind:        kind,
 			DPKey:         key,
 		}
-		v := classifyCandidate(source, sourceKey, displayName)
+		v := classifyCandidate(source, sourceKey, displayName, build)
 		// Skip entries that are unmappable AND have no Matter projection
 		// hint (i.e. truly opaque sources). Sources with a real reason
 		// surface as ⛔ rows in the UI so the operator understands why.
@@ -181,10 +184,10 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 // nothing could be exposed, so no row is shown (a row would name a
 // reason the operator can do nothing about). source is any because the
 // walk probes every data point of a channel, whatever its type.
-func classifyCandidate(source any, key matterendpoint.SourceKey, name string) eligibility.Verdict {
+func classifyCandidate(source any, key matterendpoint.SourceKey, name string, build interfaces.MatterBuildOptions) eligibility.Verdict {
 	if _, own := source.(contract.EligibilitySource); !own {
 		if ds, ok := source.(interfaces.MatterDeviceSource); ok {
-			d, err := ds.MatterDevice(fabricdevice.Options{StableKey: key, Name: name})
+			d, err := buildDevice(ds, fabricdevice.Options{StableKey: key, Name: name}, build)
 			if err != nil {
 				return eligibility.Verdict{State: eligibility.StateUnmappable, Reason: err.Error()}
 			}
