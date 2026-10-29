@@ -204,10 +204,6 @@
   "name": "paramset"
  },
  {
-  "path": "components/schemas/WsEnvelope/properties/kind",
-  "name": "kind"
- },
- {
   "path": "components/schemas/CentralReadinessChangedPayload/properties/phase",
   "name": "phase"
  },
