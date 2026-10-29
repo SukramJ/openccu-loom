@@ -8,12 +8,17 @@ package chiptool
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/tests/chiptool/harness"
 )
+
+// reSetActiveScheduleStatus is the status chip-tool prints for a
+// status-only SetActiveScheduleRequest response.
+var reSetActiveScheduleStatus = regexp.MustCompile(`Received Command Response Status for Endpoint=\d+ Cluster=0x0000_0201 Command=0x0000_0005 Status=(0x[0-9A-Fa-f]+)`)
 
 // TestThermostatSchedules_FlagOn is the commissioner's view of
 // north.matter.thermostat_schedules on a bridged HmIP-BWTH from godevccu:
@@ -23,10 +28,9 @@ import (
 //
 // The program switch is the proof the schedules were loaded at all: the
 // server answers INVALID_COMMAND for a handle that names no stored
-// schedule, so a bridge that read no week profile fails here. The
-// Schedules attribute and the command go by id (`read-by-id`,
-// `command-by-id` — connectedhomeip examples/chip-tool/commands/clusters/
-// ReportCommand.h:203, ClusterCommand.h:37-41 and :215-218), because the
+// schedule, so a bridge that read no week profile fails here. The command
+// goes by id (`command-by-id` — connectedhomeip examples/chip-tool/
+// commands/clusters/ClusterCommand.h:37-41 and :215-218), because the
 // pinned chip-tool's knowledge of MatterScheduleConfiguration by name is
 // not established; the payload keys are field ids and an octet string is
 // written "hex:" (CustomArgument.h:129-146).
@@ -102,8 +106,13 @@ func TestThermostatSchedules_FlagOn(t *testing.T) {
 		if err != nil {
 			t.Fatalf("command-by-id SetActiveScheduleRequest: %v\n%s", err, out)
 		}
-		if st, ok := harness.WriteStatus(out); !ok || st != "0x0" {
-			t.Fatalf("SetActiveScheduleRequest status = %q (%v), want 0x0 — a handle the bridge holds no schedule for answers INVALID_COMMAND:\n%s", st, ok, out)
+		// chip-tool reports a status-only response as "Received Command
+		// Response Status for Endpoint=… Cluster=0x0000_0201
+		// Command=0x0000_0005 Status=0x…" ([harness.CommandSuccess] matches
+		// the marker whatever the status, so the status is read here).
+		m := reSetActiveScheduleStatus.FindStringSubmatch(out)
+		if len(m) < 2 || m[1] != "0x0" {
+			t.Fatalf("SetActiveScheduleRequest status = %v, want 0x0 — a handle the bridge holds no schedule for answers INVALID_COMMAND (0x85):\n%s", m, out)
 		}
 		got, ok := b.CCU.GetDPValue(address, "ACTIVE_PROFILE")
 		if !ok || fmt.Sprint(got) != "2" {
