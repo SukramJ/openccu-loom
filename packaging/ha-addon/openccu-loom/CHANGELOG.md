@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.94.1
+
+- **Thermostat options split in two (Matter).** With the 0.94.0 option
+  `north.matter.thermostat_schedules` on, Apple Home loaded no data and a
+  new pairing failed. The heating state and the AUTO/manual hold now have
+  their own expert option, `north.matter.thermostat_hold_and_running_state`;
+  `thermostat_schedules` serves only the week programs. Both stay off by
+  default. Switching either can make Apple Home need the bridge paired
+  again. If you had `thermostat_schedules` on and Apple Home stopped
+  working: switch it off, restart, and pair the bridge again.
+
 ## 0.94.0
 
 - **Matter pages from go-fabric-ui.** Status, Pair, Fabrics, Selection,

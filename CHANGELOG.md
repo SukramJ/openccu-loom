@@ -6,6 +6,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.94.1] - 2026-10-29
+
+### Release summary
+
+**The thermostat opt-in of 0.94.0 is two switches.** With it on, Apple Home loaded no data and refused a new pairing; the heating state and hold now have their own switch, apart from the week programs, so each can be tried alone. Both stay off by default. REST API 14.1.0, unchanged.
+
 ### Changed
 
 - **Matter: the thermostat opt-in is two switches.** With
