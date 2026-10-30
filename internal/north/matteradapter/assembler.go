@@ -15,6 +15,7 @@ import (
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/schema"
+	"github.com/SukramJ/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -412,7 +413,9 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas))
+		if spec, ok := a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas); ok {
+			out = append(out, spec)
+		}
 	}
 
 	// Combined DPs.
@@ -530,7 +533,9 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			continue
 		default:
 		}
-		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas))
+		if spec, ok := a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas); ok {
+			out = append(out, spec)
+		}
 	}
 
 	if len(pressMembers) > 0 {
@@ -602,7 +607,7 @@ func (a *Assembler) makeElectricalGroupSpec(
 		deviceType:   measurementDeviceType(contract.MeasurementElectrical),
 		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
 		measurement:  group,
-	}), true
+	})
 }
 
 // ButtonGroupDPKey is the synthetic dp_key persisted for the
@@ -660,7 +665,7 @@ func (a *Assembler) makeButtonGroupSpec(
 		// channel), not one PRESS_* parameter — no parameter suffix.
 		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
 		measurement:  group,
-	}), true
+	})
 }
 
 // hideFromMatter reports whether a generic DP should be dropped from the
@@ -771,8 +776,11 @@ func projectionOf(dp any) (projection, bool) {
 
 // buildDevice is src's device, built under build when the source's device
 // depends on it. Every path that builds a device goes through here, so a
-// source sees the same options whichever path builds it first.
+// source sees the same options whichever path builds it first, and every
+// device is composed under the bridge's surface policies — the node
+// refuses one composed under other ones.
 func buildDevice(src interfaces.MatterDeviceSource, opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
+	opts.Surface = &build.Surface
 	if c, ok := src.(interfaces.MatterConfiguredDeviceSource); ok {
 		return c.MatterDeviceWith(opts, build)
 	}
@@ -852,7 +860,7 @@ func (a *Assembler) makeSpec(
 		return endpoint.Spec{}, false
 	}
 	in.source = src.source
-	return a.deviceSpec(in), true
+	return a.deviceSpec(in)
 }
 
 // sourceOptions are the device options of a source-backed endpoint: the
@@ -898,10 +906,14 @@ func (a *Assembler) declaredDeviceSpec(in specInput, src interfaces.MatterDevice
 		// Once per key: the source retries the build on every assembly,
 		// and the finding does not change between two of them.
 		if _, seen := a.refusedDevices.LoadOrStore(in.key.String(), struct{}{}); !seen {
-			a.logger.Warn("matter.assembler.device_refused",
-				slog.String("device_type", fmt.Sprintf("0x%04X", in.deviceType)),
-				slog.String("key", in.key.String()),
-				slog.String("err", err.Error()))
+			if errors.Is(err, surface.ErrWithheld) {
+				a.logWithheld(in.deviceType, in.key.String(), err)
+			} else {
+				a.logger.Warn("matter.assembler.device_refused",
+					slog.String("device_type", fmt.Sprintf("0x%04X", in.deviceType)),
+					slog.String("key", in.key.String()),
+					slog.String("err", err.Error()))
+			}
 		}
 		return endpoint.Spec{}, false
 	}
@@ -930,7 +942,7 @@ func (a *Assembler) makeMeasurementSpec(
 	kind matterendpoint.DPKind,
 	key string,
 	meas contract.MeasurementSource,
-) endpoint.Spec {
+) (endpoint.Spec, bool) {
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -977,8 +989,11 @@ type specInput struct {
 // refuses, falls back to the hand-built Spec and is logged once per
 // type, so the assembly never loses an endpoint over a conformance
 // finding — the finding is reported through the bridge's device-type
-// validator, which judges the hand-built Spec too.
-func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
+// validator, which judges the hand-built Spec too. A device the
+// specification level withholds yields no endpoint (false): the
+// hand-built Spec carries no surface report, so the node would serve it
+// past the level.
+func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 	handBuilt := endpoint.Spec{
 		StableKey:      in.key,
 		DeviceAddress:  in.dev.Address,
@@ -993,7 +1008,7 @@ func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
 	t, ok := fabricdevice.TypeByID(schema.DeviceTypeID(in.deviceType))
 	if !ok {
 		a.logFallback(in.deviceType, "device type not in the generated device layer", nil)
-		return handBuilt
+		return handBuilt, true
 	}
 	opts := fabricdevice.Options{
 		StableKey:      in.key,
@@ -1002,6 +1017,7 @@ func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
 		DeviceAddress:  in.dev.Address,
 		ChannelAddress: in.ch.Address,
 		Reachable:      in.dev.Available,
+		Surface:        &a.cfg.Build.Surface,
 	}
 	var decls []fabricdevice.Declaration
 	if in.source != nil {
@@ -1019,11 +1035,27 @@ func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
 		decls = append(decls, fabricdevice.Measurement(in.measurement))
 	}
 	d, err := fabricdevice.New(t, opts, decls...)
+	if errors.Is(err, surface.ErrWithheld) {
+		if _, seen := a.refusedDevices.LoadOrStore(in.key.String(), struct{}{}); !seen {
+			a.logWithheld(in.deviceType, in.key.String(), err)
+		}
+		return endpoint.Spec{}, false
+	}
 	if err != nil {
 		a.logFallback(in.deviceType, "device layer refused the composition", err)
-		return handBuilt
+		return handBuilt, true
 	}
-	return d.Spec()
+	return d.Spec(), true
+}
+
+// logWithheld reports a device the configured specification level
+// withholds (north.matter.spec_level). It is the operator's choice, not a
+// defect, so it is logged at info.
+func (a *Assembler) logWithheld(deviceType uint16, key string, err error) {
+	a.logger.Info("matter.assembler.device_withheld",
+		slog.String("device_type", fmt.Sprintf("0x%04X", deviceType)),
+		slog.String("key", key),
+		slog.String("err", err.Error()))
 }
 
 // logFallback reports a hand-built Spec once per device type.

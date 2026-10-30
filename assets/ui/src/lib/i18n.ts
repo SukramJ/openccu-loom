@@ -1424,6 +1424,8 @@ const EN: Catalog = {
     "Thermostat week programs",
   "config.field.north.matter.thermostat_hold_and_running_state":
     "Thermostat: running state and hold",
+  "config.field.north.matter.spec_level": "Matter specification level",
+  "config.field.north.matter.controller_profile": "Matter controller profile",
   "config.field.north.matter.mdns_advertise": "mDNS advertiser",
   "config.field.north.matter.dev_rotate_unique_ids":
     "Rotate unique IDs each boot (dev)",
@@ -1666,6 +1668,10 @@ const EN: Catalog = {
     "Off by default. Enable to send every thermostat's week programs to Matter: a controller can read them, switch the active one and edit them, and an edit is written to the CCU. With this and the running state and hold on together, an Apple Home pairing has failed. Experimental: Apple Home and Google Home are not verified with it. Switching it on or off can make Apple Home need the bridge paired again. Takes effect after a restart.",
   "config.help.north.matter.thermostat_hold_and_running_state":
     "Off by default. Enable to send two more things for every thermostat to Matter: whether it is heating right now, and whether it follows its week program (setpoint hold off = AUTO, on = manual; a controller can switch it). Experimental: Apple Home and Google Home are not verified with it. Switching it on or off can make Apple Home need the bridge paired again. Takes effect after a restart.",
+  "config.help.north.matter.spec_level":
+    "Empty by default: the bridge serves everything go-fabric supports. Set a Matter specification level (1.4, 1.4.1, 1.4.2, 1.5.1, 1.6.0, 1.6.1) to serve only what that level knows: optional features newer than the level are left out, and a device whose type the level does not know (for example a garage drive, a Closure since 1.5.1) is not exposed. Use it when your controller is known to work up to a level. Changing it changes what controllers see; Apple Home may need the bridge paired again. Takes effect after a restart.",
+  "config.help.north.matter.controller_profile":
+    "Empty by default. Name the controller the bridge is paired with (alexa, apple-home, google-home, home-assistant, smartthings). A profile leaves out what that controller has been reproduced failing on and logs a warning for what was only reported. No profile leaves anything out yet; apple-home warns about thermostat week programs. Takes effect after a restart.",
   "config.help.north.matter.mdns_advertise":
     "mDNS advertiser implementation. Unset defaults to `zeroconf`, which publishes the operational + commissionable records on the network — required for pairing by QR code. `noop` keeps the records in-memory only (tests / out-of-band discovery); commissioners cannot discover the bridge in that mode.",
   "config.help.north.matter.dev_rotate_unique_ids":
@@ -5653,6 +5659,8 @@ const DE: Catalog = {
     "Thermostat-Wochenprogramme",
   "config.field.north.matter.thermostat_hold_and_running_state":
     "Thermostat: Heizzustand und Halten",
+  "config.field.north.matter.spec_level": "Matter-Spezifikationsstand",
+  "config.field.north.matter.controller_profile": "Matter-Controller-Profil",
   "config.field.north.matter.mdns_advertise": "mDNS-Advertiser",
   "config.field.north.matter.dev_rotate_unique_ids":
     "UniqueID pro Boot rotieren (Dev)",
@@ -5899,6 +5907,10 @@ const DE: Catalog = {
     "Standardmäßig aus. Aktivieren, um die Wochenprogramme jedes Thermostats an Matter zu senden: ein Controller kann sie lesen, das aktive umschalten und sie bearbeiten; eine Änderung wird auf die CCU geschrieben. Zusammen mit Heizzustand und Halten ist ein Koppeln mit Apple Home bereits fehlgeschlagen. Experimentell: Apple Home und Google Home sind damit nicht verifiziert. Ein- oder Ausschalten kann bei Apple Home ein erneutes Koppeln der Bridge erfordern. Wirkt nach einem Neustart.",
   "config.help.north.matter.thermostat_hold_and_running_state":
     "Standardmäßig aus. Aktivieren, um für jedes Thermostat zwei weitere Dinge an Matter zu senden: ob es gerade heizt, und ob es seinem Wochenprogramm folgt (Halten aus = AUTO, an = manuell; ein Controller kann es umschalten). Experimentell: Apple Home und Google Home sind damit nicht verifiziert. Ein- oder Ausschalten kann bei Apple Home ein erneutes Koppeln der Bridge erfordern. Wirkt nach einem Neustart.",
+  "config.help.north.matter.spec_level":
+    "Standardmäßig leer: Die Bridge stellt alles bereit, was go-fabric unterstützt. Einen Matter-Spezifikationsstand setzen (1.4, 1.4.1, 1.4.2, 1.5.1, 1.6.0, 1.6.1), um nur bereitzustellen, was dieser Stand kennt: Optionale Funktionen, die neuer sind, entfallen, und ein Gerät, dessen Typ der Stand nicht kennt (etwa ein Garagentorantrieb, Closure seit 1.5.1), wird nicht freigegeben. Sinnvoll, wenn der Controller bekanntermaßen bis zu einem Stand funktioniert. Eine Änderung ändert, was Controller sehen; Apple Home muss die Bridge dann eventuell neu koppeln. Wirkt nach einem Neustart.",
+  "config.help.north.matter.controller_profile":
+    "Standardmäßig leer. Den Controller nennen, mit dem die Bridge gekoppelt ist (alexa, apple-home, google-home, home-assistant, smartthings). Ein Profil lässt weg, woran dieser Controller nachweislich scheitert, und protokolliert eine Warnung für das, was nur gemeldet wurde. Noch lässt kein Profil etwas weg; apple-home warnt vor Thermostat-Wochenprogrammen. Wirkt nach einem Neustart.",
   "config.help.north.matter.mdns_advertise":
     "mDNS-Advertiser-Implementierung. Ohne Wert gilt `zeroconf`: operational + commissionable Records werden im Netz veröffentlicht — Voraussetzung für das Koppeln per QR-Code. `noop` hält die Records nur in-memory (Tests / Out-of-band-Discovery); Commissioner finden die Bridge dann nicht.",
   "config.help.north.matter.dev_rotate_unique_ids":

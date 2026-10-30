@@ -6,6 +6,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Matter: a specification level and a controller profile.** Two expert
+  settings, both empty by default, which changes nothing.
+  `north.matter.spec_level` caps what the bridge serves at one Matter
+  specification level (1.4, 1.4.1, 1.4.2, 1.5.1, 1.6.0, 1.6.1). Optional
+  features newer than that level are left out, and a device whose type the
+  level does not know is not exposed: below 1.5.1 a garage drive, which is
+  served as a Closure, stays off Matter. `north.matter.controller_profile`
+  names the controller the bridge is paired with (`alexa`, `apple-home`,
+  `google-home`, `home-assistant`, `smartthings`). A profile leaves out
+  what that controller has been reproduced failing on. No profile leaves
+  anything out yet; `apple-home` logs a warning for the thermostat week
+  programs. Both take effect after a restart.
+
+### Changed
+
+- **Matter: go-fabric 0.15.1.** The bridge now serves the matter.js
+  baseline, plus one feature ahead of matter.js: the thermostat week
+  programs, which `north.matter.thermostat_schedules` still switches on. When
+  a device's Matter surface changes, for example after one of these
+  settings changed, the bridge now raises its configuration version itself,
+  so a paired controller is told to read the device again. A bridged device
+  without a name serves its Descriptor again.
+- **Matter selection page: items that cannot be exposed are hidden.** The
+  list now shows only what the bridge can expose, devices withheld by
+  `north.matter.spec_level` included in what it hides. A toggle above the
+  list ("Show items that cannot be mapped") brings them back with their
+  reason (go-fabric-ui 0.2.5).
+
 ### Fixed
 
 - **Matter: endpoint numbers left over from the old button layout are

@@ -37,6 +37,8 @@ func TestThermostatScheduleWriterIsTheSchedulesDomain(t *testing.T) {
 		{"the hold flag to the build options", "ThermostatHoldAndRunningState: mc.ThermostatHoldAndRunningState,"},
 		{"the schedules flag to the build options", "ThermostatSchedules: mc.ThermostatSchedules,"},
 		{"the writer to the build options", "ClimateSchedules: schedules,"},
+		{"the policies built from the Matter config", "surfacePolicies := matterSurfacePolicies(mc)"},
+		{"the surface policies to the node and the build options", "Surface: surfacePolicies,"},
 		{"the build options to the assembler", "Build: matterBuild,"},
 	} {
 		if !strings.Contains(matter, want.expr) {
