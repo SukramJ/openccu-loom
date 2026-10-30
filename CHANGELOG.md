@@ -20,10 +20,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   what that controller has been reproduced failing on. No profile leaves
   anything out yet; `apple-home` logs a warning for the thermostat week
   programs. Both take effect after a restart.
+- **Matter status page: the surface the bridge serves.** A "Surface" row
+  below the counts shows the specification level and where it comes from
+  (set, the built-in pin, or implied by a profile), the controller
+  profiles and the enabled features ahead of matter.js, such as the
+  thermostat week programs. The number of withheld devices, profile
+  warnings and surface changes appears only when not zero.
+  `GET /node/status` carries the same as a `surface` object
+  (REST API 15.1.0).
 
 ### Changed
 
-- **Matter: go-fabric 0.15.1.** The bridge now serves the matter.js
+- **Matter: go-fabric 0.15.2.** The bridge now serves the matter.js
   baseline, plus one feature ahead of matter.js: the thermostat week
   programs, which `north.matter.thermostat_schedules` still switches on. When
   a device's Matter surface changes, for example after one of these
@@ -34,7 +42,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list now shows only what the bridge can expose, devices withheld by
   `north.matter.spec_level` included in what it hides. A toggle above the
   list ("Show items that cannot be mapped") brings them back with their
-  reason (go-fabric-ui 0.2.5).
+  reason (go-fabric-ui 0.2.6, the Matter pages' package
+  `@sukramj/fabric-ui` included).
 
 ### Fixed
 

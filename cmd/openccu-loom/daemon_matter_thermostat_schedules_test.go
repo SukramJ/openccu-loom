@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 
@@ -205,6 +206,11 @@ func TestMatterThermostatSchedulesFollowTheConfigFlags(t *testing.T) {
 			msch := toUint32(fm)&uint32(thermostatspec.FeatureMatterScheduleConfiguration) != 0
 			if msch != tc.schedules {
 				t.Errorf("FeatureMap 0x%X: MSCH = %v, want %v", toUint32(fm), msch, tc.schedules)
+			}
+			// The node page's Surface row reads the enabled extensions from
+			// the node's report, so the flag has to reach it as well.
+			if got := slices.Contains(bundle.node.Surface().Extensions, climate.MatterScheduleExtension); got != tc.schedules {
+				t.Errorf("node surface extensions = %v, %s enabled = %v, want %v", bundle.node.Surface().Extensions, climate.MatterScheduleExtension, got, tc.schedules)
 			}
 			for _, a := range []struct {
 				attr uint32
