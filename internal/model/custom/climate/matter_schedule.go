@@ -34,6 +34,13 @@ import (
 
 var _ interfaces.MatterConfiguredDeviceSource = (*Climate)(nil)
 
+// MatterScheduleExtension is go-fabric's "Ahead of matter.js" register row
+// for MSCH (cluster/thermo/ahead.go, thermo.Ahead). go-fabric refuses a
+// Thermostat that selects MSCH unless the build's surface policies enable
+// this row (surface.ErrExtensionNotEnabled), so the bridge enables it
+// under the same flag that makes the climate request the feature.
+const MatterScheduleExtension = "BD-chip-Thermostat-Schedules"
+
 // matterExtras is what a Climate's Thermostat serves beyond the base
 // surface, decided once when the device is built.
 type matterExtras struct {

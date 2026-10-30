@@ -352,6 +352,22 @@ func matterEndpointRestartRules() []RestartRule {
 			},
 		},
 		{
+			// The node and every device are composed once under the
+			// surface policies the level is part of.
+			Path: "north.matter.spec_level",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.SpecLevel != e.North.Matter.SpecLevel
+			},
+		},
+		{
+			// The profile is one of the surface policies, fixed at start
+			// like the level.
+			Path: "north.matter.controller_profile",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.ControllerProfile != e.North.Matter.ControllerProfile
+			},
+		},
+		{
 			Path: "north.matter.enable_time_sync",
 			Differs: func(b, e *Config) bool {
 				return b.North.Matter.TimeSyncEnabled() != e.North.Matter.TimeSyncEnabled()

@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/go-fabric/cluster/thermo"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/im"
+	"github.com/SukramJ/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
@@ -102,9 +103,20 @@ func scheduleRig(t *testing.T, loader *climateLoader, loaded bool) (*rig, *putWr
 	return r, w, wp
 }
 
+// buildWith builds c's device as the bridge does: the schedules flag
+// enables MSCH's register row in the surface policies
+// (cmd/openccu-loom matterSurfacePolicies), and the device is composed
+// under them (matteradapter buildDevice).
 func buildWith(t *testing.T, c *Climate, build interfaces.MatterBuildOptions) *thermo.ThermostatServer {
 	t.Helper()
-	d, err := c.MatterDeviceWith(fabricdevice.Options{StableKey: fabricdevice.StringKey("climate-test"), Name: "climate"}, build)
+	if build.ThermostatSchedules {
+		build.Surface.Extensions = surface.NewExtensions(MatterScheduleExtension)
+	}
+	d, err := c.MatterDeviceWith(fabricdevice.Options{
+		StableKey: fabricdevice.StringKey("climate-test"),
+		Name:      "climate",
+		Surface:   &build.Surface,
+	}, build)
 	if err != nil {
 		t.Fatalf("MatterDeviceWith: %v", err)
 	}
@@ -147,6 +159,22 @@ func TestMatterSchedulesAloneServeNoHold(t *testing.T) {
 		if slices.Contains(srv.MatterAttributes(), attr) {
 			t.Errorf("attribute 0x%04X served with the schedules flag alone", attr)
 		}
+	}
+}
+
+// TestMatterSchedulesNeedTheExtension pins go-fabric's gate as the second
+// line behind the schedules flag: a climate that requests MSCH under
+// policies that do not enable its register row is refused with
+// surface.ErrExtensionNotEnabled rather than served.
+func TestMatterSchedulesNeedTheExtension(t *testing.T) {
+	r, _, _ := scheduleRig(t, &climateLoader{sched: twoProgramSchedule()}, true)
+	_, err := r.climate.MatterDeviceWith(fabricdevice.Options{
+		StableKey: fabricdevice.StringKey("climate-test"),
+		Name:      "climate",
+		Surface:   &surface.Policies{},
+	}, interfaces.MatterBuildOptions{ThermostatSchedules: true})
+	if !errors.Is(err, surface.ErrExtensionNotEnabled) {
+		t.Fatalf("MatterDeviceWith without the extension: err = %v, want surface.ErrExtensionNotEnabled", err)
 	}
 }
 
