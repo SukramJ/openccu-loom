@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.0.0
+  version: 15.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -16240,6 +16240,19 @@ components:
           type: array
           description: The host's findings about its own configuration; absent when the host reports none (no Options.Warnings), empty when it finds nothing.
           items: { $ref: "#/components/schemas/NodeWarning" }
+        surface:
+          type: object
+          description: The policies the node's served surface is composed under (go-fabric node.Node.Surface) and the counts that tell whether to look further; absent without a node.
+          required: [level, level_origin, profiles, extensions, assembled, withheld_count, warning_count, changed_count]
+          properties:
+            level: { type: string, description: "The specification level the surface is composed at (go-fabric surface.Report.Level), e.g. \"1.6.1\"." }
+            level_origin: { type: string, description: "\"explicit\", \"profile <name>[, <name>…]\" or \"pin\" (surface.Report.LevelOrigin)." }
+            profiles: { type: array, items: { type: string }, description: "The selected controller profiles, sorted." }
+            extensions: { type: array, items: { type: string }, description: "The enabled ahead-of-matter.js register IDs, sorted." }
+            assembled: { type: boolean, description: "The report reads the assembled topology (after the first assembly)." }
+            withheld_count: { type: integer, description: "Elements the level policy withheld an endpoint for." }
+            warning_count: { type: integer, description: "Profile warnings: Keep decisions of a profile policy with a warning reason." }
+            changed_count: { type: integer, description: "Surface changes announced in this process (ConfigurationVersion raised)." }
     NodeWarning:
       type: object
       required: [code, message]

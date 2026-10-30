@@ -43,7 +43,7 @@
   "dependencies": {
     "@internationalized/date": "^3.12.4",
     "@lucide/svelte": "^1.61.0",
-    "@sukramj/fabric-ui": "0.2.3",
+    "@sukramj/fabric-ui": "0.2.6",
     "bits-ui": "^2.20.2",
     "clsx": "^2.1.1",
     "qrcode": "^1.5.4",

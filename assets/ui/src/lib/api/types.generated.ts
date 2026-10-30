@@ -11376,6 +11376,25 @@ export interface components {
             csrf_token?: string;
             /** @description The host's findings about its own configuration; absent when the host reports none (no Options.Warnings), empty when it finds nothing. */
             warnings?: components["schemas"]["NodeWarning"][];
+            /** @description The policies the node's served surface is composed under (go-fabric node.Node.Surface) and the counts that tell whether to look further; absent without a node. */
+            surface?: {
+                /** @description The specification level the surface is composed at (go-fabric surface.Report.Level), e.g. "1.6.1". */
+                level: string;
+                /** @description "explicit", "profile <name>[, <name>…]" or "pin" (surface.Report.LevelOrigin). */
+                level_origin: string;
+                /** @description The selected controller profiles, sorted. */
+                profiles: string[];
+                /** @description The enabled ahead-of-matter.js register IDs, sorted. */
+                extensions: string[];
+                /** @description The report reads the assembled topology (after the first assembly). */
+                assembled: boolean;
+                /** @description Elements the level policy withheld an endpoint for. */
+                withheld_count: number;
+                /** @description Profile warnings: Keep decisions of a profile policy with a warning reason. */
+                warning_count: number;
+                /** @description Surface changes announced in this process (ConfigurationVersion raised). */
+                changed_count: number;
+            };
         };
         NodeWarning: {
             /** @description The kind of finding, stable across host releases. */
