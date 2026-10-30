@@ -104,6 +104,7 @@ var fixtureRoutes = []fixtureRoute{
 	{"node-sessions.json", "/node/sessions", "GET"},
 	{"node-mdns.json", "/node/mdns", "GET"},
 	{"node-endpoints.json", "/node/endpoints", "GET"},
+	{"node-surface.json", "/node/surface", "GET"},
 	{"node-compatibility.json", "/node/compatibility", "GET"},
 	{"node-events.json", "/node/events", "GET"},
 	{"node-fabrics.json", "/node/fabrics", "GET"},

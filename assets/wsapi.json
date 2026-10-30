@@ -1,5 +1,5 @@
 {
- "version": "2.0",
+ "version": "2.1",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -1508,6 +1508,14 @@
    "name": "node.exposure_changed",
    "topic": "node.exposure_changed",
    "payload": "ExposureEvent"
+  },
+  {
+   "category": "node",
+   "description": "Server-pushed: an assembly changed the surface the node serves on one endpoint (its ConfigurationVersion was raised). Payload: the endpoint's key, \"\" for the root; one event per endpoint. Reload GET /api/v1/node/surface or GET /api/v1/node/endpoints.",
+   "kind": "broadcast",
+   "name": "node.surface_changed",
+   "topic": "node.surface_changed",
+   "payload": "SurfaceChangedEvent"
   },
   {
    "category": "alarm_panel",

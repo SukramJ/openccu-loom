@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/eligibility"
 	"github.com/SukramJ/go-fabric/node"
+	"github.com/SukramJ/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
@@ -84,9 +85,9 @@ func (n *observedNode) Window() node.WindowSnapshot { return n.window }
 
 // TestWireMatterNodeEventsPublishesEveryEventTypeUnderTheNodeTopic pins the
 // WebSocket bridge: each of go-fabric-ui's event types reaches the hub as
-// `node.<type>` with the stream's payload — the fabric and window
-// transitions from the node's own observers, which go-fabric-ui no longer
-// routes through the event source, the endpoint and exposure changes from
+// `node.<type>` with the stream's payload — the fabric, window and
+// surface transitions from the node's own observers, which go-fabric-ui
+// does not route through the event source, the endpoint and exposure changes from
 // the event source — and only a removed fabric lands in the audit ledger.
 // The negative control is the unsubscribe: after it, the hub sees nothing.
 func TestWireMatterNodeEventsPublishesEveryEventTypeUnderTheNodeTopic(t *testing.T) {
@@ -108,6 +109,7 @@ func TestWireMatterNodeEventsPublishesEveryEventTypeUnderTheNodeTopic(t *testing
 		{Type: fabricui.EventEndpointsChanged, Data: struct{}{}},
 		{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: []string{"ccu|000A|4|custom|switch"}}},
 		{Type: fabricui.EventFabricRemoved, Data: fabricui.FabricEvent{FabricIndex: 2}},
+		{Type: fabricui.EventSurfaceChanged, Data: fabricui.SurfaceChangedEvent{Endpoints: []string{"ccu|000A|4"}}},
 	}
 	if err := obs.OnFabricAdded(node.FabricInfo{FabricIndex: 2, VendorID: 0x1349, Label: "Home"}); err != nil {
 		t.Fatal(err)
@@ -125,6 +127,9 @@ func TestWireMatterNodeEventsPublishesEveryEventTypeUnderTheNodeTopic(t *testing
 	src.Publish(events[3])
 	src.Publish(events[4])
 	if err := obs.OnFabricRemoved(node.FabricInfo{FabricIndex: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.OnSurfaceChanged(surface.SurfaceChange{Endpoint: "ccu|000A|4"}); err != nil {
 		t.Fatal(err)
 	}
 	// The hub's replay ring is what a subscriber resuming from cursor 0

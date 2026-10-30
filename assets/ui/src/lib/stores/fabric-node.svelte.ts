@@ -1,7 +1,7 @@
 // The @sukramj/fabric-ui context for the Matter area, one per SPA session.
 //
 // The Matter pages (status, pairing, fabrics, selection, endpoints,
-// diagnostics) come from the package and read this context; the Matter
+// surface, diagnostics) come from the package and read this context; the Matter
 // route provides it above them. It is a module singleton rather than a
 // per-mount object because the navigation gates outside the route (the
 // sidebar, the navigation-views editor, the landing-page picker) ask the
@@ -21,13 +21,14 @@ import { subscribe as subscribeHub } from "./events.svelte";
 import { prefs } from "./preferences.svelte";
 import { toastStore } from "./toast.svelte";
 
-/** The hrefs of the six Matter pages under loom's hash router. */
+/** The hrefs of the seven Matter pages under loom's hash router. */
 export const matterRoutes = {
   status: "#/matter",
   pair: "#/matter/pair",
   fabrics: "#/matter/fabrics",
   selection: "#/matter/selection",
   endpoints: "#/matter/endpoints",
+  surface: "#/matter/surface",
   diagnostics: "#/matter/diagnostics",
 } as const;
 

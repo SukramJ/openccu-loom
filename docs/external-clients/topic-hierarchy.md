@@ -296,12 +296,14 @@ generated [WebSocket reference](../reference/websocket.md#broadcasts)
 renders every broadcast with its topic pattern, payload schema and
 description, grouped by category.
 
-The `node.*` broadcasts are go-fabric-ui's events (the same six the
+The `node.*` broadcasts are go-fabric-ui's events (the same seven the
 handler's own stream `GET /api/v1/node/stream` carries), published onto
 the hub under the `node.` prefix with the stream's payload unchanged:
 `node.fabric_added` and `node.fabric_removed` carry a `FabricEvent`,
 `node.window_opened` and `node.window_closed` a `WindowEvent`,
 `node.exposure_changed` an `ExposureEvent` with the changed items' keys,
+`node.surface_changed` a `SurfaceChangedEvent` with the key of the one
+endpoint whose served surface an assembly changed (`""` for the root),
 and `node.endpoints_changed` an empty object — reload
 `GET /api/v1/node/endpoints`.
 

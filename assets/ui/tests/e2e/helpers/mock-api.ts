@@ -778,6 +778,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     sessions: 'node-sessions.json',
     mdns: 'node-mdns.json',
     endpoints: 'node-endpoints.json',
+    surface: 'node-surface.json',
     compatibility: 'node-compatibility.json',
     events: 'node-events.json',
     exposure: 'node-exposure.json',

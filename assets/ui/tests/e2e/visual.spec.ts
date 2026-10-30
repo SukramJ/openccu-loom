@@ -124,6 +124,36 @@ test.describe('Visual regression - light mode', () => {
     await expect(page).toHaveScreenshot('matter-diagnostics-light.png');
   });
 
+  // The surface report's header is a row of badges in several variants
+  // (level, profiles, assembled state) — pixels a token change silently
+  // inverts — so the view carries a baseline in both modes.
+  test('MatterSurface light', async ({ page }) => {
+    // Matter is off in the shared fixture; override the status document
+    // for this test alone, as the diagnostics case does.
+    await page.route('**/api/v1/node/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          exposure: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/surface');
+    await page.waitForSelector('#main');
+    // The announced changes are the report's last section.
+    await page.getByText('revision 6').first().waitFor();
+    await page.waitForTimeout(300);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-surface-light.png');
+  });
+
   // The fabrics tab pairs a table of paired controllers with the two
   // maintenance actions. One of those is irreversible, so its weight on
   // the page — an outline-danger button, never a filled one competing
@@ -293,6 +323,36 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(300);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-diagnostics-dark.png');
+  });
+
+  // The surface report's header is a row of badges in several variants
+  // (level, profiles, assembled state) — pixels a token change silently
+  // inverts — so the view carries a baseline in both modes.
+  test('MatterSurface dark', async ({ page }) => {
+    // Matter is off in the shared fixture; override the status document
+    // for this test alone, as the diagnostics case does.
+    await page.route('**/api/v1/node/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          exposure: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/surface');
+    await page.waitForSelector('#main');
+    // The announced changes are the report's last section.
+    await page.getByText('revision 6').first().waitFor();
+    await page.waitForTimeout(300);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-surface-dark.png');
   });
 
   // The fabrics tab pairs a table of paired controllers with the two

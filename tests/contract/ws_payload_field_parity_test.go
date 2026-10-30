@@ -58,6 +58,7 @@ var wsPayloadStructs = map[string]any{
 	"FabricEvent":                        fabricui.FabricEvent{},
 	"WindowEvent":                        fabricui.WindowEvent{},
 	"ExposureEvent":                      fabricui.ExposureEvent{},
+	"SurfaceChangedEvent":                fabricui.SurfaceChangedEvent{},
 	"NodeEndpointsChangedPayload":        struct{}{},
 	"AlarmCountdownPayload":              ws.AlarmCountdownPayload{},
 	"AlarmHealthChangedPayload":          ws.AlarmHealthChangedPayload{},

@@ -10,6 +10,7 @@
     NodePair,
     NodeSelection,
     NodeStatus,
+    NodeSurface,
     provideFabricUI,
   } from "@sukramj/fabric-ui";
   import { fabricUI, matterRoutes } from "$lib/stores/fabric-node.svelte";
@@ -36,6 +37,7 @@
     fabrics: NodeFabrics,
     selection: NodeSelection,
     endpoints: NodeEndpoints,
+    surface: NodeSurface,
     diagnostics: NodeDiagnostics,
   };
   type Page = keyof typeof pages;

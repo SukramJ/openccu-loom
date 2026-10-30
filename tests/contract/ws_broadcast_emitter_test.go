@@ -334,6 +334,14 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{`nodeTopicExposureChanged = "node.exposure_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))", "Events:           bundle.events,"},
 		WireValue: "node." + fabricui.EventExposureChanged,
 	},
+	"node.surface_changed": {
+		Files: []string{
+			"cmd/openccu-loom/matter_node_events.go",
+			"cmd/openccu-loom/daemon_matter.go",
+		},
+		Tokens:    []string{`nodeTopicSurfaceChanged   = "node.surface_changed"`, "hub.Publish(ws.Event{", "topic, known := nodeTopics[ev.Type]", "Topic:   topic,", "unsubs = append(unsubs, n.Observe(fabricui.NodeObservers(sink, n.Window().Open)))", "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))"},
+		WireValue: "node." + fabricui.EventSurfaceChanged,
+	},
 	"pairing.requests_changed": {
 		Files: []string{
 			"internal/north/rest/ws/pairing_events.go",

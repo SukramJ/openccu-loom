@@ -1,5 +1,5 @@
 {
- "api_version": "15.1.0",
+ "api_version": "15.2.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -146,6 +146,7 @@
   "GET /node/sessions": "listSessions",
   "GET /node/status": "getNodeStatus",
   "GET /node/stream": "stream",
+  "GET /node/surface": "getNodeSurface",
   "GET /pairing-requests": "listPairingRequests",
   "GET /pairing/{id}": "pollPairing",
   "GET /programs": "listPrograms",
@@ -1707,6 +1708,9 @@
    "parent_path:string",
    "path:string"
   ],
+  "NodeSurfaceElementKind": [],
+  "NodeSurfaceElementOrigin": [],
+  "NodeSurfaceVerdict": [],
   "NodeVerdictState": [],
   "NodeWarning": [
    "code:string",
@@ -2338,6 +2342,68 @@
    "name:string",
    "parameter:string"
   ],
+  "SurfaceChange": [
+   "after:string",
+   "at:string",
+   "before:string",
+   "changes:array\u003c$ref:SurfaceElementChange\u003e",
+   "endpoint:string"
+  ],
+  "SurfaceChangedEvent": [
+   "endpoints:array\u003cstring\u003e"
+  ],
+  "SurfaceCluster": [
+   "accepted:array\u003cstring\u003e",
+   "attributes:array\u003cstring\u003e",
+   "events:array\u003cstring\u003e",
+   "featureMap:string",
+   "generated:array\u003cstring\u003e",
+   "id:string",
+   "revision:integer"
+  ],
+  "SurfaceDecision": [
+   "cluster:string",
+   "endpoint:string",
+   "id:string",
+   "kind:$ref:NodeSurfaceElementKind",
+   "mandatory:boolean",
+   "origin:$ref:NodeSurfaceElementOrigin",
+   "policy:string",
+   "reason:string",
+   "reference:string",
+   "verdict:$ref:NodeSurfaceVerdict"
+  ],
+  "SurfaceDeviceType": [
+   "id:string",
+   "revision:integer"
+  ],
+  "SurfaceEffective": [
+   "endpoints:array\u003c$ref:SurfaceEndpoint\u003e",
+   "root:$ref:SurfaceEndpoint"
+  ],
+  "SurfaceElement": [
+   "cluster:string",
+   "endpoint:string",
+   "id:string",
+   "kind:$ref:NodeSurfaceElementKind",
+   "mandatory:boolean",
+   "origin:$ref:NodeSurfaceElementOrigin",
+   "reference:string"
+  ],
+  "SurfaceElementChange": [
+   "after:string",
+   "before:string",
+   "cluster:string",
+   "endpoint:string",
+   "id:string",
+   "kind:$ref:NodeSurfaceElementKind"
+  ],
+  "SurfaceEndpoint": [
+   "clusters:array\u003c$ref:SurfaceCluster\u003e",
+   "deviceTypes:array\u003c$ref:SurfaceDeviceType\u003e",
+   "key:string",
+   "number:integer"
+  ],
   "SurfaceInfo": [
    "defaults:object",
    "floor:string",
@@ -2351,6 +2417,18 @@
    "role_admin:boolean",
    "warn:string",
    "warn_profile:string"
+  ],
+  "SurfaceReport": [
+   "assembled:boolean",
+   "changed:array\u003c$ref:SurfaceChange\u003e",
+   "decisions:array\u003c$ref:SurfaceDecision\u003e",
+   "effective:$ref:SurfaceEffective",
+   "extensions:array\u003cstring\u003e",
+   "level:string",
+   "level_origin:string",
+   "policies:string",
+   "profiles:array\u003cstring\u003e",
+   "withheld:array\u003c$ref:SurfaceElement\u003e"
   ],
   "SurfacesRequest": [
    "embedded:boolean",
