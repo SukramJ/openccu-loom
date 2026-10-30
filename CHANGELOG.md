@@ -30,6 +30,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   settings changed, the bridge now raises its configuration version itself,
   so a paired controller is told to read the device again. A bridged device
   without a name serves its Descriptor again.
+- **Matter selection page: items that cannot be exposed are hidden.** The
+  list now shows only what the bridge can expose, devices withheld by
+  `north.matter.spec_level` included in what it hides. A toggle above the
+  list ("Show items that cannot be mapped") brings them back with their
+  reason (go-fabric-ui 0.2.5).
 
 ## [0.95.0] - 2026-10-29
 
