@@ -534,9 +534,10 @@ func TestAssemble_ButtonGroupAllowlistPerMember(t *testing.T) {
 // TestAssemble_ButtonGroupReplacesLegacyPerPressRows verifies the
 // deterministic store transition: persisted per-parameter endpoint rows
 // from the previous composition vanish from the assembled set, replaced by
-// the single consolidated row. The legacy rows stay stored — a stored key
-// keeps its number until it is forgotten, and they carry the device's
-// address, so the forget of the deleted device frees them with the rest.
+// the single consolidated row. The assembly alone leaves the legacy rows
+// stored — a stored key keeps its number until it is forgotten; the
+// reconciler forgets them as superseded keys
+// (TestReconcilerForgetsSupersededPerPressRows).
 func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
