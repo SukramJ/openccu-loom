@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/SukramJ/go-fabric/node"
 	matterstore "github.com/SukramJ/go-fabric/store"
+	"github.com/SukramJ/go-fabric/surface"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
+	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -147,6 +149,28 @@ const matterSupportedFabrics = 254
 // matterSetupPasscodeMax is the Matter §5.1.1.6 upper bound of a setup
 // passcode.
 const matterSetupPasscodeMax = 99999998
+
+// matterSurfacePolicies are the surface policies the node and every device
+// are composed under. go-fabric serves the matter.js baseline and refuses
+// an ahead-of-matter.js feature whose register row is not enabled; the
+// week programs are the one such feature loom offers, enabled with
+// north.matter.thermostat_schedules. The climate source requests MSCH
+// itself under the same flag, so the policy is the second gate, not the
+// only one. The level and the controller profile are the operator's.
+func matterSurfacePolicies(mc config.NorthMatter) surface.Policies {
+	var extensions []string
+	if mc.ThermostatSchedules {
+		extensions = append(extensions, climate.MatterScheduleExtension)
+	}
+	p := surface.Policies{
+		Extensions: surface.NewExtensions(extensions...),
+		Level:      surface.Level(mc.SpecLevel),
+	}
+	if mc.ControllerProfile != "" {
+		p.Profiles = []string{mc.ControllerProfile}
+	}
+	return p
+}
 
 // matterRootSerial is the root BasicInformation SerialNumber: a stable
 // 16-char hex digest of VID|PID|NodeLabel. ha-bridge derives its serial
@@ -340,6 +364,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 	attest := matterAttestation(mc, logger)
 	uiEvents := fabricui.NewEvents()
+	surfacePolicies := matterSurfacePolicies(mc)
 	n, err := node.New(node.Config{
 		Network: node.Network{
 			Listen:     mc.Listen,
@@ -383,6 +408,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Locales:                    matterLocales(cfg.Locale),
 		SupportedFabrics:           matterSupportedFabrics,
 		DisableTimeSynchronization: !mc.TimeSyncEnabled(),
+		Surface:                    surfacePolicies,
 		Logger:                     logger,
 	})
 	if err != nil {
@@ -402,6 +428,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ThermostatHoldAndRunningState: mc.ThermostatHoldAndRunningState,
 		ThermostatSchedules:           mc.ThermostatSchedules,
 		ClimateSchedules:              schedules,
+		Surface:                       surfacePolicies,
 	}
 	assembler := matteradapter.New(matteradapter.Config{
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,

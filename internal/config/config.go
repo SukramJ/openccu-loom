@@ -983,6 +983,21 @@ type NorthMatter struct {
 	// Apple refuses is not measured.
 	ThermostatSchedules bool `yaml:"thermostat_schedules" json:"thermostat_schedules" cfg:"expert"`
 
+	// SpecLevel caps what the bridge serves at a Matter specification
+	// level go-fabric knows (one of go-fabric's schema.Levels, e.g.
+	// "1.4.2"): optional surface the level does not know is not served,
+	// and a device whose type the level does not know is not exposed.
+	// Empty is go-fabric's own level, which changes nothing. Meant for a
+	// controller that is known to work up to one level.
+	SpecLevel string `yaml:"spec_level" json:"spec_level" cfg:"expert"`
+
+	// ControllerProfile names the Matter controller the bridge is paired
+	// with (one of go-fabric's surface.Profiles: alexa, apple-home,
+	// google-home, home-assistant, smartthings). A profile removes what
+	// go-fabric has reproduced that controller failing on and records a
+	// warning for what was only reported. Empty selects none.
+	ControllerProfile string `yaml:"controller_profile" json:"controller_profile" cfg:"expert"`
+
 	// VendorID is the bridge's IANA-assigned vendor identifier.
 	// Defaults to 0xFFF1 (the test/development vendor block) when unset
 	// — never ship that value in production.

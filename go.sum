@@ -1,8 +1,8 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SukramJ/go-fabric v0.14.0 h1:pQPHK767Ytv0EEslplA5OPWWsLixng+RVOyjwp0nJV8=
-github.com/SukramJ/go-fabric v0.14.0/go.mod h1:u05z8cUjXxgNjqaVn+kMb4S99/hjHdg8WH/8h+oq2rs=
+github.com/SukramJ/go-fabric v0.15.1 h1:a5E5dCkbLGhOArZ8DMDuvu5ytMSGy40DS/jSgWNodqI=
+github.com/SukramJ/go-fabric v0.15.1/go.mod h1:u05z8cUjXxgNjqaVn+kMb4S99/hjHdg8WH/8h+oq2rs=
 github.com/SukramJ/go-fabric-ui v0.2.4 h1:66otFICb6D0csidmrBMP1XUxl5N08IGxSNKMjPjTfuA=
 github.com/SukramJ/go-fabric-ui v0.2.4/go.mod h1:r8t7/zYe8rEZDwevAkWGP7/du6VlUtvZdNAOlL1o5UE=
 github.com/SukramJ/go-ha-catalog v0.3.1 h1:wo8CN+r4QHFCIBftSJMCHzYzmnkbs2FjEbnfjjQRT0c=

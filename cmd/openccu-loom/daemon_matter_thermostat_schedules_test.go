@@ -86,6 +86,21 @@ func flatClimateSchedule() *schedule.Climate {
 // returns the bundle and the thermostat's endpoint.
 func bootThermostatBridge(t *testing.T, hold, schedules bool, writer *recordingScheduleWriter) (context.Context, *matterBridgeBundle, uint16) {
 	t.Helper()
+	return bootThermostatBridgeWith(t, hold, schedules, writer, thermostatBridgeExtras{})
+}
+
+// thermostatBridgeExtras widens [bootThermostatBridgeWith]: configure
+// edits the Matter config before validation, populate adds channels to
+// the thermostat's device before the bridge starts.
+type thermostatBridgeExtras struct {
+	configure func(*config.NorthMatter)
+	populate  func(*device.Device)
+}
+
+// bootThermostatBridgeWith is [bootThermostatBridge] with extras. It fails
+// the test when the thermostat is not bridged.
+func bootThermostatBridgeWith(t *testing.T, hold, schedules bool, writer *recordingScheduleWriter, extras thermostatBridgeExtras) (context.Context, *matterBridgeBundle, uint16) {
+	t.Helper()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.MDNSAdvertise = "noop"
@@ -97,6 +112,9 @@ func bootThermostatBridge(t *testing.T, hold, schedules bool, writer *recordingS
 	cfg.North.Matter.Discriminator = thermoSchedDiscrim
 	cfg.North.Matter.ThermostatHoldAndRunningState = hold
 	cfg.North.Matter.ThermostatSchedules = schedules
+	if extras.configure != nil {
+		extras.configure(&cfg.North.Matter)
+	}
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}}}}
 	if err := cfg.Validate(); err != nil {
@@ -129,6 +147,9 @@ func bootThermostatBridge(t *testing.T, hold, schedules bool, writer *recordingS
 		Channel: ch, Kind: climate.KindIP,
 		Capabilities: custom.ClimateCapabilities{SupportsAuto: true, SupportsHeat: true, SupportsProfile: true},
 	}))
+	if extras.populate != nil {
+		extras.populate(dev)
+	}
 	unit.ModelRegistry.Put(dev)
 
 	ctx, cancel := context.WithCancel(context.Background())

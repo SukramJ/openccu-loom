@@ -368,6 +368,35 @@ func TestValidateChecksTheMatterBridgeParameters(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("spec level and controller profile", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name, level, profile, wantField string
+		}{
+			{"both empty select nothing", "", "", ""},
+			{"a level go-fabric knows", "1.4.2", "", ""},
+			{"a profile go-fabric knows", "", "apple-home", ""},
+			{"a level and a profile", "1.5.1", "google-home", ""},
+			{"a revision matter.js shipped no release for", "1.5", "", "north.matter.spec_level"},
+			{"a level above the pin", "9.9", "", "north.matter.spec_level"},
+			{"a profile go-fabric does not list", "", "apple", "north.matter.controller_profile"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				cfg := Default()
+				cfg.North.Matter.SpecLevel = tc.level
+				cfg.North.Matter.ControllerProfile = tc.profile
+				err := cfg.Validate()
+				if tc.wantField != "" {
+					assertRejected(t, err, tc.wantField)
+					return
+				}
+				assertAccepted(t, err)
+			})
+		}
+	})
 }
 
 // TestValidateChecksTheRESTCapacityKnobs pins the REST rate-limiter and

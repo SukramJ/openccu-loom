@@ -10,6 +10,7 @@ import (
 	contract "github.com/SukramJ/go-fabric/contract"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/schema"
+	"github.com/SukramJ/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
@@ -59,6 +60,12 @@ type MatterBuildOptions struct {
 	// ClimateSchedules writes a week program a controller committed; nil
 	// refuses every commit.
 	ClimateSchedules ClimateScheduleWriter
+	// Surface are the surface policies every device is composed under
+	// (fabricdevice.Options.Surface). They must equal the node's
+	// (node.Config.Surface): the node refuses a device composed under
+	// other ones, and a device that selects an ahead-of-matter.js feature
+	// whose register row they do not enable is refused at build.
+	Surface surface.Policies
 }
 
 // MatterConfiguredDeviceSource is a [MatterDeviceSource] whose device

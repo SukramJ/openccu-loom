@@ -17,6 +17,7 @@ import (
 
 	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 	"github.com/SukramJ/go-fabric/secure/spake2"
+	"github.com/SukramJ/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 )
@@ -176,6 +177,18 @@ func validateMatter(m *NorthMatter) error {
 	if m.TCP != "" && !slices.Contains(MatterTCPModes, m.TCP) {
 		return fmt.Errorf("config: north.matter.tcp must be one of %s (empty selects %q), got %q",
 			strings.Join(MatterTCPModes, "|"), MatterTCPOff, m.TCP)
+	}
+	// go-fabric's node refuses policies it does not know, which would
+	// leave the bridge down at start; the validator names the field
+	// instead. The level and the profile are checked together because a
+	// profile may carry a level of its own.
+	if err := (surface.Policies{Level: surface.Level(m.SpecLevel)}).Validate(); err != nil {
+		return fmt.Errorf("config: north.matter.spec_level: %w", err)
+	}
+	if m.ControllerProfile != "" {
+		if err := (surface.Policies{Level: surface.Level(m.SpecLevel), Profiles: []string{m.ControllerProfile}}).Validate(); err != nil {
+			return fmt.Errorf("config: north.matter.controller_profile: %w", err)
+		}
 	}
 	return nil
 }
