@@ -194,10 +194,13 @@ type DeviceSnapshot struct {
 }
 
 // Described is one central's fleet as the walk describes it: the
-// endpoints the central projects, under the central's scope.
+// endpoints the central projects, under the central's scope, and the keys
+// an earlier composition stored for its devices that no composition
+// produces any more ([supersededKeys]).
 type Described struct {
-	Scope     string
-	Endpoints []endpoint.Spec
+	Scope      string
+	Endpoints  []endpoint.Spec
+	Superseded []matterendpoint.SourceKey
 }
 
 // DescribeDevices walks the model fleets in snapshots and describes every
@@ -239,6 +242,7 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 				return Described{}, err
 			}
 			deviceSpecs = append(deviceSpecs, specs...)
+			out.Superseded = append(out.Superseded, supersededKeys(snap.CentralName, dev, ch)...)
 		}
 		attachPowerSource(dev, deviceSpecs)
 		out.Endpoints = append(out.Endpoints, deviceSpecs...)
@@ -704,6 +708,43 @@ func genericDPKeyForMeasurement(dp any) string {
 		return k.DataPointKey().Parameter
 	}
 	return ""
+}
+
+// supersededKeys are the keys an earlier composition stored for ch that no
+// composition produces any more, whatever the exposure, the hidden flag or
+// the configuration: a number reserved under one of them is never served
+// again while the device lives, so the reconciler frees it.
+//
+// The register has one entry. Up to 0.32.x every press parameter of a
+// button channel was its own endpoint, keyed like any generic measurement
+// (DPKindGeneric, the parameter); since 0.33.0 the channel's press
+// parameters are one GenericSwitch endpoint under [ButtonGroupDPKey], and
+// the per-parameter key is only an exposure row. A future change that
+// retires a key shape adds it here, with the release it ended in.
+//
+// Nothing that may come back belongs here: an unexposed, hidden or not
+// yet loaded endpoint, or one a setting or the specification level leaves
+// out, keeps its number so a controller sees the same accessory again.
+func supersededKeys(centralName string, dev *device.Device, ch *device.Channel) []matterendpoint.SourceKey {
+	var out []matterendpoint.SourceKey
+	for _, gdp := range ch.DataPoints() {
+		meas, ok := gdp.(contract.MeasurementSource)
+		if !ok || meas.MatterMeasurementClass() != contract.MeasurementMomentarySwitch {
+			continue
+		}
+		key := genericDPKeyForMeasurement(gdp)
+		if key == "" {
+			continue
+		}
+		out = append(out, matterendpoint.SourceKey{
+			CentralName:   centralName,
+			DeviceAddress: dev.Address,
+			ChannelNo:     ch.Number,
+			DPKind:        matterendpoint.DPKindGeneric,
+			DPKey:         key,
+		})
+	}
+	return out
 }
 
 // projection is how a data point reaches the Matter plane as an endpoint

@@ -6,6 +6,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Matter: endpoint numbers left over from the old button layout are
+  freed.** Before 0.33.0 every press parameter of a button was its own
+  Matter endpoint; since then a button is one endpoint. The numbers of the
+  old per-press endpoints stayed reserved for as long as the device existed.
+  They are now freed on the first sync after the start. Only key shapes no
+  release produces any more are freed: an endpoint that is merely not
+  exposed, hidden or switched off by a setting keeps its number, so a
+  controller still sees the same accessory when it comes back.
+
 ## [0.95.0] - 2026-10-29
 
 ### Release summary

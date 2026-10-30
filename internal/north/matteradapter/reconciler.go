@@ -28,9 +28,11 @@ import (
 // describes is removed from the partition but keeps its stored number, so
 // a device that is only unexposed, hidden or not loaded yet — a central
 // still waiting on its CCU describes nothing — comes back under the same
-// number. A number is freed in two places only: a device the CCU deleted
-// is forgotten ([Reconciler.QueueForget]), and a central removed from the
-// configuration is retired ([Reconciler.Retire]).
+// number. A number is freed in three places only: a device the CCU deleted
+// is forgotten ([Reconciler.QueueForget]), a central removed from the
+// configuration is retired ([Reconciler.Retire]), and a key an earlier
+// composition stored that no composition produces any more is forgotten
+// once the walk names it ([Described].Superseded).
 //
 // An endpoint is held as the spec the walk described, wrapped as the
 // Aggregator's endpoint; a described spec that differs from the held one
@@ -55,6 +57,11 @@ type Reconciler struct {
 	// bus's dispatch.
 	forgetMu sync.Mutex
 	forget   map[string]map[string]struct{} // scope → device address
+
+	// pruned are the superseded keys a sync already settled in this
+	// process, forgotten or found unstored; r.mu guards it. A key is
+	// looked up in the store once, not on every sync.
+	pruned map[string]struct{}
 }
 
 // DeviceKeyLister finds the stored endpoint keys of one device of one
@@ -130,6 +137,7 @@ func NewReconciler(agg *node.Aggregator, asm *Assembler, keys DeviceKeyLister, l
 		agg: agg, asm: asm, keys: keys, logger: logger,
 		held:   map[string]map[string]*heldEndpoint{},
 		forget: map[string]map[string]struct{}{},
+		pruned: map[string]struct{}{},
 	}
 }
 
@@ -230,6 +238,80 @@ func (r *Reconciler) Sync(ctx context.Context, snapshots []DeviceSnapshot) error
 		if err := r.syncCentral(ctx, d); err != nil {
 			errs = append(errs, fmt.Errorf("matteradapter: central %q: %w", d.Scope, err))
 		}
+		if err := r.forgetSuperseded(ctx, d); err != nil {
+			errs = append(errs, fmt.Errorf("matteradapter: central %q: %w", d.Scope, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// forgetSuperseded frees the stored numbers of the keys the walk names as
+// superseded ([supersededKeys]) for one central. Only a key the store
+// holds is forgotten, and only once per process: the store is asked per
+// device the first time one of its keys is named. Without a
+// DeviceKeyLister nothing is known about the store and nothing is freed.
+// r.mu is held.
+func (r *Reconciler) forgetSuperseded(ctx context.Context, d Described) error {
+	if r.keys == nil {
+		return nil
+	}
+	held := r.held[d.Scope]
+	byDevice := map[string][]matterendpoint.SourceKey{}
+	for _, k := range d.Superseded {
+		key := k.String()
+		if _, done := r.pruned[key]; done {
+			continue
+		}
+		if _, ok := held[key]; ok {
+			// Served under this key in this sync: not superseded after all.
+			continue
+		}
+		byDevice[k.DeviceAddress] = append(byDevice[k.DeviceAddress], k)
+	}
+	if len(byDevice) == 0 {
+		return nil
+	}
+	var (
+		errs    []error
+		forget  []matterendpoint.SourceKey
+		settled []string
+	)
+	for addr, keys := range byDevice {
+		stored, err := r.keys.DeviceKeys(ctx, d.Scope, addr)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("stored keys of %s: %w", addr, err))
+			continue
+		}
+		have := make(map[string]struct{}, len(stored))
+		for _, k := range stored {
+			have[k.String()] = struct{}{}
+		}
+		for _, k := range keys {
+			if _, ok := have[k.String()]; ok {
+				forget = append(forget, k)
+			}
+			settled = append(settled, k.String())
+		}
+	}
+	if len(forget) > 0 {
+		err := r.agg.Partition(d.Scope).Batch(ctx, func(b *node.Batch) error {
+			var errs []error
+			for _, k := range forget {
+				if err := b.Forget(k); err != nil {
+					errs = append(errs, fmt.Errorf("forget %s: %w", k, err))
+				}
+			}
+			return errors.Join(errs...)
+		})
+		if err != nil {
+			// Settle nothing: the next sync asks the store again.
+			return errors.Join(append(errs, err)...)
+		}
+		r.logger.Info("matter.reconciler.forget_superseded",
+			slog.String("central", d.Scope), slog.Int("keys", len(forget)))
+	}
+	for _, key := range settled {
+		r.pruned[key] = struct{}{}
 	}
 	return errors.Join(errs...)
 }
