@@ -1,5 +1,33 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.96.0
+
+- **Matter: specification level and controller profile.** Two new expert
+  options, both empty by default. `north.matter.spec_level` caps what the
+  bridge serves at one Matter specification level; a device type the level
+  does not know is not exposed (below 1.5.1 a garage drive stays off
+  Matter). `north.matter.controller_profile` names the controller the
+  bridge is paired with; `apple-home` logs a warning for the thermostat
+  week programs. Both take effect after a restart.
+- **Matter: see what the bridge serves.** The status page shows the
+  specification level, the controller profiles and the enabled features
+  ahead of matter.js. A new Surface tab lists, per endpoint, the device
+  types and clusters served, every policy decision, the withheld elements
+  and the surface changes since the start.
+- **Matter: controllers re-read a changed device by themselves.** When a
+  device's Matter surface changes, for example after one of these options
+  changed, the bridge raises its configuration version, so a paired
+  controller reads the device again. A bridged device without a name
+  serves its Descriptor again.
+- **Matter selection page:** items that cannot be exposed are hidden; a
+  toggle above the list brings them back with their reason.
+- **Matter:** endpoint numbers left over from the button layout before
+  0.33.0 are freed on the first sync after the start. Endpoints that are
+  only hidden or switched off keep their number.
+- **API clients:** REST API 15.2.0 (`GET /node/surface`, a `surface`
+  object in `GET /node/status`) and WebSocket API 2.1 (the broadcast
+  `node.surface_changed`). Both are additive.
+
 ## 0.95.0
 
 - **Thermostat options split in two (Matter).** With the 0.94.0 option
