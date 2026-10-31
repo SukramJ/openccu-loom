@@ -24,25 +24,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   below the counts shows the specification level and where it comes from
   (set, the built-in pin, or implied by a profile), the controller
   profiles and the enabled features ahead of matter.js, such as the
-  thermostat week programs. The number of withheld devices, profile
-  warnings and surface changes appears only when not zero.
+  thermostat week programs. The number of withheld devices, warnings and
+  surface changes appears only when not zero. A warning is any element a
+  policy keeps and flags, not only a profile's.
   `GET /node/status` carries the same as a `surface` object
   (REST API 15.1.0).
+- **Matter: a Surface tab.** The new tab between Endpoints and Diagnostics
+  shows what the bridge serves per endpoint, the root endpoint first: device
+  types and clusters with revision and feature map, every policy decision
+  (filterable by verdict and endpoint), the withheld elements and the
+  surface changes announced since the start. `GET /node/surface` returns the
+  report (REST API 15.2.0). When an assembly changes an endpoint's surface,
+  the WebSocket broadcast `node.surface_changed` names the endpoint
+  (WebSocket API 2.1), and the Endpoints tab marks it and reloads.
 
 ### Changed
 
-- **Matter: go-fabric 0.15.2.** The bridge now serves the matter.js
+- **Matter: go-fabric 0.15.4.** The bridge now serves the matter.js
   baseline, plus one feature ahead of matter.js: the thermostat week
   programs, which `north.matter.thermostat_schedules` still switches on. When
   a device's Matter surface changes, for example after one of these
   settings changed, the bridge now raises its configuration version itself,
   so a paired controller is told to read the device again. A bridged device
-  without a name serves its Descriptor again.
+  without a name serves its Descriptor again. A device withheld by the
+  specification level leaves the withheld list once it is removed.
 - **Matter selection page: items that cannot be exposed are hidden.** The
   list now shows only what the bridge can expose, devices withheld by
   `north.matter.spec_level` included in what it hides. A toggle above the
   list ("Show items that cannot be mapped") brings them back with their
-  reason (go-fabric-ui 0.2.6, the Matter pages' package
+  reason (go-fabric-ui 0.2.8, the Matter pages' package
   `@sukramj/fabric-ui` included).
 
 ### Fixed

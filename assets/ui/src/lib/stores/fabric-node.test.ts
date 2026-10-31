@@ -21,10 +21,10 @@ describe("nodeEventFromEnvelope", () => {
 });
 
 describe("matterRoutes", () => {
-  it("puts the six node pages under loom's #/matter routes", () => {
+  it("puts the seven node pages under loom's #/matter routes", () => {
     expect(Object.values(matterRoutes).every((href) => href.startsWith("#/matter"))).toBe(true);
     expect(Object.keys(matterRoutes).sort()).toEqual(
-      ["diagnostics", "endpoints", "fabrics", "pair", "selection", "status"],
+      ["diagnostics", "endpoints", "fabrics", "pair", "selection", "status", "surface"],
     );
   });
 });

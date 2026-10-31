@@ -1,5 +1,5 @@
 {
-  "wsapi_version": "2.0",
+  "wsapi_version": "2.1",
   "commands": {
     "addon_update.check": "",
     "addon_update.install": "",
@@ -137,6 +137,7 @@
     "node.exposure_changed": "",
     "node.fabric_added": "",
     "node.fabric_removed": "",
+    "node.surface_changed": "",
     "node.window_closed": "",
     "node.window_opened": "",
     "pairing.requests_changed": "",

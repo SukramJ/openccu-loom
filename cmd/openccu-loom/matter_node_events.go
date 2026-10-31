@@ -31,11 +31,12 @@ const (
 	nodeTopicWindowClosed     = "node.window_closed"
 	nodeTopicEndpointsChanged = "node.endpoints_changed"
 	nodeTopicExposureChanged  = "node.exposure_changed"
+	nodeTopicSurfaceChanged   = "node.surface_changed"
 )
 
 // nodeTopics maps go-fabric-ui's event types onto the hub topics. An
 // event type the table does not name is not a broadcast of this daemon
-// (assets/wsapi.json declares exactly these six) and is dropped rather
+// (assets/wsapi.json declares exactly these seven) and is dropped rather
 // than published under a topic no client subscribed to.
 var nodeTopics = map[string]string{
 	fabricui.EventFabricAdded:      nodeTopicFabricAdded,
@@ -44,6 +45,7 @@ var nodeTopics = map[string]string{
 	fabricui.EventWindowClosed:     nodeTopicWindowClosed,
 	fabricui.EventEndpointsChanged: nodeTopicEndpointsChanged,
 	fabricui.EventExposureChanged:  nodeTopicExposureChanged,
+	fabricui.EventSurfaceChanged:   nodeTopicSurfaceChanged,
 }
 
 // nodeAuditActor is the audit principal of a change the node reports
@@ -65,7 +67,7 @@ type matterNodeObserved interface {
 //
 // The events arrive on two paths. The endpoint and exposure changes are
 // published into go-fabric-ui's event source (src) by the daemon and the
-// exposure route. The fabric and window transitions are not: go-fabric-ui
+// exposure route. The fabric, window and surface transitions are not: go-fabric-ui
 // observes the node for each open SSE stream alone and puts nothing into
 // src, so the bridge observes the node itself (n) through go-fabric-ui's
 // own conversion, fabricui.NodeObservers — publishing them into src

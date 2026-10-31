@@ -380,6 +380,7 @@ Live config section read / write / delete + schema introspection
 | GET | `/node/sessions` | The open secure sessions and the session-id occupancy. | viewer |
 | GET | `/node/status` | Health, counts and the commissioning window. | viewer |
 | GET | `/node/stream` | Server-sent events. | viewer |
+| GET | `/node/surface` | The node's surface report. | viewer |
 
 ## paramsets {#paramsets}
 

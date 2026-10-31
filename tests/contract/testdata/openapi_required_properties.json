@@ -1327,10 +1327,83 @@
  "SuppressedServiceMessage": [
   "channel"
  ],
+ "SurfaceChange": [
+  "after",
+  "at",
+  "before",
+  "changes",
+  "endpoint"
+ ],
+ "SurfaceChangedEvent": [
+  "endpoints"
+ ],
+ "SurfaceCluster": [
+  "accepted",
+  "attributes",
+  "events",
+  "featureMap",
+  "generated",
+  "id",
+  "revision"
+ ],
+ "SurfaceDecision": [
+  "cluster",
+  "endpoint",
+  "id",
+  "kind",
+  "mandatory",
+  "origin",
+  "policy",
+  "reason",
+  "reference",
+  "verdict"
+ ],
+ "SurfaceDeviceType": [
+  "id",
+  "revision"
+ ],
+ "SurfaceEffective": [
+  "endpoints",
+  "root"
+ ],
+ "SurfaceElement": [
+  "cluster",
+  "endpoint",
+  "id",
+  "kind",
+  "mandatory",
+  "origin",
+  "reference"
+ ],
+ "SurfaceElementChange": [
+  "after",
+  "before",
+  "cluster",
+  "endpoint",
+  "id",
+  "kind"
+ ],
+ "SurfaceEndpoint": [
+  "clusters",
+  "deviceTypes",
+  "key"
+ ],
  "SurfaceInfo": [
   "defaults",
   "group",
   "id"
+ ],
+ "SurfaceReport": [
+  "assembled",
+  "changed",
+  "decisions",
+  "effective",
+  "extensions",
+  "level",
+  "level_origin",
+  "policies",
+  "profiles",
+  "withheld"
  ],
  "SurfacesRequest": [],
  "SurfacesResponse": [

@@ -1,0 +1,215 @@
+{
+  "assembled": true,
+  "changed": [
+    {
+      "after": "9a8b7c6d5e4f0000000000000000000000000000000000000000000000000000",
+      "at": "2026-10-25T11:59:00Z",
+      "before": "1a2b3c4d5e6f0000000000000000000000000000000000000000000000000000",
+      "changes": [
+        {
+          "after": "revision 6",
+          "before": "revision 5",
+          "cluster": "0x00000006",
+          "endpoint": "lamp-1",
+          "id": "0x00000006",
+          "kind": "cluster"
+        },
+        {
+          "after": "served",
+          "before": "",
+          "cluster": "0x00000006",
+          "endpoint": "lamp-1",
+          "id": "0x00004003",
+          "kind": "attribute"
+        }
+      ],
+      "endpoint": "lamp-1"
+    }
+  ],
+  "decisions": [
+    {
+      "cluster": "0x0000001d",
+      "endpoint": "",
+      "id": "0x0000001d",
+      "kind": "cluster",
+      "mandatory": true,
+      "origin": "device-type",
+      "policy": "level",
+      "reason": "",
+      "reference": "",
+      "verdict": "keep"
+    },
+    {
+      "cluster": "0x00000006",
+      "endpoint": "lamp-1",
+      "id": "0x00000006",
+      "kind": "cluster",
+      "mandatory": true,
+      "origin": "device-type",
+      "policy": "level",
+      "reason": "",
+      "reference": "",
+      "verdict": "keep"
+    },
+    {
+      "cluster": "0x00000006",
+      "endpoint": "lamp-1",
+      "id": "0x00004003",
+      "kind": "attribute",
+      "mandatory": false,
+      "origin": "host-declared",
+      "policy": "profile:apple-home",
+      "reason": "warning (Reported) profile apple-home: not reproduced in isolation (owner report)",
+      "reference": "",
+      "verdict": "warn"
+    },
+    {
+      "cluster": "0x00000402",
+      "endpoint": "sensor-2",
+      "id": "0x00000003",
+      "kind": "attribute",
+      "mandatory": false,
+      "origin": "host-declared",
+      "policy": "profile:home-assistant",
+      "reason": "removed by profile home-assistant: synthetic (test)",
+      "reference": "",
+      "verdict": "remove"
+    },
+    {
+      "cluster": "0x00000006",
+      "endpoint": "lamp-1",
+      "id": "0x00000006",
+      "kind": "cluster",
+      "mandatory": true,
+      "origin": "device-type",
+      "policy": "profile:home-assistant",
+      "reason": "kept: mandatory at pin (removed by profile home-assistant: synthetic (test))",
+      "reference": "",
+      "verdict": "keep"
+    }
+  ],
+  "effective": {
+    "endpoints": [
+      {
+        "clusters": [
+          {
+            "accepted": [
+              "0x00000000"
+            ],
+            "attributes": [
+              "0x00000000",
+              "0x00000001",
+              "0x0000fffd"
+            ],
+            "events": [],
+            "featureMap": "0x00000000",
+            "generated": [],
+            "id": "0x00000003",
+            "revision": 6
+          },
+          {
+            "accepted": [
+              "0x00000000",
+              "0x00000001",
+              "0x00000002"
+            ],
+            "attributes": [
+              "0x00000000",
+              "0x00004000",
+              "0x00004003",
+              "0x0000fffc",
+              "0x0000fffd"
+            ],
+            "events": [],
+            "featureMap": "0x00000001",
+            "generated": [],
+            "id": "0x00000006",
+            "revision": 6
+          }
+        ],
+        "deviceTypes": [
+          {
+            "id": "0x0100",
+            "revision": 4
+          }
+        ],
+        "key": "lamp-1",
+        "number": 2
+      },
+      {
+        "clusters": [
+          {
+            "accepted": [],
+            "attributes": [
+              "0x00000000",
+              "0x00000001",
+              "0x00000002",
+              "0x0000fffd"
+            ],
+            "events": [],
+            "featureMap": "0x00000000",
+            "generated": [],
+            "id": "0x00000402",
+            "revision": 4
+          }
+        ],
+        "deviceTypes": [
+          {
+            "id": "0x0302",
+            "revision": 3
+          }
+        ],
+        "key": "sensor-2",
+        "number": 3
+      }
+    ],
+    "root": {
+      "clusters": [
+        {
+          "accepted": [],
+          "attributes": [
+            "0x00000000",
+            "0x00000001",
+            "0x00000002",
+            "0x00000003",
+            "0x0000fffd"
+          ],
+          "events": [],
+          "featureMap": "0x00000000",
+          "generated": [],
+          "id": "0x0000001d",
+          "revision": 3
+        }
+      ],
+      "deviceTypes": [
+        {
+          "id": "0x0016",
+          "revision": 5
+        }
+      ],
+      "key": ""
+    }
+  },
+  "extensions": [
+    "BD-chip-Thermostat-Events",
+    "BD-chip-Thermostat-Schedules"
+  ],
+  "level": "1.5.1",
+  "level_origin": "explicit",
+  "policies": "4865d61a5fc2857785b6cd1f65dc06c3343840275b4ff4fdc49e9521fad2d342",
+  "profiles": [
+    "apple-home",
+    "home-assistant"
+  ],
+  "withheld": [
+    {
+      "cluster": "0x00000000",
+      "endpoint": "air-1",
+      "id": "0x002c",
+      "kind": "device-type",
+      "mandatory": true,
+      "origin": "device-type",
+      "reference": ""
+    }
+  ]
+}

@@ -4391,6 +4391,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/node/surface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The node's surface report.
+         * @description go-fabric's `surface.Report` of the node in go-fabric's own JSON
+         *     encoding (`surface.Report.MarshalJSON`): the effective surface per
+         *     endpoint, the decision ledger, the withheld elements and the
+         *     surface changes announced in this process. Element and cluster ids
+         *     are lowercase `0x` hex strings, as wide as their kind (a device
+         *     type four digits, everything else eight).
+         */
+        get: operations["getNodeSurface"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/node/sessions": {
         parameters: {
             query?: never;
@@ -4555,8 +4580,9 @@ export interface paths {
         /**
          * Server-sent events.
          * @description `event:` is one of fabric_added, fabric_removed, window_opened,
-         *     window_closed, endpoints_changed, exposure_changed; `data:` is the
-         *     JSON payload (`FabricEvent`, `WindowEvent`, `{}`, `ExposureEvent`).
+         *     window_closed, endpoints_changed, exposure_changed, surface_changed;
+         *     `data:` is the JSON payload (`FabricEvent`, `WindowEvent`, `{}`,
+         *     `ExposureEvent`, `SurfaceChangedEvent`).
          *     A comment line arrives every 15 s. No payload carries a passcode.
          */
         get: operations["stream"];
@@ -11390,7 +11416,7 @@ export interface components {
                 assembled: boolean;
                 /** @description Elements the level policy withheld an endpoint for. */
                 withheld_count: number;
-                /** @description Profile warnings: Keep decisions of a profile policy with a warning reason. */
+                /** @description Warn decisions: elements a policy keeps and flags (surface.Warn). */
                 warning_count: number;
                 /** @description Surface changes announced in this process (ConfigurationVersion raised). */
                 changed_count: number;
@@ -11630,6 +11656,124 @@ export interface components {
         ExposureEvent: {
             keys: string[];
         };
+        SurfaceChangedEvent: {
+            /** @description The key of the endpoint whose served surface an assembly changed (go-fabric node.Observers.OnSurfaceChanged, one endpoint per event); "" is the root endpoint. */
+            endpoints: string[];
+        };
+        /** @description go-fabric surface.Report (surface/policy.go wireReport). */
+        SurfaceReport: {
+            /** @description The report reads the assembled topology. */
+            assembled: boolean;
+            /** @description The surface changes announced in this process, oldest first (the node keeps the last hundred). */
+            changed: components["schemas"]["SurfaceChange"][];
+            /** @description Every decision of the policy chain, in its order. */
+            decisions: components["schemas"]["SurfaceDecision"][];
+            effective: components["schemas"]["SurfaceEffective"];
+            /** @description The enabled ahead-of-matter.js register IDs, sorted. */
+            extensions: string[];
+            /** @description The specification level the surface is composed at. */
+            level: string;
+            /** @description "explicit", "profile <name>[, <name>…]" or "pin". */
+            level_origin: string;
+            /** @description The digest of the policies, 64 hex digits. */
+            policies: string;
+            /** @description The selected controller profiles, sorted. */
+            profiles: string[];
+            /** @description The elements the level policy withheld an endpoint for. */
+            withheld: components["schemas"]["SurfaceElement"][];
+        };
+        /** @description go-fabric surface.Surface (surface/surface.go wireSurface). */
+        SurfaceEffective: {
+            /** @description The endpoints other than the root, by key. */
+            endpoints: components["schemas"]["SurfaceEndpoint"][];
+            root: components["schemas"]["SurfaceEndpoint"];
+        };
+        SurfaceEndpoint: {
+            /** @description The server clusters, by id. */
+            clusters: components["schemas"]["SurfaceCluster"][];
+            /** @description The device types in the Descriptor's order. */
+            deviceTypes: components["schemas"]["SurfaceDeviceType"][];
+            /** @description The endpoint's rendered stable key; "" for the root, "aggregator" for the Aggregator, "@<number>" for an endpoint without a key. */
+            key: string;
+            /** @description The endpoint number; absent until the endpoint is assembled, and for the root. */
+            number?: number;
+        };
+        SurfaceDeviceType: {
+            /** @description Device type id, "0x" and four hex digits. */
+            id: string;
+            revision: number;
+        };
+        SurfaceCluster: {
+            /** @description AcceptedCommandList, sorted. */
+            accepted: string[];
+            /** @description AttributeList, sorted. */
+            attributes: string[];
+            /** @description The events served, sorted. */
+            events: string[];
+            featureMap: string;
+            /** @description GeneratedCommandList, sorted. */
+            generated: string[];
+            id: string;
+            /** @description ClusterRevision. */
+            revision: number;
+        };
+        /** @description One candidate element of an endpoint's surface (surface.Element). */
+        SurfaceElement: {
+            /** @description The cluster id; "0x00000000" for a device type. */
+            cluster: string;
+            /** @description The endpoint's key; "" for the root. */
+            endpoint: string;
+            /** @description The device type id, the cluster id, the feature's one-bit mask, or the attribute, command or event id. */
+            id: string;
+            kind: components["schemas"]["NodeSurfaceElementKind"];
+            /** @description Removing the element would make the composition invalid at the pin. */
+            mandatory: boolean;
+            origin: components["schemas"]["NodeSurfaceElementOrigin"];
+            /** @description The ahead-of-matter.js register ID it is served against; "" for the matter.js baseline. */
+            reference: string;
+        };
+        /** @description One policy's judgement of one element (surface.Decision). */
+        SurfaceDecision: {
+            cluster: string;
+            endpoint: string;
+            id: string;
+            kind: components["schemas"]["NodeSurfaceElementKind"];
+            mandatory: boolean;
+            origin: components["schemas"]["NodeSurfaceElementOrigin"];
+            /** @description The policy's name: "level", "reference", "profile:<name>" or a host's own. */
+            policy: string;
+            /** @description Empty for a silent keep. */
+            reason: string;
+            reference: string;
+            verdict: components["schemas"]["NodeSurfaceVerdict"];
+        };
+        /** @description One announced change of an endpoint's served surface (surface.SurfaceChange). */
+        SurfaceChange: {
+            /** @description The new surface's digest, 64 hex digits. */
+            after: string;
+            /**
+             * Format: date-time
+             * @description When the node raised the ConfigurationVersion.
+             */
+            at: string;
+            /** @description The digest last persisted for the endpoint. */
+            before: string;
+            /** @description The differences; empty when only the earlier digest was available. */
+            changes: components["schemas"]["SurfaceElementChange"][];
+            /** @description The endpoint's key. */
+            endpoint: string;
+        };
+        /** @description One element-level difference (surface.Change). */
+        SurfaceElementChange: {
+            /** @description The element's state after ("revision 6", "set", "served", "accepted", "generated"); "" when it is gone. */
+            after: string;
+            /** @description The state before; "" when it is new. */
+            before: string;
+            cluster: string;
+            endpoint: string;
+            id: string;
+            kind: components["schemas"]["NodeSurfaceElementKind"];
+        };
         /**
          * @description Where the pairing codes come from — the configured credentials, or the window the handler opened on fresh ones.
          * @enum {string}
@@ -11651,6 +11795,21 @@ export interface components {
          * @enum {string}
          */
         NodeWindowKind: "none" | "own" | "basic" | "enhanced";
+        /**
+         * @description The kind of a surface element (go-fabric surface.Kind).
+         * @enum {string}
+         */
+        NodeSurfaceElementKind: "device-type" | "cluster" | "feature" | "attribute" | "command" | "event";
+        /**
+         * @description Why a surface element is a candidate (go-fabric surface.Origin).
+         * @enum {string}
+         */
+        NodeSurfaceElementOrigin: "cluster-mandatory" | "device-type" | "host-declared" | "kit-default";
+        /**
+         * @description A policy's verdict on a surface element (go-fabric surface.Verdict), in ascending precedence.
+         * @enum {string}
+         */
+        NodeSurfaceVerdict: "keep" | "warn" | "remove" | "refuse";
         /** @description The payload of the `node.endpoints_changed` broadcast: empty. The node reassembled its bridged endpoints; a subscriber reloads GET /node/endpoints. */
         NodeEndpointsChangedPayload: Record<string, never>;
     };
@@ -18557,6 +18716,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointList"];
+                };
+            };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    getNodeSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceReport"];
                 };
             };
             503: components["responses"]["NodeProblem"];
