@@ -1,0 +1,57 @@
+name: validate-issue-template
+
+# Closes an issue that was not filed through the bug-report form. The forms
+# mark the checklist and the diagnostics fields required, but GitHub enforces
+# that only in the browser; an issue created through the API carries whatever
+# body its author composed. script/check_issue_template.py documents the
+# violations it detects. Set the repository variable
+# AUTO_CLOSE_INVALID_TEMPLATE to "false" to only label and comment.
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to validate
+        required: true
+        type: number
+      auto_close:
+        description: Close the issue when the form was not honored
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: validate-issue-template-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  validate:
+    if: github.repository_owner == 'SukramJ'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: install PyYAML
+        run: python3 -m pip install --quiet PyYAML==6.0.3
+
+      - name: unit-test the check
+        run: python3 -I script/test_check_issue_template.py
+
+      - name: check the issue against the form
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+          AUTO_CLOSE: ${{ github.event.inputs.auto_close || vars.AUTO_CLOSE_INVALID_TEMPLATE || 'true' }}
+        run: python3 -I script/check_issue_template.py
