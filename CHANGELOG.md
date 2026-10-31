@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.96.0] - 2026-10-31
+
 ### Added
 
 - **Matter: a specification level and a controller profile.** Two expert
