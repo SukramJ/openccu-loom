@@ -106,3 +106,21 @@ for l in sys.stdin:
 Two caveats travel with the numbers: GitHub counts requests, not users, and
 the maintainer's own installs are in there; the HA export lists only
 installations that opted into analytics.
+
+## Issue-form check
+
+`check_issue_template.py` closes an issue that was not filed through the
+bug-report form. GitHub enforces the forms' required checklist and fields only
+in the browser, so an issue created through the API (`gh issue create`, an MCP
+server, an agent) can carry any body. The check reads the required checkbox
+labels from `.github/ISSUE_TEMPLATE/*.yml` at run time, matches the body
+against the closer of the two forms, and on a violation labels the issue
+`invalid-template`, posts one comment in the form's language, and closes it as
+not planned. Editing the issue later does not reopen it; the comment asks for a
+new issue through the form.
+
+The `validate-issue-template` workflow runs it on every opened or edited issue,
+after `test_check_issue_template.py`. Maintainers (`OWNER`/`MEMBER`/
+`COLLABORATOR`) and issues labelled `skip-template-check` are exempt. Setting
+the repository variable `AUTO_CLOSE_INVALID_TEMPLATE` to `false` keeps
+labelling and commenting but stops the close.

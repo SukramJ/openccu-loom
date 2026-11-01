@@ -56,7 +56,18 @@ the raw data; a pasted AI interpretation without the underlying files is usually
 be acted on. Using AI to help your own debugging is fine, but the issue must contain the actual
 data.
 
-### 6. Non-native English speakers
+### 6. Do not bypass the issue form
+
+Fill in the issue form in the browser and submit it there. Do not compose the issue body
+yourself and create the issue through the API (`gh issue create`, REST/GraphQL, an MCP server).
+Doing so skips the form's required-field validation. Shortening, rewording or omitting the
+checklist labels, or leaving a required box unchecked, is treated as a bypass regardless of
+intent.
+
+Issues that bypass the form are labelled `invalid-template` and closed automatically without
+assessment. Editing such an issue does not reopen it; file a new one through the form.
+
+### 7. Non-native English speakers
 
 Using AI to improve the grammar or clarity of text you have written yourself is fine and
 encouraged. If you machine-translate longer text, verify the translation for technical accuracy
