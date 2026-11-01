@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Matter colour lights on arm64 hosts.** The conversions between colour
+  temperature, hue/saturation and XY that the bridge applies to colour
+  lights now compute the same values on arm64 as on amd64 and in matter.js.
+  On arm64 the compiler fused a multiply and an add into one rounding, which
+  could leave a residue such as -2.2e-16 where the exact result is 0. amd64
+  results are unchanged.
+
 ## [0.96.0] - 2026-10-31
 
 ### Added
