@@ -24,7 +24,6 @@ func TestMatterStatusAdapter_NilBridge_Returns_Disabled(t *testing.T) {
 	adapter := &matterStatusReaderAdapter{
 		enabled: false,
 		node:    nil,
-		window:  nil,
 		cfg:     nil,
 	}
 	resp := adapter.MatterStatus(context.Background())
@@ -56,7 +55,6 @@ func TestMatterStatusAdapter_EnabledTrue_BridgeNil_ReturnsOnlyEnabled(t *testing
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
 		node:    nil,
-		window:  nil,
 		cfg:     nil,
 	}
 	resp := adapter.MatterStatus(context.Background())
@@ -131,7 +129,6 @@ func TestMatterStatusAdapter_Advertising_Propagated(t *testing.T) {
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
 		node:    nil, // bridge nil → early return, cfg.advertising is NOT read
-		window:  nil,
 		cfg:     &matterStatusConfig{advertising: true},
 	}
 	// When bridge == nil the adapter short-circuits before reading cfg.

@@ -155,10 +155,7 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 		snapshotter,
 		mdns.NewNoop(),
 		bridge.Config{
-			Listen:    "127.0.0.1:0",
-			VendorID:  0x1234,
-			ProductID: 0x5678,
-			NodeLabel: "scenario-harness",
+			Listen: "127.0.0.1:0",
 		},
 		logger,
 	)
@@ -247,9 +244,7 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 
 	fabricByID := make(map[uint16]uint8, len(s.Given.Subscriptions))
 	for _, spec := range s.Given.Subscriptions {
-		if spec.FabricIndex != 0 {
-			fabricByID[spec.SessionID] = spec.FabricIndex
-		}
+		fabricByID[spec.SessionID] = spec.fabric()
 	}
 	br.AttachSessionLookup(scenarioFabricResolver{
 		sessions: bridgeSessionByID,
@@ -348,7 +343,7 @@ func (h *scenarioHarness) establishSubscription(idx int, spec scenarioSubSpec) {
 	}
 
 	sub, err := h.subMgr.Subscribe(subscription.SubscribeArgs{
-		FabricIndex:        spec.FabricIndex,
+		FabricIndex:        spec.fabric(),
 		SessionID:          spec.SessionID,
 		MinIntervalFloor:   minFloor,
 		MaxIntervalCeiling: maxCeil,

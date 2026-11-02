@@ -1204,6 +1204,7 @@ func TestGarageMatterReadAllAttributes(t *testing.T) {
 func TestGarageMatterInvokeAllCommands(t *testing.T) {
 	w := &stubWriter{}
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
+	g.OnState(DoorStateVentilation)
 	srv := matterServers(t, g)[0]
 
 	for _, target := range []closuredef.TargetPositionEnum{

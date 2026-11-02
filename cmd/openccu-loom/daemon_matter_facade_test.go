@@ -208,11 +208,10 @@ func TestStartMatterBridgeKeepsServingWithABrokenAttestationChain(t *testing.T) 
 	if bundle.commissioningBlocked == nil {
 		t.Fatal("bundle.commissioningBlocked is nil on an unloadable attestation chain, want the load error")
 	}
-	window := bundle.node.CommissioningWindow()
-	if window.IsOpen() {
+	if bundle.node.Window().Open {
 		t.Error("the uncommissioned node opened its own window, want commissioning blocked")
 	}
-	if err := window.OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
+	if err := bundle.node.OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
 		t.Errorf("OpenOwnWindow err = %v, want ErrCommissioningBlocked", err)
 	}
 }
@@ -232,7 +231,7 @@ func TestStartMatterBridgeStartsWithoutAttestationConfig(t *testing.T) {
 	t.Cleanup(bundle.stop)
 	// The negative control of the blocked case: without a block the
 	// uncommissioned node opens its own window at Start.
-	if !bundle.node.CommissioningWindow().IsOpen() {
+	if !bundle.node.Window().Open {
 		t.Error("the uncommissioned node opened no window without an attestation configuration")
 	}
 }

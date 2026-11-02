@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **go-fabric v0.16.0.** The Matter stack moves from v0.15.6 to v0.16.0,
+  with the security fixes of its whole-codebase review: an Interaction Model
+  message on the unsecured session is dropped, PASE sessions close when
+  commissioning completes, and commissioning commands require the fail-safe
+  of the accessing fabric. Device type labels and the pairing window's
+  behaviour in the Matter pages are unchanged. A garage drive now refuses a
+  Matter move command until it has reported its first door state.
+
 ### Fixed
 
 - **Matter colour lights on arm64 hosts.** The conversions between colour

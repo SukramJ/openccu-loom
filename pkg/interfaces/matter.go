@@ -5,7 +5,7 @@ package interfaces
 
 import (
 	"context"
-	"strings"
+	"fmt"
 
 	contract "github.com/SukramJ/go-fabric/contract"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
@@ -246,25 +246,49 @@ type MatterEligibilitySource = contract.EligibilitySource
 // to — the UI then still has something stable to render and to filter
 // on.
 //
-// [contract.DeviceTypeName] answers first; a device type its label
-// table lacks is named from the generated schema
-// ([schema.DeviceTypeName]) before the hex fallback, so every type a
-// measurement class advertises has a label here
-// (TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType).
+// [matterDeviceTypeLabels] answers first, then the generated schema
+// ([schema.DeviceTypeName]), so every type a measurement class advertises
+// has a name here (TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType).
 func MatterDeviceTypeName(id uint16) string {
 	if id == 0 {
 		return ""
 	}
-	if name := contract.DeviceTypeName(id); !strings.HasPrefix(name, "0x") {
-		return name
+	if label, ok := matterDeviceTypeLabels[id]; ok {
+		return label
 	}
-	// contract's label table can lag the generated schema (it once
-	// named no SoilSensor, 0x0045, which the soil-moisture measurement
-	// class advertises; go-fabric v0.4.0 generates it); the schema
-	// carries every device type matter.js models, so it answers before
-	// the hex fallback.
 	if name, ok := schema.DeviceTypeName(schema.DeviceTypeID(id)); ok {
 		return name
 	}
-	return contract.DeviceTypeName(id)
+	return fmt.Sprintf("0x%04X", id)
+}
+
+// matterDeviceTypeLabels are the operator-facing names that differ from the
+// Matter device type's own name (in the comment). go-fabric keeps one name,
+// schema.DeviceTypeName, and leaves a host's labels to the host.
+var matterDeviceTypeLabels = map[uint16]string{
+	0x000A: "Door Lock",               // DoorLock
+	0x000F: "Generic Switch",          // GenericSwitch
+	0x0015: "Contact Sensor",          // ContactSensor
+	0x0027: "Mode Select",             // ModeSelect
+	0x002C: "Air Quality Sensor",      // AirQualitySensor
+	0x002D: "Air Purifier",            // AirPurifier
+	0x0043: "Water Leak Detector",     // WaterLeakDetector
+	0x0073: "Laundry Washer",          // LaundryWasher
+	0x0074: "Robotic Vacuum Cleaner",  // RoboticVacuumCleaner
+	0x0076: "Smoke / CO Alarm",        // SmokeCoAlarm
+	0x007A: "Extractor Hood",          // ExtractorHood
+	0x007C: "Laundry Dryer",           // LaundryDryer
+	0x0100: "On/Off Light",            // OnOffLight
+	0x0101: "Dimmable Light",          // DimmableLight
+	0x0106: "Light Sensor",            // LightSensor
+	0x0107: "Occupancy Sensor",        // OccupancySensor
+	0x010A: "On/Off Plug-in Unit",     // OnOffPlugInUnit
+	0x010C: "Color Temperature Light", // ColorTemperatureLight
+	0x010D: "Extended Color Light",    // ExtendedColorLight
+	0x0202: "Window Covering",         // WindowCovering
+	0x0302: "Temperature Sensor",      // TemperatureSensor
+	0x0305: "Pressure Sensor",         // PressureSensor
+	0x0306: "Flow Sensor",             // FlowSensor
+	0x0307: "Humidity Sensor",         // HumiditySensor
+	0x0510: "Electrical Sensor",       // ElectricalSensor
 }

@@ -91,7 +91,6 @@ type goldenEndpoint struct {
 
 // goldenTopology is the whole recorded assembly.
 type goldenTopology struct {
-	NodeLabel string           `json:"node_label"`
 	VendorID  string           `json:"vendor_id"`
 	ProductID string           `json:"product_id"`
 	Endpoints []goldenEndpoint `json:"endpoints"`
@@ -349,7 +348,6 @@ func goldenEndpointConfig(t *testing.T) endpoint.Config {
 	return endpoint.Config{
 		VendorID:   0x1234,
 		ProductID:  0x5678,
-		NodeLabel:  "GoldenBridge",
 		VendorName: "eQ-3",
 		Groups:     mgr,
 	}
@@ -369,7 +367,6 @@ func hexID(v uint32) string { return fmt.Sprintf("0x%04X", v) }
 func recordTopology(t *testing.T, top *endpoint.Topology) goldenTopology {
 	t.Helper()
 	out := goldenTopology{
-		NodeLabel: top.NodeLabel,
 		VendorID:  hexID(uint32(top.VendorID)),
 		ProductID: hexID(uint32(top.ProductID)),
 		Endpoints: make([]goldenEndpoint, 0, len(top.Endpoints)),

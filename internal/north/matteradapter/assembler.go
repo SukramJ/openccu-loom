@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/go-fabric/contract"
 	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/schema"
 	"github.com/SukramJ/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -780,7 +779,7 @@ func projectionOf(dp any) (projection, bool) {
 // device is composed under the bridge's surface policies — the node
 // refuses one composed under other ones.
 func buildDevice(src interfaces.MatterDeviceSource, opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
-	opts.Surface = &build.Surface
+	opts.Surface = build.Surface
 	if c, ok := src.(interfaces.MatterConfiguredDeviceSource); ok {
 		return c.MatterDeviceWith(opts, build)
 	}
@@ -864,7 +863,7 @@ func (a *Assembler) makeSpec(
 }
 
 // sourceOptions are the device options of a source-backed endpoint: the
-// key, the composed label, the addresses and the live availability — what
+// key, the composed label and the addresses — what
 // [Assembler.declaredDeviceSpec] hands the source, so a device built from
 // the projection probe is the one the spec reuses.
 func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *device.Device, ch *device.Channel, kind matterendpoint.DPKind, key string) fabricdevice.Options {
@@ -881,7 +880,6 @@ func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *d
 		Vendor:         bridgedVendorName,
 		DeviceAddress:  dev.Address,
 		ChannelAddress: ch.Address,
-		Reachable:      dev.Available,
 	}
 }
 
@@ -900,7 +898,6 @@ func (a *Assembler) declaredDeviceSpec(in specInput, src interfaces.MatterDevice
 		Vendor:         bridgedVendorName,
 		DeviceAddress:  in.dev.Address,
 		ChannelAddress: in.ch.Address,
-		Reachable:      in.dev.Available,
 	}, a.cfg.Build)
 	if err != nil {
 		// Once per key: the source retries the build on every assembly,
@@ -1005,7 +1002,7 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 		Source:         in.source,
 		Measurement:    in.measurement,
 	}
-	t, ok := fabricdevice.TypeByID(schema.DeviceTypeID(in.deviceType))
+	t, ok := fabricdevice.Lookup(uint32(in.deviceType))
 	if !ok {
 		a.logFallback(in.deviceType, "device type not in the generated device layer", nil)
 		return handBuilt, true
@@ -1016,8 +1013,7 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 		Vendor:         bridgedVendorName,
 		DeviceAddress:  in.dev.Address,
 		ChannelAddress: in.ch.Address,
-		Reachable:      in.dev.Available,
-		Surface:        &a.cfg.Build.Surface,
+		Surface:        a.cfg.Build.Surface,
 	}
 	var decls []fabricdevice.Declaration
 	if in.source != nil {
@@ -1045,7 +1041,9 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 		a.logFallback(in.deviceType, "device layer refused the composition", err)
 		return handBuilt, true
 	}
-	return d.Spec(), true
+	spec := d.Spec()
+	spec.Availability = in.dev.Available
+	return spec, true
 }
 
 // logWithheld reports a device the configured specification level

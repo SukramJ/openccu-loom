@@ -22,9 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	"github.com/SukramJ/go-fabric/cluster/wire"
 	matterstore "github.com/SukramJ/go-fabric/store"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -192,16 +191,15 @@ func TestMatterStatusReaderAdapter_WindowNonNil_SetsWindowOpenFalse(t *testing.T
 	}
 	t.Cleanup(bundle.stop)
 
-	// The window is created inside startMatterBridge and is closed (freshly
-	// constructed). Build the status adapter with the live bridge + window.
-	w := matterbridge.NewCommissioningWindow()
+	// An uncommissioned node opens its own window at Start: close it.
+	if err := bundle.node.CloseWindow(context.Background()); err != nil {
+		t.Fatalf("CloseWindow: %v", err)
+	}
 	r := &matterStatusReaderAdapter{
 		enabled: true,
 		node:    bundle.node,
-		window:  w,
 	}
 	status := r.MatterStatus(context.Background())
-	// Window is closed → WindowOpen = false; but the nil-check IS exercised.
 	if status.WindowOpen {
 		t.Error("expected WindowOpen=false for closed window")
 	}
@@ -285,16 +283,12 @@ func TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration(t *testin
 	}
 	t.Cleanup(bundle.stop)
 
-	w := matterbridge.NewCommissioningWindow()
-	if err := w.OpenWindow(context.Background(), wire.OpenWindowParams{
-		CommissioningTimeoutSeconds: 600,
-	}); err != nil {
-		t.Fatalf("OpenWindow: unexpected error: %v", err)
+	if err := bundle.node.OpenOwnWindow(context.Background(), 600*time.Second); err != nil {
+		t.Fatalf("OpenOwnWindow: unexpected error: %v", err)
 	}
 	r := &matterStatusReaderAdapter{
 		enabled: true,
 		node:    bundle.node,
-		window:  w,
 	}
 	status := r.MatterStatus(context.Background())
 	if !status.WindowOpen {

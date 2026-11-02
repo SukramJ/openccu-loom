@@ -111,27 +111,15 @@ func TestWireMatterNodeEventsPublishesEveryEventTypeUnderTheNodeTopic(t *testing
 		{Type: fabricui.EventFabricRemoved, Data: fabricui.FabricEvent{FabricIndex: 2}},
 		{Type: fabricui.EventSurfaceChanged, Data: fabricui.SurfaceChangedEvent{Endpoints: []string{"ccu|000A|4"}}},
 	}
-	if err := obs.OnFabricAdded(node.FabricInfo{FabricIndex: 2, VendorID: 0x1349, Label: "Home"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := obs.OnWindowTransition(node.WindowSnapshot{Open: true, Discriminator: 3840, Timeout: 300 * time.Second}); err != nil {
-		t.Fatal(err)
-	}
+	obs.OnFabricAdded(node.FabricInfo{FabricIndex: 2, VendorID: 0x1349, Label: "Home"})
+	obs.OnWindowTransition(node.WindowSnapshot{Open: true, Discriminator: 3840, Timeout: 300 * time.Second})
 	// A repeated snapshot of the same state is no transition.
-	if err := obs.OnWindowTransition(node.WindowSnapshot{Open: true, Discriminator: 3840, Timeout: 300 * time.Second}); err != nil {
-		t.Fatal(err)
-	}
-	if err := obs.OnWindowTransition(node.WindowSnapshot{}); err != nil {
-		t.Fatal(err)
-	}
+	obs.OnWindowTransition(node.WindowSnapshot{Open: true, Discriminator: 3840, Timeout: 300 * time.Second})
+	obs.OnWindowTransition(node.WindowSnapshot{})
 	src.Publish(events[3])
 	src.Publish(events[4])
-	if err := obs.OnFabricRemoved(node.FabricInfo{FabricIndex: 2}); err != nil {
-		t.Fatal(err)
-	}
-	if err := obs.OnSurfaceChanged(surface.SurfaceChange{Endpoint: "ccu|000A|4"}); err != nil {
-		t.Fatal(err)
-	}
+	obs.OnFabricRemoved(node.FabricInfo{FabricIndex: 2})
+	obs.OnSurfaceChanged(surface.SurfaceChange{Endpoint: "ccu|000A|4"})
 	// The hub's replay ring is what a subscriber resuming from cursor 0
 	// reads; it holds every published frame in order.
 	got := hub.Replay(0, func(topic string) bool { return strings.HasPrefix(topic, nodeTopicPrefix) }).Events

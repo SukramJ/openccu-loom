@@ -69,8 +69,7 @@ type bootWindowReplacer struct {
 }
 
 func (b *bootWindowReplacer) beforeOpen(r *http.Request) {
-	window := b.node.CommissioningWindow()
-	if window == nil || !window.IsOpen() || !window.IsOwnWindow() {
+	if window := b.node.Window(); !window.Open || !window.Own {
 		return
 	}
 	b.mu.Lock()
@@ -83,16 +82,12 @@ func (b *bootWindowReplacer) beforeOpen(r *http.Request) {
 	// facade has not yet closed: the handler's open replaces it. The
 	// revoke runs the node's window observer, so the pages and the hub
 	// see window_closed before the window_opened that follows.
-	_ = window.RevokeWindow(r.Context())
+	_ = b.node.CloseWindow(r.Context())
 }
 
 func (b *bootWindowReplacer) opened() {
-	window := b.node.CommissioningWindow()
-	if window == nil {
-		return
-	}
 	b.mu.Lock()
-	b.until = time.Now().Add(time.Duration(window.RequestedDurationSeconds()) * time.Second)
+	b.until = time.Now().Add(b.node.Window().Timeout)
 	b.mu.Unlock()
 }
 

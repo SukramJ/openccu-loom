@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"math"
+	"time"
 
 	"github.com/SukramJ/go-fabric/node"
 
@@ -30,7 +32,6 @@ type matterStatusReaderAdapter struct {
 	// from store because the allowlist is keyed by this daemon's source
 	// 5-tuple and therefore lives host-side; see [matterendpoint].
 	exposures *matterendpoint.Store
-	window    *node.CommissioningWindow
 	cfg       *matterStatusConfig
 }
 
@@ -52,17 +53,14 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) mcp.Matter
 	if r.cfg != nil {
 		res.Advertising = r.cfg.advertising
 	}
-	if r.window != nil {
-		// IsOpen rather than the AdministratorCommissioning snapshot: the
-		// node's own window — the operator's window, the window an
-		// uncommissioned node opens at start — reads WindowNotOpen on the
-		// cluster, as matter.js keeps those attributes for administrator
-		// windows alone, and the status surface would call a live window
-		// closed.
-		res.WindowOpen = r.window.IsOpen()
-		if res.WindowOpen {
-			res.WindowDuration = r.window.RequestedDurationSeconds()
-		}
+	// Open rather than the AdministratorCommissioning snapshot: the node's
+	// own window — the operator's window, the window an uncommissioned node
+	// opens at start — reads WindowNotOpen on the cluster, as matter.js keeps
+	// those attributes for administrator windows alone, and the status
+	// surface would call a live window closed.
+	if window := r.node.Window(); window.Open {
+		res.WindowOpen = true
+		res.WindowDuration = uint16(min(window.Timeout/time.Second, math.MaxUint16)) //nolint:gosec // clamped to uint16
 	}
 	if fabrics, err := r.node.FabricInfos(ctx); err == nil {
 		res.FabricCount = len(fabrics)

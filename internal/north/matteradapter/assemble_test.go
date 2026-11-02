@@ -24,7 +24,7 @@ import (
 // testEndpointConfig is the endpoint assembly the tests run the walk's
 // output through.
 func testEndpointConfig() endpoint.Config {
-	return endpoint.Config{VendorID: 0x1234, ProductID: 0x5678, NodeLabel: "TestBridge", VendorName: "eQ-3"}
+	return endpoint.Config{VendorID: 0x1234, ProductID: 0x5678, VendorName: "eQ-3"}
 }
 
 var (

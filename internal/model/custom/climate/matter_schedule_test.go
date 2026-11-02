@@ -115,7 +115,7 @@ func buildWith(t *testing.T, c *Climate, build interfaces.MatterBuildOptions) *t
 	d, err := c.MatterDeviceWith(fabricdevice.Options{
 		StableKey: fabricdevice.StringKey("climate-test"),
 		Name:      "climate",
-		Surface:   &build.Surface,
+		Surface:   build.Surface,
 	}, build)
 	if err != nil {
 		t.Fatalf("MatterDeviceWith: %v", err)
@@ -171,7 +171,7 @@ func TestMatterSchedulesNeedTheExtension(t *testing.T) {
 	_, err := r.climate.MatterDeviceWith(fabricdevice.Options{
 		StableKey: fabricdevice.StringKey("climate-test"),
 		Name:      "climate",
-		Surface:   &surface.Policies{},
+		Surface:   surface.Policies{},
 	}, interfaces.MatterBuildOptions{ThermostatSchedules: true})
 	if !errors.Is(err, surface.ErrExtensionNotEnabled) {
 		t.Fatalf("MatterDeviceWith without the extension: err = %v, want surface.ErrExtensionNotEnabled", err)

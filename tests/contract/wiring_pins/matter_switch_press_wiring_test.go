@@ -90,7 +90,6 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 	inner, err := matterendpoint.New(identity, matterendpoint.Config{
 		VendorID:   0x1234,
 		ProductID:  0x5678,
-		NodeLabel:  "switch-press-wiring-pin",
 		VendorName: "eQ-3",
 	}, nil)
 	if err != nil {
@@ -111,10 +110,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		snapshotter,
 		mdns.NewNoop(),
 		matterbridge.Config{
-			Listen:    ":0",
-			VendorID:  0x1234,
-			ProductID: 0x5678,
-			NodeLabel: "switch-press-wiring-pin",
+			Listen: ":0",
 		},
 		nil,
 	)

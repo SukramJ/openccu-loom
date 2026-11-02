@@ -286,6 +286,7 @@ func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := &stubWriter{}
 			g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
+			g.OnState(DoorStateVentilation)
 			srv := matterServers(t, g)[0]
 			target := tc.target
 			if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
@@ -737,5 +738,34 @@ func awaitReported(t *testing.T, reported <-chan []uint32, attrID uint32) {
 		case <-deadline:
 			t.Fatalf("attribute 0x%04X was not reported through the change notifier", attrID)
 		}
+	}
+}
+
+// TestGarageMoveToBeforeTheFirstStateIsRefused: until the drive reported a
+// DOOR_STATE the server stays in its constructed SetupRequired, in which
+// ClosureControl answers MoveTo InvalidInState (connectedhomeip
+// ClosureControlCluster.cpp:599-605). The command must not reach the drive:
+// nothing says where the door is.
+func TestGarageMoveToBeforeTheFirstStateIsRefused(t *testing.T) {
+	t.Parallel()
+	w := &stubWriter{}
+	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
+	srv := matterServers(t, g)[0]
+	target := closuredef.TargetPositionMoveToFullyOpen
+	if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
+		closuredef.MoveToRequest{Position: &target}); err == nil {
+		t.Fatal("MoveTo without a reported door state succeeded, want InvalidInState")
+	}
+	if w.last != nil {
+		t.Fatalf("MoveTo without a reported door state wrote %v, want nothing", w.last)
+	}
+
+	g.OnState(DoorStateClosed)
+	if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
+		closuredef.MoveToRequest{Position: &target}); err != nil {
+		t.Fatalf("MoveTo after the first state: %v", err)
+	}
+	if w.last != "OPEN" {
+		t.Fatalf("MoveTo after the first state wrote %v, want OPEN", w.last)
 	}
 }
