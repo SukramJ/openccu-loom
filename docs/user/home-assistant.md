@@ -179,15 +179,13 @@ every update or reload.
 the daemon over REST + WebSocket instead of to the CCU over XML-RPC. The
 daemon owns the CCU connection; the integration becomes a thin client.
 
-!!! warning "Preview — not user-selectable today"
-    The backend is fully wired in the integration (config-flow entries,
-    mDNS discovery of daemons, in-place backend switch), but a master
-    switch keeps it out of the UI: `LOOM_BACKEND_SELECTABLE = False` in
-    *Homematic(IP) Local* 2.8.4. New config entries can only target the
-    direct-CCU backend. Treat this scenario as **the planned path**, not
-    as something you can enable in the add-on store today.
+!!! warning "Beta"
+    The integration marks this backend as Beta and recommends the direct
+    CCU connection. Its setup flow offers the backend when it finds a
+    daemon on the network or already has a loom entry. Otherwise setup goes
+    straight to the direct CCU connection.
 
-**What it will give you** that S2 does not: native HA entity semantics
+**What it gives you** that S2 does not: native HA entity semantics
 (device triggers, the full `homematicip_local.*` service surface, the
 integration's own device/area handling) **plus** the daemon's benefits
 (one CCU connection, multi-CCU, no XML-RPC callback listener inside HA,
@@ -303,7 +301,7 @@ scoped by central name.
 | Device path | How multi-CCU appears in HA |
 |---|---|
 | MQTT Discovery (S2) | Every topic carries `<central>`; devices from all CCUs land in one HA instance, distinguishable by name and topic. One daemon, one broker connection. |
-| Loom backend (S3, preview) | **One config entry per central.** The entry resolves its CCU by serial and scopes all requests by central name. |
+| Loom backend (S3, Beta) | **One config entry per central.** The entry resolves its CCU by serial and scopes all requests by central name. |
 | Matter (S5) | One bridge for the whole fleet — mind Alexa's accessory cap when several CCUs add up. |
 
 Migrating a device between CCUs leaves retained topics behind; the
@@ -365,11 +363,11 @@ with HA's login in front of them.
 
 Read a row as "if I already run this, can I add the column?"
 
-|  | HA direct (aiohomematic) | MQTT Discovery | Loom backend (preview) | Matter bridge | Raw MQTT | REST / WS / MCP / webhooks | SPA panel |
+|  | HA direct (aiohomematic) | MQTT Discovery | Loom backend (Beta) | Matter bridge | Raw MQTT | REST / WS / MCP / webhooks | SPA panel |
 |---|---|---|---|---|---|---|---|
 | **HA direct (aiohomematic)** | — | ❌ duplicates | ❌ same integration, other backend | ⚠️ duplicates in the Home app | ✅ | ✅ | ✅ |
 | **MQTT Discovery** | ❌ duplicates | — | ❌ duplicates | ⚠️ per-device exclusive | ✅ | ✅ | ✅ |
-| **Loom backend (preview)** | ❌ | ❌ duplicates | — | ⚠️ per-device exclusive | ✅ | ✅ | ✅ |
+| **Loom backend (Beta)** | ❌ | ❌ duplicates | — | ⚠️ per-device exclusive | ✅ | ✅ | ✅ |
 | **Matter bridge** | ⚠️ | ⚠️ per-device exclusive | ⚠️ per-device exclusive | — | ✅ | ✅ | ✅ |
 | **Raw MQTT** | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
 | **REST / WS / MCP / webhooks** | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
@@ -531,7 +529,7 @@ old central name survive; clean them as shown in
 
 What each device path actually delivers in Home Assistant.
 
-| Capability | HA direct (aiohomematic) | MQTT Discovery | Loom backend (preview) |
+| Capability | HA direct (aiohomematic) | MQTT Discovery | Loom backend (Beta) |
 |---|---|---|---|
 | Device entities | ✅ | ✅ | ✅ |
 | System variables & programs | ✅ | ✅ | ✅ |
@@ -544,7 +542,7 @@ What each device path actually delivers in Home Assistant.
 | Survives HA restart without CCU re-init | ❌ | ✅ | ✅ |
 | Inbound listener inside HA | XML-RPC callback server | none | none |
 | Needs an MQTT broker | ❌ | ✅ | ❌ |
-| Available today | ✅ | ✅ | ❌ preview |
+| Available today | ✅ | ✅ | ⚠️ Beta |
 
 ---
 
