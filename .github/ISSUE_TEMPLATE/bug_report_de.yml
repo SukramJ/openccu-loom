@@ -9,6 +9,9 @@ body:
         Für Fragen, Ideen und Funktionswünsche nutze bitte die
         [Diskussionen](https://github.com/SukramJ/openccu-loom/discussions).
 
+        🏠 **Du nutzt die Home-Assistant-Integration Homematic(IP) Local mit diesem Daemon?** Bitte melde es bei
+        [homematicip_local](https://github.com/SukramJ/homematicip_local/issues/new/choose). Liegt die Ursache im Daemon, verschieben wir das Issue hierher.
+
         ⚠️ **Sinnvoller Support ist nur möglich, wenn alle erforderlichen Informationen bereitgestellt werden.**
         Insbesondere: der **Diagnose-Dump (`.json`)** und eine **Protokolldatei (am besten DEBUG)**.
         Issues ohne diese Daten können kommentarlos geschlossen werden.
@@ -102,7 +105,6 @@ body:
       options:
         - OpenCCU
         - CCU3
-        - OpenCCU
         - piVCCU / debmatic
         - CCU2
         - Homegear
