@@ -306,6 +306,16 @@ def format_comment(check: TemplateCheck, *, auto_closed: bool) -> str:
     return "\n\n".join(parts) + "\n"
 
 
+def was_transferred(events: Iterable[dict[str, Any]]) -> bool:
+    """Return True when the issue's events show it was moved here from another repository.
+
+    A transfer fires this workflow in the destination repository. The body was written
+    for the form of the source repository, and a maintainer moved it deliberately. The
+    events decide this because labels arrive only after the workflow has started.
+    """
+    return any(event.get("event") == "transferred" for event in events)
+
+
 def is_exempt(*, author_association: str, labels: Iterable[str]) -> bool:
     """Return True when the check must not act on this issue."""
     return author_association.upper() in EXEMPT_ASSOCIATIONS or SKIP_LABEL in set(labels)
@@ -345,6 +355,14 @@ class GitHub:
             page += 1
         return bodies
 
+    def events(self, number: int) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        page = 1
+        while batch := self.request("GET", f"/issues/{number}/events?per_page=100&page={page}"):
+            events.extend(batch)
+            page += 1
+        return events
+
     def ensure_label(self) -> None:
         try:
             self.request("GET", f"/labels/{urllib.parse.quote(INVALID_TEMPLATE_LABEL)}")
@@ -374,6 +392,10 @@ def main() -> int:
     gh = GitHub(token, repo)
     issue = gh.request("GET", f"/issues/{number}")
     labels = {label["name"] for label in issue.get("labels", [])}
+    if was_transferred(gh.events(number)):
+        print(f"#{number}: transferred from another repository")
+        return 0
+
     if is_exempt(author_association=issue.get("author_association", ""), labels=labels):
         print(f"#{number}: exempt (association={issue.get('author_association')!r})")
         return 0
