@@ -14,7 +14,7 @@ import (
 
 // TestMatterStatusAdapter_WithLiveBridge_Enabled exercises the
 // bridge-non-nil path of MatterStatus, covering the
-// LocalAddr / Topology / cfg / window / store branches.
+// LocalAddr / Topology / cfg / store branches.
 func TestMatterStatusAdapter_WithLiveBridge_Enabled(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
@@ -38,7 +38,6 @@ func TestMatterStatusAdapter_WithLiveBridge_Enabled(t *testing.T) {
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
 		node:    bundle.node,
-		window:  nil,
 		cfg:     &matterStatusConfig{advertising: true},
 	}
 
@@ -90,7 +89,6 @@ func TestMatterStatusAdapter_WithStore_EmptyFabrics(t *testing.T) {
 	adapter := &matterStatusReaderAdapter{
 		enabled: true,
 		node:    bundle.node,
-		window:  nil,
 		cfg:     nil,
 	}
 	resp := adapter.MatterStatus(context.Background())

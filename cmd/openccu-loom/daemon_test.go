@@ -217,8 +217,8 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	if !bundle.configuredCommissioning {
 		t.Fatalf("the configured passcode was not recognised as configured; logs:\n%s", buf.String())
 	}
-	if qr, manual, err := bundle.node.PairingCodes(); err != nil || qr == "" || manual == "" {
-		t.Fatalf("PairingCodes = %q, %q, %v; want the configured passcode's codes", qr, manual, err)
+	if p, err := bundle.node.SetupPayload(); err != nil || p.QR == "" || p.Manual == "" {
+		t.Fatalf("SetupPayload = %q, %q, %v; want the configured passcode's codes", p.QR, p.Manual, err)
 	}
 }
 

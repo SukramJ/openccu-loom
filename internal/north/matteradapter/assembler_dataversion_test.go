@@ -7,7 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -50,13 +49,6 @@ func findBridgedByAddress(top *endpoint.Topology, addr string) *endpoint.Endpoin
 // endpoint, so controllers' cached DataVersionFilters all miss and the
 // whole bridge re-transfers on each config edit (resubscribe storm).
 func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
-	// Deterministic version seeds (distinct per fresh tracker) so the
-	// assertions are crisp. Not parallel — mutates a package var.
-	restore := contract.InitialDataVersion
-	var seed uint32
-	contract.InitialDataVersion = func() uint32 { seed += 100; return seed }
-	t.Cleanup(func() { contract.InitialDataVersion = restore })
-
 	ctx := context.Background()
 	const central = "ccu1"
 	const clusterID = uint32(0x0006) // OnOff — arbitrary; only the id matters here.

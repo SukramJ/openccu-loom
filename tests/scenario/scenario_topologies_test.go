@@ -45,7 +45,6 @@ func newScenarioSnapshotter(snapshots []matteradapter.DeviceSnapshot) (bridge.Sn
 	inner, err := matterendpoint.New(epStore, matterendpoint.Config{
 		VendorID:   0x1234,
 		ProductID:  0x5678,
-		NodeLabel:  "scenario-harness",
 		VendorName: "eQ-3",
 	}, slog.New(slog.DiscardHandler))
 	if err != nil {

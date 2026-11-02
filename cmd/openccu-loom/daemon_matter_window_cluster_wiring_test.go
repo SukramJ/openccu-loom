@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/im"
-	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -58,8 +58,8 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 			teardown()
 		}
 	})
-	n, ok := wiring.nodeUI.Node.(*node.Node)
-	if !ok || n == nil {
+	n, ok := wiring.nodeUI.Node.(matterNodeSource)
+	if !ok || n.Node == nil {
 		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}
 	bridge := n.Bridge()
@@ -101,5 +101,71 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 	}
 	if got := readStatus(); got != windowNotOpen {
 		t.Fatalf("WindowStatus with the node's own window open = %s, want %s", got, windowNotOpen)
+	}
+}
+
+// countingPaseCloser counts the revocations that reach the PASE sessions.
+type countingPaseCloser struct{ calls atomic.Int32 }
+
+func (c *countingPaseCloser) ClosePaseSessions(context.Context) error {
+	c.calls.Add(1)
+	return nil
+}
+
+// TestMatterNodePagesRevokeTheWindowTheyCloseOrReplace pins the effect of
+// matterNodeSource through the composition root: the operator's close and
+// the replacement of the boot window both reach the PASE sessions.
+// node.Node.CloseWindow leaves them to their commissioner, and a retry of an
+// abandoned pairing would meet that commissioner's fail-safe.
+func TestMatterNodePagesRevokeTheWindowTheyCloseOrReplace(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
+	cfg.North.Matter.Listen = "127.0.0.1:0"
+	cfg.North.Matter.Commissioning.Passcode = 20202021
+	cfg.DataDir = t.TempDir()
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-revoke", Host: "127.0.0.1"}}
+
+	reg := buildTestRegistry(t, "ccu-revoke")
+	ctx, cancel := context.WithCancel(context.Background())
+	wiring, closers, teardown := wireMatterRuntime(
+		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
+		slog.New(slog.DiscardHandler), nil, nil,
+	)
+	t.Cleanup(func() {
+		cancel()
+		for _, c := range closers {
+			c()
+		}
+		if teardown != nil {
+			teardown()
+		}
+	})
+	n, ok := wiring.nodeUI.Node.(matterNodeSource)
+	if !ok || n.Node == nil {
+		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
+	}
+	window := n.Bridge().CommissioningWindow()
+	if !window.IsOpen() || !window.IsOwnWindow() {
+		t.Fatalf("boot window open=%v own=%v, want the uncommissioned node's own window", window.IsOpen(), window.IsOwnWindow())
+	}
+	closer := &countingPaseCloser{}
+	window.SetPaseSessionCloser(closer)
+
+	opts := wiring.nodeUI
+	opts.AllowEmptyTopology = true
+	if rec := serveNodeAPI(t, opts, http.MethodPost, "/api/v1/node/pairing/window", `{"duration_seconds":180}`); rec.Code != http.StatusOK {
+		t.Fatalf("open over the boot window: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := closer.calls.Load(); got != 1 {
+		t.Fatalf("PASE closes after replacing the boot window = %d, want 1", got)
+	}
+	if rec := serveNodeAPI(t, opts, http.MethodPost, "/api/v1/node/pairing/window/close", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("close: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := closer.calls.Load(); got != 2 {
+		t.Fatalf("PASE closes after the operator's close = %d, want 2", got)
 	}
 }

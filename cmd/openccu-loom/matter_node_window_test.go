@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
 
@@ -70,9 +71,8 @@ func TestOperatorWindowReplacesTheBootWindow(t *testing.T) {
 		cfg.North.Matter.Commissioning.Passcode = 20202021
 		cfg.North.Matter.Commissioning.Salt = "openccu-loom-dev0"
 	})
-	window := bundle.node.CommissioningWindow()
-	if !window.IsOpen() || !window.IsOwnWindow() {
-		t.Skipf("the node did not open its own window at Start (open=%v own=%v)", window.IsOpen(), window.IsOwnWindow())
+	if w := bundle.node.Window(); !w.Open || !w.Own {
+		t.Skipf("the node did not open its own window at Start (open=%v own=%v)", w.Open, w.Own)
 	}
 	api := newNodeAPI(t, opts)
 
@@ -84,16 +84,15 @@ func TestOperatorWindowReplacesTheBootWindow(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	qr, manual, err := bundle.node.PairingCodes()
+	payload, err := bundle.node.SetupPayload()
 	if err != nil {
-		t.Fatalf("PairingCodes: %v", err)
+		t.Fatalf("SetupPayload: %v", err)
 	}
-	if got.DurationSeconds != 180 || got.QRCode != qr || got.ManualCode != manual {
-		t.Fatalf("window = %+v, want 180 s on the node's codes (%s, %s)", got, qr, manual)
+	if got.DurationSeconds != 180 || got.QRCode != payload.QR || got.ManualCode != payload.Manual {
+		t.Fatalf("window = %+v, want 180 s on the node's codes (%s, %s)", got, payload.QR, payload.Manual)
 	}
-	if !window.IsOpen() || !window.IsOwnWindow() || window.RequestedDurationSeconds() != 180 {
-		t.Fatalf("after the open: open=%v own=%v duration=%d, want the node's own window for 180 s",
-			window.IsOpen(), window.IsOwnWindow(), window.RequestedDurationSeconds())
+	if w := bundle.node.Window(); !w.Open || !w.Own || w.Timeout != 180*time.Second {
+		t.Fatalf("after the open: open=%v own=%v timeout=%s, want the node's own window for 180 s", w.Open, w.Own, w.Timeout)
 	}
 
 	if rec := serveNodeAPIOn(t, api, http.MethodPost, "/api/v1/node/pairing/window", `{"duration_seconds":180}`); rec.Code != http.StatusConflict {
@@ -129,8 +128,7 @@ func TestOperatorWindowWithoutAPasscodeRunsOnFreshCredentials(t *testing.T) {
 	if got.Passcode == 0 || got.Discriminator == 0 || got.QRCode == "" || got.ManualCode == "" {
 		t.Fatalf("window = %+v, want fresh credentials with their codes", got)
 	}
-	window := bundle.node.CommissioningWindow()
-	if !window.IsOpen() {
+	if !bundle.node.Window().Open {
 		t.Fatal("the window is not open after the operator's open")
 	}
 }

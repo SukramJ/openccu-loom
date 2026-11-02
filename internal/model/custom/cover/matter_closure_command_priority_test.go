@@ -79,11 +79,12 @@ func TestClosureCommandsReachTheWriterAtHighPriority(t *testing.T) {
 		if srv == nil {
 			t.Fatal("no closure projection was built — the guard lost its subject")
 		}
+		// ClosureControl refuses a MoveTo until the drive reported a state.
+		g.OnState(DoorStateVentilation)
 		if c.cmdID == clusterwire.ClosureControlCmdStop {
 			// Since go-fabric v0.2.0 a Stop acts only on a closure that is
 			// moving (matter.js parity) and answers SUCCESS without reaching
 			// the handler otherwise, so put the drive in motion first.
-			g.OnState(DoorStateVentilation)
 			g.OnSection(sectionOpening)
 		}
 

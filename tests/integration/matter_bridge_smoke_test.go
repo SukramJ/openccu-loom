@@ -165,7 +165,6 @@ func smokeEndpointConfig(t *testing.T) endpoint.Config {
 	return endpoint.Config{
 		VendorID:   0xFFF1,
 		ProductID:  0x8001,
-		NodeLabel:  "SmokeTestBridge",
 		VendorName: "eQ-3",
 		Groups:     mgr,
 	}

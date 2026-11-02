@@ -140,8 +140,8 @@ func TestMatterMDNSSelectsTheNodesDNSSD(t *testing.T) {
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewTextHandler(&buf, nil))
 		got := matterMDNS(config.NorthMatter{MDNSAdvertise: tc.value}, logger)
-		if got.Disabled != tc.wantDisabled {
-			t.Errorf("matterMDNS(%q).Disabled = %v, want %v", tc.value, got.Disabled, tc.wantDisabled)
+		if got.Off != tc.wantDisabled {
+			t.Errorf("matterMDNS(%q).Off = %v, want %v", tc.value, got.Off, tc.wantDisabled)
 		}
 		if warned := bytes.Contains(buf.Bytes(), []byte("matter.bridge.mdns.unknown")); warned != tc.wantWarning {
 			t.Errorf("matterMDNS(%q) warned = %v, want %v; log:\n%s", tc.value, warned, tc.wantWarning, buf.String())

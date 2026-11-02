@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"github.com/SukramJ/go-fabric/bootid"
 	"github.com/SukramJ/go-fabric/node"
 	matterstore "github.com/SukramJ/go-fabric/store"
 	"github.com/SukramJ/go-fabric/surface"
@@ -65,7 +66,7 @@ func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 		// Explicit opt-out only. A commissioner can never discover a
 		// bridge that does not advertise, so "quiet" must be a conscious
 		// choice, not the unset default.
-		return node.MDNS{Disabled: true}
+		return node.MDNS{Off: true}
 	case "", "zeroconf":
 		logger.Info("matter.bridge.mdns.zeroconf",
 			slog.String("hint", "primary record via grandcat/zeroconf, subtypes via the facade's side-car responder"))
@@ -74,7 +75,7 @@ func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 		logger.Warn("matter.bridge.mdns.unknown",
 			slog.String("value", mc.MDNSAdvertise),
 			slog.String("hint", "falling back to noop; valid: noop|zeroconf"))
-		return node.MDNS{Disabled: true}
+		return node.MDNS{Off: true}
 	}
 }
 
@@ -365,7 +366,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	attest := matterAttestation(mc, logger)
 	uiEvents := fabricui.NewEvents()
 	surfacePolicies := matterSurfacePolicies(mc)
-	n, err := node.New(node.Config{
+	if mc.DevRotateUniqueIDs {
+		bootid.EnableRotation()
+	}
+	n, err := node.New(ctx, node.Config{
 		Network: node.Network{
 			Listen:     mc.Listen,
 			PreferIPv4: mc.PreferIPv4,
@@ -375,7 +379,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Commissioning: node.Commissioning{
 			Passcode:           passcode,
 			Discriminator:      mc.Discriminator,
-			PBKDFIterations:    iterations,
+			PBKDFIterations:    uint32(iterations), //nolint:gosec // the config validator bounds it to the PBKDF range
 			Salt:               salt,
 			LocationCapability: node.RegulatoryIndoorOutdoor,
 		},
@@ -401,18 +405,21 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			SoftwareVersion:       node.SoftwareVersionFromString(build.Version),
 			SoftwareVersionString: build.Version,
 		},
-		Store:                      node.Store{Credentials: store, Endpoints: identity},
-		Attestation:                attest,
-		BootID:                     node.BootID{RotateUniqueIDs: mc.DevRotateUniqueIDs},
-		Health:                     matterHealth(healthTracker),
-		Locales:                    matterLocales(cfg.Locale),
-		SupportedFabrics:           matterSupportedFabrics,
-		DisableTimeSynchronization: !mc.TimeSyncEnabled(),
-		Surface:                    surfacePolicies,
-		Logger:                     logger,
+		Store:               node.Store{Credentials: store, Endpoints: identity},
+		Attestation:         attest,
+		Health:              matterHealth(healthTracker),
+		Locales:             matterLocales(cfg.Locale),
+		SupportedFabrics:    matterSupportedFabrics,
+		TimeSynchronization: node.TimeSynchronization{Off: !mc.TimeSyncEnabled()},
+		Surface:             surfacePolicies,
+		Logger:              logger,
 	})
 	if err != nil {
 		return fail("matter.bridge.node", err)
+	}
+	if healthTracker != nil {
+		// The listener lives as long as the node: no unsubscribe.
+		n.OnHealthSample(matterHealthRecorder{healthTracker}.onSample)
 	}
 	// The daemon owns the device walk: it knows the device model, the
 	// operator's exposure allowlist and the locale, none of which the
@@ -928,7 +935,6 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		enabled:   mcfg.Enabled,
 		node:      bundle.node,
 		exposures: mids,
-		window:    bundle.node.CommissioningWindow(),
 		cfg: &matterStatusConfig{
 			advertising: mcfg.MDNSAdvertise == "zeroconf",
 		},
@@ -949,7 +955,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// commissioner's AdministratorCommissioning.
 	candidates := &matterCandidateProviderAdapter{reg: reg, cfg: cfg, build: bundle.build}
 	wiring.nodeUI = fabricui.Options{
-		Node: bundle.node,
+		Node: matterNodeSource{bundle.node},
 		Exposure: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{
 			Candidates: candidates.MatterCandidates,
 			Store:      mids,
@@ -1029,11 +1035,24 @@ func (r matterHealthRecorder) onSample(s node.HealthSample) {
 	r.RecordUnhealthy(matterHealthComponent, s)
 }
 
-// matterHealth configures the node's health probe at the default cadence
-// over t; a nil tracker runs none.
-func matterHealth(t *health.Tracker) node.Health {
+// matterHealth configures the node's health probe at the default cadence;
+// a nil tracker runs none.
+func matterHealth(t *health.Tracker) *node.Health {
 	if t == nil {
-		return node.Health{}
+		return nil
 	}
-	return node.Health{OnSample: matterHealthRecorder{t}.onSample}
+	return &node.Health{}
+}
+
+// matterNodeSource is the node as go-fabric-ui's pages reach it. Closing a
+// window there revokes it rather than node.Node.CloseWindow: the operator
+// who closes or replaces a window abandons the pairing on it, and a PASE
+// session or an armed fail-safe left behind answers the retry's
+// commissioner Busy until the fail-safe expires.
+type matterNodeSource struct{ *node.Node }
+
+// CloseWindow implements [fabricui.NodeSource].
+func (s matterNodeSource) CloseWindow(ctx context.Context) error {
+	mb := s.Bridge()
+	return mb.CommissioningWindow().RevokeWindow(ctx)
 }

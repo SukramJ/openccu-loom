@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric/im"
-	"github.com/SukramJ/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -81,8 +80,8 @@ func TestMatterBootEventsAreReadableAfterWiring(t *testing.T) {
 		}
 	})
 
-	n, ok := wiring.nodeUI.Node.(*node.Node)
-	if !ok || n == nil {
+	n, ok := wiring.nodeUI.Node.(matterNodeSource)
+	if !ok || n.Node == nil {
 		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}
 	bridge := n.Bridge()

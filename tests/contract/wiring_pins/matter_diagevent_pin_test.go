@@ -38,7 +38,7 @@ func TestABridgeWithoutARingStillServesAnEmptyTrace(t *testing.T) {
 // trace's own half: the facade's events are the bridge's.
 func TestTheNodeIsTheEventsRouteSource(t *testing.T) {
 	src := collapseSpaces(readMatterComposition(t))
-	if !strings.Contains(src, "Node: bundle.node,") {
+	if !strings.Contains(src, "Node: matterNodeSource{bundle.node},") {
 		t.Fatal("wireMatterRuntime does not hand go-fabric-ui the node whose bridge records the trace")
 	}
 }

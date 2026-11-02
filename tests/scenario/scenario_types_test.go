@@ -118,13 +118,21 @@ type scenarioSubSpec struct {
 	EngineManualOnly bool `json:"engine_manual_only,omitempty"`
 
 	// FabricIndex maps the per-subscription session to a fabric so
-	// the bridge's session-fabric resolver chain stamps a non-zero
-	// FabricIndex into the dispatch context. Defaults to 0
-	// (pre-fabric / PASE), which is what the production daemon
-	// resolves for an unresolved session. Fabric-scoped scenarios set
-	// this so fabric-scoped cluster servers see a meaningful fabric
-	// ID.
+	// the bridge's session-fabric resolver chain stamps it into the
+	// dispatch context. Unset is fabric 1: the harness's sessions are
+	// not PASE, and the bridge refuses an Interaction Model request
+	// without an accessing fabric on any other session. Fabric-scoped
+	// scenarios set this so fabric-scoped cluster servers see a
+	// meaningful fabric ID.
 	FabricIndex uint8 `json:"fabric_index,omitempty"`
+}
+
+// fabric is the session's accessing fabric.
+func (s scenarioSubSpec) fabric() uint8 {
+	if s.FabricIndex == 0 {
+		return 1
+	}
+	return s.FabricIndex
 }
 
 // effectivePaths returns Paths when populated; otherwise wraps
