@@ -286,7 +286,8 @@ owns the CCU connection and how devices travel from there.
 - **Matter** mainly pays off *without* HA; with HA you would usually
   publish to Apple/Google/Alexa from HA itself.
 - The *Homematic(IP) Local* **loom backend** (integration talks REST/WS
-  to the daemon) is wired but not yet user-selectable — a preview.
+  to the daemon) is a Beta. The integration's setup flow offers it when it
+  discovers a daemon on the network.
 
 MQTT Discovery, the loom backend and the Matter bridge each create their
 own HA entities, so exactly **one** of them per device. Wherever that

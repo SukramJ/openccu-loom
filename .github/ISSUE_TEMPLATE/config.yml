@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 🏠 Using the integration Homematic(IP) Local? / Du nutzt die Integration Homematic(IP) Local?
+    url: https://github.com/SukramJ/homematicip_local/issues/new/choose
+    about: "With the integration installed, please report there, whichever connection you use. / Ist die Integration installiert, melde es bitte dort, egal mit welcher Verbindung."
   - name: 💬 Questions & Feature requests / Fragen & Funktionswünsche
     url: https://github.com/SukramJ/openccu-loom/discussions
     about: "Please use Discussions for questions, ideas and feature requests. / Bitte nutze die Diskussionen für Fragen, Ideen und Funktionswünsche."
