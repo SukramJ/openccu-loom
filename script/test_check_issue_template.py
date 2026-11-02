@@ -7,9 +7,12 @@ Run: python3 script/test_check_issue_template.py (needs PyYAML)
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
+from unittest import mock
 
 # script/ is not a package (its entries are standalone tools), so the module
 # under test is imported from this file's own directory.
@@ -104,6 +107,59 @@ class CommentTest(unittest.TestCase):
         comment = checker.format_comment(check, auto_closed=False)
         self.assertIn("stays open", comment)
         self.assertIn(f"`{TEMPLATES['en'][0]}`", comment)
+
+
+class FakeGitHub:
+    """Answers the REST calls of main() for one issue from an external reporter."""
+
+    def __init__(self, *events: str) -> None:
+        self._events = [{"event": event} for event in events]
+        self.writes: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    def __call__(self, _token: str, _repo: str) -> FakeGitHub:
+        return self
+
+    def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+        if method == "GET":
+            return {
+                "state": "open",
+                "author_association": "NONE",
+                "labels": [],
+                "body": "### Another form\n\n- [x] A checkbox of another repository\n",
+            }
+        self.writes.append((method, path, payload))
+        return None
+
+    def events(self, _number: int) -> list[dict[str, str]]:
+        return self._events
+
+    def comment_bodies(self, _number: int) -> list[str]:
+        return []
+
+    def ensure_label(self) -> None:
+        return None
+
+
+class MainTest(unittest.TestCase):
+    @staticmethod
+    def run_main(gh: FakeGitHub) -> None:
+        env = {"GITHUB_TOKEN": "token", "REPO_NAME": "SukramJ/openccu-loom", "ISSUE_NUMBER": "1", "AUTO_CLOSE": "true"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(checker, "GitHub", gh):
+            checker.main()
+
+    def test_foreign_body_of_an_external_reporter_is_closed(self) -> None:
+        # Control: without a transfer, a body from another form is closed as not planned.
+        gh = FakeGitHub("labeled")
+        self.run_main(gh)
+        self.assertIn(
+            ("PATCH", "/issues/1", {"state": "closed", "state_reason": "not_planned"}),
+            gh.writes,
+        )
+
+    def test_transferred_issue_is_left_alone(self) -> None:
+        gh = FakeGitHub("labeled", "transferred")
+        self.run_main(gh)
+        self.assertEqual(gh.writes, [])
 
 
 if __name__ == "__main__":
