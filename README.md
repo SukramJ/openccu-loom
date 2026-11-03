@@ -6,6 +6,10 @@
   <em>One daemon between your Homematic CCUs and the rest of your smart home.</em>
 </p>
 
+<p align="center">
+  <a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FSukramJ%2Fopenccu-loom"><img src="https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg" alt="Open your Home Assistant instance and add this add-on repository."></a>
+</p>
+
 # OpenCCU-Loom
 
 **OpenCCU-Loom** is a standalone Go daemon that talks to Homematic and
@@ -203,7 +207,8 @@ make build
 ### Home Assistant add-ons
 
 Add `https://github.com/SukramJ/openccu-loom` as a repository under
-*Settings → Add-ons → Add-on Store → ⋮ → Repositories*, then install
+*Settings → Apps → Install app → ⋮ → Repositories* (formerly *Settings →
+Add-ons → Add-on Store*), then install
 **OpenCCU-Loom**. The Config UI appears as a sidebar panel (Ingress)
 and on `:8119`; state persists in the add-on's `/data`. A second add-on,
 **OpenCCU-Loom Remote** ([ADR 0054](./docs/adr/0054-remote-ingress-proxy-addon.md)),

@@ -4,7 +4,8 @@ This directory contains the Home Assistant add-on packaging for OpenCCU-Loom.
 
 ## Adding the repository to Home Assistant
 
-1. In Home Assistant open **Settings → Add-ons → Add-on Store**.
+1. In Home Assistant open **Settings → Apps → Install app** (formerly
+   *Settings → Add-ons → Add-on Store*).
 2. Click the three-dot menu (top right) and choose **Repositories**.
 3. Enter `https://github.com/SukramJ/openccu-loom` and click **Add**.
 4. Find **OpenCCU-Loom** in the store and click **Install**.
