@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Pre-releases and a release channel for the CCU add-on updater.** A
+  version can now ship betas before its final release: a tag
+  `vX.Y.Z-beta.N` publishes a GitHub pre-release with the same changelog
+  section as the final `vX.Y.Z`, moves no `:latest` image and leaves the
+  Home Assistant add-ons alone. In the add-on update card of the settings a
+  new switch, *Show pre-releases* (`addon_update.include_prereleases`,
+  default off), lets the self-updater offer betas too. It takes effect at
+  the next check without a restart; a beta installation is offered the final
+  release either way. The status reports `latest_prerelease` (REST, WS),
+  and `addon_update` is now a configuration section the SPA can edit
+  (API 15.3.0).
+
 ### Changed
 
 - **go-fabric v0.16.0.** The Matter stack moves from v0.15.6 to v0.16.0,

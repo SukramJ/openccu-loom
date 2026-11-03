@@ -108,6 +108,9 @@ var configLeavesAppliedWithoutRestart = map[string]string{
 	"north.mqtt.retain_cleanup_window_ms": "boot-only inside an otherwise live block: it bounds the " +
 		"retain scrub that runs once at boot, so a new value applies to the next boot's scrub and there " +
 		"is nothing a restart would make happen sooner",
+	"addon_update.include_prereleases": "read at the start of every add-on release check through " +
+		"addonUpdateChannelResolver (cmd/openccu-loom/addon_update_wiring.go), which overlays the " +
+		"stored section onto the YAML base per call",
 }
 
 // TestEveryConfigLeafIsEitherRestartRequiredOrDeclaredLive is the completeness

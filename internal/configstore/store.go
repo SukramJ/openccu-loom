@@ -570,6 +570,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return overlaySection(raw, &cfg.North.Matter)
 	case SectionMCP:
 		return overlaySection(raw, &cfg.North.MCP)
+	case SectionAddonUpdate:
+		return overlaySection(raw, &cfg.AddonUpdate)
 	case SectionDiscovery:
 		return overlaySection(raw, &cfg.North.Discovery)
 	case SectionWebhook:
@@ -638,6 +640,8 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 		raw, err = json.Marshal(cfg.North.Matter)
 	case SectionMCP:
 		raw, err = json.Marshal(cfg.North.MCP)
+	case SectionAddonUpdate:
+		raw, err = json.Marshal(cfg.AddonUpdate)
 	case SectionDiscovery:
 		raw, err = json.Marshal(cfg.North.Discovery)
 	case SectionWebhook:

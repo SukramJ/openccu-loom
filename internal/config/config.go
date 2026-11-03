@@ -258,6 +258,13 @@ type AddonUpdateConfig struct {
 	// (24h, applied in [Config.applyDefaults]); disabling the periodic
 	// check is Enabled=false, not a zero interval.
 	CheckInterval time.Duration `yaml:"check_interval,omitempty" json:"check_interval,omitzero" cfg:"expert"`
+	// IncludePrereleases widens the release check from final releases
+	// to pre-releases as well (a `vX.Y.Z-beta.N` tag, which the release
+	// workflow publishes as a GitHub pre-release). Default false: only
+	// final releases are offered. Read fresh on every check, so a change
+	// takes effect without a restart. A final release is offered either
+	// way once it is newer than the running pre-release.
+	IncludePrereleases bool `yaml:"include_prereleases,omitempty" json:"include_prereleases,omitempty" cfg:"expert"`
 }
 
 // PeriodicCheckEnabled reports the resolved background-check toggle

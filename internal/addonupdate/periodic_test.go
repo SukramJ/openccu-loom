@@ -59,9 +59,9 @@ func (tr handlerTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return rec.Result(), nil
 }
 
-const latestReleaseBody = `{"tag_name":"v1.0.0","html_url":"https://example.invalid","assets":[` +
+const latestReleaseBody = `[{"tag_name":"v1.0.0","html_url":"https://example.invalid","assets":[` +
 	`{"name":"openccu-loom-ccu-1.0.0.tar.gz","browser_download_url":"https://example.invalid/a"},` +
-	`{"name":"checksums.txt","browser_download_url":"https://example.invalid/c"}]}`
+	`{"name":"checksums.txt","browser_download_url":"https://example.invalid/c"}]}]`
 
 // newCountingCheckClient serves a minimal, always-valid "latest release"
 // response in-process and counts every hit, so PeriodicChecker tests can
@@ -70,7 +70,7 @@ const latestReleaseBody = `{"tag_name":"v1.0.0","html_url":"https://example.inva
 func newCountingCheckClient() (*http.Client, *atomic.Int64) {
 	var count atomic.Int64
 	mux := http.NewServeMux()
-	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/releases", func(w http.ResponseWriter, _ *http.Request) {
 		count.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, latestReleaseBody)
@@ -289,7 +289,7 @@ func TestPeriodicCheckerSurvivesAStalledCheck(t *testing.T) {
 
 		var hits atomic.Int64
 		mux := http.NewServeMux()
-		mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/releases", func(w http.ResponseWriter, r *http.Request) {
 			if hits.Add(1) == 1 {
 				// First tick: never answer. The handler unblocks when the
 				// request context ends, which is what the per-tick bound causes.

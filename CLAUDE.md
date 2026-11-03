@@ -485,7 +485,7 @@ under `internal/store/sqlite/`.
 - Every PR passes `make test`, `make contract`, `make lint`; integration is a
   required check.
 - Commits are signed off (`git commit -s`) — DCO applies.
-- Releases tagged `vX.Y.Z`, pre-releases `vX.Y.Z-rc.N`.
+- Releases tagged `vX.Y.Z`, pre-releases `vX.Y.Z-beta.N` (same CHANGELOG section `## [X.Y.Z]`; GitHub pre-release, no `:latest`, no HA add-on build).
 - Never push `--force` to `main`.
 
 ---

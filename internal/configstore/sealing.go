@@ -37,6 +37,9 @@ func sectionTarget(sec Section) any {
 		// Same reasoning as SectionMCP — no secret fields today, wired so a
 		// future one is sealed automatically.
 		return new(config.AlarmConfig)
+	case SectionAddonUpdate:
+		// Same reasoning as SectionMCP.
+		return new(config.AddonUpdateConfig)
 	case SectionWebhook:
 		// Has the north.webhook.secret signing key (cfg:"secret"), so the
 		// section store seals it at rest by reflection.

@@ -55,7 +55,7 @@ func newUpdaterFakeServer(t *testing.T, version string, payload []byte) *updater
 		checksums: hex.EncodeToString(sum[:]) + "  " + assetName + "\n",
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/releases/latest", s.handleRelease)
+	mux.HandleFunc("/releases", s.handleRelease)
 	mux.HandleFunc("/asset.tar.gz", s.handleAsset)
 	mux.HandleFunc("/checksums.txt", s.handleChecksums)
 	srv := httptest.NewServer(mux)
@@ -77,8 +77,8 @@ func (s *updaterFakeServer) handleRelease(w http.ResponseWriter, _ *http.Request
 		return
 	}
 	body := fmt.Sprintf(
-		`{"tag_name":"v%s","html_url":"https://example.invalid/releases/v%s","assets":[`+
-			`{"name":%q,"browser_download_url":%q},{"name":"checksums.txt","browser_download_url":%q}]}`,
+		`[{"tag_name":"v%s","html_url":"https://example.invalid/releases/v%s","assets":[`+
+			`{"name":%q,"browser_download_url":%q},{"name":"checksums.txt","browser_download_url":%q}]}]`,
 		s.version, s.version, s.assetName, s.url+"/asset.tar.gz", s.url+"/checksums.txt",
 	)
 	w.Header().Set("Content-Type", "application/json")

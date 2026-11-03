@@ -19,14 +19,16 @@ const broadcastAddonUpdateStateChanged = "addon_update.state_changed"
 // schema verbatim — keep the json tags in lockstep with
 // assets/openapi.yaml and internal/north/rest/handlers.AddonUpdateStatusResponse.
 type AddonUpdateStatusPayload struct {
-	Supported       bool   `json:"supported"`
-	CurrentVersion  string `json:"current_version"`
-	LatestVersion   string `json:"latest_version,omitempty"`
-	UpdateAvailable bool   `json:"update_available,omitempty"`
-	ReleaseURL      string `json:"release_url,omitempty"`
-	LastCheck       string `json:"last_check,omitempty"`
-	State           string `json:"state"`
-	Error           string `json:"error,omitempty"`
+	Supported      bool   `json:"supported"`
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version,omitempty"`
+	// LatestPrerelease marks LatestVersion as a pre-release.
+	LatestPrerelease bool   `json:"latest_prerelease,omitempty"`
+	UpdateAvailable  bool   `json:"update_available,omitempty"`
+	ReleaseURL       string `json:"release_url,omitempty"`
+	LastCheck        string `json:"last_check,omitempty"`
+	State            string `json:"state"`
+	Error            string `json:"error,omitempty"`
 }
 
 // PublishAddonUpdateStateChanged emits the add-on self-updater's

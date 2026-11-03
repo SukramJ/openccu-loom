@@ -10381,8 +10381,10 @@ export interface components {
             /** @description Platform can self-install (add-on build + firmware installer present). */
             supported: boolean;
             current_version: string;
-            /** @description Newest published release; empty before the first successful check. */
+            /** @description Newest published release on the configured channel (`addon_update.include_prereleases`); empty before the first successful check. */
             latest_version?: string;
+            /** @description `latest_version` is a pre-release (a `-beta.N` tag). Only set when the operator opted into pre-releases. */
+            latest_prerelease?: boolean;
             update_available?: boolean;
             /** @description Release-notes page of the latest version. */
             release_url?: string;

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,11 @@ func newCheckerTestServer(t *testing.T, status int, body string) *Checker {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
+		// The checker reads the release list; a single-object body is a
+		// one-release list, which keeps the asset-resolution cases short.
+		if status == http.StatusOK && strings.HasPrefix(strings.TrimSpace(body), "{") {
+			body = "[" + body + "]"
+		}
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
@@ -37,7 +43,7 @@ func TestCheckerLatestReleaseSuccess(t *testing.T) {
 	}`
 	checker := newCheckerTestServer(t, http.StatusOK, body)
 
-	info, err := checker.LatestRelease(context.Background())
+	info, err := checker.LatestRelease(context.Background(), false)
 	if err != nil {
 		t.Fatalf("LatestRelease() error = %v", err)
 	}
@@ -69,7 +75,7 @@ func TestCheckerLatestReleaseMissingAddonAsset(t *testing.T) {
 	]}`
 	checker := newCheckerTestServer(t, http.StatusOK, body)
 
-	_, err := checker.LatestRelease(context.Background())
+	_, err := checker.LatestRelease(context.Background(), false)
 	if !errors.Is(err, ErrNoAddonAsset) {
 		t.Fatalf("LatestRelease() error = %v, want ErrNoAddonAsset", err)
 	}
@@ -83,7 +89,7 @@ func TestCheckerLatestReleaseMissingChecksumsAsset(t *testing.T) {
 	]}`
 	checker := newCheckerTestServer(t, http.StatusOK, body)
 
-	_, err := checker.LatestRelease(context.Background())
+	_, err := checker.LatestRelease(context.Background(), false)
 	if !errors.Is(err, ErrNoChecksumsAsset) {
 		t.Fatalf("LatestRelease() error = %v, want ErrNoChecksumsAsset", err)
 	}
@@ -94,21 +100,21 @@ func TestCheckerLatestReleaseMalformedJSON(t *testing.T) {
 
 	checker := newCheckerTestServer(t, http.StatusOK, `{not valid json`)
 
-	_, err := checker.LatestRelease(context.Background())
+	_, err := checker.LatestRelease(context.Background(), false)
 	if !errors.Is(err, ErrMalformedRelease) {
 		t.Fatalf("LatestRelease() error = %v, want ErrMalformedRelease", err)
 	}
 }
 
-func TestCheckerLatestReleaseMissingTagName(t *testing.T) {
+func TestCheckerLatestReleaseSkipsReleaseWithoutTag(t *testing.T) {
 	t.Parallel()
 
 	body := `{"html_url":"https://example.invalid","assets":[]}`
 	checker := newCheckerTestServer(t, http.StatusOK, body)
 
-	_, err := checker.LatestRelease(context.Background())
-	if !errors.Is(err, ErrMalformedRelease) {
-		t.Fatalf("LatestRelease() error = %v, want ErrMalformedRelease", err)
+	_, err := checker.LatestRelease(context.Background(), false)
+	if !errors.Is(err, ErrNoRelease) {
+		t.Fatalf("LatestRelease() error = %v, want ErrNoRelease", err)
 	}
 }
 
@@ -117,7 +123,7 @@ func TestCheckerLatestReleaseNon200Status(t *testing.T) {
 
 	checker := newCheckerTestServer(t, http.StatusInternalServerError, "boom")
 
-	_, err := checker.LatestRelease(context.Background())
+	_, err := checker.LatestRelease(context.Background(), false)
 	if err == nil {
 		t.Fatal("LatestRelease() error = nil, want non-nil")
 	}
@@ -132,7 +138,7 @@ func TestCheckerLatestReleaseContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := checker.LatestRelease(ctx)
+	_, err := checker.LatestRelease(ctx, false)
 	if err == nil {
 		t.Fatal("LatestRelease(cancelled ctx) error = nil, want non-nil")
 	}
@@ -204,7 +210,7 @@ func TestCheckerLatestReleasePrefersSha256Sidecar(t *testing.T) {
 			t.Parallel()
 			body := `{"tag_name": "v1.2.3", "html_url": "https://example.invalid/r", "assets": [` + tc.assets + `]}`
 			checker := newCheckerTestServer(t, http.StatusOK, body)
-			info, err := checker.LatestRelease(context.Background())
+			info, err := checker.LatestRelease(context.Background(), false)
 			if err != nil {
 				t.Fatalf("LatestRelease() error = %v", err)
 			}

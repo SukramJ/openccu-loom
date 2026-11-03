@@ -24,12 +24,18 @@ vi.mock("$lib/stores/events.svelte", () => ({
 const mockGetAddonUpdateStatus = vi.fn();
 const mockCheckAddonUpdate = vi.fn();
 const mockInstallAddonUpdate = vi.fn();
+const mockGetEffectiveConfig = vi.fn();
+const mockGetConfigSection = vi.fn();
+const mockPutConfigSection = vi.fn();
 
 vi.mock("$lib/api/client", () => ({
   api: {
     getAddonUpdateStatus: (...args: unknown[]) => mockGetAddonUpdateStatus(...args),
     checkAddonUpdate: (...args: unknown[]) => mockCheckAddonUpdate(...args),
     installAddonUpdate: (...args: unknown[]) => mockInstallAddonUpdate(...args),
+    getEffectiveConfig: (...args: unknown[]) => mockGetEffectiveConfig(...args),
+    getConfigSection: (...args: unknown[]) => mockGetConfigSection(...args),
+    putConfigSection: (...args: unknown[]) => mockPutConfigSection(...args),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -100,6 +106,12 @@ beforeEach(() => {
   mockCheckAddonUpdate.mockResolvedValue(undefined);
   mockInstallAddonUpdate.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
+  mockGetEffectiveConfig.mockResolvedValue({
+    config: { addon_update: { include_prereleases: false } },
+    sources: {},
+  });
+  mockGetConfigSection.mockResolvedValue({ check_interval: 3600000000000 });
+  mockPutConfigSection.mockResolvedValue({ applied: false, restart_required: false });
 });
 
 afterEach(() => {
@@ -234,5 +246,74 @@ describe("AddonUpdatePanel — reconnect after install", () => {
         expect.stringContaining("addon_update.toast.installed"),
       ),
     );
+  });
+});
+
+describe("AddonUpdatePanel — release channel", () => {
+  it("shows the switch with the effective channel", async () => {
+    mockGetEffectiveConfig.mockResolvedValue({
+      config: { addon_update: { include_prereleases: true } },
+      sources: {},
+    });
+    render(AddonUpdatePanel);
+    const sw = await screen.findByRole("switch");
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("merges the flag into the stored section, saves it and re-checks", async () => {
+    render(AddonUpdatePanel);
+    const sw = await screen.findByRole("switch");
+
+    await fireEvent.click(sw);
+
+    await waitFor(() =>
+      expect(mockPutConfigSection).toHaveBeenCalledWith("addon_update", {
+        check_interval: 3600000000000,
+        include_prereleases: true,
+      }),
+    );
+    await waitFor(() => expect(mockCheckAddonUpdate).toHaveBeenCalledTimes(1));
+  });
+
+  it("writes only the flag when no section row is stored yet", async () => {
+    const { ApiError } = await import("$lib/api/client");
+    mockGetConfigSection.mockRejectedValue(new ApiError(404, null, "not found"));
+    render(AddonUpdatePanel);
+    await fireEvent.click(await screen.findByRole("switch"));
+
+    await waitFor(() =>
+      expect(mockPutConfigSection).toHaveBeenCalledWith("addon_update", {
+        include_prereleases: true,
+      }),
+    );
+  });
+
+  it("reverts the switch and toasts when the save fails", async () => {
+    mockPutConfigSection.mockRejectedValue(new Error("forbidden"));
+    render(AddonUpdatePanel);
+    const sw = await screen.findByRole("switch");
+    await fireEvent.click(sw);
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith("addon_update.toast.channel_failed", "forbidden"),
+    );
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(mockCheckAddonUpdate).not.toHaveBeenCalled();
+  });
+
+  it("marks a pre-release as such", async () => {
+    mockGetAddonUpdateStatus.mockResolvedValue(
+      status({ latest_version: "0.48.0-beta.1", latest_prerelease: true, update_available: true }),
+    );
+    render(AddonUpdatePanel);
+    await screen.findByText("addon_update.prerelease");
+  });
+
+  it("hides the switch when the effective config cannot be read", async () => {
+    mockGetEffectiveConfig.mockRejectedValue(new Error("forbidden"));
+    render(AddonUpdatePanel);
+    await screen.findByText("addon_update.title");
+    await Promise.resolve();
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 });

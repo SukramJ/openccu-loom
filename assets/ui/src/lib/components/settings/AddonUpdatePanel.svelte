@@ -7,6 +7,8 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
+  import { api, ApiError } from "$lib/api/client";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -49,6 +51,62 @@
   onDestroy(() => {
     if (streamed) addonUpdateStore.close();
   });
+
+  // Release channel: addon_update.include_prereleases. The updater reads
+  // it fresh on every check, so a save needs no restart — the panel runs
+  // a check right after so the card shows the channel's answer at once.
+  // Only the stored section row is merged and written back (a missing row
+  // is a 404), so the save does not pin enabled / check_interval into the
+  // database tier when the operator never touched them.
+  let includePre = $state(false);
+  let channelLoaded = $state(false);
+  let channelSaving = $state(false);
+
+  async function loadStoredSection(): Promise<Record<string, unknown>> {
+    try {
+      return (await api.getConfigSection<Record<string, unknown>>("addon_update")) ?? {};
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return {};
+      throw err;
+    }
+  }
+
+  async function loadChannel() {
+    try {
+      const eff = await api.getEffectiveConfig();
+      const au = (eff.config as Record<string, unknown> | undefined)?.addon_update as
+        | { include_prereleases?: boolean }
+        | undefined;
+      includePre = au?.include_prereleases === true;
+      channelLoaded = true;
+    } catch {
+      // A role without config read access keeps the toggle hidden.
+      channelLoaded = false;
+    }
+  }
+
+  $effect(() => {
+    if (enabled && !channelLoaded) void loadChannel();
+  });
+
+  async function setChannel(next: boolean) {
+    const previous = includePre;
+    includePre = next;
+    channelSaving = true;
+    try {
+      const stored = await loadStoredSection();
+      await api.putConfigSection("addon_update", { ...stored, include_prereleases: next });
+      await check();
+    } catch (err) {
+      includePre = previous;
+      toastStore.error(
+        t("addon_update.toast.channel_failed"),
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      channelSaving = false;
+    }
+  }
 
   // An install stops the daemon that triggered it (ADR 0057 §3), so the
   // WS socket drops and reconnects on its own. Track the installing→
@@ -160,6 +218,27 @@
     </div>
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("addon_update.subtitle")}</p>
 
+    {#if channelLoaded}
+      <label class="flex items-start gap-2 text-sm">
+        <Switch
+          id="addon-update-include-prereleases"
+          checked={includePre}
+          disabled={channelSaving || checkBusy || isInstalling}
+          onCheckedChange={(v) => void setChannel(v)}
+          ariaDescribedby="addon-update-include-prereleases-help"
+        />
+        <span>
+          <span class="block">{t("addon_update.include_prereleases")}</span>
+          <span
+            id="addon-update-include-prereleases-help"
+            class="block text-xs text-[var(--ha-secondary-text-color)]"
+          >
+            {t("addon_update.include_prereleases_help")}
+          </span>
+        </span>
+      </label>
+    {/if}
+
     {#if status && status.state === "failed" && status.error}
       <ErrorState message={status.error} onRetry={() => void check()} />
     {/if}
@@ -187,6 +266,9 @@
         <dd class="font-mono">
           {#if status.latest_version}
             {status.latest_version}
+            {#if status.latest_prerelease}
+              <Badge variant="muted">{t("addon_update.prerelease")}</Badge>
+            {/if}
             {#if status.release_url}
               <a
                 href={status.release_url}

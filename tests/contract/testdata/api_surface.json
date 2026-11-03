@@ -1,5 +1,5 @@
 {
- "api_version": "15.2.0",
+ "api_version": "15.3.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -345,6 +345,7 @@
    "current_version:string",
    "error:string",
    "last_check:string",
+   "latest_prerelease:boolean",
    "latest_version:string",
    "release_url:string",
    "state:string",
