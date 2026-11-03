@@ -12,7 +12,8 @@ It runs as a native HA add-on and is accessible directly from the HA sidebar.
 
 ## Installation
 
-1. In Home Assistant go to **Settings → Add-ons → Add-on Store**, click
+1. In Home Assistant go to **Settings → Apps → Install app** (formerly
+   *Settings → Add-ons → Add-on Store*), click
    the three-dot menu (top right), and choose **Repositories**.
 2. Add `https://github.com/SukramJ/openccu-loom` and confirm.
 3. Find **OpenCCU-Loom** in the store, click **Install**, and wait for the

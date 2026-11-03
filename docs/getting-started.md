@@ -43,7 +43,8 @@ full operator walkthrough see the [User Guide](user-guide.md).
 === "Home Assistant add-on"
 
     Add `https://github.com/SukramJ/openccu-loom` as a repository under
-    **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, then
+    **Settings → Apps → Install app → ⋮ → Repositories** (formerly
+    *Settings → Add-ons → Add-on Store*), then
     install **OpenCCU-Loom**. The Config UI appears as a sidebar panel
     (Ingress) and on `:8119`; state persists in the add-on's `/data`.
 

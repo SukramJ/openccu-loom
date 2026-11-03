@@ -53,7 +53,8 @@ Other subcommands: `openccu-loom version`, `openccu-loom backup`,
 ### Home Assistant add-on
 
 Add `https://github.com/SukramJ/openccu-loom` as a repository under
-**Settings → Add-ons → Add-on Store → ⋮ → Repositories**, then install
+**Settings → Apps → Install app → ⋮ → Repositories** (formerly
+*Settings → Add-ons → Add-on Store*), then install
 **OpenCCU-Loom**. The daemon runs on the HA host, the Config UI appears
 as a sidebar panel (Ingress) and on `:8119`, and state persists in the
 add-on's `/data` — no `config.yaml` needed. Optional Ingress auto-login
