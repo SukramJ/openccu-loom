@@ -1,4 +1,7 @@
 {
+  "addon_update.check_interval": "time.Duration,omitzero",
+  "addon_update.enabled": "*bool,omitempty",
+  "addon_update.include_prereleases": "bool,omitempty",
   "alarm.default_siren_seconds": "int",
   "alarm.duress_visibility": "string",
   "alarm.enabled": "*bool,omitempty",

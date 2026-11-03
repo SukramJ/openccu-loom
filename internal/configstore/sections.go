@@ -57,6 +57,10 @@ const (
 	// just allow_plaintext_secrets (governs whether a central row may
 	// store a password that cannot be encrypted at rest).
 	SectionSecurity Section = "security"
+	// SectionAddonUpdate carries [config.AddonUpdateConfig] — the CCU
+	// add-on self-update checker (ADR 0057). include_prereleases is read
+	// on every check; enabled and check_interval are restart-required.
+	SectionAddonUpdate Section = "addon_update"
 )
 
 // AllSections lists every known section. Used by the schema
@@ -80,6 +84,7 @@ func AllSections() []Section {
 		SectionPersistence,
 		SectionAlarm,
 		SectionSecurity,
+		SectionAddonUpdate,
 	}
 }
 

@@ -29,6 +29,22 @@ jobs:
     name: goreleaser
     runs-on: ubuntu-latest
     steps:
+      # Two tag shapes exist: vX.Y.Z is a final release, vX.Y.Z-beta.N a
+      # pre-release of the same version. Both read the CHANGELOG section
+      # "## [X.Y.Z]"; the suffix alone decides that goreleaser
+      # (`prerelease: auto`) publishes a GitHub pre-release, that no
+      # `:latest` image moves and that the Home Assistant add-ons are not
+      # rebuilt. `-beta.N` and not `bN`: the tag must be SemVer for
+      # goreleaser and the add-on updater, and only a dot-separated
+      # numeric identifier orders beta.10 after beta.2. Reject any other
+      # shape before anything is published.
+      - name: verify tag shape
+        run: |
+          set -euo pipefail
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]; then
+            echo "Tag ${GITHUB_REF_NAME} is neither vX.Y.Z nor vX.Y.Z-beta.N" >&2
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -71,12 +87,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       # Use the curated CHANGELOG.md section for this version as the release
       # body instead of goreleaser's commit-derived changelog. The tag is
-      # vX.Y.Z; CHANGELOG headers are Keep-a-Changelog "## [X.Y.Z] …", so we
-      # strip the leading "v" and slice from that header to the next "## [".
+      # vX.Y.Z or vX.Y.Z-beta.N; CHANGELOG headers are Keep-a-Changelog
+      # "## [X.Y.Z] …", so we strip the leading "v" and any pre-release
+      # suffix and slice from that header to the next "## [". A beta and
+      # its final therefore publish the same, growing section.
       - name: extract release notes from CHANGELOG.md
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${VERSION%%-*}"
           awk -v ver="$VERSION" '
             /^## \[/ {
               if (insec) exit
@@ -162,11 +181,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Home Assistant add-on: build one image per arch from the HA base image,
       # COPYing the daemon binary out of the release image goreleaser just
-      # published. The add-on's config.yaml version IS the image tag and must
+      # published — for final releases only: the add-on store has no
+      # channels, so a pre-release built here would reach every HA
+      # installation. The add-on's config.yaml version IS the image tag and must
       # equal the release tag, so guard it before building (a stale version
       # would publish an image that no installed add-on can pull).
       - name: verify HA add-on versions match the tag
-        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
+        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' && !contains(github.ref_name, '-') }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
@@ -191,7 +212,7 @@ jobs:
       # cannot pull an OCI index with attestations. amd64 only (the daemon image
       # is amd64-only; see .goreleaser.yaml).
       - name: build & publish Home Assistant add-on
-        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
+        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' && !contains(github.ref_name, '-') }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.0.0
         with:
           context: packaging/ha-addon/openccu-loom
@@ -209,7 +230,7 @@ jobs:
       # Same pattern for the OpenCCU-Loom Remote add-on (ADR 0054): its thin
       # image COPYs the openccu-loom-remote binary out of the release image.
       - name: build & publish Home Assistant Remote add-on
-        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
+        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' && !contains(github.ref_name, '-') }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.0.0
         with:
           context: packaging/ha-addon/openccu-loom-remote
@@ -263,6 +284,9 @@ jobs:
   notify-client-repo:
     name: trigger wire regeneration
     needs: goreleaser
+    # The client regenerates against final releases only; a beta's
+    # contract may still move before its final.
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -283,7 +307,7 @@ jobs:
               | sed -nE 's/^const APIVersion = "([^"]+)"$/\1/p'
           }
           HEAD_VER="$(api_version_at "${GITHUB_REF_NAME}")"
-          PREV_TAG="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          PREV_TAG="$(git describe --tags --abbrev=0 --exclude '*-*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
           BREAKING=false
           if [ -n "$PREV_TAG" ]; then
             PREV_VER="$(api_version_at "$PREV_TAG" || true)"

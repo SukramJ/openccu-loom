@@ -34,7 +34,7 @@ type recordingHandler struct {
 
 func (rec *recordingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s", r.Method, r.URL.Path)
+	fmt.Fprintf(&b, "%s %s", r.Method, r.URL.RequestURI())
 	names := make([]string, 0, len(r.Header))
 	for name := range r.Header {
 		names = append(names, name)
@@ -93,10 +93,10 @@ func TestOutboundRequestsArePinned(t *testing.T) {
 	var srv *httptest.Server
 	rec := &recordingHandler{next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/releases/latest":
-			fmt.Fprintf(w, `{"tag_name":"v1.2.3","html_url":"%s/notes","assets":[
+		case "/releases":
+			fmt.Fprintf(w, `[{"tag_name":"v1.2.3","html_url":"%s/notes","assets":[
 {"name":"%s","browser_download_url":"%s/assets/%s"},
-{"name":"checksums.txt","browser_download_url":"%s/assets/checksums.txt"}]}`,
+{"name":"checksums.txt","browser_download_url":"%s/assets/checksums.txt"}]}]`,
 				srv.URL, assetName, srv.URL, assetName, srv.URL)
 		case "/assets/checksums.txt":
 			fmt.Fprintf(w, "%s  %s\n", hex.EncodeToString(sum[:]), assetName)
@@ -111,7 +111,7 @@ func TestOutboundRequestsArePinned(t *testing.T) {
 
 	ctx := context.Background()
 	checker := &Checker{HTTPClient: srv.Client(), BaseURL: srv.URL}
-	info, err := checker.LatestRelease(ctx)
+	info, err := checker.LatestRelease(ctx, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestOutboundRequestsArePinned(t *testing.T) {
 	}
 
 	want := []string{
-		"GET /releases/latest\nAccept: application/vnd.github+json\nAccept-Encoding: gzip\nUser-Agent: Go-http-client/1.1",
+		"GET /releases?per_page=30\nAccept: application/vnd.github+json\nAccept-Encoding: gzip\nUser-Agent: Go-http-client/1.1",
 		"GET /assets/checksums.txt\nAccept-Encoding: gzip\nUser-Agent: Go-http-client/1.1",
 		"GET /assets/" + assetName + "\nAccept-Encoding: gzip\nUser-Agent: Go-http-client/1.1",
 	}

@@ -143,10 +143,13 @@ type getAddonUpdateStatusOut struct {
 	// Supported is false on a deployment where the add-on self-updater
 	// does not apply (not running as the HA add-on, or the platform
 	// capability probe failed) — every other field is then meaningless.
-	Supported       bool   `json:"supported"`
-	CurrentVersion  string `json:"current_version,omitempty"`
-	LatestVersion   string `json:"latest_version,omitempty"`
-	UpdateAvailable bool   `json:"update_available"`
+	Supported      bool   `json:"supported"`
+	CurrentVersion string `json:"current_version,omitempty"`
+	LatestVersion  string `json:"latest_version,omitempty"`
+	// LatestPrerelease marks LatestVersion as a pre-release (only
+	// resolved when addon_update.include_prereleases is on).
+	LatestPrerelease bool `json:"latest_prerelease,omitempty"`
+	UpdateAvailable  bool `json:"update_available"`
 	// State is the updater's lifecycle state: idle, checking,
 	// downloading, installing, or failed.
 	State string `json:"state"`
@@ -176,6 +179,7 @@ func registerGetAddonUpdateStatus(s *mcpsdk.Server, d Deps) {
 			Supported:         st.Supported,
 			CurrentVersion:    st.CurrentVersion,
 			LatestVersion:     st.LatestVersion,
+			LatestPrerelease:  st.LatestPrerelease,
 			UpdateAvailable:   st.UpdateAvailable,
 			State:             string(st.State),
 			InstallInProgress: st.State == addonupdate.StateDownloading || st.State == addonupdate.StateInstalling,

@@ -862,6 +862,9 @@ func validateSection(section configstore.Section, raw json.RawMessage) error {
 	case configstore.SectionMCP:
 		var v config.NorthMCP
 		return strictUnmarshal(raw, &v)
+	case configstore.SectionAddonUpdate:
+		var v config.AddonUpdateConfig
+		return strictUnmarshal(raw, &v)
 	case configstore.SectionDiscovery:
 		var v config.NorthDiscovery
 		return strictUnmarshal(raw, &v)

@@ -487,7 +487,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// state publish + command sink are wired per-broker-connection
 	// inside makeMQTTSubscriberBuilder below (they must target whichever
 	// bridge instance is currently live).
-	addonUpdater := wireAddonUpdate(ctx, logger)
+	addonUpdater := wireAddonUpdate(ctx, logger, cfg, ov)
 	defer wireAddonUpdateWS(reg.Manifest(), addonUpdater, wsHub)()
 	defer startAddonUpdatePeriodicCheck(ctx, addonUpdater, cfg, logger)()
 

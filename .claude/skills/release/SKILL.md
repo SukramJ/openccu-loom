@@ -71,6 +71,31 @@ git diff internal/north/mqtt/testdata/ assets/wire-fixtures/ | grep '^[-+] '   #
 Then commit (`git commit -s`), open the PR, let CI go green, merge, and tag
 `vX.Y.Z` on the merge commit. Never tag before the add-on versions match.
 
+## Pre-releases (beta)
+
+A pre-release is the same version with a tag suffix: `vX.Y.Z-beta.N`
+(`N` from 1, numeric — `-beta.10` sorts after `-beta.2`; `bN` or `-rc.N`
+is rejected by the workflow's tag-shape step). There is **one** CHANGELOG
+section per version, `## [X.Y.Z]`, for every beta and the final alike; the
+workflow strips the suffix to find it, so the section simply grows from
+beta to beta.
+
+- First beta: rename `## [Unreleased]` to `## [X.Y.Z]` and bump
+  `internal/build/version.go` to `X.Y.Z` (steps 1–2 without the add-ons).
+  Later betas add to that section; a new `## [Unreleased]` only opens once
+  the final is out.
+- **Do not** bump the HA add-on `config.yaml` versions or their changelogs
+  for a beta. The HA add-on store has no channels, so the workflow skips the
+  HA add-on build and its version guard on a suffixed tag; they move with the
+  final.
+- What the suffix does: goreleaser publishes a GitHub pre-release, no
+  `:latest` image moves, no sponsoring note, no client-repo dispatch. The
+  CCU add-on tarball is attached as usual; only daemons with
+  `addon_update.include_prereleases` on are offered it.
+- Gate as in step 5, then tag `vX.Y.Z-beta.N` on the merge commit.
+- The final is a normal release (all steps) with tag `vX.Y.Z`; every beta
+  installation is offered it whatever its channel.
+
 ## 6. The release is not finished at the tag
 
 `release.yml` dispatches `daemon-release` to `openccu-loom-client`, which opens

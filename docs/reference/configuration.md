@@ -27,6 +27,7 @@ and API tokens, navigation profiles) are not part of this list.
 |---|---|---|---|---|---|
 | `addon_update.check_interval` | `time.Duration` |  | expert | yes | How often the daemon checks GitHub for a new add-on release in the background, plus a random jitter of up to 1 hour so a fleet doesn't poll all at once. Zero falls back to the default of 24 h; use the enabled toggle to turn background checking off. |
 | `addon_update.enabled` | `*bool` |  | expert | yes | Check GitHub for new add-on releases in the background (boot check plus the recurring interval); default on. The manual "Check for updates" button and installing stay available when disabled. |
+| `addon_update.include_prereleases` | `bool` |  | expert | no | Also offer pre-releases (beta versions, tagged X.Y.Z-beta.N) as add-on updates; default off, final releases only. Takes effect at the next check without a restart. A final release is offered either way once it is newer than an installed beta. |
 
 ## `alarm` {#alarm}
 

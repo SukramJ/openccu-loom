@@ -39,6 +39,9 @@ type Status struct {
 	// LatestVersion is the newest published release tag (version
 	// part, no leading "v"); empty before the first successful check.
 	LatestVersion string
+	// LatestPrerelease reports that LatestVersion is a pre-release,
+	// which a check only resolves when the operator opted into them.
+	LatestPrerelease bool
 	// UpdateAvailable is true when LatestVersion is newer than
 	// CurrentVersion.
 	UpdateAvailable bool

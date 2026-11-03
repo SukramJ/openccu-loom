@@ -31,9 +31,11 @@ the section has no effect. On an **openccu-lite** host the probe also
 reports unsupported (the `VARIANT=lite` marker in `/VERSION`): add-on
 updates there belong to occulited's own catalogue, which downloads and
 installs releases itself. When active, the daemon asks
-`https://api.github.com/repos/SukramJ/openccu-loom/releases/latest`
+`https://api.github.com/repos/SukramJ/openccu-loom/releases?per_page=30`
 shortly after boot and then once a day whether a newer release exists
-(ADR 0057).
+(ADR 0057). The list is filtered locally: only final releases count,
+unless `addon_update.include_prereleases` admits pre-releases too — the
+request is the same either way.
 
 - **Sent**: a plain `GET` with `Accept: application/vnd.github+json` and
   Go's own `User-Agent`. No version, serial number, hostname or any

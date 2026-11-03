@@ -22,6 +22,12 @@ type Deps struct {
 	Downloader *Downloader
 	Installer  *Installer
 	Logger     *slog.Logger
+	// IncludePrereleases resolves the operator's release channel at the
+	// start of every [Updater.Check]: true admits pre-releases, false
+	// (and a nil resolver) final releases only. A resolver rather than a
+	// value so a channel change saved through the config API applies to
+	// the next check without a restart.
+	IncludePrereleases func(context.Context) bool
 	// CurrentVersion overrides build.Version — the running daemon's
 	// version to compare releases against. Empty uses build.Version.
 	CurrentVersion string
@@ -39,6 +45,7 @@ type Deps struct {
 // object the REST, WebSocket and MQTT surfaces observe via [OnChange].
 type Updater struct {
 	checker        *Checker
+	includePre     func(context.Context) bool
 	downloader     *Downloader
 	installer      *Installer
 	logger         *slog.Logger
@@ -84,6 +91,7 @@ func NewUpdater(deps Deps) *Updater {
 	}
 	u := &Updater{
 		checker:        checker,
+		includePre:     deps.IncludePrereleases,
 		downloader:     downloader,
 		installer:      installer,
 		logger:         logger,
@@ -216,7 +224,8 @@ func (u *Updater) Check(ctx context.Context) error {
 	if !u.enterBusy(StateChecking) {
 		return ErrBusy
 	}
-	info, err := u.checker.LatestRelease(ctx)
+	includePre := u.includePre != nil && u.includePre(ctx)
+	info, err := u.checker.LatestRelease(ctx, includePre)
 	if err != nil {
 		u.fail(err)
 		return err
@@ -229,6 +238,7 @@ func (u *Updater) Check(ctx context.Context) error {
 	u.transition(func(s *Status) {
 		s.State = StateIdle
 		s.LatestVersion = info.Version
+		s.LatestPrerelease = info.Prerelease
 		s.ReleaseURL = info.ReleaseURL
 		s.LastCheck = now
 		s.UpdateAvailable = IsNewer(current, info.Version)

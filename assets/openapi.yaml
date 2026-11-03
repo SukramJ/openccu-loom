@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.2.0
+  version: 15.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -14651,7 +14651,15 @@ components:
         current_version: { type: string }
         latest_version:
           type: string
-          description: Newest published release; empty before the first successful check.
+          description: >-
+            Newest published release on the configured channel
+            (`addon_update.include_prereleases`); empty before the first
+            successful check.
+        latest_prerelease:
+          type: boolean
+          description: >-
+            `latest_version` is a pre-release (a `-beta.N` tag). Only set
+            when the operator opted into pre-releases.
         update_available: { type: boolean }
         release_url:
           type: string

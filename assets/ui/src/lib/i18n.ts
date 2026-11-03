@@ -1598,6 +1598,7 @@ const EN: Catalog = {
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP trace endpoint",
   "config.field.addon_update.check_interval": "Update check interval",
   "config.field.addon_update.enabled": "Background update checks",
+  "config.field.addon_update.include_prereleases": "Include pre-releases",
   // Inline help — shown beneath the field label. Same key
   // namespace as the labels above, but with `.help.` instead of
   // `.field.`. A missing help row is fine; the editor just
@@ -1957,6 +1958,8 @@ const EN: Catalog = {
     "How often the daemon checks GitHub for a new add-on release in the background, plus a random jitter of up to 1 hour so a fleet doesn't poll all at once. Zero falls back to the default of 24 h; use the enabled toggle to turn background checking off.",
   "config.help.addon_update.enabled":
     'Check GitHub for new add-on releases in the background (boot check plus the recurring interval); default on. The manual "Check for updates" button and installing stay available when disabled.',
+  "config.help.addon_update.include_prereleases":
+    "Also offer pre-releases (beta versions, tagged X.Y.Z-beta.N) as add-on updates; default off, final releases only. Takes effect at the next check without a restart. A final release is offered either way once it is newer than an installed beta.",
   "settings.section.intro.persistence":
     "Local on-disk cache of CCU data-point values. The cache lets the daemon survive restarts without re-reading every paramset from the CCU. By default it is ON with a 60-second flush interval — leave it alone unless you are debugging cache behaviour.",
   "settings.section.intro.reliability":
@@ -3954,6 +3957,10 @@ const EN: Catalog = {
   "addon_update.checking": "Checking…",
   "addon_update.available": "Update available",
   "addon_update.up_to_date": "Up to date",
+  "addon_update.include_prereleases": "Show pre-releases",
+  "addon_update.include_prereleases_help": "Also offer beta versions. Off: final releases only.",
+  "addon_update.prerelease": "Pre-release",
+  "addon_update.toast.channel_failed": "Could not save the release channel",
   "addon_update.install": "Install update",
   "addon_update.install_starting": "Starting…",
   "addon_update.installing_notice":
@@ -5841,6 +5848,7 @@ const DE: Catalog = {
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP-Trace-Endpunkt",
   "config.field.addon_update.check_interval": "Update-Prüfintervall",
   "config.field.addon_update.enabled": "Hintergrund-Updateprüfung",
+  "config.field.addon_update.include_prereleases": "Vorabversionen einbeziehen",
   "config.help.locale":
     "Standard-Sprache der SPA beim ersten Aufruf. Operatoren können pro Benutzer in den Einstellungen umschalten.",
   "config.help.data_dir":
@@ -6196,6 +6204,8 @@ const DE: Catalog = {
     "Wie oft der Daemon im Hintergrund bei GitHub nach einem neuen Add-on-Release sucht, plus ein zufälliger Jitter von bis zu 1 Stunde, damit nicht die ganze Flotte gleichzeitig anfragt. 0 nutzt den Standard von 24 h; zum Abschalten der Hintergrundprüfung dient der Aktiviert-Schalter.",
   "config.help.addon_update.enabled":
     "Im Hintergrund bei GitHub nach neuen Add-on-Releases suchen (Prüfung beim Start plus wiederkehrendes Intervall); Standard an. Der manuelle „Nach Updates suchen“-Button und das Installieren bleiben auch bei Deaktivierung verfügbar.",
+  "config.help.addon_update.include_prereleases":
+    "Auch Vorabversionen (Betas, Tag X.Y.Z-beta.N) als Add-on-Update anbieten; Standard aus, nur finale Versionen. Wirkt ab der nächsten Prüfung ohne Neustart. Eine finale Version wird in jedem Fall angeboten, sobald sie neuer als eine installierte Beta ist.",
   "settings.section.intro.persistence":
     "Lokaler Disk-Cache der CCU-Datenpunkt-Werte. Erlaubt dem Daemon, Neustarts ohne kompletten Paramset-Re-Read zu überstehen. Standardmäßig AN mit 60-Sekunden-Flush — nur anfassen, wenn man Cache-Verhalten debuggt.",
   "settings.section.intro.reliability":
@@ -8185,6 +8195,10 @@ const DE: Catalog = {
   "addon_update.checking": "Suche läuft…",
   "addon_update.available": "Update verfügbar",
   "addon_update.up_to_date": "Aktuell",
+  "addon_update.include_prereleases": "Vorabversionen anzeigen",
+  "addon_update.include_prereleases_help": "Auch Beta-Versionen anbieten. Aus: nur finale Versionen.",
+  "addon_update.prerelease": "Vorabversion",
+  "addon_update.toast.channel_failed": "Release-Kanal konnte nicht gespeichert werden",
   "addon_update.install": "Update installieren",
   "addon_update.install_starting": "Wird gestartet…",
   "addon_update.installing_notice":

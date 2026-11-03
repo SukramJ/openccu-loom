@@ -58,6 +58,8 @@ type ReleaseInfo struct {
 	// ChecksumsAsset is the release's checksums.txt, used to verify
 	// Asset's SHA256 before it is staged (ADR 0057 decision 2).
 	ChecksumsAsset ReleaseAsset
+	// Prerelease reports that GitHub marks the release as a pre-release.
+	Prerelease bool
 }
 
 // ErrNoAddonAsset / ErrNoChecksumsAsset are returned when the latest
@@ -68,6 +70,10 @@ var (
 	ErrNoAddonAsset     = errors.New("addonupdate: release has no matching add-on asset")
 	ErrNoChecksumsAsset = errors.New("addonupdate: release has no checksums.txt asset")
 	ErrMalformedRelease = errors.New("addonupdate: malformed release metadata")
+	// ErrNoRelease is returned when no published release passes the
+	// channel filter (only drafts, or only pre-releases on the final
+	// channel).
+	ErrNoRelease = errors.New("addonupdate: no release on the selected channel")
 )
 
 // Checker resolves the latest published release of this project via
@@ -114,23 +120,40 @@ func (c *Checker) baseURL() string {
 	return defaultGitHubAPIBase
 }
 
-// githubReleaseResponse is the subset of the GitHub "get the latest
-// release" response shape the checker needs.
+// githubReleaseResponse is the subset of one GitHub release object the
+// checker needs. The "list releases" endpoint returns an array of these.
 type githubReleaseResponse struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
-	Assets  []struct {
+	TagName    string `json:"tag_name"`
+	HTMLURL    string `json:"html_url"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
 }
 
-// LatestRelease fetches GET {base}/releases/latest and resolves the
-// ccu-addon tarball + checksums.txt assets. Returns ErrNoAddonAsset /
-// ErrNoChecksumsAsset when either is missing so callers fail closed
-// rather than staging an unverifiable archive.
-func (c *Checker) LatestRelease(ctx context.Context) (ReleaseInfo, error) {
-	url := c.baseURL() + "/releases/latest"
+// releaseListPageSize bounds how many of the newest releases one check
+// considers. GitHub lists releases newest first, so a page this size
+// spans many release cycles of final and pre-releases alike.
+const releaseListPageSize = 30
+
+// LatestRelease resolves the newest release the operator's channel
+// admits and its ccu-addon tarball + checksum assets.
+//
+// It lists releases (GET {base}/releases) instead of asking for
+// /releases/latest, because GitHub's "latest" never names a
+// pre-release, so an opted-in pre-release channel could not see one.
+// Drafts are always skipped; pre-releases only when includePrereleases
+// is false. Among the admitted releases the highest SemVer tag wins, so
+// the answer does not depend on the order GitHub lists them in; a tag
+// that is not valid SemVer is ignored.
+//
+// Returns ErrNoRelease when no release is admitted, and ErrNoAddonAsset
+// / ErrNoChecksumsAsset when the chosen one lacks either asset, so
+// callers fail closed rather than staging an unverifiable archive.
+func (c *Checker) LatestRelease(ctx context.Context, includePrereleases bool) (ReleaseInfo, error) {
+	url := fmt.Sprintf("%s/releases?per_page=%d", c.baseURL(), releaseListPageSize)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return ReleaseInfo{}, fmt.Errorf("addonupdate: build request: %w", err)
@@ -139,27 +162,57 @@ func (c *Checker) LatestRelease(ctx context.Context) (ReleaseInfo, error) {
 
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
-		return ReleaseInfo{}, fmt.Errorf("addonupdate: fetch latest release: %w", err)
+		return ReleaseInfo{}, fmt.Errorf("addonupdate: fetch releases: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return ReleaseInfo{}, fmt.Errorf("addonupdate: latest release: unexpected status %d", resp.StatusCode)
+		return ReleaseInfo{}, fmt.Errorf("addonupdate: releases: unexpected status %d", resp.StatusCode)
 	}
 
-	var body githubReleaseResponse
+	var list []githubReleaseResponse
 	dec := json.NewDecoder(io.LimitReader(resp.Body, maxReleaseBodyBytes))
-	if err := dec.Decode(&body); err != nil {
+	if err := dec.Decode(&list); err != nil {
 		return ReleaseInfo{}, fmt.Errorf("%w: %w", ErrMalformedRelease, err)
 	}
-	if body.TagName == "" {
-		return ReleaseInfo{}, fmt.Errorf("%w: missing tag_name", ErrMalformedRelease)
+	body, ok := pickRelease(list, includePrereleases)
+	if !ok {
+		return ReleaseInfo{}, ErrNoRelease
 	}
+	return resolveAssets(body)
+}
 
+// pickRelease returns the admitted release with the highest SemVer tag.
+func pickRelease(list []githubReleaseResponse, includePrereleases bool) (githubReleaseResponse, bool) {
+	var best githubReleaseResponse
+	bestVer := ""
+	for _, r := range list {
+		if r.Draft || (r.Prerelease && !includePrereleases) {
+			continue
+		}
+		v := "v" + strings.TrimPrefix(r.TagName, "v")
+		if !semver.IsValid(v) {
+			continue
+		}
+		// A pre-release flag GitHub did not set still marks the tag as
+		// one when it carries a SemVer pre-release suffix.
+		if semver.Prerelease(v) != "" && !includePrereleases {
+			continue
+		}
+		if bestVer == "" || semver.Compare(v, bestVer) > 0 {
+			best, bestVer = r, v
+		}
+	}
+	return best, bestVer != ""
+}
+
+// resolveAssets maps a chosen release onto [ReleaseInfo], locating the
+// add-on tarball and its checksum source.
+func resolveAssets(body githubReleaseResponse) (ReleaseInfo, error) {
 	version := strings.TrimPrefix(body.TagName, "v")
 	wantAsset := ccuAddonAssetPrefix + version + ccuAddonAssetSuffix
 
-	info := ReleaseInfo{Tag: body.TagName, Version: version, ReleaseURL: body.HTMLURL}
+	info := ReleaseInfo{Tag: body.TagName, Version: version, ReleaseURL: body.HTMLURL, Prerelease: body.Prerelease}
 	// The per-asset .sha256 sidecar is the primary verification source —
 	// the release workflow uploads it right next to the tarball because
 	// goreleaser's checksums.txt is finalized before the add-on package

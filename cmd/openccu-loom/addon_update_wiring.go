@@ -28,16 +28,47 @@ import (
 // daemon shutdown while the final installer hand-off (which
 // deliberately ignores context cancellation — see
 // [addonupdate.DefaultRunner]) is unaffected.
-func wireAddonUpdate(ctx context.Context, logger *slog.Logger) *addonupdate.Updater {
+//
+// The release channel (addon_update.include_prereleases) is resolved per
+// check through [addonUpdateChannelResolver], so a channel saved in the
+// SPA applies to the next check without a restart.
+func wireAddonUpdate(ctx context.Context, logger *slog.Logger, cfg *config.Config, ov *auditOverlay) *addonupdate.Updater {
 	probe := addonupdate.NewCapabilityProbe()
 	if !probe.Supported() {
 		return nil
 	}
 	return addonupdate.NewUpdater(addonupdate.Deps{
-		Capability: probe,
-		Logger:     logger,
-		Context:    ctx,
+		Capability:         probe,
+		Logger:             logger,
+		Context:            ctx,
+		IncludePrereleases: addonUpdateChannelResolver(cfg, ov, logger),
 	})
+}
+
+// addonUpdateChannelResolver returns the per-check channel resolver. It
+// overlays the DB-tier addon_update section onto the YAML base on every
+// call — the same assembly the config API reports as effective — and
+// falls back to the boot config when there is no config store, or when
+// reading it fails, so a store hiccup degrades to the booted channel
+// rather than to "final only".
+func addonUpdateChannelResolver(cfg *config.Config, ov *auditOverlay, logger *slog.Logger) func(context.Context) bool {
+	boot := cfg != nil && cfg.AddonUpdate.IncludePrereleases
+	if ov == nil || ov.configStore == nil || ov.yamlBase == nil {
+		return func(context.Context) bool { return boot }
+	}
+	store, base := ov.configStore, ov.yamlBase
+	return func(ctx context.Context) bool {
+		next := config.Clone(base)
+		if _, err := store.OverlayInto(ctx, next); err != nil {
+			if logger != nil {
+				logger.Warn("addon_update.channel.resolve_failed",
+					slog.String("error", err.Error()),
+					slog.Bool("include_prereleases", boot))
+			}
+			return boot
+		}
+		return next.AddonUpdate.IncludePrereleases
+	}
 }
 
 // startAddonUpdatePeriodicCheck launches the boot-delayed, jittered
@@ -92,13 +123,14 @@ func wireAddonUpdateWS(m *wiring.Manifest, updater *addonupdate.Updater, hub *ws
 // handlers.addonUpdateStatusResponse (internal/north/rest/handlers/addon_update.go).
 func addonUpdateWSPayload(st addonupdate.Status) ws.AddonUpdateStatusPayload {
 	payload := ws.AddonUpdateStatusPayload{
-		Supported:       st.Supported,
-		CurrentVersion:  st.CurrentVersion,
-		LatestVersion:   st.LatestVersion,
-		UpdateAvailable: st.UpdateAvailable,
-		ReleaseURL:      st.ReleaseURL,
-		State:           string(st.State),
-		Error:           st.Error,
+		Supported:        st.Supported,
+		CurrentVersion:   st.CurrentVersion,
+		LatestVersion:    st.LatestVersion,
+		LatestPrerelease: st.LatestPrerelease,
+		UpdateAvailable:  st.UpdateAvailable,
+		ReleaseURL:       st.ReleaseURL,
+		State:            string(st.State),
+		Error:            st.Error,
 	}
 	if !st.LastCheck.IsZero() {
 		payload.LastCheck = st.LastCheck.UTC().Format(time.RFC3339)

@@ -29,14 +29,16 @@ type AddonUpdateService interface {
 // schema verbatim; keep the json tags in lockstep with
 // assets/openapi.yaml.
 type AddonUpdateStatusResponse struct {
-	Supported       bool   `json:"supported"`
-	CurrentVersion  string `json:"current_version"`
-	LatestVersion   string `json:"latest_version,omitempty"`
-	UpdateAvailable bool   `json:"update_available,omitempty"`
-	ReleaseURL      string `json:"release_url,omitempty"`
-	LastCheck       string `json:"last_check,omitempty"`
-	State           string `json:"state"`
-	Error           string `json:"error,omitempty"`
+	Supported      bool   `json:"supported"`
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version,omitempty"`
+	// LatestPrerelease marks LatestVersion as a pre-release.
+	LatestPrerelease bool   `json:"latest_prerelease,omitempty"`
+	UpdateAvailable  bool   `json:"update_available,omitempty"`
+	ReleaseURL       string `json:"release_url,omitempty"`
+	LastCheck        string `json:"last_check,omitempty"`
+	State            string `json:"state"`
+	Error            string `json:"error,omitempty"`
 }
 
 // addonUpdateStatusResponse converts the domain snapshot to the wire
@@ -44,13 +46,14 @@ type AddonUpdateStatusResponse struct {
 // serialised as the Go zero time.
 func addonUpdateStatusResponse(s addonupdate.Status) AddonUpdateStatusResponse {
 	resp := AddonUpdateStatusResponse{
-		Supported:       s.Supported,
-		CurrentVersion:  s.CurrentVersion,
-		LatestVersion:   s.LatestVersion,
-		UpdateAvailable: s.UpdateAvailable,
-		ReleaseURL:      s.ReleaseURL,
-		State:           string(s.State),
-		Error:           s.Error,
+		Supported:        s.Supported,
+		CurrentVersion:   s.CurrentVersion,
+		LatestVersion:    s.LatestVersion,
+		LatestPrerelease: s.LatestPrerelease,
+		UpdateAvailable:  s.UpdateAvailable,
+		ReleaseURL:       s.ReleaseURL,
+		State:            string(s.State),
+		Error:            s.Error,
 	}
 	if !s.LastCheck.IsZero() {
 		resp.LastCheck = s.LastCheck.UTC().Format(time.RFC3339)
