@@ -142,7 +142,10 @@ type LockState struct {
 	Direction      string `json:"direction"`
 	IsLocking      bool   `json:"is_locking"`
 	IsUnlocking    bool   `json:"is_unlocking"`
-	IsJammed       bool   `json:"is_jammed"`
+	// IsOpening is true while an HmIP lock pulls its latch, including the
+	// DOWN movement back to the unlocked position that is not locking.
+	IsOpening bool `json:"is_opening"`
+	IsJammed  bool `json:"is_jammed"`
 }
 
 // --- Siren / SmokeSiren / SoundPlayer -------------------------------

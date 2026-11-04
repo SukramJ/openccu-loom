@@ -60,11 +60,14 @@ const (
 type Direction string
 
 // Direction values. The CCU DIRECTION parameter uses "DOWN" for a
-// locking movement and "UP" for an unlocking movement.
+// locking movement and "UP" for an unlocking movement. The HmIP door
+// locks' ACTIVITY_STATE adds "STABLE" for a motor at rest and "UNKNOWN".
 const (
 	DirectionNone    Direction = ""
 	DirectionLocking Direction = "DOWN"
 	DirectionUnlock  Direction = "UP"
+	DirectionStable  Direction = "STABLE"
+	DirectionUnknown Direction = "UNKNOWN"
 )
 
 // LockError enumerates the error states the CCU reports on the ERROR_JAMMED /
@@ -120,6 +123,16 @@ type Lock struct {
 	// unlockMu guards unlockHistory.
 	unlockMu      sync.Mutex
 	unlockHistory []UnlockEvent
+
+	// openMu guards openMovement.
+	openMu sync.Mutex
+	// openMovement is true while an HmIP lock pulls its latch. The device
+	// reports no open state, only the motor direction (ACTIVITY_STATE) and
+	// the bolt position (LOCK_STATE): opening moves UP while the bolt is
+	// already UNLOCKED and returns DOWN to the unlocked position. That DOWN
+	// is not a locking movement, so the movement is remembered from the UP
+	// until the motor reports STABLE (or UNKNOWN) again.
+	openMovement bool
 
 	// IP-locks expose LOCK_STATE and DIRECTION as read-only ENUM
 	// parameters, which the resolver projects onto raw-index Sensor[int32]
@@ -230,6 +243,17 @@ func New(cfg Config) *Lock {
 	case KindIP:
 		// HmIP locks: LOCK_STATE (read-only ENUM).
 		l.stateDp = custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLockState, hmenum.ParameterLockState))
+		// Both parameters arrive as separate events in one multicall, in
+		// an order the device chooses, so the open movement is re-evaluated
+		// on either. The flag is only read at a later DOWN, so whether a
+		// payload publisher observes an event before or after this
+		// callback does not change what it reports.
+		if l.stateDp != nil {
+			_ = l.stateDp.OnConfirmedUpdate(func(_, _ int32) { l.updateOpenMovement() })
+		}
+		if l.directionDp != nil {
+			_ = l.directionDp.OnConfirmedUpdate(func(_, _ int32) { l.updateOpenMovement() })
+		}
 	case KindRF:
 		// RF locks: bool STATE only — the CCU exposes no LOCK_STATE here.
 		l.boolStateDp = custom.SwitchField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldState, hmenum.ParameterState))
@@ -371,23 +395,69 @@ func (l *Lock) Direction() (Direction, bool) {
 }
 
 // IsLocking reports whether the motor is currently moving toward the
-// locked position.
+// locked position. The return movement of an HmIP latch opening also
+// reports DOWN and is not a locking movement — see [Lock.IsOpening].
 func (l *Lock) IsLocking() bool {
 	d, ok := l.Direction()
 	if !ok {
 		return false
 	}
-	return d == DirectionLocking
+	return d == DirectionLocking && !l.inOpenMovement()
 }
 
 // IsUnlocking reports whether the motor is currently moving toward the
-// unlocked position.
+// unlocked position. An HmIP lock moving UP while its bolt is already
+// unlocked is pulling the latch, which [Lock.IsOpening] reports instead.
 func (l *Lock) IsUnlocking() bool {
 	d, ok := l.Direction()
 	if !ok {
 		return false
 	}
-	return d == DirectionUnlock
+	return d == DirectionUnlock && !l.isOpeningUp(d)
+}
+
+// IsOpening reports whether an HmIP lock is pulling its latch: the UP
+// movement while the bolt is already unlocked, and the DOWN movement
+// back to the unlocked position that follows it. Always false for RF
+// and button locks, which have no latch movement on the wire.
+func (l *Lock) IsOpening() bool {
+	d, ok := l.Direction()
+	if !ok {
+		return false
+	}
+	return l.isOpeningUp(d) || (d == DirectionLocking && l.inOpenMovement())
+}
+
+// isOpeningUp reports whether d is an UP movement of an HmIP lock whose
+// bolt is already unlocked — the start of a latch opening.
+func (l *Lock) isOpeningUp(d Direction) bool {
+	if l.Kind != KindIP || d != DirectionUnlock {
+		return false
+	}
+	s, ok := l.LockState()
+	return ok && s == StateUnlocked
+}
+
+// inOpenMovement reports whether a latch opening is in progress.
+func (l *Lock) inOpenMovement() bool {
+	l.openMu.Lock()
+	defer l.openMu.Unlock()
+	return l.openMovement
+}
+
+// updateOpenMovement starts the open movement on an UP while the bolt is
+// unlocked and ends it once the motor stops (STABLE) or its state is lost
+// (UNKNOWN, or no direction at all).
+func (l *Lock) updateOpenMovement() {
+	d, ok := l.Direction()
+	l.openMu.Lock()
+	defer l.openMu.Unlock()
+	switch {
+	case !ok || d == DirectionNone || d == DirectionStable || d == DirectionUnknown:
+		l.openMovement = false
+	case l.isOpeningUp(d):
+		l.openMovement = true
+	}
 }
 
 // NamePostfix returns the suffix appended to a lock's data-point name.
