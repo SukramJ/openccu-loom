@@ -78,13 +78,10 @@ func (l *Lock) State() payload.StatePayload {
 	}
 	if d, ok := l.Direction(); ok {
 		st.Direction = string(d)
-		st.IsLocking = d == DirectionLocking
-		st.IsUnlocking = d == DirectionUnlock
-	} else {
-		st.Direction = ""
-		st.IsLocking = false
-		st.IsUnlocking = false
 	}
+	st.IsLocking = l.IsLocking()
+	st.IsUnlocking = l.IsUnlocking()
+	st.IsOpening = l.IsOpening()
 	return st
 }
 

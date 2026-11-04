@@ -32,6 +32,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Opening an HmIP-DLD latch is no longer reported as locking.** Pulling
+  the latch moves the motor up while the bolt is already unlocked, then down
+  back to the unlocked position. The lock state reported that return
+  movement as `is_locking`, so a client saw *unlocking → locking → unlocked*
+  for an action that never moved the bolt. The lock now remembers the
+  opening until the motor stops and reports both movements under the new
+  field `is_opening`; `is_locking` and `is_unlocking` stay false for them.
+  The HA lock state (`lock_state`) and the Matter DoorLock state were not
+  affected.
 - **Matter colour lights on arm64 hosts.** The conversions between colour
   temperature, hue/saturation and XY that the bridge applies to colour
   lights now compute the same values on arm64 as on amd64 and in matter.js.

@@ -81,7 +81,7 @@ func newIPLockDevice(t *testing.T, model string, lockChannel, jammedChannel int)
 	// HmIP door locks report the motor's last direction under
 	// ACTIVITY_STATE; they carry no DIRECTION parameter at all.
 	putLockWireDP(t, lockCh, hmenum.ParameterActivityState, hmenum.ParameterTypeEnum,
-		[]string{"UNKNOWN", "STABLE", "UP", "DOWN"})
+		[]string{"UNKNOWN", "UP", "DOWN", "STABLE"})
 	putLockWireDP(t, chs[jammedChannel], hmenum.ParameterErrorJammed, hmenum.ParameterTypeBool, nil)
 
 	if err := custom.CreateCustomDataPoints(dev, custom.DefaultRegistry()); err != nil {
