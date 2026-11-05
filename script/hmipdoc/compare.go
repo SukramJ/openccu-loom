@@ -411,7 +411,8 @@ func joinUnique(values []string) string {
 func report(latest map[string]*section, sections []*section, cat catalog) []string {
 	a := analyse(latest, cat)
 	out := make([]string, 0, 64)
-	out = append(out,
+	out = append(
+		out,
 		"## 1. Coverage", "",
 		fmt.Sprintf("- Models with a current section: %d", a.models),
 		fmt.Sprintf("- With a configuration: %d", a.models-len(a.noConfig)),
