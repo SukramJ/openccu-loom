@@ -61,6 +61,11 @@ type Irrigation struct {
 	// FieldGroupState mapping or the device does not expose it on the
 	// resolved channel.
 	groupStateDP GroupStateDataPoint
+
+	// durationTimer is true when the channel carries DURATION_VALUE and
+	// DURATION_UNIT, so a timed open writes that pair instead of ON_TIME. A
+	// channel of an HmIP-WSM with firmware 1.4.12 has the pair and no ON_TIME.
+	durationTimer bool
 }
 
 // NewIrrigation constructs an Irrigation valve that wraps the
@@ -80,11 +85,21 @@ func NewIrrigation(ch *device.Channel, group custom.RebasedChannelGroupConfig) *
 		return nil
 	}
 	v := &Irrigation{
-		Switch:     sw,
-		groupState: custom.NewGroupState(),
+		Switch:        sw,
+		groupState:    custom.NewGroupState(),
+		durationTimer: carriesDurationTimer(ch, group),
 	}
 	v.registerIrrigationServices()
 	return v
+}
+
+// carriesDurationTimer reports whether the schema's duration slots resolve to
+// parameters that the device carries.
+func carriesDurationTimer(ch *device.Channel, group custom.RebasedChannelGroupConfig) bool {
+	valueCh, valueParam := custom.ResolveSlotOr(ch, group, hmenum.FieldDurationValue, hmenum.ParameterDurationValue)
+	unitCh, unitParam := custom.ResolveSlotOr(ch, group, hmenum.FieldDurationUnit, hmenum.ParameterDurationUnit)
+	return valueCh != nil && unitCh != nil &&
+		valueCh.Parameter(valueParam) != nil && unitCh.Parameter(unitParam) != nil
 }
 
 // GroupState returns the group-membership tracker.
@@ -149,11 +164,12 @@ func (v *Irrigation) IsOpen() (open, observed bool) { return v.Value() }
 func (v *Irrigation) OnState(open bool) { v.OnEvent(open) }
 
 // Open opens the valve. When duration > 0 the operation is sent as a
-// single atomic put_paramset bundle of {ON_TIME, STATE}. Without
-// duration the call collapses to a single SetValue.
+// single atomic put_paramset bundle of the timer parameters and STATE: {ON_TIME,
+// STATE}, or {DURATION_VALUE, DURATION_UNIT, STATE} on a channel that carries the
+// pair. Without duration the call collapses to a single SetValue.
 //
 // When duration > 0 a [generic.CallParameterCollector] is attached to
-// ctx for forward-compatible batching of ON_TIME + STATE. Mirrors
+// ctx for forward-compatible batching of the timer + STATE. Mirrors
 func (v *Irrigation) Open(ctx context.Context, duration time.Duration, priority hmenum.CommandPriority) error {
 	ctx = custom.EnsureContext(ctx)
 	if duration > 0 {
@@ -162,6 +178,9 @@ func (v *Irrigation) Open(ctx context.Context, duration time.Duration, priority 
 		}
 		coll := generic.NewCollector(generic.WriterAsBackend(v.Writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
+		if v.durationTimer {
+			return generic.FlushCollector(ctx, coll, v.stageDurationOpen(coll, duration))
+		}
 		// ON_TIME + STATE are only staged by TurnOnWithTimer; the wire
 		// call happens in the flush, so its error is the command result.
 		return generic.FlushCollector(ctx, coll, v.TurnOnWithTimer(ctx, duration, priority))
@@ -170,6 +189,26 @@ func (v *Irrigation) Open(ctx context.Context, duration time.Duration, priority 
 		return nil
 	}
 	return v.Set(ctx, true, priority)
+}
+
+// stageDurationOpen stages DURATION_VALUE, DURATION_UNIT and STATE. The wire call
+// happens in the flush, so the flush error is the command result.
+func (v *Irrigation) stageDurationOpen(coll *generic.CallParameterCollector, duration time.Duration) error {
+	if !v.IsWritable() {
+		return generic.ErrNotWritable
+	}
+	value, unit := custom.EncodeTimerDuration(duration)
+	addr := v.Key.ChannelAddress
+	if err := coll.AddParam(addr, v.Key.ParamsetKey, string(hmenum.ParameterDurationValue), value, 0); err != nil {
+		return fmt.Errorf("valve: stage DURATION_VALUE: %w", err)
+	}
+	if err := coll.AddParam(addr, v.Key.ParamsetKey, string(hmenum.ParameterDurationUnit), unit, 0); err != nil {
+		return fmt.Errorf("valve: stage DURATION_UNIT: %w", err)
+	}
+	if err := coll.Add(v.Switch, true, 0); err != nil {
+		return fmt.Errorf("valve: stage STATE: %w", err)
+	}
+	return nil
 }
 
 // Close closes the valve immediately. Any pending ON_TIME deferred by a

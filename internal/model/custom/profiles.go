@@ -1132,7 +1132,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
 		ScheduleChannelNo: nil,
 		Extended:          nil,
-		Config:            ProfileConfigs[hmenum.DeviceProfile("IPRGBW")],
+		Config:            ipRGBWSingleChannelConfig(),
 	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPGarage"),
