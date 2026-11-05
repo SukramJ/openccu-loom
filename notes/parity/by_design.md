@@ -3550,3 +3550,18 @@ the string the stream carried.
 
 **Guard.** `TestTypedValueUsesParamsetDescription`
 (`internal/central/adapter/lite_values_test.go`).
+
+## HmIPW-DRS4 has its own profile, the reference shares one prefix
+
+**Divergence.** The reference registers `HmIPW-DRS` with the eight base channels
+2 to 30 (`model/custom/switch.py:102`), and `HmIPW-DRS4` resolves to it by
+prefix. Loom registers `hmipw-drs4` with the bases 2, 6, 10 and 14 and keeps
+`hmipw-drs` for `HmIPW-DRS8` (`internal/model/custom/profiles.go`).
+
+**Why.** The eQ-3 device documentation, crRFD 1.60.1, section 133 lists channels
+0 to 17 for `HmIPW-DRS4`, with channel 17 as `SWITCH_WEEK_PROFILE`. The shared
+profile declares groups 18, 22, 26 and 30 without channels and takes channel 17
+as the state channel of group 18.
+
+**Guard.** `TestDRSVariantsGroupOnlyTheirOwnChannels`
+(`internal/model/custom/drs_channels_test.go`).

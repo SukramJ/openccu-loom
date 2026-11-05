@@ -53,6 +53,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   primary, 6 and 7 as secondaries, 4 as the state channel. `HmIP-BDT` is
   unchanged. On an existing HmIP-BDT-I the light's data point moves to
   channel 5.
+- **HmIPW-DRS4 no longer reports channel groups it does not have.** The model
+  used the eight-output profile of `HmIPW-DRS8`, although it has four outputs.
+  That declared groups 18, 22, 26 and 30, and put the week-profile channel 17
+  into group 18. It now has its own profile with groups 2, 6, 10 and 14.
+  Channel 17 reports no group any more. The switches on channels 2–16 are
+  unchanged.
+- **HmIP-FS6 no longer exposes `OPERATING_VOLTAGE`.** It now hides the
+  parameter like `HmIP-FSM`. An automation that reads this value on an
+  HmIP-FS6 loses it.
 
 ## [0.96.0] - 2026-10-31
 

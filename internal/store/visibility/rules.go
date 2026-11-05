@@ -465,6 +465,7 @@ var ignoreParametersByDevice = map[string]map[string]struct{}{
 		"HmIP-DR",
 		"HmIP-FDT",
 		"HmIP-FROLL",
+		"HmIP-FS6",
 		"HmIP-FSM",
 		"HmIP-MOD-OC8",
 		// Inert for HmIP-PCBS and HmIP-PCBS-BAT for the reason spelled out
