@@ -39,6 +39,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **godevccu v0.10.1 → v0.11.0.** The simulator carries an HmIP-BDT-I
+  fixture from a device export, so the HmIP-BDT-I profile is now checked
+  against real device data by the fleet-wide tests. The module is built with
+  Go 1.27.3, which this repository already targets. Tests only; the daemon
+  does not change.
 - **go-fabric v0.16.0.** The Matter stack moves from v0.15.6 to v0.16.0,
   with the security fixes of its whole-codebase review: an Interaction Model
   message on the unsecured session is dropped, PASE sessions close when

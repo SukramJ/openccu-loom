@@ -13,8 +13,8 @@ github.com/SukramJ/go-mqtt v1.7.0 h1:7yjVrUrlWD3u2hjqQkT3gEGoE+YMIUiSmQ+vU/7Ouxc
 github.com/SukramJ/go-mqtt v1.7.0/go.mod h1:aZERJuvzn/l627LZUkbZaGh8zhZnfIDcI2tbYM9oxzY=
 github.com/SukramJ/go-openccu-data v0.3.0 h1:XF9QQy3otMTuvjvcGiV0vwi0/GTapC/vvmYEPwdsgXk=
 github.com/SukramJ/go-openccu-data v0.3.0/go.mod h1:H6EmkW8BglTusAYguH653yQ66xHdJMzsvdUotPQlvq0=
-github.com/SukramJ/godevccu v0.10.1 h1:n9oTXQ5X5cY+7cNVW1Riw6/CBExvr5IFlQOg4aH7pv4=
-github.com/SukramJ/godevccu v0.10.1/go.mod h1:yId3SWQJFFmUd0CBJ1RYmDGab3pTKJQody/tXAXVfYo=
+github.com/SukramJ/godevccu v0.11.0 h1:PYZzERXSREbCccnwVGSYWia4GKZFveurMmYGsjiCL54=
+github.com/SukramJ/godevccu v0.11.0/go.mod h1:0wcfCsLhv6Gb+oG9wYf8woQfXs8q9WkMQyzRBc1Vw9g=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
