@@ -356,8 +356,9 @@ func (s *SchedulesDomain) CopyClimateProfile(
 	return nil
 }
 
-// ListScheduleDevices returns every device that carries a week schedule,
-// across every central, sorted by central then address.
+// ListScheduleDevices returns one entry per week schedule across every
+// central, sorted by central, address and channel. A device with two
+// schedules (HmIP-WGT: heating and switching) appears twice.
 //
 // Type-derived on purpose. FindScheduleChannel resolves the same question
 // exactly for one device and pays a MASTER read for the climate case; run
@@ -372,31 +373,61 @@ func (s *SchedulesDomain) ListScheduleDevices(_ context.Context) ([]hmapi.Schedu
 	var out []hmapi.ScheduleDeviceSummary
 	for _, u := range s.registry.List() {
 		for _, dev := range u.ModelRegistry.List() {
-			ch, kind, ok := scheduleChannelByType(dev)
-			if !ok {
-				continue
+			for _, sc := range scheduleChannelsByType(dev) {
+				out = append(out, hmapi.ScheduleDeviceSummary{
+					Central: u.Name(),
+					Address: dev.Address,
+					Name:    dev.Name(),
+					Model:   dev.Model,
+					Channel: hmapi.ScheduleChannelRef{
+						Address: sc.channel.Address,
+						Number:  sc.channel.Number,
+						Device:  dev.Address,
+					},
+					Kind: sc.kind,
+				})
 			}
-			out = append(out, hmapi.ScheduleDeviceSummary{
-				Central: u.Name(),
-				Address: dev.Address,
-				Name:    dev.Name(),
-				Model:   dev.Model,
-				Channel: hmapi.ScheduleChannelRef{
-					Address: ch.Address,
-					Number:  ch.Number,
-					Device:  dev.Address,
-				},
-				Kind: kind,
-			})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Central != out[j].Central {
 			return out[i].Central < out[j].Central
 		}
-		return out[i].Address < out[j].Address
+		if out[i].Address != out[j].Address {
+			return out[i].Address < out[j].Address
+		}
+		return out[i].Channel.Number < out[j].Channel.Number
 	})
 	return out, nil
+}
+
+// scheduleChannel is one week schedule of a device: the channel that carries
+// it and its kind ("week_profile" or "climate").
+type scheduleChannel struct {
+	channel *device.Channel
+	kind    string
+}
+
+// scheduleChannelsByType lists the week schedules of a device: the one
+// [scheduleChannelByType] picks, and next to a WEEK_PROFILE channel the
+// climate schedule a thermostat channel carries on its own (HmIP-WGT). The
+// attached climate descriptor is the record of that second schedule;
+// [DevicePipeline.normalizeClimateWeekProfiles] leaves it on its climate
+// channel only on a device with a separate switch schedule, and moves it onto
+// the WEEK_PROFILE channel everywhere else, where it is the same schedule.
+func scheduleChannelsByType(dev *device.Device) []scheduleChannel {
+	ch, kind, ok := scheduleChannelByType(dev)
+	if !ok {
+		return nil
+	}
+	out := []scheduleChannel{{channel: ch, kind: kind}}
+	if kind != "week_profile" {
+		return out
+	}
+	if climate := existingClimateWeekProfileChannel(dev); climate != nil && climate.Address != ch.Address {
+		out = append(out, scheduleChannel{channel: climate, kind: "climate"})
+	}
+	return out
 }
 
 // scheduleChannelByType picks the schedule-carrying channel from the

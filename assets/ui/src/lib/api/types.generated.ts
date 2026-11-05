@@ -838,11 +838,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Fleet-wide overview of devices carrying a week schedule
-         * @description Returns every device that carries a week schedule, across all
-         *     configured centrals, with the channel expected to hold it. The
-         *     counterpart to `/links`: the one way to answer "which devices
-         *     have a schedule at all" without opening each device in turn.
+         * Fleet-wide overview of week schedules
+         * @description Returns one entry per week schedule, across all configured
+         *     centrals, with the channel expected to hold it. A device with two
+         *     schedules is listed twice: an HmIP-WGT carries a heating schedule
+         *     on its climate channel and a switch schedule on its
+         *     SWITCH_WEEK_PROFILE channel. The counterpart to `/links`: the one
+         *     way to answer "which devices have a schedule at all" without
+         *     opening each device in turn. `device` narrows the list to one
+         *     device, which is how a device page learns how many schedules it
+         *     has.
          *
          *     The list is derived from channel **types** — a `*_WEEK_PROFILE`
          *     channel, or one of the climate channel types that carry the
@@ -9856,7 +9861,7 @@ export interface components {
             /** @description Hold a newly-paired device until an operator accepts it from the inbox (it is then built) and releases it (it then reaches MQTT, Matter and webhooks). Devices already known are never held. false builds and publishes a new device immediately (default true). */
             delay_new_device_creation?: boolean;
         };
-        /** @description One device that carries a week schedule. */
+        /** @description One week schedule of a device. */
         ScheduleDeviceSummary: {
             /** @description The CCU this device belongs to. */
             central: string;
@@ -13290,7 +13295,10 @@ export interface operations {
     };
     listSchedules: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Device address; only that device's schedules are returned. */
+                device?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

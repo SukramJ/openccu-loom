@@ -1042,6 +1042,40 @@ func TestListScheduleDevicesPrefersTheDedicatedChannel(t *testing.T) {
 	}
 }
 
+// TestListScheduleDevicesListsBothSchedulesOfAGlassThermostat pins one entry
+// per schedule. An HmIP-WGTC carries its heating schedule in the MASTER
+// paramset of the climate channel 8 and its switch schedule on the
+// SWITCH_WEEK_PROFILE channel 7; the pipeline records the first as a climate
+// week profile on channel 8. A climate profile on the WEEK_PROFILE channel
+// itself (where the pipeline moves it on every other device) is the same
+// schedule and stays one entry.
+func TestListScheduleDevicesListsBothSchedulesOfAGlassThermostat(t *testing.T) {
+	t.Parallel()
+
+	reg, unit := scheduleTestRegistry(t)
+	wgtc := scheduleTestDevice(unit, "VCU4105035", "HmIP-WGTC", "Glass thermostat")
+	wgtc.AddChannel("VCU4105035:7", 7, "SWITCH_WEEK_PROFILE", hmenum.ParamsetKeyMaster)
+	wgtc.AddChannel("VCU4105035:8", 8, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyMaster)
+	attachWeekProfileToChannel(wgtc.Channel("VCU4105035:8"), unit.Name())
+
+	tcIt := scheduleTestDevice(unit, "VCU4105036", "HM-TC-IT-WM-W-EU", "Wall thermostat")
+	tcIt.AddChannel("VCU4105036:7", 7, "HEATING_WEEK_PROFILE", hmenum.ParamsetKeyMaster)
+	attachWeekProfileToChannel(tcIt.Channel("VCU4105036:7"), unit.Name())
+
+	got, err := NewSchedulesDomain(reg, nil).ListScheduleDevices(context.Background())
+	if err != nil {
+		t.Fatalf("ListScheduleDevices: %v", err)
+	}
+	summary := make([]string, 0, len(got))
+	for _, s := range got {
+		summary = append(summary, fmt.Sprintf("%s:%d/%s", s.Address, s.Channel.Number, s.Kind))
+	}
+	want := []string{"VCU4105035:7/week_profile", "VCU4105035:8/climate", "VCU4105036:7/week_profile"}
+	if fmt.Sprint(summary) != fmt.Sprint(want) {
+		t.Errorf("schedules = %v, want %v", summary, want)
+	}
+}
+
 // TestListScheduleDevicesIncludesDeviceRootOnlySchedule is the regression
 // guard for HM-TC-IT-WM-W-EU (and any device whose schedule lives only on
 // the device-root MASTER paramset with no dedicated WEEK_PROFILE channel

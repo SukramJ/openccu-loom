@@ -160,6 +160,10 @@ var relevantMasterParamsetsByDevice = map[string]ModelMasterEntry{
 		Channels:   channelSet(8, 14),
 		Parameters: climateMasterParameters,
 	},
+	"HmIP-WT": {
+		Channels:   channelSet(1),
+		Parameters: climateMasterParameters,
+	},
 	"HmIP-WTH": {
 		Channels:   channelSet(1),
 		Parameters: climateMasterParameters,
@@ -184,7 +188,27 @@ var relevantMasterParamsetsByDevice = map[string]ModelMasterEntry{
 		Channels:   channelRange(1, 7),
 		Parameters: channelOperationModeSet,
 	},
+	"HmIPW-SCTHD": {
+		Channels:   channelSet(1),
+		Parameters: climateMasterParameters,
+	},
 	"HmIPW-STH": {
+		Channels:   channelSet(1),
+		Parameters: climateMasterParameters,
+	},
+	"HmIPW-WGT": {
+		Channels:   channelSet(4),
+		Parameters: climateMasterParameters,
+	},
+	"HmIPW-WTH": {
+		Channels:   channelSet(1),
+		Parameters: climateMasterParameters,
+	},
+	"KW-STATH": {
+		Channels:   channelSet(1),
+		Parameters: climateMasterParameters,
+	},
+	"KW-UKETRV": {
 		Channels:   channelSet(1),
 		Parameters: climateMasterParameters,
 	},

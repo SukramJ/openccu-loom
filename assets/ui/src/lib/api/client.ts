@@ -1827,8 +1827,11 @@ export const api = {
   // Fleet-wide overview of devices that carry a week schedule. The
   // counterpart to listAllLinks; type-derived server-side, so it costs
   // no CCU traffic.
-  listSchedules() {
-    return request<{ items: ScheduleDeviceSummary[] }>(`/schedules`);
+  // One entry per week schedule; `device` narrows the list to one device,
+  // which can carry two (HmIP-WGT: heating and switching).
+  listSchedules(device?: string) {
+    const query = device ? `?device=${encodeURIComponent(device)}` : "";
+    return request<{ items: ScheduleDeviceSummary[] }>(`/schedules${query}`);
   },
   // --- Surface profiles ---------------------------------------
   // The registry plus the resolved visibility of the live profile.

@@ -15,9 +15,12 @@
 
   type Props = {
     address: string;
+    // Set when the device carries more than one schedule; the device-level
+    // endpoints resolve only one of them.
+    channelNo?: number;
   };
 
-  let { address }: Props = $props();
+  let { address, channelNo }: Props = $props();
 
   // Local working copy; never mutated by the server fetch directly so
   // we keep a clean "server snapshot" to diff against (dirty flag) and
@@ -52,7 +55,10 @@
     loadError = null;
     notSupported = false;
     try {
-      const s = await api.getDeviceSchedule(address);
+      const s =
+        channelNo === undefined
+          ? await api.getDeviceSchedule(address)
+          : await api.getSchedule(address, channelNo);
       serverSchedule = deepClone(s);
       schedule = deepClone(s);
       if (!s.profiles) s.profiles = {};
@@ -99,7 +105,8 @@
     if (!schedule || !isDirty) return;
     saving = true;
     try {
-      await api.putDeviceSchedule(address, schedule);
+      if (channelNo === undefined) await api.putDeviceSchedule(address, schedule);
+      else await api.putSchedule(address, channelNo, schedule);
       toastStore.success(t("schedule.saved_toast"));
       await load();
     } catch (err) {
@@ -120,7 +127,8 @@
     }
     saving = true;
     try {
-      await api.setDeviceActiveProfile(address, pid);
+      if (channelNo === undefined) await api.setDeviceActiveProfile(address, pid);
+      else await api.setActiveProfile(address, channelNo, pid);
       activeProfile = pid;
       if (schedule) schedule.active_profile = pid;
       if (serverSchedule) serverSchedule.active_profile = pid;

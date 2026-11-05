@@ -3570,3 +3570,51 @@ channel type (`resolveChannelGroup`, `internal/model/custom/materialize.go`; ADR
 `TestRGBWVariantsBindLightToTheirOwnChannels`,
 `TestWGTBindsDimmerAndSwitchToTheirOwnChannels` (`internal/model/custom/`), and
 `TestCatalogueFitsEveryFixture` (`tests/integration/`).
+
+## Week schedules: target bits from the editors' lists, two schedules per device
+
+**Context.** The reference added the second schedule of the glass wall
+thermostats and their target bits (aiohomematic PRs 3500 to 3502, 2026-11-05).
+Loom does the same, with three differences.
+
+**Target bits for seven families, not two.** Both CCU weekly-program editors
+write the target list out by hand for HmIP-WKP, HmIP-MOD-WD-VK, the four
+HmIP(W)-SMO230 models, HmIP-WGS, HmIPW-WGS, HmIP-WGT and HmIPW-WGT
+(`OpenCCU-Base/www/config/easymodes/js/HmIPWeeklyProgram.js:405-430`,
+`OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:56-87`).
+Loom takes all of them (`editorTargetChannels`,
+`internal/model/weekprofile/channel_keys.go`). The reference's
+`_TARGET_CHANNELS_BY_MODEL_PREFIX` (`model/week_profile_data_point.py`) has the
+two glass wall thermostat prefixes only. Measured over the device descriptions
+of the eQ-3 documentation crRFD 1.60.1 and the godevccu fixtures, deriving the
+list from the channel types gives a different list for every one of the seven
+families except HmIP-MOD-WD-VK, which has no description there.
+
+**Target keys from the channel groups.** Loom keys a target `<group>_<member>`
+from the channel groups: on an HmIP-WGT `1_1` is channel 2 and `2_1`, `2_2`,
+`2_3` are channels 4 to 6. The reference derives the key from the bit, three
+per actor: `1_1`, `1_2`, `1_3`, `2_1`. The bits written are the same; the keys
+are each stack's own API.
+
+**Domain of the switch schedule.** Loom takes it from the schedule channel's
+type, `SWITCH_WEEK_PROFILE`, so `switch` (`resolveScheduleDomain`,
+`internal/central/adapter/schedules.go`). The reference lets the backlight
+dimmer own the schedule and reports `light`. Neither models the editor's two
+modes for these devices, a backlight level or an on/off switch per entry
+(`HmIPWeeklyProgram.js:151-191`).
+
+**No separate unique-id prefix.** The reference gives the climate schedule of
+these devices the prefix `climate_week_profile` so the switch schedule keeps
+its id. Loom keys a schedule entity by its channel (`scheduleSlot`,
+`internal/north/mqtt/discovery_schedule.go`), so the two do not collide.
+
+**Not modelled.** In the operating mode `modeBWTH` an HmIP-WGT addresses
+channel 2 only (`iseHmIPWeeklyProgram.js:76-83`); Loom still offers the switch
+receivers as targets. The HmIP-BSL list depends on the firmware major version
+(`:48-54`), which the bit computation is not given; the derivation yields the
+list for firmware 2 and later.
+
+**Guard.** `TestTargetBitOrderTakesTheListTheEditorsWriteOut`
+(`internal/model/weekprofile/`), `TestGlassThermostatKeepsBothSchedules`
+(`tests/integration/`), `TestListScheduleDevicesListsBothSchedulesOfAGlassThermostat`
+(`internal/central/adapter/`).

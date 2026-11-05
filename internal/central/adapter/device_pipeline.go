@@ -933,8 +933,9 @@ func (p *DevicePipeline) finishIngest(
 	// with the reference has_schedule gate and the channel the loom-client
 	// probes: detach profiles on devices that declare no schedule channel
 	// (ALPHA-IP-RBG) and relocate the rest onto the canonical schedule channel
-	// (WEEK_PROFILE channel, else the climate custom-DP channel — HM-TC-IT,
-	// HmIP-WGTC). Runs after custom-DP materialisation so the registry +
+	// (WEEK_PROFILE channel, else the climate custom-DP channel — HM-TC-IT);
+	// a device with a second, switch schedule keeps its climate profile where
+	// the slots are (HmIP-WGTC). Runs after custom-DP materialisation so the registry +
 	// custom-DP channels are authoritative, and before refinement so a pruned
 	// profile is never bound to backend IO.
 	p.normalizeClimateWeekProfiles(interfaceID)

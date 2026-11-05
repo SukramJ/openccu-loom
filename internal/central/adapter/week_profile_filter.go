@@ -110,12 +110,12 @@ func attachNonClimateWeekProfileToDevice(dev *device.Device, centralName string)
 	if scheduleCh == nil {
 		return
 	}
-	// Skip when a climate WeekProfile already lives on the device — the
-	// two surfaces are mutually exclusive.
-	for _, ch := range dev.Channels() {
-		if wp := ch.WeekProfile(); wp != nil && wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
-			return
-		}
+	// A climate week profile elsewhere on the device is a second, separate
+	// schedule (HmIP-WGT: heating on channel 8, switching on channel 7) and
+	// does not stop this one. Only a climate profile on the schedule channel
+	// itself would be overwritten, so that one is left alone.
+	if wp := scheduleCh.WeekProfile(); wp != nil && wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
+		return
 	}
 	// Suppress the redundant target-lock wire DPs on the schedule channel
 	// in every case — even when no CDP-backed target map can be derived
@@ -353,8 +353,9 @@ func (p *DevicePipeline) attachNonClimateWeekProfiles(interfaceID string) {
 //     the climate custom-DP channel. That is exactly the channel the
 //     loom-client probes for a week profile (adapter._bootstrap_schedules), so
 //     a profile the heuristic parked on the wrong channel (HM-TC-IT on the
-//     device root, HmIP-WGTC on the climate channel instead of its
-//     SWITCH_WEEK_PROFILE channel) is no longer a 404.
+//     device root) is no longer a 404.
+//   - A device with a second, non-climate schedule (HmIP-WGTC) keeps its
+//     climate profile on the climate channel that carries the slots.
 //
 // Idempotent: a profile already on the canonical channel is left untouched.
 func (p *DevicePipeline) normalizeClimateWeekProfiles(interfaceID string) {
@@ -376,14 +377,12 @@ func (p *DevicePipeline) normalizeClimateWeekProfiles(interfaceID string) {
 			existing.AttachWeekProfile(nil)
 			continue
 		}
-		// A device that also carries WEEK_PROGRAM_CHANNEL_LOCKS exposes its
-		// schedule as a non-climate DefaultWeekProfile (+ ScheduleChannelSwitches)
-		// even when it has a climate CDP (HmIP-WGTC). Detach the slot-param
-		// climate profile so attachNonClimateWeekProfiles takes over and builds
-		// the Default profile with its schedule-enable switches on the
-		// WEEK_PROGRAM_CHANNEL_LOCKS channel.
+		// A device that also carries WEEK_PROGRAM_CHANNEL_LOCKS has two week
+		// programs (HmIP-WGTC: the heating schedule in the MASTER paramset of
+		// its climate channel 8, the switch schedule on its SWITCH_WEEK_PROFILE
+		// channel 7). The climate profile stays on the channel whose slots
+		// carry it; attachNonClimateWeekProfiles adds the switch schedule.
 		if findScheduleChannel(d) != nil {
-			existing.AttachWeekProfile(nil)
 			continue
 		}
 		canonical := canonicalScheduleChannel(d)

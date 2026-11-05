@@ -57,13 +57,12 @@ var scheduleRelevantChannelTypeTokens = []string{
 //	    list.
 //
 // The list is every channel whose CHANNEL_TYPE carries one of
-// [scheduleRelevantChannelTypeTokens], ascending by channel number. The
-// per-family lists the device-page editor spells out by hand (HmIP-BSL
-// `[4,5,6,8,9,10,12,13,14]`, HmIP-WKP `[1,3,5,...,15]`, HmIP-SMO230
-// `[10,11,12]`, a window drive `[2]`, HmIP-WGS `[7,9,10,11]`, :394-418) are
-// that derivation written out, which is why the WebUI editor, which
-// derives the list, and the device-page editor, which lists it, address
-// the same bits. A set bit in WEEK_PROGRAM_CHANNEL_LOCKS means LOCKED
+// [scheduleRelevantChannelTypeTokens], ascending by channel number, except
+// for the families both editors list by hand ([editorTargetChannels]): there
+// the hand-written list is the list, and it is not the derivation — the glass
+// wall devices add the BACKLIGHTING_RECEIVER no token matches, HmIP-SMO230
+// leaves out its STATE_RESET_VIRTUAL_RECEIVER, HmIP-WKP takes every second
+// ACCESS_TRANSCEIVER. A set bit in WEEK_PROGRAM_CHANNEL_LOCKS means LOCKED
 // (schedule disabled) — [ParseChannelLocks] carries the inversion.
 //
 // Two families are not positional, and the editor says so:
@@ -85,6 +84,22 @@ var scheduleRelevantChannelTypeTokens = []string{
 // firmware applies is not derivable from a channel number; it needs the
 // list, so callers hand the device's channels in and take the map out.
 func TargetBitOrder(model string, channels []TypedChannel) map[int]uint {
+	if listed := editorTargetChannels(model); listed != nil {
+		carried := make(map[int]bool, len(channels))
+		for _, ch := range channels {
+			carried[ch.No] = true
+		}
+		out := make(map[int]uint, len(listed))
+		for index, no := range listed {
+			if carried[no] {
+				out[no] = uint(index) //nolint:gosec // slice index
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
 	relevant := make([]TypedChannel, 0, len(channels))
 	for _, ch := range channels {
 		if ch.No < 1 || !isScheduleRelevantChannelType(ch.Type) {
@@ -126,6 +141,55 @@ func isScheduleRelevantChannelType(channelType string) bool {
 		}
 	}
 	return false
+}
+
+// editorTargetChannels returns the target-channel list both weekly-program
+// editors write out by hand for a model, or nil where they derive it. The bit
+// is the position in this list, as for a derived one (valCheckBox =
+// Math.pow(2, index), HmIPWeeklyProgram.js:2899 and :2926,
+// iseHmIPWeeklyProgram.js:357).
+//
+// The lists, the same in the device-page editor
+// (../OpenCCU-Base/www/config/easymodes/js/HmIPWeeklyProgram.js:405-430) and
+// in the WebUI editor (../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:56-87):
+//
+//   - HmIP-WKP [1,3,5,...,15], HmIP-MOD-WD-VK [2] and the four HmIP(W)-SMO230
+//     models [10,11,12] match the model exactly (_isDeviceType, :547).
+//   - HmIP-WGS [7,9,10,11], HmIPW-WGS [6], HmIP-WGT [2,4,5,6] and HmIPW-WGT [2]
+//     match as a substring (deviceType.id.includes), so HmIP-WGT also covers
+//     HmIP-WGTC and the -A variants.
+//
+// These are the expert lists. The simplified view of the WebUI editor shows a
+// shorter list ([7,9] for HmIP-WGS, [2,4] for HmIP-WGT) and computes its bits
+// as if every list held triples of one actor (tmpVal << 3, :358-364), which
+// contradicts the expert view for these families; the expert view agrees with
+// the device-page editor and with the read-back, so it is the one taken.
+//
+// HmIP-BSL is left to the derivation: its list depends on the firmware major
+// version (:48-54), which this function is not given, and for firmware 2 and
+// later the derivation yields the editor's list. In the operating mode
+// modeBWTH an HmIP-WGT addresses channel 2 only (:76-83); the bit of channel 2
+// is 0 in both modes, the switch receivers are simply no targets there.
+func editorTargetChannels(model string) []int {
+	switch model {
+	case "HmIP-WKP":
+		return []int{1, 3, 5, 7, 9, 11, 13, 15}
+	case "HmIP-MOD-WD-VK":
+		return []int{2}
+	case "HmIP-SMO230", "HmIP-SMO230-A", "HmIPW-SMO230", "HmIPW-SMO230-A":
+		return []int{10, 11, 12}
+	}
+	switch {
+	case strings.Contains(model, "HmIP-WGS"):
+		return []int{7, 9, 10, 11}
+	case strings.Contains(model, "HmIPW-WGS"):
+		return []int{6}
+	case strings.Contains(model, "HmIP-WGT"):
+		return []int{2, 4, 5, 6}
+	case strings.Contains(model, "HmIPW-WGT"):
+		return []int{2}
+	}
+	return nil
 }
 
 func isDALIUniversalLightModel(model string) bool {

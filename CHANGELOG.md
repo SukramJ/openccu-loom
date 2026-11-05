@@ -19,9 +19,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   release either way. The status reports `latest_prerelease` (REST, WS),
   and `addon_update` is now a configuration section the SPA can edit
   (API 15.3.0).
+- **Profiles for HmIP-WT, KW-STATH, KW-UKETRV, HmIP-WUA, ELV-SH-WUA,
+  HmIP-UDI-PB2 and HmIPW-WGT.** These models had generic data points only.
+  The thermostats `HmIP-WT`, `KW-STATH` and `KW-UKETRV` (also `-2`) get a
+  climate entity on channel 1 with their week schedule and the button lock on
+  channel 0. The dimmers `HmIP-WUA` and `ELV-SH-WUA` (channel 2) and
+  `HmIP-UDI-PB2` (also `-A`, channel 5) get a light. The wired glass wall
+  thermostats `HmIPW-WGT`, `-A`, `HmIPW-WGTC` and `-A` get a climate entity on
+  channel 4, the backlight on channel 2 and the button lock. Their channel
+  layouts come from the eQ-3 device documentation; none of these models was
+  tested on a real device.
+- **Glass wall thermostats show both week programs.** An `HmIP-WGT` or
+  `HmIP-WGTC` has a heating schedule on its climate channel 8 and a switch
+  schedule on channel 7, which drives the backlight and the three switch
+  outputs. Before, such a device had no schedule at all. Now both are there,
+  and the device page shows a switch between the two. `GET /schedules` lists one entry per schedule, so such a device
+  appears twice, and takes `device=<address>` to list one device's schedules;
+  the MCP tool `list_schedules` takes the same filter (API 15.4.0).
 
 ### Changed
 
+- **godevccu v0.10.1 → v0.11.0.** The simulator carries an HmIP-BDT-I
+  fixture from a device export, so the HmIP-BDT-I profile is now checked
+  against real device data by the fleet-wide tests. The module is built with
+  Go 1.27.3, which this repository already targets. Tests only; the daemon
+  does not change.
 - **go-fabric v0.16.0.** The Matter stack moves from v0.15.6 to v0.16.0,
   with the security fixes of its whole-codebase review: an Interaction Model
   message on the unsecured session is dropped, PASE sessions close when
@@ -80,6 +102,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   This also applies to `-A` variants. With MQTT sub-devices on, these models
   have one multi-channel group left, so they no longer split into sub-devices,
   and their entities move back to the parent device.
+- **Week-program targets on HmIP-WGT, HmIP-WGS, HmIP-SMO230, HmIP-WKP and
+  their wired variants.** A schedule entry addresses its target channels by
+  bit, and the bit is the channel's position in a list. For these families
+  the CCU's weekly-program editor writes the list out by hand, and it differs
+  from the list OpenCCU-Loom derived from the channel types: the backlight
+  was missing on the glass wall devices, `HmIP-SMO230` had an extra channel,
+  `HmIP-WKP` took every channel instead of every second. An entry written for
+  one output could therefore switch another one. The lists now come from the
+  editor. Schedules already on such a device are read with the corrected
+  bits too, so their targets may show differently than before.
+- **HmIP-DLP reports a jammed lock as its own entity.** `ERROR_JAMMED` is on
+  the lock channel 12 of this model, but it was registered for channel 0,
+  which does not have it. The value was used by the lock but had no entity of
+  its own, unlike on `HmIP-DLD`.
+- **The MASTER parameters of HmIPW-WTH and HmIPW-SCTHD are read.** Like on
+  `HmIPW-STH`, `TEMPERATURE_MINIMUM`, `TEMPERATURE_MAXIMUM`,
+  `TEMPERATURE_OFFSET` and the other climate settings on channel 1 are now
+  loaded as data points.
 - **A device profile binds only channels the device really has.** The catalogue
   now also declares which channel types each role accepts, and a channel binds
   only if the device carries it with an accepted type (ADR 0087). Apart from the

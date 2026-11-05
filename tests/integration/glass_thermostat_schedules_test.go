@@ -1,0 +1,104 @@
+//go:build integration
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 SukramJ.
+
+package integration
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"sort"
+	"testing"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/ccudata"
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
+	"github.com/SukramJ/openccu-loom/internal/store/visibility"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// ingestFixtureDevice runs one embedded fixture model through the production
+// ingest and returns the hydrated device.
+func ingestFixtureDevice(t *testing.T, model string) *device.Device {
+	t.Helper()
+	srv := startMockCCUWithDevices(t, []string{model})
+	xmlClient := newXMLRPCClient(t, srv.URL())
+	backend := backends.NewCcuBackend(&xmlrpcBackendCaller{client: xmlClient}, nil, nil)
+
+	c, err := central.New(central.Config{Name: "fixture-ccu"})
+	if err != nil {
+		t.Fatalf("central: %v", err)
+	}
+	translations, err := ccudata.LoadTranslationsEmbedded()
+	if err != nil {
+		t.Fatalf("translations: %v", err)
+	}
+	pipeline := adapter.NewDevicePipeline(c).
+		WithTranslations(translations, snapshotLocale()).
+		WithVisibility(visibility.NewRegistry())
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := pipeline.IngestFromBackend(
+		ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, slog.New(slog.DiscardHandler),
+	); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	for _, dev := range c.ModelRegistry.List() {
+		if dev.Model == model {
+			return dev
+		}
+	}
+	t.Fatalf("the fixture %s hydrated no device", model)
+	return nil
+}
+
+// TestGlassThermostatKeepsBothSchedules pins the two week programs of the
+// HmIP-WGTC on the recorded device description: the heating schedule lives in
+// the MASTER paramset of the climate channel 8 (P<n>_* slots) and the switch
+// schedule in that of the SWITCH_WEEK_PROFILE channel 7 (<nn>_WP_* slots). A
+// device keeping only one of them leaves the other unreachable.
+//
+// The switch schedule addresses the backlight 2 and the switch receivers 4, 5
+// and 6, with the bit the CCU's weekly-program editor gives each:
+// virtualChannels [2, 4, 5, 6] for every HmIP-WGT model
+// (OpenCCU-Base/www/config/easymodes/js/HmIPWeeklyProgram.js:425-427) and
+// valCheckBox = 2^index over that list (:2926). The thermostat is no target.
+func TestGlassThermostatKeepsBothSchedules(t *testing.T) {
+	dev := ingestFixtureDevice(t, "HmIP-WGTC")
+
+	climate := dev.Channel(dev.Address + ":8").WeekProfile()
+	if climate == nil || climate.ScheduleType() != weekprofile.ScheduleTypeClimate {
+		t.Errorf("channel 8 carries no climate week profile (got %v)", climate)
+	}
+
+	switchCh := dev.Channel(dev.Address + ":7")
+	wp := switchCh.WeekProfile()
+	if wp == nil || wp.ScheduleType() != weekprofile.ScheduleTypeDefault {
+		t.Fatalf("channel 7 carries no switch week profile (got %v)", wp)
+	}
+	targets := wp.AvailableTargetChannels()
+	got := make([]string, 0, len(targets))
+	for key, info := range targets {
+		got = append(got, fmt.Sprintf("%s=ch%d/bit%d/known=%t", key, info.ChannelNo, info.Bit, info.BitKnown))
+	}
+	sort.Strings(got)
+	want := []string{
+		"1_1=ch2/bit0/known=true",
+		"2_1=ch4/bit1/known=true",
+		"2_2=ch5/bit2/known=true",
+		"2_3=ch6/bit3/known=true",
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("switch schedule targets = %v, want %v", got, want)
+	}
+	if n := len(dev.ScheduleChannelSwitches()); n != len(want) {
+		t.Errorf("schedule channel switches = %d, want %d", n, len(want))
+	}
+}

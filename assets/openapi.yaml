@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.3.0
+  version: 15.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1344,12 +1344,17 @@ paths:
   /schedules:
     get:
       operationId: listSchedules
-      summary: Fleet-wide overview of devices carrying a week schedule
+      summary: Fleet-wide overview of week schedules
       description: |
-        Returns every device that carries a week schedule, across all
-        configured centrals, with the channel expected to hold it. The
-        counterpart to `/links`: the one way to answer "which devices
-        have a schedule at all" without opening each device in turn.
+        Returns one entry per week schedule, across all configured
+        centrals, with the channel expected to hold it. A device with two
+        schedules is listed twice: an HmIP-WGT carries a heating schedule
+        on its climate channel and a switch schedule on its
+        SWITCH_WEEK_PROFILE channel. The counterpart to `/links`: the one
+        way to answer "which devices have a schedule at all" without
+        opening each device in turn. `device` narrows the list to one
+        device, which is how a device page learns how many schedules it
+        has.
 
         The list is derived from channel **types** — a `*_WEEK_PROFILE`
         channel, or one of the climate channel types that carry the
@@ -1359,6 +1364,12 @@ paths:
         pay for a question the detail view answers exactly once, on
         click. `kind` says which of the two paths matched.
       tags: [core]
+      parameters:
+        - in: query
+          name: device
+          required: false
+          schema: { type: string }
+          description: Device address; only that device's schedules are returned.
       responses:
         "200":
           description: OK
@@ -13946,7 +13957,7 @@ components:
     ScheduleDeviceSummary:
       type: object
       required: [central, address, name, channel, kind]
-      description: One device that carries a week schedule.
+      description: One week schedule of a device.
       properties:
         central:
           type: string
