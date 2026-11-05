@@ -71,10 +71,12 @@ type ListSchedulesResponse struct {
 	Items []ScheduleDeviceSummary `json:"items"`
 }
 
-// ListSchedules serves the fleet-wide overview of devices that carry a
-// week schedule — the counterpart to the direct-links list, and the one
-// way to answer "which devices have a schedule at all" without opening
-// every device in turn.
+// ListSchedules serves the fleet-wide overview of week schedules, one entry
+// per schedule — the counterpart to the direct-links list, and the one way
+// to answer "which devices have a schedule at all" without opening every
+// device in turn. The optional `device` query parameter narrows the list to
+// one device address, which is how a device page learns that it has two
+// schedules (HmIP-WGT).
 func ListSchedules(svc ScheduleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -88,11 +90,28 @@ func ListSchedules(svc ScheduleService) http.HandlerFunc {
 				"Schedule list failed", err)
 			return
 		}
+		if device := r.URL.Query().Get("device"); device != "" {
+			items = SchedulesOfDevice(items, device)
+		}
 		if items == nil {
 			items = []ScheduleDeviceSummary{}
 		}
 		JSON(w, http.StatusOK, ListSchedulesResponse{Items: items})
 	}
+}
+
+// SchedulesOfDevice returns the entries of items that belong to the device
+// address, in a new slice; the REST overview and the MCP list_schedules tool
+// narrow the list the same way. items is left untouched, since the service
+// may hand out a slice it keeps.
+func SchedulesOfDevice(items []ScheduleDeviceSummary, device string) []ScheduleDeviceSummary {
+	out := make([]ScheduleDeviceSummary, 0, 2)
+	for _, it := range items {
+		if it.Address == device {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // GetSchedule returns the full climate schedule for one channel.

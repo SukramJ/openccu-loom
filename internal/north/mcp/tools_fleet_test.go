@@ -524,6 +524,37 @@ func TestListSchedules_HappyPath(t *testing.T) {
 	}
 }
 
+// TestListSchedules_DeviceNarrowsTheList pins the optional device input: the
+// two schedules of one glass wall thermostat, not the rest of the fleet.
+func TestListSchedules_DeviceNarrowsTheList(t *testing.T) {
+	lister := &fakeScheduleLister{items: []hmapi.ScheduleDeviceSummary{
+		{Central: "alpha", Address: "VCU4105035", Channel: hmapi.ScheduleChannelRef{Number: 7}, Kind: "week_profile"},
+		{Central: "alpha", Address: "VCU4105035", Channel: hmapi.ScheduleChannelRef{Number: 8}, Kind: "climate"},
+		{Central: "alpha", Address: "0001D3C99C1234", Kind: "climate"},
+	}}
+	deps := fleetDeps()
+	deps.Schedules = lister
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_schedules", map[string]any{"device": "VCU4105035"})
+	if res.IsError {
+		t.Fatalf("list_schedules returned error: %v", res.Content)
+	}
+	var out struct {
+		Schedules []hmapi.ScheduleDeviceSummary `json:"schedules"`
+	}
+	unmarshalStructured(t, res, &out)
+	if len(out.Schedules) != 2 {
+		t.Fatalf("got %d schedules, want the device's two: %+v", len(out.Schedules), out.Schedules)
+	}
+	for _, s := range out.Schedules {
+		if s.Address != "VCU4105035" {
+			t.Errorf("schedule of another device in the list: %+v", s)
+		}
+	}
+}
+
 func TestListSchedules_EmptyReturnsEmptyArray(t *testing.T) {
 	deps := fleetDeps()
 	deps.Schedules = &fakeScheduleLister{}

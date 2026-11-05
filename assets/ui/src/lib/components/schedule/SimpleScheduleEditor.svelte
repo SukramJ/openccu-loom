@@ -19,9 +19,12 @@
     address: string;
     schedule: ClimateSchedule;
     onReload: () => void;
+    // Set when the device carries more than one schedule; the device-level
+    // endpoint resolves only one of them.
+    channelNo?: number;
   };
 
-  let { address, schedule, onReload }: Props = $props();
+  let { address, schedule, onReload, channelNo }: Props = $props();
 
   // Domain dispatches widget choice. Mirrors aiohomematic's
   // DataPointCategory mapping in week_profile.create_empty_schedule_group:
@@ -223,7 +226,8 @@
         domain: schedule.domain,
         simple_entries: entries,
       };
-      await api.putDeviceSchedule(address, payload);
+      if (channelNo === undefined) await api.putDeviceSchedule(address, payload);
+      else await api.putSchedule(address, channelNo, payload);
       toastStore.success(t("schedule.saved_toast"));
       onReload();
     } catch (err) {

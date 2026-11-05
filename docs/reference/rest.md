@@ -171,7 +171,7 @@ Live config section read / write / delete + schema introspection
 | GET | `/info` | Daemon build + runtime info | public |
 | GET | `/links` | Global direct-link overview (read-only) | viewer |
 | GET | `/sbom` | Software bill of materials of this build | viewer |
-| GET | `/schedules` | Fleet-wide overview of devices carrying a week schedule | viewer |
+| GET | `/schedules` | Fleet-wide overview of week schedules | viewer |
 | GET | `/system/ccu` | Per-central CCU metadata | viewer |
 | GET | `/system/config-changes` | Config fields changed since the daemon started | viewer |
 | GET | `/system/restart-pending` | Whether a saved config change needs a daemon restart | viewer |

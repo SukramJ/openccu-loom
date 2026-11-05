@@ -436,7 +436,9 @@ func registerListLinks(s *mcpsdk.Server, d Deps) {
 
 // --- schedules -------------------------------------------------------------
 
-type listSchedulesIn struct{}
+type listSchedulesIn struct {
+	Device string `json:"device,omitempty" jsonschema:"optional device address; narrows the list to the schedules of that device"`
+}
 
 type listSchedulesOut struct {
 	Schedules []hmapi.ScheduleDeviceSummary `json:"schedules"`
@@ -445,11 +447,14 @@ type listSchedulesOut struct {
 func registerListSchedules(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_schedules",
-		Description: "List every device across the fleet that carries a week schedule, with its schedule kind (week_profile or climate).",
-	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, _ listSchedulesIn) (*mcpsdk.CallToolResult, listSchedulesOut, error) {
+		Description: "List every week schedule across the fleet, one entry per schedule, with its device, channel and kind (week_profile or climate). A device with two schedules, such as a glass wall thermostat with a heating and a switch schedule, appears twice.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listSchedulesIn) (*mcpsdk.CallToolResult, listSchedulesOut, error) {
 		items, err := d.Schedules.ListScheduleDevices(ctx)
 		if err != nil {
 			return nil, listSchedulesOut{}, fmt.Errorf("list schedules: %w", err)
+		}
+		if in.Device != "" {
+			items = handlers.SchedulesOfDevice(items, in.Device)
 		}
 		if items == nil {
 			items = []hmapi.ScheduleDeviceSummary{}

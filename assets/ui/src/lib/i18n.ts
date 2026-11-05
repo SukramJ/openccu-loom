@@ -2865,6 +2865,9 @@ const EN: Catalog = {
   "central.action_failed": "Could not change press-event forwarding",
   // --- Schedules ---
   "schedule.loading": "Loading schedule…",
+  "schedule.kind.climate": "Heating schedule (channel {channel})",
+  "schedule.kind.week_profile": "Week program (channel {channel})",
+  "schedule.kind.select": "Schedule",
   "schedule.unsupported": "This device does not support a schedule.",
   "schedule.unsupported_channel": "This channel has no climate schedule.",
   "schedule.profile_active": "Active profile: {profile}",
@@ -7118,6 +7121,9 @@ const DE: Catalog = {
   "central.action_failed":
     "Tasterevent-Weiterleitung konnte nicht geändert werden",
   "schedule.loading": "Lade Zeitplan…",
+  "schedule.kind.climate": "Heizplan (Kanal {channel})",
+  "schedule.kind.week_profile": "Wochenprogramm (Kanal {channel})",
+  "schedule.kind.select": "Zeitplan",
   "schedule.unsupported": "Dieses Gerät unterstützt keinen Zeitplan.",
   "schedule.unsupported_channel":
     "Dieser Kanal unterstützt keinen Klima-Zeitplan.",

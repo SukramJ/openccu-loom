@@ -351,9 +351,15 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: [] }),
   );
 
-  await page.route('**/api/v1/schedules', (route) =>
-    route.fulfill({ json: fixture('schedules.json') }),
-  );
+  // `*` covers the `?device=` query the device page's schedule tab sends to
+  // learn whether the device carries more than one schedule; the mock narrows
+  // the fixture to that device the way the server does.
+  await page.route('**/api/v1/schedules*', (route) => {
+    const body = fixture('schedules.json') as { items: { address: string }[] };
+    const device = new URL(route.request().url()).searchParams.get('device');
+    if (!device) return route.fulfill({ json: body });
+    return route.fulfill({ json: { items: body.items.filter((it) => it.address === device) } });
+  });
 
   // Programs
   await page.route('**/api/v1/programs', (route) =>

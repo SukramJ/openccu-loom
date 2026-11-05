@@ -159,6 +159,16 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPIrrigationValve")],
 	})
 	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPDimmer"),
+		DeviceType:        "elv-sh-wua",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLight,
+		Channels:          []ChannelRoleAssignment{{Channel: 2, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPDimmer")],
+	})
+	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("RfDimmer"),
 		DeviceType:        "hbw-lc-rgbww-in6-dr",
 		ProductGroup:      hmenum.ProductGroupUnknown,
@@ -911,7 +921,6 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 			FixedChannelFields: nil,
 			AdditionalDataPoints: map[int][]hmenum.Parameter{
 				0: {
-					hmenum.ParameterErrorJammed,
 					hmenum.ParameterSabotageAcceleration,
 					hmenum.ParameterSabotageBattery,
 					hmenum.ParameterSabotageMagneticField,
@@ -945,6 +954,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 					hmenum.ParameterPermissionState,
 				},
 				12: {
+					hmenum.ParameterErrorJammed,
 					hmenum.ParameterLockStateReason,
 				},
 				13: {
@@ -1335,6 +1345,16 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPDimmer"),
+		DeviceType:        "hmip-udi-pb2",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLight,
+		Channels:          []ChannelRoleAssignment{{Channel: 5, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPDimmer")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPDimmer"),
 		DeviceType:        "hmip-udi-smi55",
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryLight,
@@ -1380,7 +1400,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 8, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: new(1),
+		ScheduleChannelNo: new(8),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1466,6 +1486,26 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPThermostat"),
+		DeviceType:        "hmip-wt",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryClimate,
+		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: new(1),
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPButtonLock"),
+		DeviceType:        "hmip-wt",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLock,
+		Channels:          []ChannelRoleAssignment{{Channel: 0, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPButtonLock")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPThermostat"),
 		DeviceType:        "hmip-wth",
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
@@ -1483,6 +1523,16 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ScheduleChannelNo: nil,
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPButtonLock")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPDimmer"),
+		DeviceType:        "hmip-wua",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLight,
+		Channels:          []ChannelRoleAssignment{{Channel: 2, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPDimmer")],
 	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPCover"),
@@ -1555,6 +1605,36 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
 	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPThermostat"),
+		DeviceType:        "hmipw-wgt",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryClimate,
+		Channels:          []ChannelRoleAssignment{{Channel: 4, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: new(4),
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPDimmer"),
+		DeviceType:        "hmipw-wgt",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLight,
+		Channels:          []ChannelRoleAssignment{{Channel: 2, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPDimmer")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPButtonLock"),
+		DeviceType:        "hmipw-wgt",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLock,
+		Channels:          []ChannelRoleAssignment{{Channel: 0, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPButtonLock")],
+	})
+	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPSimpleFixedColorLightWired"),
 		DeviceType:        "hmipw-wrc6",
 		ProductGroup:      hmenum.ProductGroupHmIP,
@@ -1613,6 +1693,46 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ScheduleChannelNo: nil,
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("RfDimmer")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPThermostat"),
+		DeviceType:        "kw-stath",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryClimate,
+		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: new(1),
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPButtonLock"),
+		DeviceType:        "kw-stath",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLock,
+		Channels:          []ChannelRoleAssignment{{Channel: 0, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPButtonLock")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPThermostat"),
+		DeviceType:        "kw-uketrv",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryClimate,
+		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: new(1),
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
+	})
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPButtonLock"),
+		DeviceType:        "kw-uketrv",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLock,
+		Channels:          []ChannelRoleAssignment{{Channel: 0, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPButtonLock")],
 	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("RfDimmer"),

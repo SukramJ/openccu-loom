@@ -67,20 +67,6 @@ func TestTargetBitOrderIsThePositionInTheFirmwaresRelevantChannelList(t *testing
 			want:     map[int]uint{3: 0, 4: 1, 5: 2},
 		},
 		{
-			// HmIP-SMO230: receivers 10-12 (HmIPWeeklyProgram.js:414).
-			name:     "HmIP-SMO230",
-			model:    "HmIP-SMO230",
-			channels: append(receivers("MOTION_DETECTOR", 1, 2, 3), receivers("SWITCH_VIRTUAL_RECEIVER", 10, 11, 12)...),
-			want:     map[int]uint{10: 0, 11: 1, 12: 2},
-		},
-		{
-			// HmIP-WKP: odd channels only (HmIPWeeklyProgram.js:406).
-			name:     "HmIP-WKP",
-			model:    "HmIP-WKP",
-			channels: append(receivers("ACCESS_TRANSCEIVER", 1, 3, 5, 7, 9, 11, 13, 15), receivers("KEY_TRANSCEIVER", 2, 4, 6, 8, 10, 12, 14, 16)...),
-			want:     map[int]uint{1: 0, 3: 1, 5: 2, 7: 3, 9: 4, 11: 5, 13: 6, 15: 7},
-		},
-		{
 			// HmIP-MOD-WD-VK: a single receiver, and it is channel 2 — so
 			// even the one-channel case is bit 0, not bit 1.
 			name:     "window drive",
@@ -160,5 +146,86 @@ func TestTargetBitOrderIgnoresChannelsTheEditorDoesNotList(t *testing.T) {
 	}
 	if got := TargetBitOrder("HmIP-eTRV", []TypedChannel{{No: 1, Type: "HEATING_CLIMATECONTROL_TRANSCEIVER"}}); got != nil {
 		t.Errorf("a device with no schedule-relevant channel yielded %v, want nil", got)
+	}
+}
+
+// TestTargetBitOrderTakesTheListTheEditorsWriteOut pins the families both
+// weekly-program editors list by hand
+// (www/config/easymodes/js/HmIPWeeklyProgram.js:405-430,
+// src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:56-87). Each case is the
+// channel layout of a real device description — the godevccu fixture where one
+// exists, otherwise the eQ-3 device documentation crRFD 1.60.1 — because the
+// derivation from channel types gives a different list for every one of them:
+//
+//   - HmIP-SMO230 carries a STATE_RESET_VIRTUAL_RECEIVER on channel 8, which
+//     the type tokens accept and the editor leaves out.
+//   - HmIP-WKP has sixteen ACCESS_TRANSCEIVER channels; the editor takes the
+//     odd ones.
+//   - The glass wall devices add their BACKLIGHTING_RECEIVER, which no token
+//     matches; the wired ones have no receiver the tokens accept at all.
+//
+// A case built from convenient channel types instead of real ones passed with
+// the derivation for HmIP-SMO230 and HmIP-WKP, which is how the mismatch went
+// unnoticed.
+func TestTargetBitOrderTakesTheListTheEditorsWriteOut(t *testing.T) {
+	t.Parallel()
+
+	layout := func(types ...string) []TypedChannel {
+		out := make([]TypedChannel, 0, len(types))
+		for no, typ := range types {
+			out = append(out, TypedChannel{No: no, Type: typ})
+		}
+		return out
+	}
+	wgt := layout("MAINTENANCE", "KEY_TRANSCEIVER", "BACKLIGHTING_RECEIVER", "SWITCH_TRANSMITTER",
+		"SWITCH_VIRTUAL_RECEIVER", "SWITCH_VIRTUAL_RECEIVER", "SWITCH_VIRTUAL_RECEIVER", "SWITCH_WEEK_PROFILE",
+		"HEATING_CLIMATECONTROL_TRANSCEIVER", "HEATING_CLIMATECONTROL_RECEIVER")
+	wiredWGT := layout("MAINTENANCE", "KEY_TRANSCEIVER", "BACKLIGHTING_RECEIVER", "SWITCH_WEEK_PROFILE",
+		"HEATING_CLIMATECONTROL_TRANSCEIVER", "HEATING_CLIMATECONTROL_RECEIVER")
+	wgs := layout("MAINTENANCE", "KEY_TRANSCEIVER", "KEY_TRANSCEIVER", "KEY_TRANSCEIVER", "KEY_TRANSCEIVER",
+		"KEY_TRANSCEIVER", "MULTI_MODE_INPUT_TRANSMITTER", "BACKLIGHTING_RECEIVER", "SWITCH_TRANSMITTER",
+		"SWITCH_VIRTUAL_RECEIVER", "SWITCH_VIRTUAL_RECEIVER", "SWITCH_VIRTUAL_RECEIVER", "SWITCH_WEEK_PROFILE",
+		"ALARM_COND_SWITCH_TRANSMITTER")
+	wiredWGS := layout("MAINTENANCE", "KEY_TRANSCEIVER", "KEY_TRANSCEIVER", "KEY_TRANSCEIVER", "KEY_TRANSCEIVER",
+		"KEY_TRANSCEIVER", "BACKLIGHTING_RECEIVER", "SWITCH_WEEK_PROFILE", "ALARM_COND_SWITCH_TRANSMITTER")
+	smo230 := layout("MAINTENANCE", "MOTIONDETECTOR_TRANSCEIVER", "MOTIONDETECTOR_TRANSCEIVER",
+		"MOTIONDETECTOR_TRANSCEIVER", "MOTIONDETECTOR_VIRTUAL_TRANSCEIVER", "STATE_RESET_RECEIVER",
+		"STATE_RESET_RECEIVER", "STATE_RESET_RECEIVER", "STATE_RESET_VIRTUAL_RECEIVER", "SWITCH_TRANSMITTER",
+		"SWITCH_VIRTUAL_RECEIVER", "SWITCH_VIRTUAL_RECEIVER", "SWITCH_VIRTUAL_RECEIVER", "SWITCH_WEEK_PROFILE",
+		"ALARM_COND_SWITCH_TRANSMITTER")
+	wkpTypes := make([]string, 0, 19)
+	wkpTypes = append(wkpTypes, "MAINTENANCE")
+	for range 16 {
+		wkpTypes = append(wkpTypes, "ACCESS_TRANSCEIVER")
+	}
+	wkp := layout(append(wkpTypes, "ALARM_COND_SWITCH_TRANSMITTER", "SWITCH_WEEK_PROFILE")...)
+
+	glassWall := map[int]uint{2: 0, 4: 1, 5: 2, 6: 3}
+	cases := []struct {
+		model    string
+		channels []TypedChannel
+		want     map[int]uint
+	}{
+		{"HmIP-WGT", wgt, glassWall},
+		{"HmIP-WGT-A", wgt, glassWall},
+		// HmIP-WGTC matches through deviceType.id.includes of the HmIP-WGT name.
+		{"HmIP-WGTC", wgt, glassWall},
+		{"HmIP-WGTC-A", wgt, glassWall},
+		{"HmIPW-WGT", wiredWGT, map[int]uint{2: 0}},
+		{"HmIPW-WGTC-A", wiredWGT, map[int]uint{2: 0}},
+		{"HmIP-WGS", wgs, map[int]uint{7: 0, 9: 1, 10: 2, 11: 3}},
+		{"HmIP-WGS-A", wgs, map[int]uint{7: 0, 9: 1, 10: 2, 11: 3}},
+		{"HmIPW-WGS", wiredWGS, map[int]uint{6: 0}},
+		{"HmIP-SMO230-A", smo230, map[int]uint{10: 0, 11: 1, 12: 2}},
+		{"HmIPW-SMO230", smo230, map[int]uint{10: 0, 11: 1, 12: 2}},
+		{"HmIP-WKP", wkp, map[int]uint{1: 0, 3: 1, 5: 2, 7: 3, 9: 4, 11: 5, 13: 6, 15: 7}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.model, func(t *testing.T) {
+			t.Parallel()
+			if got := TargetBitOrder(tc.model, tc.channels); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("TargetBitOrder(%s) = %v, want %v", tc.model, got, tc.want)
+			}
+		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ScheduleTargetChannel is one member channel of a schedule-relevant
@@ -69,6 +70,13 @@ func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []Sch
 		}
 		profile, ok := lookupProfileForCustomDP(registry, dev.Model, cdp)
 		if !ok || profile.Config == nil {
+			continue
+		}
+		// A thermostat's ScheduleChannelNo names its own climate schedule, a
+		// separate week program. Counted here, it made the thermostat the only
+		// target of the switch schedule on a device carrying both (HmIP-WGT),
+		// and a channel no editor addresses left that schedule without targets.
+		if profile.Category == hmenum.DataPointCategoryClimate {
 			continue
 		}
 		entry := groupEntry{
