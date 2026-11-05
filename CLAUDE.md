@@ -113,6 +113,10 @@ Non-negotiable. Each one is followed by the guard that enforces it, or by
 - **Dependency licences**: MIT / Apache-2.0 / BSD are fine. **GPL / LGPL /
   MPL / AGPL pull in copyleft obligations — stop and discuss.** The embedded
   openccu-data archives are handled by a separate aggregation path (ADR 0003).
+- **Every further dependency is a decision, not a convenience.** A new direct
+  dependency, and a direct-dependency version bump (dependabot's included),
+  raises the version in the build and gets a `CHANGELOG.md` entry under
+  `### Changed`. Reviewed.
 
 ### Domain invariants
 
@@ -262,6 +266,19 @@ forbidden, because drift produces silent Apple/Google pair-aborts. The full
 workflow (which file to read, how to cite it, which parity test to extend)
 is in [go-fabric `CLAUDE.md`](https://github.com/SukramJ/go-fabric/blob/main/CLAUDE.md);
 deliberate divergences land in `notes/parity/by_design.md`.
+
+**Work that starts here.** Matter rules live in go-fabric. A rule decided while
+working in this repo (how the module treats matter.js, what a server must do,
+how a divergence is recorded) is written into go-fabric's `CLAUDE.md` or
+`notes/parity/`, not only here; this repo's documents point there.
+
+Implementation go-fabric needs is handed over in a go-fabric issue complete
+enough to continue there without this session's context: why (this repo's need,
+in the module's terms), the verified sources with `file:line` at the pins, the
+scope and the port or facade shape, the parity tests to port, the `by_design.md`
+row it adds, acceptance criteria, what stays here, and the open questions. The
+follow-up in this repo is a separate issue that references it. This repo does
+not implement in go-fabric from its own session.
 
 ---
 
@@ -550,6 +567,36 @@ Completion checklist per change:
 - [ ] `SPECIFICATION.md` updated if a goal, non-goal, hard constraint or
       resolved decision moved; ADR written for any architectural shift.
 - [ ] No CGo, no copyleft dependency, license header on every new `.go` file.
+
+---
+
+## The architecture standard
+
+Set by the owner for the go-fabric family, which names the hosts, on 2026-10-20
+and reaffirmed 2026-10-24 and 2026-11-04 (in the owner's words: "hervorragende
+Architektur, zukunftsweisend, innovativ, herausragend"). Taken over here on
+2026-11-05. It is the bar every design decision in this repo is held to:
+
+- **Outstanding, not adequate.** Every layer (north-bound adapters, domain core,
+  south-bound transports, the device catalogue, the test harness, the SPA
+  contract) is the best design we can state, coherent with the others, and judged
+  as API design: one shape, no convenience seam.
+- **Forward-looking and innovative.** A decision is weighed against where CCU
+  firmware, Home Assistant, Matter and the consumers are going, not only against
+  today's need. Going ahead of a reference implementation is allowed and recorded
+  in `notes/parity/by_design.md`; copying a limitation is not.
+- **Better than others, better than before, the right cut.** Every concept and
+  architectural ADR carries an explicit section that answers three questions:
+  better than the comparison targets (the aiohomematic family, the CCU's own
+  WebUI)? better than the state before? is the split between this repo, go-fabric,
+  the SPA, the clients and `openccu-data` right? A concept without that section is
+  not finished.
+- **The check is stated, not assumed.** When a decision is put to the owner, the
+  recommendation says whether it is the best architecture and why; when the
+  owner's choice is not the best architecture in the assistant's judgement, the
+  assistant says so with its reasons before implementing. The owner decides, and
+  the reasons are on record. A scope boundary that is a decision (no CGo, no
+  polling path, no static device database) is kept unless the owner reopens it.
 
 ---
 
