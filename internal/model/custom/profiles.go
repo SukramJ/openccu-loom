@@ -770,6 +770,19 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPDimmer")],
 	})
+	// HmIP-BDT-I has an additional input channel, so its dimmer channels sit one
+	// higher than on HmIP-BDT. Source: eQ-3 device documentation, crRFD 1.60.1,
+	// section 10 (BDT_V1).
+	r.MustRegister(Profile{
+		Name:              hmenum.DeviceProfile("IPDimmer"),
+		DeviceType:        "hmip-bdt-i",
+		ProductGroup:      hmenum.ProductGroupHmIP,
+		Category:          hmenum.DataPointCategoryLight,
+		Channels:          []ChannelRoleAssignment{{Channel: 5, Role: ChannelRolePrimary}},
+		ScheduleChannelNo: nil,
+		Extended:          nil,
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPDimmer")],
+	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPCover"),
 		DeviceType:        "hmip-broll",

@@ -47,6 +47,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   On arm64 the compiler fused a multiply and an add into one rounding, which
   could leave a residue such as -2.2e-16 where the exact result is 0. amd64
   results are unchanged.
+- **HmIP-BDT-I dimmer uses the correct channels.** The model matched the
+  `HmIP-BDT` profile and bound its light to channel 4, which is the state
+  channel on this device. It now has its own profile: channel 5 as the
+  primary, 6 and 7 as secondaries, 4 as the state channel. `HmIP-BDT` is
+  unchanged. On an existing HmIP-BDT-I the light's data point moves to
+  channel 5.
 
 ## [0.96.0] - 2026-10-31
 
