@@ -59,6 +59,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   into group 18. It now has its own profile with groups 2, 6, 10 and 14.
   Channel 17 reports no group any more. The switches on channels 2–16 are
   unchanged.
+- **HmIP-FS6 no longer exposes `OPERATING_VOLTAGE`.** It now hides the
+  parameter like `HmIP-FSM`. An automation that reads this value on an
+  HmIP-FS6 loses it.
 
 ## [0.96.0] - 2026-10-31
 
