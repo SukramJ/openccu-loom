@@ -3,7 +3,12 @@
 
 package calculated
 
-import "github.com/SukramJ/openccu-loom/pkg/hmenum"
+import (
+	"maps"
+	"slices"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
 
 // BatteryType identifies the cell chemistry / form-factor a Homematic device
 // uses.
@@ -171,6 +176,16 @@ func LookupBatteryConfig(model string) (BatteryConfig, bool) {
 		return cfg, false
 	}
 	return cfg, true
+}
+
+// BatteryModels returns the model keys of the battery table in sorted order.
+// [LookupBatteryConfig] answers for one model; the device-documentation check
+// under script/hmipdoc needs the whole key set to find keys no documented model
+// matches.
+//
+// loom:reachable:reason="sole caller is script/hmipdoc, the operator tool that compares the catalogue with the eQ-3 device documentation; the analyzer counts no production edge from a script package, and TestProductionCatalogReadsTheRealTables pins the returned list there"
+func BatteryModels() []string {
+	return slices.Sorted(maps.Keys(batteryData))
 }
 
 // IsOperatingVoltageLevelRelevant reports whether a channel qualifies for an

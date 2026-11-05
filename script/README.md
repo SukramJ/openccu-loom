@@ -81,6 +81,26 @@ aiohomematic install.
 
   Re-running on unchanged sources is a no-op (deterministic output, file mtime unchanged). Re-run after editing any struct that carries `payload:"..."` tags. Generated files MUST end in `_gen.go` so `golangci-lint` skips them.
 
+## HmIP device documentation check
+
+`hmipdoc` compares the eQ-3 "Homematic IP Devices - Technical Documentation" PDF with the device catalogue. eQ-3 updates the PDF regularly, so run it against each new edition. It needs `pdftotext` (poppler). The PDF is not part of the repository; `tmp/` is gitignored.
+
+```sh
+go run ./script/hmipdoc -output tmp/hmip_device_doc_report.md tmp/hmip_device_documentation.pdf
+```
+
+Flags go before the path. Only the current firmware range of a model is evaluated: the section whose range has no end. The profile registry and the visibility rules are built as the daemon builds them.
+
+The report lists candidates, not defects. A missing parameter is often intended, because profiles are shared between models and absent fields are skipped at runtime, so judge each candidate by reading the section it cites. The report does not change anything in the catalogue.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Report written |
+| 1 | The tool could not run, for example `pdftotext` is missing |
+| 2 | The PDF was not read completely, no report is written |
+
+Exit code 2 comes from checks against raw counts of the extracted text, so a changed PDF layout fails instead of producing an incomplete report. It also fires when the document does not determine a model's current section: no open-ended firmware range, or one in two sections. `go run` itself exits with 1 and prints `exit status 2`.
+
 ## Download statistics
 
 `release_download_snapshot.py` turns two public counters into rows of
