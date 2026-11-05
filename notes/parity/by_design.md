@@ -3551,32 +3551,22 @@ the string the stream carried.
 **Guard.** `TestTypedValueUsesParamsetDescription`
 (`internal/central/adapter/lite_values_test.go`).
 
-## HmIPW-DRS4 has its own profile, the reference shares one prefix
+## A catalogue channel binds only if the device confirms it
 
-**Divergence.** The reference registers `HmIPW-DRS` with the eight base channels
-2 to 30 (`model/custom/switch.py:102`), and `HmIPW-DRS4` resolves to it by
-prefix. Loom registers `hmipw-drs4` with the bases 2, 6, 10 and 14 and keeps
-`hmipw-drs` for `HmIPW-DRS8` (`internal/model/custom/profiles.go`).
+**Divergence.** The reference binds a profile's channel offsets without looking at
+the device (`model/custom/definition.py`, `_get_relevant_channels`). Loom treats them
+as candidates: a channel binds only if the device carries it and the role accepts its
+channel type (`resolveChannelGroup`, `internal/model/custom/materialize.go`; ADR 0087).
 
-**Why.** The eQ-3 device documentation, crRFD 1.60.1, section 133 lists channels
-0 to 17 for `HmIPW-DRS4`, with channel 17 as `SWITCH_WEEK_PROFILE`. The shared
-profile declares groups 18, 22, 26 and 30 without channels and takes channel 17
-as the state channel of group 18.
+**Wire facts** (eQ-3 device documentation, crRFD 1.60.1, and the `godevccu` fixtures):
 
-**Guard.** `TestDRSVariantsGroupOnlyTheirOwnChannels`
-(`internal/model/custom/drs_channels_test.go`).
+| Model | Layout | With offsets alone |
+| --- | --- | --- |
+| `HmIPW-DRS4` | Channels 0 to 17, channel 17 is `SWITCH_WEEK_PROFILE` (section 133) | Groups 18 to 30, and channel 17 in group 18 (`model/custom/switch.py:102`) |
+| `HmIP-LSC` | Channel 1 `UNIVERSAL_LIGHT_RECEIVER`, channel 2 `UNIVERSAL_LIGHT_WEEK_PROFILE` (section 180) | A light on channel 2 and channels 3 and 4 in the group (`model/custom/profile.py:504`) |
+| `HmIP-WGT`, `-A`, `HmIP-WGTC`, `-A` | Channel 2 `BACKLIGHTING_RECEIVER`, 3 `SWITCH_TRANSMITTER`, 4 to 6 `SWITCH_VIRTUAL_RECEIVER` | A dimmer on channels 3 and 4, and channel 4 in the backlight's group |
 
-## HmIP-LSC has no secondary channels, the reference shares the HmIP-RGBW schema
-
-**Divergence.** The reference registers `HmIP-LSC` with `IP_RGBW_LIGHT_CONFIG` and
-its `secondary_channels=(1, 2, 3)` (`model/custom/profile.py:504`,
-`model/custom/light.py:1077`). Loom uses the same schema without secondary channels
-(`ipRGBWSingleChannelConfig`, `internal/model/custom/profile_configs.go`).
-
-**Why.** The eQ-3 device documentation, crRFD 1.60.1, section 180 lists channel 1
-as `UNIVERSAL_LIGHT_RECEIVER` and channel 2 as `UNIVERSAL_LIGHT_WEEK_PROFILE`, with
-no channels 3 and 4. The shared schema builds a second light on the week-profile
-channel and declares two members without a channel.
-
-**Guard.** `TestRGBWVariantsBindLightToTheirOwnChannels`
-(`internal/model/custom/rgbw_channels_test.go`).
+**Guard.** `TestDRSVariantsGroupOnlyTheirOwnChannels`,
+`TestRGBWVariantsBindLightToTheirOwnChannels`,
+`TestWGTBindsDimmerAndSwitchToTheirOwnChannels` (`internal/model/custom/`), and
+`TestCatalogueFitsEveryFixture` (`tests/integration/`).

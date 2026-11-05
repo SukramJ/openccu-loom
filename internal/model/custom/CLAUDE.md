@@ -20,7 +20,13 @@ generator (ADR 0063). Adding a device is four edits and one measurement:
    `internal/model/custom/profile_configs.go`. Reuse only when the
    parameter *and* the channel offsets match — a schema shared by two
    devices that place a field differently cannot serve both, and that is
-   what the per-registration `Config` pointer is for.
+   what the per-registration `Config` pointer is for. Every role names the
+   channel types it accepts: the channel numbers are candidates, and one
+   binds only if the device carries it with an accepted type (ADR 0087). A
+   model variant with fewer channels therefore needs no entry of its own.
+   Take the types from the device description, not from a guess: a missing
+   type makes the device lose its data point, which
+   `TestCatalogueFitsEveryFixture` reports only for a model with a fixture.
 4. A new `DeviceProfile` value needs a hand-written Go wrapper and a
    registered constructor under `internal/model/custom/<cat>/`;
    `TestEveryRegisteredProfileHasConstructor` fails without it.

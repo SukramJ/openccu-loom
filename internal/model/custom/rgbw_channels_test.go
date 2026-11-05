@@ -20,14 +20,18 @@ import (
 func TestRGBWVariantsBindLightToTheirOwnChannels(t *testing.T) {
 	t.Parallel()
 
+	const (
+		receiver    = "UNIVERSAL_LIGHT_RECEIVER"
+		weekProfile = "UNIVERSAL_LIGHT_WEEK_PROFILE"
+	)
 	tests := []struct {
 		model    string
-		channels int
+		channels []string
 		bound    []int
 		members  []int
 	}{
-		{model: "HmIP-LSC", channels: 3, bound: []int{1}, members: []int{1}},
-		{model: "HmIP-RGBW", channels: 6, bound: []int{1, 2, 3, 4}, members: []int{1, 2, 3, 4}},
+		{model: "HmIP-LSC", channels: []string{"MAINTENANCE", receiver, weekProfile}, bound: []int{1}, members: []int{1}},
+		{model: "HmIP-RGBW", channels: []string{"MAINTENANCE", receiver, receiver, receiver, receiver, weekProfile}, bound: []int{1, 2, 3, 4}, members: []int{1, 2, 3, 4}},
 	}
 
 	for _, tt := range tests {
@@ -46,8 +50,8 @@ func TestRGBWVariantsBindLightToTheirOwnChannels(t *testing.T) {
 				Model:        tt.model,
 				ProductGroup: hmenum.ProductGroupHmIP,
 			})
-			for i := range tt.channels {
-				dev.AddChannel("0001LS:"+itoaSmall(i), i, "T", hmenum.ParamsetKeyValues)
+			for i, channelType := range tt.channels {
+				dev.AddChannel("0001LS:"+itoaSmall(i), i, channelType, hmenum.ParamsetKeyValues)
 			}
 
 			if err := CreateCustomDataPoints(dev, r); err != nil {

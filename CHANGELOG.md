@@ -72,6 +72,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   second light on channel 2, the week-profile channel, and declared channels
   3 and 4, which the device does not have. The light on channel 1 and the
   week-program target channels are unchanged.
+- **HmIP-WGT and HmIP-WGTC no longer have a dimmer on their switch channels.**
+  The backlight's schema also claimed channel 3, the switch transmitter, and
+  channel 4, the first switch receiver. That built dimmers there and put
+  channel 4 into the backlight's group instead of the switch's. The backlight
+  now binds channel 2 only, and channels 4 to 6 are switches in one group.
+  This also applies to `-A` variants. With MQTT sub-devices on, these models
+  have one multi-channel group left, so they no longer split into sub-devices,
+  and their entities move back to the parent device.
+- **A device profile binds only channels the device really has.** The catalogue
+  now also declares which channel types each role accepts, and a channel binds
+  only if the device carries it with an accepted type (ADR 0087). Apart from the
+  fixes above, this removes channels from the group of five `HM-LC-Dim1*`
+  descriptions that lack them. No other binding of the 613 device descriptions
+  compared changes.
 
 ## [0.96.0] - 2026-10-31
 

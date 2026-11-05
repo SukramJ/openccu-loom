@@ -139,12 +139,37 @@ func putFloatSensor(ch *device.Channel, p hmenum.Parameter) device.ParameterData
 }
 
 // addChannel registers a channel under its CCU-style address and
-// returns the channel pointer. Channel type is irrelevant for the
-// anchor tests since the visibility gate (which keys off TYPE) is not
-// active here.
+// returns the channel pointer.
 func addChannel(d *device.Device, num int) *device.Channel {
 	addr := d.Address + ":" + itoa(num)
-	return d.AddChannel(addr, num, "X", hmenum.ParamsetKeyValues)
+	return d.AddChannel(addr, num, catalogueChannelType(d.Model, num), hmenum.ParamsetKeyValues)
+}
+
+// catalogueChannelType returns a channel type the catalogue accepts for this
+// channel of the model, or "X" for a channel no profile names. The tests using it
+// are about anchoring and naming; TestCatalogueFitsEveryFixture checks the
+// accepted types against real device descriptions.
+func catalogueChannelType(model string, channelNo int) string {
+	for _, profile := range custom.DefaultRegistry().GetConfigs(model) {
+		if profile.Config == nil {
+			continue
+		}
+		cg := profile.Config.ChannelGroup
+		for _, base := range profile.Channels {
+			if base.Channel+cg.PrimaryChannel == channelNo && len(cg.PrimaryChannelTypes) > 0 {
+				return cg.PrimaryChannelTypes[0]
+			}
+			if cg.StateChannelOffset != nil && base.Channel+*cg.StateChannelOffset == channelNo && len(cg.StateChannelTypes) > 0 {
+				return cg.StateChannelTypes[0]
+			}
+			for _, offset := range cg.SecondaryChannels {
+				if base.Channel+offset == channelNo && len(cg.SecondaryChannelTypes) > 0 {
+					return cg.SecondaryChannelTypes[0]
+				}
+			}
+		}
+	}
+	return "X"
 }
 
 // newDevice constructs a HmIP/HM-style device and pre-populates the

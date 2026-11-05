@@ -27,6 +27,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"ACCESS_RECEIVER", "ACCESS_TRANSCEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: true,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldState: Hidden(hmenum.ParameterState),
@@ -44,6 +47,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"MAINTENANCE", "MAINTENANCE_BAT_BL", "MAINTENANCE_BAT_CL"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: true,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldButtonLock: Hidden(hmenum.ParameterGlobalButtonLock),
@@ -61,6 +67,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
 			StateChannelOffset:              new(-1),
+			PrimaryChannelTypes:             []string{"BLIND_VIRTUAL_RECEIVER", "SHUTTER_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           []string{"BLIND_VIRTUAL_RECEIVER", "SHUTTER_VIRTUAL_RECEIVER"},
+			StateChannelTypes:               []string{"BLIND_TRANSMITTER", "SHUTTER_TRANSMITTER"},
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldCombinedParameter: Bare(hmenum.ParameterCombinedParameter),
@@ -88,6 +97,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"UNIVERSAL_LIGHT_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldColorTemperature: Bare(hmenum.ParameterColorTemperature),
@@ -113,6 +125,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
 			StateChannelOffset:              new(-1),
+			PrimaryChannelTypes:             []string{"BACKLIGHTING_RECEIVER", "DIMMER_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           []string{"DIMMER_VIRTUAL_RECEIVER"},
+			StateChannelTypes:               []string{"DIMMER_TRANSMITTER"},
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldLevel:         Bare(hmenum.ParameterLevel),
@@ -136,6 +151,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
 			StateChannelOffset:              new(-1),
+			PrimaryChannelTypes:             []string{"DIMMER_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           []string{"DIMMER_VIRTUAL_RECEIVER"},
+			StateChannelTypes:               []string{"DIMMER_TRANSMITTER"},
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldColor:          Bare(hmenum.ParameterColor),
@@ -164,6 +182,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DOOR_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldDoorCommand: Bare(hmenum.ParameterDoorCommand),
@@ -187,6 +208,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"SHADING_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields:                          nil,
 			ChannelFields: map[int]map[hmenum.Field]FieldValue{
@@ -209,6 +233,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"WATER_SWITCH_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           []string{"WATER_SWITCH_VIRTUAL_RECEIVER"},
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldDurationUnit:  Bare(hmenum.ParameterDurationUnit),
@@ -239,6 +266,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DOOR_LOCK_STATE_TRANSMITTER", "DOOR_LOCK_TRANSCEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldDirection:       Bare(hmenum.ParameterActivityState),
@@ -262,6 +292,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2, 3},
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"UNIVERSAL_LIGHT_RECEIVER"},
+			SecondaryChannelTypes:           []string{"UNIVERSAL_LIGHT_RECEIVER"},
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldColorTemperature: Bare(hmenum.ParameterColorTemperature),
@@ -314,6 +347,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"OPTICAL_SIGNAL_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldColor:          Bare(hmenum.ParameterColor),
@@ -337,6 +373,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"ALARM_SWITCH_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldAcousticAlarmActive:    Bare(hmenum.ParameterAcousticAlarmActive),
@@ -359,6 +398,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"SMOKE_DETECTOR"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldSmokeDetectorAlarmStatus: Visible(hmenum.ParameterSmokeDetectorAlarmStatus),
@@ -377,6 +419,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldDirection:     Bare(hmenum.ParameterActivityState),
@@ -401,6 +446,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DIMMER_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldColor:         Bare(hmenum.ParameterColor),
@@ -426,6 +474,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
 			StateChannelOffset:              new(-1),
+			PrimaryChannelTypes:             []string{"SWITCH_VIRTUAL_RECEIVER"},
+			SecondaryChannelTypes:           []string{"SWITCH_VIRTUAL_RECEIVER"},
+			StateChannelTypes:               []string{"SWITCH_TRANSMITTER"},
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldOnTimeValue: Bare(hmenum.ParameterOnTime),
@@ -458,6 +509,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"ACOUSTIC_DISPLAY_RECEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldAcousticNotificationSelection: Bare(hmenum.ParameterAcousticNotificationSelection),
@@ -488,6 +542,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"CLIMATE_TRANSCEIVER", "HEATING_CLIMATECONTROL_TRANSCEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldActiveProfile:                     Bare(hmenum.ParameterActiveProfile),
@@ -532,6 +589,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"HEATING_CLIMATECONTROL_TRANSCEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldActiveProfile:                     Bare(hmenum.ParameterActiveProfile),
@@ -587,6 +647,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"BLIND", "JALOUSIE", "WINMATIC"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldDirection:     Bare(hmenum.ParameterDirection),
@@ -608,6 +671,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DIMMER", "VIRTUAL_DIMMER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldGroupLevel:    Visible(hmenum.ParameterLevelReal),
@@ -628,6 +694,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DIMMER"},
+			SecondaryChannelTypes:           []string{"VIRTUAL_DIMMER"},
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldGroupLevel:    Visible(hmenum.ParameterLevelReal),
@@ -648,6 +717,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DIMMER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldGroupLevel:    Visible(hmenum.ParameterLevelReal),
@@ -675,6 +747,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DIMMER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldGroupLevel:    Visible(hmenum.ParameterLevelReal),
@@ -695,6 +770,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"DUAL_WHITE_BRIGHTNESS", "VIRTUAL_DUAL_WHITE_BRIGHTNESS"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldGroupLevel:    Visible(hmenum.ParameterLevelReal),
@@ -719,6 +797,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"KEYMATIC"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldDirection: Bare(hmenum.ParameterDirection),
@@ -765,6 +846,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"CLIMATECONTROL_RT_TRANSCEIVER", "THERMALCONTROL_TRANSMIT"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldAutoMode:     Bare(hmenum.ParameterAutoMode),
@@ -801,6 +885,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"CLIMATECONTROL_RT_TRANSCEIVER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldAutoMode:     Bare(hmenum.ParameterAutoMode),
@@ -837,6 +924,9 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               nil,
 			StateChannelOffset:              nil,
+			PrimaryChannelTypes:             []string{"WEATHER"},
+			SecondaryChannelTypes:           nil,
+			StateChannelTypes:               nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldHumidity:    Visible(hmenum.ParameterHumidity),
@@ -852,14 +942,4 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 		AdditionalDataPoints:     nil,
 		IncludeDefaultDataPoints: true,
 	},
-}
-
-// ipRGBWSingleChannelConfig returns the IPRGBW schema without secondary channels,
-// for HmIP-LSC. It has one UNIVERSAL_LIGHT_RECEIVER, and channel 2 is
-// UNIVERSAL_LIGHT_WEEK_PROFILE (eQ-3 device documentation, crRFD 1.60.1, section
-// 180). The rest of the schema is shared, so the copy is shallow.
-func ipRGBWSingleChannelConfig() *ProfileConfig {
-	cfg := *ProfileConfigs[hmenum.DeviceProfile("IPRGBW")]
-	cfg.ChannelGroup.SecondaryChannels = nil
-	return &cfg
 }

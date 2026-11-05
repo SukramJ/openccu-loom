@@ -151,6 +151,36 @@ func TestEveryFieldMappingNamesAParameter(t *testing.T) {
 	t.Logf("checked %d field mappings across %d schemas", checked, len(custom.ProfileConfigs))
 }
 
+// TestEveryChannelGroupRoleDeclaresItsChannelTypes asserts that every role a
+// registered profile uses names the channel types it accepts (ADR 0087).
+//
+// An empty list accepts any type, which is what an ad-hoc schema in a test wants
+// and what the catalogue must not do: it would turn the type check off for every
+// model of that profile, and the catalogue would still read as complete.
+func TestEveryChannelGroupRoleDeclaresItsChannelTypes(t *testing.T) {
+	t.Parallel()
+	seen := map[hmenum.DeviceProfile]bool{}
+	for _, p := range allRegisteredProfiles() {
+		if p.Config == nil || seen[p.Name] {
+			continue
+		}
+		seen[p.Name] = true
+		cg := p.Config.ChannelGroup
+		if cg.PrimaryChannelSet && len(cg.PrimaryChannelTypes) == 0 {
+			t.Errorf("%s declares no primary channel types", p.Name)
+		}
+		if len(cg.SecondaryChannels) > 0 && len(cg.SecondaryChannelTypes) == 0 {
+			t.Errorf("%s has secondary channels and declares no types for them", p.Name)
+		}
+		if cg.StateChannelOffset != nil && len(cg.StateChannelTypes) == 0 {
+			t.Errorf("%s has a state channel and declares no types for it", p.Name)
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("no profile found — the walk is broken and this test would pass vacuously")
+	}
+}
+
 // TestDeviceTypesAreNormalised asserts that every registration's device
 // type is already in the form the registry normalises lookups to.
 //

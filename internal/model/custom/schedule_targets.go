@@ -54,9 +54,11 @@ func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []Sch
 		return nil
 	}
 	type groupEntry struct {
-		rebased  RebasedChannelGroupConfig
-		schedule bool
+		rebased        RebasedChannelGroupConfig
+		secondaryTypes []string
+		schedule       bool
 	}
+	types := channelTypesByNumber(dev)
 	all := make(map[int]groupEntry)
 	scheduled := make(map[int]groupEntry)
 	for _, ch := range dev.Channels() {
@@ -70,8 +72,9 @@ func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []Sch
 			continue
 		}
 		entry := groupEntry{
-			rebased:  profile.Rebase(groupNo),
-			schedule: profile.ScheduleChannelNo != nil,
+			rebased:        profile.Rebase(groupNo),
+			secondaryTypes: profile.Config.ChannelGroup.SecondaryChannelTypes,
+			schedule:       profile.ScheduleChannelNo != nil,
 		}
 		if _, seen := all[groupNo]; !seen {
 			all[groupNo] = entry
@@ -98,7 +101,9 @@ func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []Sch
 			members = append(members, ScheduleTargetChannel{ChannelNo: *entry.rebased.PrimaryChannel, Primary: true})
 		}
 		for _, sec := range entry.rebased.SecondaryChannels {
-			members = append(members, ScheduleTargetChannel{ChannelNo: sec})
+			if channelFits(types, sec, entry.secondaryTypes) {
+				members = append(members, ScheduleTargetChannel{ChannelNo: sec})
+			}
 		}
 		if len(members) == 0 {
 			continue

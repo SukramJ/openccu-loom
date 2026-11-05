@@ -63,6 +63,9 @@ func newScheduleTargetsDevice(t *testing.T, model, address string, maxChannel, s
 	if model == "HmIP-RGBW" || model == "HmIP-LSC" {
 		receiverType = "UNIVERSAL_LIGHT_RECEIVER"
 	}
+	if model == "ELV-SH-WSM" {
+		receiverType = "WATER_SWITCH_VIRTUAL_RECEIVER"
+	}
 	for i := 0; i <= maxChannel; i++ {
 		chType := receiverType
 		switch i {

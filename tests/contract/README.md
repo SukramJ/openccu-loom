@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 554.
+Guards without a doc comment: 8 of 555.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -119,6 +119,7 @@ Guards without a doc comment: 8 of 554.
 | TestPinnedChannelGroupSchemasAreUnchanged | custom_profile_constructor_resolves_test.go | TestPinnedChannelGroupSchemasAreUnchanged pins the wrapped generic-DP composition (the Field→Parameter mapping, plus visibility forcing) of four representative profiles — spanning cover, switch, lock and climate — field by field. |
 | TestRealDeviceModelsMaterializeCustomDataPoint | custom_profile_constructor_resolves_test.go | TestRealDeviceModelsMaterializeCustomDataPoint drives custom.CreateCustomDataPoints — the exact function the daemon calls at device-hydration time — against a handful of well-known CCU models and asserts the profile's primary channel receives a non-nil custom data point. |
 | TestDeviceTypesAreNormalised | device_profile_catalogue_test.go | TestDeviceTypesAreNormalised asserts that every registration's device type is already in the form the registry normalises lookups to. |
+| TestEveryChannelGroupRoleDeclaresItsChannelTypes | device_profile_catalogue_test.go | TestEveryChannelGroupRoleDeclaresItsChannelTypes asserts that every role a registered profile uses names the channel types it accepts (ADR 0087). |
 | TestEveryChannelGroupSchemaIsReferenced | device_profile_catalogue_test.go | TestEveryChannelGroupSchemaIsReferenced asserts that no schema sits in the catalogue unreferenced without saying so. |
 | TestEveryFieldMappingNamesAParameter | device_profile_catalogue_test.go | TestEveryFieldMappingNamesAParameter asserts that every field mapping in every schema carries a non-empty wire parameter. |
 | TestEveryProfileResolvesToAChannelGroupSchema | device_profile_catalogue_test.go | TestEveryProfileResolvesToAChannelGroupSchema asserts that no profile registration carries a nil Config. |

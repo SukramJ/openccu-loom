@@ -57,8 +57,8 @@ func newIPIrrigationValveDevice(t *testing.T, groupStateWritable bool) *device.C
 		Model:        "ELV-SH-WSM",
 		ProductGroup: hmenum.ProductGroupUnknown,
 	})
-	valveCh := dev.AddChannel("000A1BE9957783:4", 4, "IRRIGATION_ACTUATOR_CHANNEL", hmenum.ParamsetKeyValues)
-	groupCh := dev.AddChannel("000A1BE9957783:3", 3, "IRRIGATION_TRANSMITTER", hmenum.ParamsetKeyValues)
+	valveCh := dev.AddChannel("000A1BE9957783:4", 4, "WATER_SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	groupCh := dev.AddChannel("000A1BE9957783:3", 3, "WATER_SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 
 	putValveWireDP(t, valveCh, hmenum.ParameterState, true)
 	putValveWireDP(t, groupCh, hmenum.ParameterState, groupStateWritable)

@@ -280,7 +280,7 @@ func TestRfThermostatBindsActualHumidity(t *testing.T) {
 	})
 	chs := make(map[int]*device.Channel, 3)
 	for no := range 3 {
-		chs[no] = dev.AddChannel(fmt.Sprintf("MEQ0987654:%d", no), no, "T", hmenum.ParamsetKeyValues)
+		chs[no] = dev.AddChannel(fmt.Sprintf("MEQ0987654:%d", no), no, map[int]string{0: "MAINTENANCE", 1: "WEATHER_TRANSMIT", 2: "THERMALCONTROL_TRANSMIT"}[no], hmenum.ParamsetKeyValues)
 	}
 	ro := hmenum.OperationsRead | hmenum.OperationsEvent
 	rw := hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent

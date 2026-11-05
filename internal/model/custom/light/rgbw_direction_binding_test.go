@@ -49,7 +49,7 @@ func newIPRGBWDevice(t *testing.T) (*RGBWLight, *device.Channel) {
 		Model:        "HmIP-RGBW",
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
-	ch := dev.AddChannel("VCU2345678:1", 1, "DIMMER", hmenum.ParamsetKeyValues)
+	ch := dev.AddChannel("VCU2345678:1", 1, "UNIVERSAL_LIGHT_RECEIVER", hmenum.ParamsetKeyValues)
 	putWritableFloatDP(ch, hmenum.ParameterLevel)
 	putEnumSensorDP(ch, hmenum.ParameterActivityState, activityStateValueList)
 

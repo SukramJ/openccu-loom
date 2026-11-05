@@ -181,7 +181,7 @@ func TestRealDeviceModelsMaterializeCustomDataPoint(t *testing.T) {
 				Model:       tc.model,
 			})
 			addr := "TESTDEV:" + strconv.Itoa(primary)
-			ch := dev.AddChannel(addr, primary, "T", hmenum.ParamsetKeyValues)
+			ch := dev.AddChannel(addr, primary, profile.Config.ChannelGroup.PrimaryChannelTypes[0], hmenum.ParamsetKeyValues)
 			tc.wire(ch)
 
 			if err := custom.CreateCustomDataPoints(dev, registry); err != nil {

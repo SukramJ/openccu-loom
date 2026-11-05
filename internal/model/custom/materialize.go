@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"sync"
 
@@ -182,7 +183,7 @@ func CreateCustomDataPoint(dev *device.Device, ch *device.Channel, profile Profi
 		return nil
 	}
 
-	relevant := relevantChannels(profile)
+	relevant := relevantChannels(dev, profile)
 	if _, ok := relevant[ch.Number]; !ok {
 		return nil
 	}
@@ -239,25 +240,92 @@ func CreateCustomDataPoint(dev *device.Device, ch *device.Channel, profile Profi
 // [device.Channel.AssignGroupNumber] so [CreateCustomDataPoint] can read it
 // without going through Device.GroupChannels.
 //
+// Only channels the device carries with an accepted type join a group, see
+// [resolveChannelGroup].
+//
 // No-op when the profile has no Config or no PrimaryChannel set.
 func addChannelGroupsToDevice(dev *device.Device, profile Profile) {
 	if profile.Config == nil || !profile.Config.ChannelGroup.PrimaryChannelSet {
 		return
 	}
 	cg := profile.Config.ChannelGroup
-	primary := cg.PrimaryChannel
+	types := channelTypesByNumber(dev)
 
 	for _, base := range profile.Channels {
-		groupNo := base.Channel + primary
-		assignChannelGroup(dev, groupNo, groupNo)
-
-		if cg.StateChannelOffset != nil {
-			assignChannelGroup(dev, base.Channel+*cg.StateChannelOffset, groupNo)
+		group, ok := resolveChannelGroup(types, cg, base.Channel)
+		if !ok {
+			// A model's firmware generation can legitimately lack a channel a
+			// shared profile names, so this is not an error. The catalogue guard
+			// keeps it from going unnoticed for a model with a fixture.
+			slog.Debug(
+				"custom: profile candidate does not fit the device; no channel group",
+				slog.String("profile", string(profile.Name)),
+				slog.String("device_type", dev.Model),
+				slog.Int("primary_channel", base.Channel+cg.PrimaryChannel),
+			)
+			continue
 		}
-		for _, sec := range cg.SecondaryChannels {
-			assignChannelGroup(dev, base.Channel+sec, groupNo)
+		assignChannelGroup(dev, group.primary, group.primary)
+		if group.state != nil {
+			assignChannelGroup(dev, *group.state, group.primary)
+		}
+		for _, sec := range group.secondaries {
+			assignChannelGroup(dev, sec, group.primary)
 		}
 	}
+}
+
+// resolvedChannelGroup is one channel group as the device confirms it, in
+// absolute channel numbers.
+type resolvedChannelGroup struct {
+	primary     int
+	state       *int
+	secondaries []int
+}
+
+// resolveChannelGroup is the single place that decides which of a profile's
+// candidate channels a device really has. A candidate fits when the device carries
+// the channel and the role accepts its type. Without a fitting primary channel the
+// group does not exist, and ok is false.
+//
+// The caller must have checked PrimaryChannelSet.
+func resolveChannelGroup(types map[int]string, cg ChannelGroupConfig, base int) (group resolvedChannelGroup, ok bool) {
+	primary := base + cg.PrimaryChannel
+	if !channelFits(types, primary, cg.PrimaryChannelTypes) {
+		return resolvedChannelGroup{}, false
+	}
+	group.primary = primary
+	if cg.StateChannelOffset != nil {
+		if state := base + *cg.StateChannelOffset; channelFits(types, state, cg.StateChannelTypes) {
+			group.state = &state
+		}
+	}
+	for _, offset := range cg.SecondaryChannels {
+		if sec := base + offset; channelFits(types, sec, cg.SecondaryChannelTypes) {
+			group.secondaries = append(group.secondaries, sec)
+		}
+	}
+	return group, true
+}
+
+// channelFits reports whether the device carries channelNo with an accepted type.
+// An empty accepted list accepts any type.
+func channelFits(types map[int]string, channelNo int, accepted []string) bool {
+	channelType, ok := types[channelNo]
+	if !ok {
+		return false
+	}
+	return len(accepted) == 0 || slices.Contains(accepted, channelType)
+}
+
+// channelTypesByNumber returns the type of every channel of the device.
+func channelTypesByNumber(dev *device.Device) map[int]string {
+	channels := dev.Channels()
+	types := make(map[int]string, len(channels))
+	for _, ch := range channels {
+		types[ch.Number] = ch.Type
+	}
+	return types
 }
 
 // assignChannelGroup writes the group bookkeeping to both the
@@ -286,25 +354,35 @@ func assignChannelGroup(dev *device.Device, channelNo, groupNo int) {
 	}
 }
 
-// relevantChannels mirrors `_get_relevant_channels`
-// (`model/custom/definition.py:168`). The relevant set is the
-// cross-product of `[primary, *secondary]` × `device_config.channels`,
-// translated to absolute channel numbers. We deliberately preserve
-// Python's `None`-passthrough for primary by guarding on
-// PrimaryChannelSet — when the profile has no primary channel,
-// secondary offsets still contribute to the relevant set.
-func relevantChannels(profile Profile) map[int]struct{} {
+// relevantChannels returns the channels of dev that host a custom data point of
+// this profile: the primary and secondary channels of every group the device
+// confirms ([resolveChannelGroup]). We deliberately preserve Python's
+// `None`-passthrough for primary by guarding on PrimaryChannelSet — when the
+// profile has no primary channel, secondary offsets still contribute to the
+// relevant set.
+func relevantChannels(dev *device.Device, profile Profile) map[int]struct{} {
 	out := make(map[int]struct{})
 	if profile.Config == nil {
 		return out
 	}
 	cg := profile.Config.ChannelGroup
+	types := channelTypesByNumber(dev)
 	for _, base := range profile.Channels {
-		if cg.PrimaryChannelSet {
-			out[base.Channel+cg.PrimaryChannel] = struct{}{}
+		if !cg.PrimaryChannelSet {
+			for _, offset := range cg.SecondaryChannels {
+				if sec := base.Channel + offset; channelFits(types, sec, cg.SecondaryChannelTypes) {
+					out[sec] = struct{}{}
+				}
+			}
+			continue
 		}
-		for _, sec := range cg.SecondaryChannels {
-			out[base.Channel+sec] = struct{}{}
+		group, ok := resolveChannelGroup(types, cg, base.Channel)
+		if !ok {
+			continue
+		}
+		out[group.primary] = struct{}{}
+		for _, sec := range group.secondaries {
+			out[sec] = struct{}{}
 		}
 	}
 	return out
