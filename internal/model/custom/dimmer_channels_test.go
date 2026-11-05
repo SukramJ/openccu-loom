@@ -15,7 +15,7 @@ import (
 // through the materializer: HmIP-BDT-I shares the HmIP-BDT prefix but has every
 // dimmer channel one higher, so a prefix hit on the shorter entry would bind the
 // light to its state channel. The channel numbers of HmIP-BDT-I come from the
-// owner's channel table, not from a device export.
+// eQ-3 device documentation, crRFD 1.60.1, section 10 (BDT_V1).
 func TestBDTVariantsBindDimmerToTheirOwnChannels(t *testing.T) {
 	t.Parallel()
 
