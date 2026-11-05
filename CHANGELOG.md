@@ -62,6 +62,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **HmIP-FS6 no longer exposes `OPERATING_VOLTAGE`.** It now hides the
   parameter like `HmIP-FSM`. An automation that reads this value on an
   HmIP-FS6 loses it.
+- **Timed opening of an HmIP-WSM or ELV-SH-WSM valve on current firmware.**
+  A valve with firmware 1.4.12 has `DURATION_VALUE` and `DURATION_UNIT`
+  instead of `ON_TIME`, but opening it for a set time still wrote `ON_TIME`.
+  The valve now writes the parameters its channel carries. Older firmware
+  with `ON_TIME` behaves as before.
+- **HmIP-LSC no longer has a light on its week-profile channel.** The model
+  used the HmIP-RGBW schema with three secondary channels. That built a
+  second light on channel 2, the week-profile channel, and declared channels
+  3 and 4, which the device does not have. The light on channel 1 and the
+  week-program target channels are unchanged.
 
 ## [0.96.0] - 2026-10-31
 

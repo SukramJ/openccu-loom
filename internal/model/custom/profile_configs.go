@@ -211,8 +211,10 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			StateChannelOffset:              nil,
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
-				hmenum.FieldOnTimeValue: Bare(hmenum.ParameterOnTime),
-				hmenum.FieldState:       Bare(hmenum.ParameterState),
+				hmenum.FieldDurationUnit:  Bare(hmenum.ParameterDurationUnit),
+				hmenum.FieldDurationValue: Bare(hmenum.ParameterDurationValue),
+				hmenum.FieldOnTimeValue:   Bare(hmenum.ParameterOnTime),
+				hmenum.FieldState:         Bare(hmenum.ParameterState),
 			},
 			ChannelFields: map[int]map[hmenum.Field]FieldValue{
 				-1: {
@@ -850,4 +852,14 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 		AdditionalDataPoints:     nil,
 		IncludeDefaultDataPoints: true,
 	},
+}
+
+// ipRGBWSingleChannelConfig returns the IPRGBW schema without secondary channels,
+// for HmIP-LSC. It has one UNIVERSAL_LIGHT_RECEIVER, and channel 2 is
+// UNIVERSAL_LIGHT_WEEK_PROFILE (eQ-3 device documentation, crRFD 1.60.1, section
+// 180). The rest of the schema is shared, so the copy is shallow.
+func ipRGBWSingleChannelConfig() *ProfileConfig {
+	cfg := *ProfileConfigs[hmenum.DeviceProfile("IPRGBW")]
+	cfg.ChannelGroup.SecondaryChannels = nil
+	return &cfg
 }
