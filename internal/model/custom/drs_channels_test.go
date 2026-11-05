@@ -46,8 +46,19 @@ func TestDRSVariantsGroupOnlyTheirOwnChannels(t *testing.T) {
 				Model:        tt.model,
 				ProductGroup: hmenum.ProductGroupHmIP,
 			})
+			// Channel 0 is maintenance, then each output is a transmitter and three
+			// receivers, and the last channel is the week profile.
 			for i := range tt.weekProfile + 1 {
-				dev.AddChannel("0001DR:"+itoaSmall(i), i, "T", hmenum.ParamsetKeyValues)
+				channelType := "SWITCH_VIRTUAL_RECEIVER"
+				switch {
+				case i == 0:
+					channelType = "MAINTENANCE"
+				case i == tt.weekProfile:
+					channelType = "SWITCH_WEEK_PROFILE"
+				case i%4 == 1:
+					channelType = "SWITCH_TRANSMITTER"
+				}
+				dev.AddChannel("0001DR:"+itoaSmall(i), i, channelType, hmenum.ParamsetKeyValues)
 			}
 
 			if err := CreateCustomDataPoints(dev, r); err != nil {

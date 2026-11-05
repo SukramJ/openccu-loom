@@ -305,9 +305,31 @@ func TestAnalyseSeparatesCorrectFromWrongChannelBinding(t *testing.T) {
 func TestAnalyseReportsChannelsTheModelDoesNotHave(t *testing.T) {
 	latest, _ := sampleLatest(t)
 	a := analyse(latest, testCatalog(t, dimmerProfile("hmip-dim", 3)))
-	want := []missingChannel{{model: "HmIP-DIM", profile: "IPDimmer", role: "secondary", channel: 4}}
+	want := []missingChannel{{model: "HmIP-DIM", profile: "IPDimmer", role: "secondary", channel: 4, reason: "no such channel"}}
 	if !slices.Equal(a.missing, want) {
 		t.Errorf("missing = %v, want %v", a.missing, want)
+	}
+}
+
+// TestAnalyseSkipsTheGroupOfAPrimaryTheRoleDoesNotAccept pins the materializer's
+// rule in the report: the transmitter is not an accepted primary, so the group does
+// not exist and its secondary channel does not count as covered.
+func TestAnalyseSkipsTheGroupOfAPrimaryTheRoleDoesNotAccept(t *testing.T) {
+	latest, _ := sampleLatest(t)
+	profile := dimmerProfile("hmip-dim", 1)
+	profile.Config.ChannelGroup.PrimaryChannelTypes = []string{"DIMMER_VIRTUAL_RECEIVER"}
+
+	a := analyse(latest, testCatalog(t, profile))
+
+	want := []missingChannel{{model: "HmIP-DIM", profile: "IPDimmer", role: "primary", channel: 1, reason: "type DIMMER_TRANSMITTER not accepted"}}
+	if !slices.Equal(a.missing, want) {
+		t.Errorf("missing = %v, want %v", a.missing, want)
+	}
+	if len(a.combinations["IPDimmer"]) != 0 {
+		t.Errorf("combinations = %v, want none", a.combinations)
+	}
+	if len(a.uncovered) != 1 || !strings.Contains(a.uncovered[0][2], "2: DIMMER_VIRTUAL_RECEIVER") {
+		t.Errorf("uncovered = %v, want the receivers listed", a.uncovered)
 	}
 }
 

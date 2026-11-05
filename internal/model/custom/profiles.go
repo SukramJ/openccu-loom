@@ -1132,7 +1132,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
 		ScheduleChannelNo: nil,
 		Extended:          nil,
-		Config:            ipRGBWSingleChannelConfig(),
+		Config:            ProfileConfigs[hmenum.DeviceProfile("IPRGBW")],
 	})
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("IPGarage"),
@@ -1510,19 +1510,6 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategorySwitch,
 		Channels:          []ChannelRoleAssignment{{Channel: 2, Role: ChannelRolePrimary}, {Channel: 6, Role: ChannelRolePrimary}, {Channel: 10, Role: ChannelRolePrimary}, {Channel: 14, Role: ChannelRolePrimary}, {Channel: 18, Role: ChannelRolePrimary}, {Channel: 22, Role: ChannelRolePrimary}, {Channel: 26, Role: ChannelRolePrimary}, {Channel: 30, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: nil,
-		Extended:          nil,
-		Config:            ProfileConfigs[hmenum.DeviceProfile("IPSwitch")],
-	})
-	// HmIPW-DRS4 has four outputs and its channel 17 is SWITCH_WEEK_PROFILE, so the
-	// eight groups of the hmipw-drs prefix do not fit it. Source: eQ-3 device
-	// documentation, crRFD 1.60.1, section 133 (HMIPW_DRS4_V1).
-	r.MustRegister(Profile{
-		Name:              hmenum.DeviceProfile("IPSwitch"),
-		DeviceType:        "hmipw-drs4",
-		ProductGroup:      hmenum.ProductGroupHmIP,
-		Category:          hmenum.DataPointCategorySwitch,
-		Channels:          []ChannelRoleAssignment{{Channel: 2, Role: ChannelRolePrimary}, {Channel: 6, Role: ChannelRolePrimary}, {Channel: 10, Role: ChannelRolePrimary}, {Channel: 14, Role: ChannelRolePrimary}},
 		ScheduleChannelNo: nil,
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPSwitch")],

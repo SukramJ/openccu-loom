@@ -5,6 +5,7 @@ package lock_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -69,7 +70,10 @@ func newIPLockDevice(t *testing.T, model string, lockChannel, jammedChannel int)
 		}
 		typ := "MAINTENANCE"
 		if no == lockChannel {
-			typ = "LOCK"
+			typ = "DOOR_LOCK_TRANSCEIVER"
+			if strings.HasPrefix(model, "HmIP-DLD") {
+				typ = "DOOR_LOCK_STATE_TRANSMITTER"
+			}
 		}
 		chs[no] = dev.AddChannel(fmt.Sprintf("000A1BE9957782:%d", no), no, typ, hmenum.ParamsetKeyValues)
 	}

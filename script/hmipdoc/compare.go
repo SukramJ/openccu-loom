@@ -84,6 +84,7 @@ type typeCombination struct {
 type missingChannel struct {
 	model, profile, role string
 	channel              int
+	reason               string
 }
 
 // analysis collects the findings of the comparison.
@@ -143,16 +144,22 @@ func (a *analysis) addProfile(model string, s *section, p custom.Profile, covere
 		if cg.PrimaryChannelSet {
 			groupNo = base.Channel + cg.PrimaryChannel
 			primary = &groupNo
+			// Like the materializer: without a fitting primary channel the group
+			// does not exist, so nothing else of it is evaluated.
+			if reason, fits := candidateFits(s, groupNo, cg.PrimaryChannelTypes); !fits {
+				a.missing = append(a.missing, missingChannel{model: model, profile: name, role: "primary", channel: groupNo, reason: reason})
+				continue
+			}
 		}
 		group := p.Rebase(groupNo)
 
 		a.addCombination(name, model, s, primary, group.StateChannel)
 
-		a.addRole(model, name, "primary", primary, s, covered)
-		a.addRole(model, name, "state", group.StateChannel, s, covered)
+		a.addRole(model, name, "primary", primary, cg.PrimaryChannelTypes, s, covered)
+		a.addRole(model, name, "state", group.StateChannel, cg.StateChannelTypes, s, covered)
 		for _, offset := range cg.SecondaryChannels {
 			secondary := base.Channel + offset
-			a.addRole(model, name, "secondary", &secondary, s, covered)
+			a.addRole(model, name, "secondary", &secondary, cg.SecondaryChannelTypes, s, covered)
 		}
 
 		a.addFields(model, name, "fields", primary, group.Fields, s)
@@ -182,14 +189,29 @@ func (a *analysis) addCombination(profile, model string, s *section, primary, st
 	a.combinations[profile][key] = append(a.combinations[profile][key], model)
 }
 
-func (a *analysis) addRole(model, profile, role string, channel *int, s *section, covered map[int]struct{}) {
+func (a *analysis) addRole(model, profile, role string, channel *int, accepted []string, s *section, covered map[int]struct{}) {
 	if channel == nil {
 		return
 	}
-	covered[*channel] = struct{}{}
-	if _, ok := s.channels[*channel]; !ok {
-		a.missing = append(a.missing, missingChannel{model: model, profile: profile, role: role, channel: *channel})
+	reason, fits := candidateFits(s, *channel, accepted)
+	if !fits {
+		a.missing = append(a.missing, missingChannel{model: model, profile: profile, role: role, channel: *channel, reason: reason})
+		return
 	}
+	covered[*channel] = struct{}{}
+}
+
+// candidateFits applies the materializer's rule to a documented model: the channel
+// exists and the role accepts its type. An empty accepted list accepts any type.
+func candidateFits(s *section, channel int, accepted []string) (reason string, fits bool) {
+	name, ok := s.channels[channel]
+	if !ok {
+		return "no such channel", false
+	}
+	if len(accepted) > 0 && !slices.Contains(accepted, name) {
+		return "type " + name + " not accepted", false
+	}
+	return "", true
 }
 
 func (a *analysis) addFields(model, profile, role string, channel *int, fields map[hmenum.Field]custom.FieldValue, s *section) {
@@ -348,7 +370,7 @@ func (a *analysis) missingRows() [][]string {
 	sorted = slices.Compact(sorted)
 	rows := make([][]string, 0, len(sorted))
 	for _, m := range sorted {
-		rows = append(rows, []string{m.model, m.profile, m.role, strconv.Itoa(m.channel)})
+		rows = append(rows, []string{m.model, m.profile, m.role, strconv.Itoa(m.channel), m.reason})
 	}
 	return rows
 }
@@ -419,9 +441,10 @@ func report(latest map[string]*section, sections []*section, cat catalog) []stri
 		fmt.Sprintf("- Without a configuration: %d", len(a.noConfig)),
 		fmt.Sprintf("- Profiles without a schema (the materializer skips them): %d", len(a.withoutSchema)),
 		"",
-		"## 2. Configured channel does not exist on the model", "",
+		"## 2. Candidate channels the materializer skips", "",
+		"Expected where a profile spans model variants. Read the primary rows: a model whose only primary is skipped has no custom data point.", "",
 	)
-	writeTable(&out, []string{"Model", "Profile", "Role", "Channel"}, a.missingRows())
+	writeTable(&out, []string{"Model", "Profile", "Role", "Channel", "Reason"}, a.missingRows())
 
 	out = append(out, "## 3. Channel types per profile (primary, state)", "", "Rare combinations are worth reading.", "")
 	writeTable(&out, []string{"Profile", "Primary type", "State type", "Groups", "Models"}, a.combinationRows())

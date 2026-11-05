@@ -38,8 +38,13 @@ func newScheduleTargetDevice(t *testing.T, model, address string, maxChannel int
 		Model:        model,
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
+	// Secondary channels only count with the type the role accepts.
+	channelType := "SWITCH_VIRTUAL_RECEIVER"
+	if model == "ELV-SH-WSM" {
+		channelType = "WATER_SWITCH_VIRTUAL_RECEIVER"
+	}
 	for i := 0; i <= maxChannel; i++ {
-		d.AddChannel(fmt.Sprintf("%s:%d", address, i), i, "T", hmenum.ParamsetKeyValues)
+		d.AddChannel(fmt.Sprintf("%s:%d", address, i), i, channelType, hmenum.ParamsetKeyValues)
 	}
 	for _, no := range cdpChannels {
 		chAddr := fmt.Sprintf("%s:%d", address, no)
@@ -83,6 +88,19 @@ func TestScheduleRelevantChannelGroupsIrrigationValve(t *testing.T) {
 	d := newScheduleTargetDevice(t, "ELV-SH-WSM", "0052E3C0002EC3", 7, []int{4})
 	got := flattenGroups(ScheduleRelevantChannelGroups(d, DefaultRegistry()))
 	want := []string{"4:p4 s5 s6 "}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ScheduleRelevantChannelGroups = %v, want %v", got, want)
+	}
+}
+
+// TestScheduleRelevantChannelGroupsLeavesOutSecondariesThatDoNotFit verifies that
+// a schedule target is a channel the device confirms: the HmIP-RGBW schema names
+// three secondary channels, and the channels of this device do not fit them.
+func TestScheduleRelevantChannelGroupsLeavesOutSecondariesThatDoNotFit(t *testing.T) {
+	t.Parallel()
+	d := newScheduleTargetDevice(t, "HmIP-LSC", "0015226998783C", 2, []int{1})
+	got := flattenGroups(ScheduleRelevantChannelGroups(d, DefaultRegistry()))
+	want := []string{"1:p1 "}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ScheduleRelevantChannelGroups = %v, want %v", got, want)
 	}

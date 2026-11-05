@@ -306,7 +306,7 @@ func aggregateCustomDPCases() []aggregateGoldenCase {
 		// the same channel, so the two are only told apart by the body.
 		{name: "cover/garage", build: agg(aggregateFixture{
 			model: "HmIP-MOD-HO", address: "0001MODHO001", deviceName: "Garagentor",
-			channels: map[int]string{1: "GARAGE_DOOR_CHANNEL"},
+			channels: map[int]string{1: "DOOR_RECEIVER"},
 		}, 1)},
 		{name: "lock/door-lock-drive", build: agg(aggregateFixture{
 			model: "HmIP-DLD", address: "0001DLD00001", deviceName: "Haustür",
@@ -326,11 +326,11 @@ func aggregateCustomDPCases() []aggregateGoldenCase {
 		// the plane.
 		{name: "siren/alarm-siren", build: agg(aggregateFixture{
 			model: "HmIP-ASIR", address: "0001ASIR0001", deviceName: "Sirene Diele",
-			channels: map[int]string{3: "SIREN_VIRTUAL_RECEIVER"},
+			channels: map[int]string{3: "ALARM_SWITCH_VIRTUAL_RECEIVER"},
 		}, 3)},
 		{name: "valve/irrigation", build: agg(aggregateFixture{
 			model: "ELV-SH-WSM", address: "0001WSM00001", deviceName: "Bewässerung Beet",
-			channels: map[int]string{4: "WATERING_ACTUATOR"},
+			channels: map[int]string{4: "WATER_SWITCH_VIRTUAL_RECEIVER"},
 		}, 4)},
 		// A device with four primary custom data points of the same
 		// family. The entity name is no longer null but `ch<N>`, and

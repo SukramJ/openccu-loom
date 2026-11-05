@@ -51,10 +51,10 @@ func newIPBlindDeviceWithGroupChannel(t *testing.T) (blind *cover.Blind, stateCh
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
 	dev.AddChannel("VCU1234567:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
-	state := dev.AddChannel("VCU1234567:3", 3, "SHUTTER_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	state := dev.AddChannel("VCU1234567:3", 3, "SHUTTER_TRANSMITTER", hmenum.ParamsetKeyValues)
 	putReadOnlyFloatDP(state, hmenum.ParameterLevel)
 	putReadOnlyFloatDP(state, hmenum.ParameterLevel2)
-	action := dev.AddChannel("VCU1234567:4", 4, "SHUTTER_CONTACT", hmenum.ParamsetKeyValues)
+	action := dev.AddChannel("VCU1234567:4", 4, "SHUTTER_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
 	putCoverFloatDP(action, hmenum.ParameterLevel)
 	putCoverFloatDP(action, hmenum.ParameterLevel2)
 

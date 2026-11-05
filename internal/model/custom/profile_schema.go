@@ -138,6 +138,17 @@ type ChannelGroupConfig struct {
 	// channel. nil means "no state channel".
 	StateChannelOffset *int
 
+	// PrimaryChannelTypes, SecondaryChannelTypes and StateChannelTypes are the
+	// channel types each role accepts. The channel numbers above are candidates:
+	// the materializer binds one only if the device carries it and its type is
+	// listed here, so a model that shares a prefix or a schema with another family
+	// cannot inherit a channel that is wrong for it. An empty list accepts any type
+	// and exists for ad-hoc schemas; the catalogue itself must declare every role
+	// it uses (ADR 0087).
+	PrimaryChannelTypes   []string
+	SecondaryChannelTypes []string
+	StateChannelTypes     []string
+
 	// AllowUndefinedGenericDataPoints, when true, lets a profile accept
 	// extra generic data points that the channel exposes but the
 	// profile does not name explicitly.

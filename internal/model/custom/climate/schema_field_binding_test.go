@@ -242,7 +242,7 @@ func TestRfThermostatControlModeAndValveStateBindThroughSubscribe(t *testing.T) 
 func TestRfThermostatGroupControlModeBindsThroughSubscribe(t *testing.T) {
 	t.Parallel()
 	dev := device.New(device.Config{InterfaceID: "BidCos-RF", Address: "MEQ0333444", Model: "HM-CC-VG-1"})
-	ch := dev.AddChannel("MEQ0333444:1", 1, "CLIMATECONTROL_VG_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	ch := dev.AddChannel("MEQ0333444:1", 1, "CLIMATECONTROL_RT_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	controlMode := putStringSensor(ch, hmenum.ParameterControlMode)
 
 	if err := custom.CreateCustomDataPoints(dev, custom.DefaultRegistry()); err != nil {
@@ -264,7 +264,7 @@ func TestRfThermostatGroupControlModeBindsThroughSubscribe(t *testing.T) {
 func newIPThermostatGroupFixture(t *testing.T) (climateCh, stateCh *device.Channel, level *generic.Sensor[float64], partyMode, state *generic.BinarySensor) {
 	t.Helper()
 	dev := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "0002AB1709AF01", Model: "HmIP-HEATING"})
-	climateCh = dev.AddChannel("0002AB1709AF01:1", 1, "HEATING_THERMOSTAT_CHANNEL", hmenum.ParamsetKeyValues)
+	climateCh = dev.AddChannel("0002AB1709AF01:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	level = putFloatSensor(climateCh, hmenum.ParameterLevel)
 	partyMode = putBoolSensor(climateCh, hmenum.ParameterPartyMode)
 	stateCh = dev.AddChannel("0002AB1709AF01:4", 4, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)

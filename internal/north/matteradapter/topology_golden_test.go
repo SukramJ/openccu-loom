@@ -195,7 +195,7 @@ func goldenMeteringPlug(t *testing.T) *device.Device {
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
 	for i := range 7 {
-		dev.AddChannel("0001PSM01:"+strconv.Itoa(i), i, "X", hmenum.ParamsetKeyValues)
+		dev.AddChannel("0001PSM01:"+strconv.Itoa(i), i, goldenPSMChannelType(i), hmenum.ParamsetKeyValues)
 	}
 	ch3 := dev.Channel("0001PSM01:3")
 	ch3.Put(generic.NewSwitch(generic.Spec{
@@ -275,7 +275,7 @@ func goldenClimateSensor(t *testing.T) *device.Device {
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
 	for i := range 2 {
-		dev.AddChannel("0003STH03:"+strconv.Itoa(i), i, "X", hmenum.ParamsetKeyValues)
+		dev.AddChannel("0003STH03:"+strconv.Itoa(i), i, []string{"MAINTENANCE", "CLIMATE_TRANSCEIVER"}[i], hmenum.ParamsetKeyValues)
 	}
 	ch1 := dev.Channel("0003STH03:1")
 	// An operator-assigned channel name suppresses the channel-number
@@ -620,4 +620,20 @@ func lineDiff(want, got []byte) string {
 		fmt.Fprintf(&b, "  line %d:\n    golden: %s\n    got:    %s\n", i+1, w, g)
 	}
 	return b.String()
+}
+
+// goldenPSMChannelType returns the channel type of an HmIP-PSM channel.
+func goldenPSMChannelType(channelNo int) string {
+	switch channelNo {
+	case 0:
+		return "MAINTENANCE"
+	case 1:
+		return "KEY_TRANSCEIVER"
+	case 2:
+		return "SWITCH_TRANSMITTER"
+	case 6:
+		return "ENERGIE_METER_TRANSMITTER"
+	default:
+		return "SWITCH_VIRTUAL_RECEIVER"
+	}
 }

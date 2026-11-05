@@ -58,7 +58,7 @@ func buildNamingDevice(model string, maxCh int) *device.Device {
 	})
 	for i := 0; i <= maxCh; i++ {
 		addr := "0001NAMING:" + itoa(i)
-		d.AddChannel(addr, i, "X", hmenum.ParamsetKeyValues)
+		d.AddChannel(addr, i, catalogueChannelType(model, i), hmenum.ParamsetKeyValues)
 	}
 	return d
 }
