@@ -6,6 +6,7 @@ package visibility
 import (
 	"io"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -191,6 +192,13 @@ func IgnoreParametersByDeviceLower() map[string]map[string]struct{} {
 		out[param] = cp
 	}
 	return out
+}
+
+// UnIgnoreParameterModels returns the model keys of the per-device un-ignore
+// table in sorted order. The device-documentation check under script/hmipdoc
+// uses them to find keys no documented model matches.
+func UnIgnoreParameterModels() []string {
+	return slices.Sorted(maps.Keys(unIgnoreParametersByDevice))
 }
 
 // IgnoreDevicesForDataPointEventsLower returns a read-only copy of the
