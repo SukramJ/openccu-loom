@@ -5788,7 +5788,14 @@ export interface components {
         };
         /** @description Body for POST /cdps/{name}/{operation}. The operation is in the URL path. */
         CustomDPInvokeRequest: {
-            /** @description Operation-specific parameters (category-dependent). */
+            /**
+             * @description Operation-specific parameters (category-dependent). A bounded
+             *     switch-on takes its duration as `seconds` (a positive number) in
+             *     the same call: switch `turn_on_for`, valve `open`, light
+             *     `turn_on` and `set_level` (the last two since
+             *     `cdp.bounded_on.v1`). The device writes the on-time together
+             *     with the switch-on.
+             */
             params?: {
                 [key: string]: unknown;
             };
@@ -6541,7 +6548,10 @@ export interface components {
              *     `features` on `GET /system/ccu`, and an operation a central
              *     does not offer answers the `feature_unavailable` problem),
              *     `south.openccu_lite.v1` (a central can be an openccu-lite
-             *     system: `system_type: openccu-lite`).
+             *     system: `system_type: openccu-lite`), `cdp.bounded_on.v1`
+             *     (every custom-data-point switch-on that can be bounded takes
+             *     the duration in the same command as `seconds`: switch
+             *     `turn_on_for`, valve `open`, light `turn_on` and `set_level`).
              *     Conditional entries surface only when configured:
              *     `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
              *     `auth.oidc.v1`, `auth.ccu.v1`, `auth.basic.v1`,

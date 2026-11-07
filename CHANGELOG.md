@@ -36,8 +36,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and the device page shows a switch between the two. `GET /schedules` lists one entry per schedule, so such a device
   appears twice, and takes `device=<address>` to list one device's schedules;
   the MCP tool `list_schedules` takes the same filter (API 15.4.0).
+- **A light switch-on can carry its on-time.** The custom-data-point
+  operations `turn_on` and `set_level` of a light take `seconds`, a positive
+  number. The daemon writes the on-time together with the level, so the light
+  switches itself off after that time even if the daemon is gone by then.
+  Before, a light had only `set_timer_on_time`, which stores the on-time in the
+  daemon for the next `turn_on`. A switch-on from another client could use
+  that stored on-time first, and `set_level` with a brightness ignored it.
+  `set_timer_on_time` is kept. The new always-on capability
+  `cdp.bounded_on.v1` tells a client that the switch's `turn_on_for`, the
+  valve's `open` and now the light take `seconds` (API 15.5.0).
 
 ### Changed
+
+- **A switch's `turn_on`, `turn_off` and `toggle` work like the Matter
+  OnOff command.** Over REST and WebSocket, `turn_on` on a switch that is
+  already on is no longer written again, and `turn_off` drops an on-time
+  stored for the next switch-on. Before, these operations wrote STATE
+  directly. A stored on-time survived a `turn_off` and limited a later,
+  unrelated switch-on.
 
 - **godevccu v0.10.1 → v0.11.0.** The simulator carries an HmIP-BDT-I
   fixture from a device export, so the HmIP-BDT-I profile is now checked

@@ -822,11 +822,15 @@ func (d *CustomDPDispatcher) dispatchModulatingValve(
 func (d *CustomDPDispatcher) dispatchSwitch(
 	ctx context.Context, s *switchdev.Switch, op string, p map[string]any, prio hmenum.CommandPriority,
 ) error {
+	// turn_on / turn_off go through the switch's own methods, the path the
+	// Matter OnOff command takes too: they skip a write that changes nothing,
+	// consume a staged on-time, and drop it on a switch-off so it cannot
+	// bound a later switch-on. A bare STATE write did none of that.
 	switch op {
 	case "turn_on":
-		return s.Set(ctx, true, prio)
+		return s.TurnOn(ctx, prio)
 	case "turn_off":
-		return s.Set(ctx, false, prio)
+		return s.TurnOff(ctx, prio)
 	case "turn_on_for", "set_on_time":
 		dur, err := requireOnTime(p)
 		if err != nil {
@@ -834,8 +838,10 @@ func (d *CustomDPDispatcher) dispatchSwitch(
 		}
 		return s.TurnOnFor(ctx, dur, prio)
 	case "toggle":
-		on, _ := s.IsOn()
-		return s.Set(ctx, !on, prio)
+		if on, _ := s.IsOn(); on {
+			return s.TurnOff(ctx, prio)
+		}
+		return s.TurnOn(ctx, prio)
 	default:
 		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}

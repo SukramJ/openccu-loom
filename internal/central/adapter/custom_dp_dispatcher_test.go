@@ -1415,6 +1415,64 @@ func TestDispatchSwitch_Toggle(t *testing.T) {
 	}
 }
 
+// turn_on goes through Switch.TurnOn, the path the Matter OnOff command
+// takes: a switch already on is not written again. A bare STATE write here
+// re-sent STATE=true on every press.
+func TestDispatchSwitch_TurnOnSkipsAnOutputAlreadyOn(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW007", w)
+	s.OnEvent(true)
+	disp, _ := buildDispatcher(t, "SW007", "STATE", s)
+
+	if err := disp.InvokeCustomDP(context.Background(), "SW007", "STATE", "turn_on", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on: %v", err)
+	}
+	if n := w.callCount(); n != 0 {
+		t.Fatalf("turn_on on a switch already on wrote %d calls, want 0", n)
+	}
+}
+
+// turn_off drops a staged on-time. Left in place, it would bound the next
+// unbounded switch-on — a timer the caller of that switch-on never asked for.
+func TestDispatchSwitch_TurnOffDropsAStagedOnTime(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW008", w)
+	s.OnEvent(true)
+	s.SetTimerOnTime(30 * time.Second)
+	disp, _ := buildDispatcher(t, "SW008", "STATE", s)
+
+	if err := disp.InvokeCustomDP(context.Background(), "SW008", "STATE", "turn_off", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_off: %v", err)
+	}
+	s.OnEvent(false)
+	if err := disp.InvokeCustomDP(context.Background(), "SW008", "STATE", "turn_on", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on: %v", err)
+	}
+	if put, ok := w.lastPut(); ok {
+		t.Fatalf("the switch-on after turn_off carried the staged on-time: %v", put.values)
+	}
+	if sc, ok := w.lastSet(); !ok || sc.param != hmenum.ParameterState || sc.value != true {
+		t.Fatalf("last write = %+v (ok=%v), want a plain STATE=true", sc, ok)
+	}
+}
+
+func TestDispatchSwitch_ToggleTurnsAnOutputThatIsOnOff(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW009", w)
+	s.OnEvent(true)
+	disp, _ := buildDispatcher(t, "SW009", "STATE", s)
+
+	if err := disp.InvokeCustomDP(context.Background(), "SW009", "STATE", "toggle", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("toggle: %v", err)
+	}
+	if sc, ok := w.lastSet(); !ok || sc.value != false {
+		t.Fatalf("toggle on a switch that is on wrote %+v (ok=%v), want STATE=false", sc, ok)
+	}
+}
+
 func TestDispatchSwitch_TurnOnForMissingDuration(t *testing.T) {
 	t.Parallel()
 	w := &dispatchWriter{}
