@@ -60,8 +60,8 @@ type AlarmCodeAdmin interface {
 // AlarmPanelCommandsConfig bundles the alarm-panel facade consumed by
 // [RegisterAlarmPanelCommands]. A nil Panel skips the whole family —
 // the daemon leaves it nil when the alarm service is disabled. A nil
-// Codes leaves the codes_* commands registered but serving "unavailable"
-// until the codes facade is wired.
+// Codes leaves the codes_* commands registered but serving "unavailable";
+// the daemon leaves it nil when the alarm service has no code store.
 type AlarmPanelCommandsConfig struct {
 	Panel AlarmPanelQuery
 	Codes AlarmCodeAdmin
@@ -492,8 +492,7 @@ func alarmEngineError(err error) *CommandError {
 //
 // These are operator-gated writes (see writeCommandRoles): codes are
 // security material, so even the list is not viewer-open. A nil admin
-// (codes facade not yet wired) answers "unavailable" rather than
-// panicking.
+// (no alarm code store) answers "unavailable" rather than panicking.
 
 // alarmCodeUpsertArgs is the shared create/update body. For update the
 // id names the target; for create it is ignored (server-generated).

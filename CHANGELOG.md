@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.97.0] - 2026-11-07
+
 ### Added
 
 - **Pre-releases and a release channel for the CCU add-on updater.** A
@@ -55,7 +57,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stored for the next switch-on. Before, these operations wrote STATE
   directly. A stored on-time survived a `turn_off` and limited a later,
   unrelated switch-on.
-
 - **godevccu v0.10.1 → v0.11.0.** The simulator carries an HmIP-BDT-I
   fixture from a device export, so the HmIP-BDT-I profile is now checked
   against real device data by the fleet-wide tests. The module is built with

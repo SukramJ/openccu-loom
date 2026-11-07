@@ -91,7 +91,6 @@ type LinkProfilesProvider interface {
 // ParameterDeterminer is the write/read surface for `paramset.determine`.
 // Mirrors Python `ws_determine_parameter` (websocket_api.py:2556) which
 // calls `device.client.determine_parameter`.
-// Stub until determine_parameter is wired on InterfaceClient.
 type ParameterDeterminer interface {
 	DetermineParameter(ctx context.Context, interfaceID, channelAddress, parameterID string) (any, error)
 }
@@ -124,9 +123,9 @@ type MissingCommandsConfig struct {
 	HubData HubDataProvider
 	// UserPermissions backs `system.user_permissions` (wired — reads from ctx).
 	UserPermissions UserPermissionsProvider
-	// ScheduleEnabler backs `schedules.set_enabled` (stub).
+	// ScheduleEnabler backs `schedules.set_enabled` (wired).
 	ScheduleEnabler ScheduleEnabler
-	// LinkFormSchema backs `links.get_form_schema` (stub).
+	// LinkFormSchema backs `links.get_form_schema` (wired).
 	LinkFormSchema LinkFormSchemaProvider
 	// LinkProfiles backs `links.get_profiles` and `links.apply_profile`.
 	LinkProfiles LinkProfilesProvider
@@ -136,7 +135,7 @@ type MissingCommandsConfig struct {
 	// disables enforcement — a test-only escape hatch; the production mount
 	// always wires the shared registry.
 	EditLocks EditLockVerifier
-	// ParameterDeterminer backs `paramset.determine` (stub).
+	// ParameterDeterminer backs `paramset.determine` (wired).
 	ParameterDeterminer ParameterDeterminer
 }
 

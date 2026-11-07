@@ -588,11 +588,10 @@ func (l *Light) SetLevel(ctx context.Context, level float64, priority hmenum.Com
 // `turn_on` without an explicit brightness restores the last known
 // non-zero level instead of jumping to full power.
 //
-// When a deferred timer is pending (set via [SetTimerOnTime]
+// When a deferred timer is pending (set via [SetTimerOnTime] or
 // [SetTimerRampTime]), the operation is bundled into a single atomic
-// put_paramset of {LEVEL[, ON_TIME, RAMP_TIME]} —.
-// "LEVEL": 1.0})`). The deferred timer is consumed by every TurnOn
-// call.
+// put_paramset of {LEVEL[, ON_TIME, RAMP_TIME]}. The deferred timer is
+// consumed by every TurnOn call.
 func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) error {
 	l.timerMu.Lock()
 	on, ramp := l.pendingOn, l.pendingRamp
@@ -820,7 +819,8 @@ func (l *Light) TurnOffWithRamp(ctx context.Context, ramp time.Duration, priorit
 // change, then drives LEVEL to 0. Clearing the timer first ensures that a
 // pending set_timer_on_time / set_timer_ramp_time that was queued for a
 // subsequent TurnOn does not interfere with the off command and mirrors the
-// reset_timer_on_time() pre-guard in the Python reference (light.py:396).
+// reset_timer_on_time() call that opens turn_off in the Python reference
+// (light.py).
 func (l *Light) TurnOff(ctx context.Context, priority hmenum.CommandPriority) error {
 	l.timerMu.Lock()
 	l.pendingOn = nil
