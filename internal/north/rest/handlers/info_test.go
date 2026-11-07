@@ -137,6 +137,9 @@ func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 		CapabilityREST:           true,
 		CapabilityWSBroadcasts:   true,
 		CapabilityProblemDetails: true,
+		// openccu-loom-client switches the light's bounded switch-on from
+		// the set_timer_on_time stage to `seconds` on this token.
+		CapabilityCDPBoundedOn: true,
 	}
 	for _, c := range body.Capabilities {
 		delete(want, c)

@@ -630,6 +630,20 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 	return l.TurnOnWith(ctx, cfg, priority)
 }
 
+// TurnOnFor turns the light on for `d` as one ON_TIME + LEVEL write, at
+// `level` (0..1) when given and at the remembered level otherwise. The
+// duration travels with the command instead of being staged first (see
+// [SetTimerOnTime]), so a caller on another plane can neither consume it nor
+// inherit it. A staged on-time is superseded and dropped; a staged ramp still
+// applies to this switch-on.
+func (l *Light) TurnOnFor(ctx context.Context, d time.Duration, level *float64, priority hmenum.CommandPriority) error {
+	l.timerMu.Lock()
+	ramp := l.pendingRamp
+	l.pendingOn, l.pendingRamp = nil, nil
+	l.timerMu.Unlock()
+	return l.TurnOnWith(ctx, OnConfig{OnTime: &d, RampTime: ramp, Brightness: level}, priority)
+}
+
 // SetTimerOnTime stores `d` for the next [TurnOn] call. The next TurnOn
 // merges it into one atomic put_paramset bundle.
 // Pass a zero or negative duration to clear the deferred timer.

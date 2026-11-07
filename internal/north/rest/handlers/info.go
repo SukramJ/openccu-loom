@@ -18,7 +18,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "15.4.0"
+const APIVersion = "15.5.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -77,6 +77,13 @@ const (
 	// CapabilitySouthOpenCCULite says this build can run a central against
 	// an openccu-lite system (system_type openccu-lite).
 	CapabilitySouthOpenCCULite = "south.openccu_lite.v1"
+	// CapabilityCDPBoundedOn says every custom-data-point switch-on that can
+	// be bounded takes the duration in the command itself, as `seconds`:
+	// the switch's turn_on_for, the valve's open, and the light's turn_on
+	// and set_level. A client that sees it never needs the light's
+	// set_timer_on_time stage, whose pending timer another plane's
+	// switch-on could consume; one that does not falls back to it.
+	CapabilityCDPBoundedOn = "cdp.bounded_on.v1"
 	// CapabilitySupervisedRestart is surfaced when the daemon
 	// detects that something (systemd, Docker, k8s) will bring it
 	// back up after a clean shutdown. The SPA reads this capability
@@ -297,6 +304,7 @@ func capabilities(d CapabilityDetector) []string {
 		CapabilityProblemDetails,
 		CapabilityCentralFeatures,
 		CapabilitySouthOpenCCULite,
+		CapabilityCDPBoundedOn,
 	}
 	if d == nil {
 		return out

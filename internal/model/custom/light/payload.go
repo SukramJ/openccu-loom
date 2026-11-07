@@ -260,12 +260,54 @@ func (l *Light) applyHAColorTempAndEffect(
 	return nil
 }
 
+// boundedOnTime reads the optional `seconds` of a light switch-on — the same
+// key the switch's turn_on_for and the valve's open take. Absent means an
+// unbounded switch-on; a present value must be a positive number, because
+// neither stack has a timer-cancel value a zero could stand for.
+func boundedOnTime(params map[string]any) (*time.Duration, error) {
+	raw, ok := params["seconds"]
+	if !ok {
+		return nil, nil //nolint:nilnil // absent is a valid, distinct answer: no bound
+	}
+	secs, err := toNumber(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %q: %w", payload.ErrServiceInvalidParam, "seconds", err)
+	}
+	if secs <= 0 {
+		return nil, fmt.Errorf("%w: %q must be positive, got %v", payload.ErrServiceInvalidParam, "seconds", secs)
+	}
+	d := time.Duration(secs * float64(time.Second))
+	return &d, nil
+}
+
+// turnOnFor is [Light.TurnOn], bounded by `onFor` when one is given.
+func (l *Light) turnOnFor(ctx context.Context, onFor *time.Duration, priority hmenum.CommandPriority) error {
+	if onFor != nil {
+		return l.TurnOnFor(ctx, *onFor, nil, priority)
+	}
+	return l.TurnOn(ctx, priority)
+}
+
+// setLevelFor writes `level`, bounded by `onFor` when one is given and the
+// level switches the light on. A bound on a switch-off has nothing to bound.
+func (l *Light) setLevelFor(ctx context.Context, level float64, onFor *time.Duration, priority hmenum.CommandPriority) error {
+	if onFor != nil && level > 0 {
+		return l.TurnOnFor(ctx, *onFor, &level, priority)
+	}
+	return l.SetLevel(ctx, level, priority)
+}
+
 // registerLightServices registers the base light service methods (turn_on,
 // turn_off, set_level) onto the ServiceRegistry inherited from
-// *generic.Float.
+// *generic.Float. turn_on and set_level take an optional `seconds` that
+// bounds the switch-on in the same write.
 func (l *Light) registerLightServices() {
-	l.RegisterService("turn_on", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
-		return l.TurnOn(ctx, priority)
+	l.RegisterService("turn_on", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		onFor, err := boundedOnTime(params)
+		if err != nil {
+			return err
+		}
+		return l.turnOnFor(ctx, onFor, priority)
 	})
 	l.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return l.TurnOff(ctx, priority)
@@ -310,6 +352,10 @@ func (l *Light) registerLightServices() {
 func (l *Light) applyHASetLevel(
 	ctx context.Context, params map[string]any, priority hmenum.CommandPriority,
 ) error {
+	onFor, err := boundedOnTime(params)
+	if err != nil {
+		return err
+	}
 	if state, ok := params["state"]; ok {
 		s, _ := state.(string)
 		switch strings.ToUpper(s) {
@@ -319,13 +365,13 @@ func (l *Light) applyHASetLevel(
 		case "ON":
 			if br, hasBr := params["brightness"]; hasBr {
 				if f, err := toNumber(br); err == nil {
-					if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
+					if err := l.setLevelFor(ctx, f/255.0, onFor, priority); err != nil {
 						return err
 					}
 					return l.applyHALightAttributes(ctx, params, priority)
 				}
 			}
-			if err := l.TurnOn(ctx, priority); err != nil {
+			if err := l.turnOnFor(ctx, onFor, priority); err != nil {
 				return err
 			}
 			return l.applyHALightAttributes(ctx, params, priority)
@@ -333,13 +379,20 @@ func (l *Light) applyHASetLevel(
 	}
 	if br, hasBr := params["brightness"]; hasBr {
 		if f, err := toNumber(br); err == nil {
-			if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
+			if err := l.setLevelFor(ctx, f/255.0, onFor, priority); err != nil {
 				return err
 			}
 			return l.applyHALightAttributes(ctx, params, priority)
 		}
 	}
 	if hasHALightAttributes(params) {
+		// A bound needs a switch-on to carry it; the attributes follow it,
+		// as they follow the switch-on of the "ON" branch.
+		if onFor != nil {
+			if err := l.TurnOnFor(ctx, *onFor, nil, priority); err != nil {
+				return err
+			}
+		}
 		return l.applyHALightAttributes(ctx, params, priority)
 	}
 	// Legacy scalar form: {"level": 0.5}.
@@ -353,7 +406,7 @@ func (l *Light) applyHASetLevel(
 	if v < 0 || v > 1 {
 		return fmt.Errorf("%w: %q value %v out of range [0, 1]", payload.ErrServiceInvalidParam, "level", v)
 	}
-	return l.SetLevel(ctx, v, priority)
+	return l.setLevelFor(ctx, v, onFor, priority)
 }
 
 // --- ColorLight ---
