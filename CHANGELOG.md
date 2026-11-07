@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The two week programs of a glass wall thermostat have their own ids.**
+  Since 0.97.0 an `HmIP-WGT` or `HmIP-WGTC` carries a switch schedule on
+  channel 7 and a heating schedule on channel 8, but
+  `GET /devices/{addr}/channels/{no}/week_profile` gave both the same
+  `unique_id`, `loom_week_profile_<device>_week_profile`. A client that keys
+  its entities on it, such as Home Assistant, could hold only one of the two.
+  The heating schedule of such a device is now
+  `loom_climate_week_profile_<device>_week_profile`, the key the reference
+  stack uses for it. The switch schedule and every device with a single
+  schedule keep their ids, so no other entity changes. MQTT was not affected;
+  it keys the schedules by channel (API 15.6.0).
+
 ## [0.97.0] - 2026-11-07
 
 ### Added

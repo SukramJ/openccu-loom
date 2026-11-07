@@ -59,7 +59,28 @@ const (
 	// SensorFamily is the routing-key family a week-profile entity is
 	// published under.
 	SensorFamily = "week_profile"
+	// ClimateSensorFamily is the family of a climate schedule that shares its
+	// device with a second schedule; see [SensorFamilyOf].
+	ClimateSensorFamily = "climate_week_profile"
 )
+
+// SensorFamilyOf returns the routing-key family of the week-profile entity of
+// a schedule of scheduleType on a device carrying profiles schedules.
+//
+// Both schedules of a device are device-level entities, so the family is the
+// only segment that can tell them apart. The climate schedule moves to
+// [ClimateSensorFamily] only next to a second schedule (HmIP-WGT and
+// HmIP-WGTC: switch schedule on channel 7, heating schedule on channel 8); a
+// thermostat with its one schedule keeps [SensorFamily] and so the entity it
+// has always had. That is the rule of the reference stack, which keeps the key
+// a consumer migrating from it holds (notes/parity/by_design.md, "Week
+// schedules").
+func SensorFamilyOf(scheduleType ScheduleType, profiles int) string {
+	if scheduleType == ScheduleTypeClimate && profiles > 1 {
+		return ClimateSensorFamily
+	}
+	return SensorFamily
+}
 
 // ChannelSwitchFamily is the routing-key family a channel-switch entity is
 // published under. Named beside the parameter for the same reason.
