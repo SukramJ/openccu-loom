@@ -4,6 +4,29 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.97.0
+
+- **New device profiles:** thermostats HmIP-WT, KW-STATH and KW-UKETRV, dimmers
+  HmIP-WUA, ELV-SH-WUA and HmIP-UDI-PB2, and the wired glass wall thermostats
+  HmIPW-WGT and HmIPW-WGTC. None of them was tested on a real device.
+- **Glass wall thermostats show both week programs:** the heating schedule and
+  the switch schedule of an HmIP-WGT or HmIP-WGTC.
+- **Timed switch-on:** a light can be switched on for a set time, and the light
+  switches itself off after that time. A switch that is already on is no
+  longer switched again by `turn_on`, and `turn_off` drops an on-time that was
+  stored for the next switch-on.
+- **Fixes:** opening an HmIP-DLD latch is no longer reported as locking. Matter
+  colour lights compute the same colours on arm64 as on amd64. HmIP-BDT-I uses
+  channel 5 for its light. HmIPW-DRS4, HmIP-LSC, HmIP-WGT and HmIP-WGTC no
+  longer get channels or groups they do not have. HmIP-WSM valves on firmware
+  1.4.12 open for the set time. Week-program targets on HmIP-WGT, -WGS,
+  -SMO230 and -WKP switch the right output. HmIP-DLP reports a jammed lock as
+  its own entity.
+- **Matter stack go-fabric 0.16.0** with the security fixes of its review.
+- **API clients:** REST API 15.5.0. It adds the capability `cdp.bounded_on.v1`
+  and `seconds` on the light operations, the `device` filter on
+  `GET /schedules` and the add-on update settings. All of it is additive.
+
 # 0.96.0
 
 - **Matter: specification level and controller profile.** Two new expert

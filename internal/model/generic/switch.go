@@ -50,10 +50,9 @@ func (s *Switch) Set(ctx context.Context, on bool, priority hmenum.CommandPriori
 }
 
 // TurnOn switches the output on. When a deferred timer is pending
-// (set via [SetTimerOnTime]) or `onTime` is non-zero, the operation
-// is sent as a single atomic put_paramset bundle of {ON_TIME, STATE}
-// Mirrors.
-// The deferred timer is consumed by every TurnOn call.
+// (set via [SetTimerOnTime]), ON_TIME and STATE go out as one atomic
+// bundle (see [Switch.TurnOnWithTimer] for how). The deferred timer is
+// consumed by every TurnOn call.
 func (s *Switch) TurnOn(ctx context.Context, priority hmenum.CommandPriority) error {
 	return s.turnOnWithTimer(ctx, nil, priority)
 }

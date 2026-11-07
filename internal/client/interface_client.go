@@ -334,11 +334,11 @@ func New(cfg Config) (*InterfaceClient, error) {
 	}
 	if cfg.Circuit == nil {
 		cfg.Circuit = reliability.NewCircuit(reliability.CircuitConfig{})
-		// Default incident listener — log the state change on trip / recovery so
-		// that an audit consumer (e.g. internal/audit) can observe events without
-		// explicit wiring. In the hexagonal architecture openccu-loom has no direct
-		// adapter; this default listener provides the equivalent without additional
-		// wiring overhead.
+		// Default incident listener: log the state change on trip / recovery, so
+		// a breaker transition is visible in the log even where nothing else
+		// listens. The event bus and the incident record attach their own
+		// listeners (WireCircuitBus / WireCircuitIncidents, called from
+		// internal/central/adapter/reliability_wiring.go); this one only logs.
 		ifaceID := string(cfg.Interface)
 		centralName := cfg.CentralName
 		logger := cfg.Logger

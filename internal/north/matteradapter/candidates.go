@@ -27,7 +27,7 @@ import (
 // `ENERGIE_METER_TRANSMITTER` resolves differently from the bare
 // parameter table).
 //
-// loom:reachable:reason="returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used"
+// loom:reachable:reason="returned by CollectCandidates and consumed by the exposure provider behind the Matter node pages (NewExposureProvider, wired in cmd/openccu-loom/daemon_matter.go); a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used"
 type Candidate struct {
 	Key         matterendpoint.SourceKey
 	DisplayName string

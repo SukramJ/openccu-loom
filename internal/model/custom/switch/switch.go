@@ -180,11 +180,10 @@ func (s *Switch) TurnOff(ctx context.Context, priority hmenum.CommandPriority) e
 	return s.Switch.TurnOff(ctx, priority)
 }
 
-// TurnOnFor switches the relay on for `d` and bundles ON_TIME + STATE into
-// one atomic put_paramset (when the writer supports it).
-//
-// A [generic.CallParameterCollector] is attached to ctx for
-// forward-compatible batching of ON_TIME + STATE.
+// TurnOnFor switches the relay on for `d`, with ON_TIME and STATE in one
+// write. With a writer, a [generic.CallParameterCollector] on ctx stages
+// both and its flush sends them together; without one, the generic
+// switch's own timer path does the bundling.
 func (s *Switch) TurnOnFor(ctx context.Context, d time.Duration, priority hmenum.CommandPriority) error {
 	ctx = custom.EnsureContext(ctx)
 	if s.Writer == nil {
