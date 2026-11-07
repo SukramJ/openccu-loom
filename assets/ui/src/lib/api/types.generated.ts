@@ -10017,8 +10017,13 @@ export interface components {
              *     week-profile sensor entity
              *     (`loom_week_profile_<device-addr>_week_profile`), built over the
              *     owning device address + parameter "WEEK_PROFILE" + prefix
-             *     "week_profile". Bit-identical to the client-synthesised key so the
-             *     client consumes it instead of recomputing it. Always present and
+             *     "week_profile". A climate schedule that shares its device with a
+             *     second schedule (HmIP-WGT, HmIP-WGTC) takes the prefix
+             *     "climate_week_profile" instead
+             *     (`loom_climate_week_profile_<device-addr>_week_profile`), as in the
+             *     reference stack, so the two schedules of one device never share a
+             *     key (since 15.6.0). Bit-identical to the client-synthesised key so
+             *     the client consumes it instead of recomputing it. Always present and
              *     non-empty (the serial-readiness gate guarantees the central-id slot).
              */
             unique_id: string;

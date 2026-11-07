@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -35,7 +36,11 @@ type WeekProfileResponse struct {
 	// the key a client otherwise synthesises, so the client consumes it instead
 	// of recomputing it. Built over the owning *device* address (not this
 	// channel address) + parameter "WEEK_PROFILE" + prefix "week_profile",
-	// mirroring the reference WeekProfileDataPoint. Always present and
+	// mirroring the reference WeekProfileDataPoint. A climate schedule that
+	// shares its device with a second schedule (HmIP-WGT, HmIP-WGTC) takes the
+	// prefix "climate_week_profile" instead
+	// (`loom_climate_week_profile_<device-addr>_week_profile`), as in the
+	// reference; see [weekprofile.SensorFamilyOf]. Always present and
 	// non-empty (the serial-readiness gate guarantees the central-id slot).
 	UniqueID                string                          `json:"unique_id"`
 	ScheduleType            string                          `json:"schedule_type"`
@@ -112,10 +117,14 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 		// device-level entities (mirroring the reference stack), so their
 		// canonical keys are built over the owning device address — not this
 		// channel address — with the serial from the owning central.
+		// A channel without a device counts its own schedule only, which keeps
+		// the family a sole schedule has.
 		serial := serialSuffixForChannel(idx, ch)
 		deviceAddr := ch.Address
+		profiles := 1
 		if dev := ch.Device(); dev != nil {
 			deviceAddr = dev.Address
+			profiles = weekProfileCount(dev)
 		}
 
 		// Surface the channel-lock key -> target channel mapping so consumers
@@ -144,7 +153,8 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 			Address: ch.Address,
 			UniqueID: routingkey.CanonicalUniqueID(
 				serial, deviceAddr,
-				weekprofile.SensorParameter, weekprofile.SensorFamily,
+				weekprofile.SensorParameter,
+				weekprofile.SensorFamilyOf(wp.ScheduleType(), profiles),
 			),
 			ScheduleType:            schedType,
 			MinTemp:                 wp.MinTemp(),
@@ -158,6 +168,18 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 		}
 		JSON(w, http.StatusOK, resp)
 	}
+}
+
+// weekProfileCount returns how many channels of dev carry a week profile —
+// the schedules a client sees, since a channel without one answers 404.
+func weekProfileCount(dev *device.Device) int {
+	n := 0
+	for _, ch := range dev.Channels() {
+		if ch.WeekProfile() != nil {
+			n++
+		}
+	}
+	return n
 }
 
 // ChannelLockRequest is the body of

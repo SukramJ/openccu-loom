@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.97.1
+
+- **Glass wall thermostats: the heating schedule has its own id.** Since
+  0.97.0 the heating schedule and the switch schedule of an HmIP-WGT or
+  HmIP-WGTC had the same id, so Home Assistant could show only one of them.
+  The heating schedule now has its own id; every other schedule keeps its id.
+- **API clients:** REST API 15.6.0. The `unique_id` of the heating schedule of
+  these devices changes; nothing else does.
+
 ## 0.97.0
 
 - **New device profiles:** thermostats HmIP-WT, KW-STATH and KW-UKETRV, dimmers

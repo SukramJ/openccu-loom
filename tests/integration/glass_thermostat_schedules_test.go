@@ -7,11 +7,17 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -19,6 +25,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -26,6 +34,14 @@ import (
 // ingestFixtureDevice runs one embedded fixture model through the production
 // ingest and returns the hydrated device.
 func ingestFixtureDevice(t *testing.T, model string) *device.Device {
+	t.Helper()
+	_, dev := ingestFixtureCentral(t, model)
+	return dev
+}
+
+// ingestFixtureCentral is [ingestFixtureDevice] that also returns the central
+// holding the device, for a test that reads it back through a north plane.
+func ingestFixtureCentral(t *testing.T, model string) (*central.Unit, *device.Device) {
 	t.Helper()
 	srv := startMockCCUWithDevices(t, []string{model})
 	xmlClient := newXMLRPCClient(t, srv.URL())
@@ -52,11 +68,11 @@ func ingestFixtureDevice(t *testing.T, model string) *device.Device {
 	}
 	for _, dev := range c.ModelRegistry.List() {
 		if dev.Model == model {
-			return dev
+			return c, dev
 		}
 	}
 	t.Fatalf("the fixture %s hydrated no device", model)
-	return nil
+	return nil, nil
 }
 
 // TestGlassThermostatKeepsBothSchedules pins the two week programs of the
@@ -100,5 +116,52 @@ func TestGlassThermostatKeepsBothSchedules(t *testing.T) {
 	}
 	if n := len(dev.ScheduleChannelSwitches()); n != len(want) {
 		t.Errorf("schedule channel switches = %d, want %d", n, len(want))
+	}
+}
+
+// TestGlassThermostatSchedulesHaveDistinctUniqueIDs reads both week programs
+// of the recorded HmIP-WGTC back through the REST route a client builds its
+// schedule entities from, on the production device index. Both are
+// device-level entities; a key built from the device address alone gave them
+// one id, so a client keying entities on it kept one schedule and dropped the
+// other. The switch schedule keeps its key, the heating schedule takes the
+// reference stack's climate family (notes/parity/by_design.md, "Week
+// schedules").
+func TestGlassThermostatSchedulesHaveDistinctUniqueIDs(t *testing.T) {
+	c, dev := ingestFixtureCentral(t, "HmIP-WGTC")
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("registry.Register: %v", err)
+	}
+	idx := adapter.NewDevicesAdapter(reg)
+	router := chi.NewRouter()
+	router.Get("/devices/{addr}/channels/{no}/week_profile", handlers.GetWeekProfile(idx))
+
+	uniqueID := func(no int) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet,
+			fmt.Sprintf("/devices/%s/channels/%d/week_profile", dev.Address, no), http.NoBody))
+		if w.Code != http.StatusOK {
+			t.Fatalf("channel %d: expected 200, got %d body=%s", no, w.Code, w.Body.String())
+		}
+		var resp handlers.WeekProfileResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("channel %d: unmarshal: %v", no, err)
+		}
+		return resp.UniqueID
+	}
+
+	switchUID, climateUID := uniqueID(7), uniqueID(8)
+	if switchUID == climateUID {
+		t.Fatalf("both schedules carry the unique_id %q", switchUID)
+	}
+	serial := idx.SerialSuffix(c.Name())
+	if want := routingkey.CanonicalUniqueID(serial, dev.Address,
+		weekprofile.SensorParameter, weekprofile.SensorFamily); switchUID != want {
+		t.Errorf("switch schedule unique_id = %q, want the unchanged %q", switchUID, want)
+	}
+	if want := "loom_climate_week_profile_" + strings.ToLower(dev.Address) + "_week_profile"; climateUID != want {
+		t.Errorf("climate schedule unique_id = %q, want %q", climateUID, want)
 	}
 }

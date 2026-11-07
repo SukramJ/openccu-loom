@@ -3603,10 +3603,21 @@ dimmer own the schedule and reports `light`. Neither models the editor's two
 modes for these devices, a backlight level or an on/off switch per entry
 (`HmIPWeeklyProgram.js:151-191`).
 
-**No separate unique-id prefix.** The reference gives the climate schedule of
-these devices the prefix `climate_week_profile` so the switch schedule keeps
-its id. Loom keys a schedule entity by its channel (`scheduleSlot`,
-`internal/north/mqtt/discovery_schedule.go`), so the two do not collide.
+**Unique-id prefix: REST follows the reference, MQTT keys by channel.** The
+reference gives the climate schedule of these devices the prefix
+`climate_week_profile` so the switch schedule keeps its id
+(`_create_week_profile_data_point`, `model/week_profile_data_point.py`:
+`_UNIQUE_ID_PREFIX_CLIMATE if len(device.week_profiles) > 1`). MQTT keys a
+schedule entity by its channel (`scheduleSlot`,
+`internal/north/mqtt/discovery_schedule.go`), so the two do not collide there.
+REST did collide: `GET /devices/{addr}/channels/{no}/week_profile` builds the
+key over the device address, and until API 15.6.0 it gave both schedules
+`loom_week_profile_<device>_week_profile`, so a client keying entities on it
+kept one. REST now takes the reference's rule (`SensorFamilyOf`,
+`internal/model/weekprofile/channel_switch.go`): the climate schedule moves to
+`loom_climate_week_profile_<device>_week_profile` only next to a second
+schedule, which is the reference's key in the loom namespace, so a consumer
+migrating its entities from the reference already holds it.
 
 **Not modelled.** In the operating mode `modeBWTH` an HmIP-WGT addresses
 channel 2 only (`iseHmIPWeeklyProgram.js:76-83`); Loom still offers the switch
@@ -3617,4 +3628,7 @@ list for firmware 2 and later.
 **Guard.** `TestTargetBitOrderTakesTheListTheEditorsWriteOut`
 (`internal/model/weekprofile/`), `TestGlassThermostatKeepsBothSchedules`
 (`tests/integration/`), `TestListScheduleDevicesListsBothSchedulesOfAGlassThermostat`
-(`internal/central/adapter/`).
+(`internal/central/adapter/`), `TestGlassThermostatSchedulesHaveDistinctUniqueIDs`
+(`tests/integration/`), `TestGetWeekProfile_TwoSchedulesHaveDistinctUniqueIDs`
+(`internal/north/rest/handlers/`), `TestSensorFamilyOf`
+(`internal/model/weekprofile/`).

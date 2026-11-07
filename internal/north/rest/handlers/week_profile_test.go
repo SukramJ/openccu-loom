@@ -274,6 +274,98 @@ func TestGetWeekProfile_UniqueID(t *testing.T) {
 	}
 }
 
+// newGlassThermostatFixture builds a device with the two week programs of an
+// HmIP-WGTC — the switch schedule on the SWITCH_WEEK_PROFILE channel 7 and the
+// heating schedule on the climate channel 8, as the production ingest attaches
+// them (tests/integration/glass_thermostat_schedules_test.go).
+func newGlassThermostatFixture() *device.Device {
+	d := device.New(device.Config{
+		Address:     "0001ABCD",
+		Model:       "HmIP-WGTC",
+		Interface:   hmenum.InterfaceHmIPRF,
+		InterfaceID: "HmIP-RF@CCU",
+		Name:        "Glass Thermostat",
+	})
+	switchCh := d.AddChannel("0001ABCD:7", 7, "SWITCH_WEEK_PROFILE", hmenum.ParamsetKeyMaster)
+	switchCh.AttachWeekProfile(weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    "Test",
+		ChannelAddress: "0001ABCD:7",
+		ScheduleType:   weekprofile.ScheduleTypeDefault,
+		ProfileCount:   1,
+	}))
+	climateCh := d.AddChannel("0001ABCD:8", 8, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyMaster)
+	climateCh.AttachWeekProfile(weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    "Test",
+		ChannelAddress: "0001ABCD:8",
+		ScheduleType:   weekprofile.ScheduleTypeClimate,
+		ProfileCount:   6,
+	}))
+	return d
+}
+
+func getWeekProfileUniqueID(t *testing.T, idx DeviceIndex, addr, no string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": addr, "no": no}))
+	w := httptest.NewRecorder()
+	GetWeekProfile(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("channel %s: expected 200, got %d body=%s", no, w.Code, w.Body.String())
+	}
+	var resp WeekProfileResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("channel %s: unmarshal response: %v", no, err)
+	}
+	return resp.UniqueID
+}
+
+// TestGetWeekProfile_TwoSchedulesHaveDistinctUniqueIDs pins the identity of
+// the two week programs of one device. Both are device-level entities, so a
+// key built from the device address alone gave them the same id, and a client
+// keying entities on it could register only one of them. The switch schedule
+// keeps its id; the climate schedule moves to the climate family, which is the
+// reference stack's own split (notes/parity/by_design.md, "Week schedules")
+// and so what a consumer migrating its entities from it already holds, with
+// the loom namespace in front.
+func TestGetWeekProfile_TwoSchedulesHaveDistinctUniqueIDs(t *testing.T) {
+	t.Parallel()
+	idx := newWeekProfileIndex(newGlassThermostatFixture())
+	serial := idx.SerialSuffix("home")
+
+	switchUID := getWeekProfileUniqueID(t, idx, "0001ABCD", "7")
+	climateUID := getWeekProfileUniqueID(t, idx, "0001ABCD", "8")
+
+	if switchUID == climateUID {
+		t.Fatalf("both schedules carry the unique_id %q", switchUID)
+	}
+	if want := routingkey.CanonicalUniqueID(serial, "0001ABCD",
+		weekprofile.SensorParameter, weekprofile.SensorFamily); switchUID != want {
+		t.Errorf("switch schedule unique_id = %q, want the unchanged %q", switchUID, want)
+	}
+	if want := routingkey.CanonicalUniqueID(serial, "0001ABCD",
+		weekprofile.SensorParameter, weekprofile.ClimateSensorFamily); climateUID != want {
+		t.Errorf("climate schedule unique_id = %q, want %q", climateUID, want)
+	}
+	if want := "loom_climate_week_profile_0001abcd_week_profile"; climateUID != want {
+		t.Errorf("climate schedule unique_id = %q, want the reference's key in the loom namespace %q",
+			climateUID, want)
+	}
+}
+
+// TestGetWeekProfile_SoleClimateScheduleKeepsItsUniqueID is the other half:
+// a thermostat with its one schedule keeps the key its entity has always had.
+// Moving it would re-create the week-profile entity of every thermostat.
+func TestGetWeekProfile_SoleClimateScheduleKeepsItsUniqueID(t *testing.T) {
+	t.Parallel()
+	d, _ := newWeekProfileFixture()
+	idx := newWeekProfileIndex(d)
+
+	if got, want := getWeekProfileUniqueID(t, idx, "0001ABCD", "1"),
+		"loom_week_profile_0001abcd_week_profile"; got != want {
+		t.Errorf("sole climate schedule unique_id = %q, want %q", got, want)
+	}
+}
+
 // TestGetWeekProfile_EmptyScheduleEnabled verifies that schedule_enabled is
 // omitted from the response when the DP has no registered channels (i.e.
 // the map is empty / nil).
