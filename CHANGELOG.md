@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.97.1] - 2026-11-07
+
 ### Fixed
 
 - **The two week programs of a glass wall thermostat have their own ids.**
