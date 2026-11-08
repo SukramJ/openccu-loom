@@ -602,7 +602,8 @@ Architektur, zukunftsweisend, innovativ, herausragend"). Taken over here on
 
 ## Which model does which work
 
-Set on 2026-10-10, mirrored from go-fabric's rule of the same date. A
+Set on 2026-10-10, mirrored from go-fabric's rule of the same date; the
+review split of 2026-11-08 (go-fabric #456) likewise. A
 statement that lands in this repo is cited later as fact — a ratchet
 justification, a comment naming a consumer, a `by_design.md` entry, a claim
 about CCU or Matter behaviour — so the work that produces such statements
@@ -613,8 +614,9 @@ defaults to Opus.
 
 | Work | Model |
 | --- | --- |
-| Analysis, planning, reviews, audits; anything written into an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md`, a ratchet entry (`wiringSettersWithoutCaller`, `eventsWithoutSubscriber`, …) or a comment that names a consumer, a caller, or a CCU / matter.js behaviour; *which* guard gets built and its bite line; the never-delegate list of the next section (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling); rebases and merge conflicts where `main` may have overtaken the change; every live-CCU write | **Fable** (the default for this repo; also the `hunt` agent) |
+| Analysis, planning, audits; anything written into an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md`, a ratchet entry (`wiringSettersWithoutCaller`, `eventsWithoutSubscriber`, …) or a comment that names a consumer, a caller, or a CCU / matter.js behaviour; *which* guard gets built and its bite line; the never-delegate list of the next section (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling); rebases and merge conflicts where `main` may have overtaken the change; every live-CCU write | **Fable** (the default for this repo; also the `hunt` agent) |
 | Implementation of a finished plan with guards behind it: a device profile once the pattern exists in `internal/model/custom/`, a REST handler whose `openapi.yaml` entry is already written, a SPA view behind a registered surface, rewording refuted comment claims from a findings list the owner has verified, a CHANGELOG entry for a finished diff | **Opus** (the `impl` default; also what fast mode runs on) |
+| **Review of a slice's pull request, split (owner decision 2026-11-08, go-fabric #456).** The code review — correctness, concurrency, error paths, tests, the fixed report shape — is **Opus**. On top of it **Fable** reads, bounded: every new comment that names a consumer, a caller or a CCU / matter.js behaviour against the code or the pinned source, every line that enters an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md` or a ratchet entry, the never-delegate paths of the first row (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling), and the brief's decisions against the CCU firmware, aiohomematic and matter.js — the behavioural gaps a code review does not see. The load-bearing claims of the Opus review are verified before they reach the implementer. | **Opus**, then **Fable** |
 | Work a test or generator checks immediately: `make generate` / `make export-schemas`, `gofumpt`, `config.field.*` / `config.help.*` catalogue work, table cases on an existing pattern, a version bump across the changelog set, regenerating a ratchet baseline; search and first reading of a tree whose result a stronger model or the owner reads again — the comment-claims sweep's VERIFIED / REFUTED table included | **Sonnet** (the `guard` default; `impl` with `model: "sonnet"`) |
 | Mechanical inventories whose answer is a list the caller can re-grep: which files reference X, which `cfg:` fields lack a catalogue key, which links are dead | **Haiku** (`sweep` default) |
 
@@ -737,6 +739,13 @@ doubling.
   in the fixed shape; it does not survey the tree. One agent per brief;
   two agents only on disjoint paths, at most one Opus agent at a time,
   and the chip-tool harness and the live CCU are one agent's at a time.
+- **Push, pull request and tag are the session's own calls.** An
+  implementing agent works locally — branch, commits, guards — and
+  reports; the owner's session reads the diff, runs the gate, pushes,
+  opens the pull request and tags the merge commit; the owner merges. A
+  delegated push, pull request or tag is refused by the auto-mode
+  classifier ("Create Public Surface", 2026-11-07), and the review above
+  sits between the agent's report and the push anyway.
 
 ## Interaction Protocol
 
