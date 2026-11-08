@@ -230,10 +230,15 @@ type serviceMessageSummary struct {
 	// needs this one — without it the answer reads "LOWBAT" rather than
 	// "Battery low". Empty when no catalogue entry covers the code.
 	DisplayName string `json:"display_name,omitempty"`
-	Address     string `json:"address,omitempty"`
-	DeviceName  string `json:"device_name,omitempty"`
-	Type        string `json:"type"`
-	Timestamp   string `json:"timestamp,omitempty"`
+	// Value is the alarm's value as the CCU prints it, ValueText the
+	// value-list entry it resolves to for an enum trigger datapoint.
+	// Both omitted when the CCU reports none.
+	Value      string `json:"value,omitempty"`
+	ValueText  string `json:"value_text,omitempty"`
+	Address    string `json:"address,omitempty"`
+	DeviceName string `json:"device_name,omitempty"`
+	Type       string `json:"type"`
+	Timestamp  string `json:"timestamp,omitempty"`
 	// LastTimestamp is when the message last recurred. Omitted when the
 	// CCU reports no such occurrence.
 	LastTimestamp string   `json:"last_timestamp,omitempty"`
@@ -275,6 +280,8 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 					ID:            m.ID,
 					Name:          m.Name,
 					DisplayName:   m.DisplayName,
+					Value:         m.Value,
+					ValueText:     m.ValueText,
 					Address:       m.Address,
 					DeviceName:    m.DeviceName,
 					Type:          m.Type.String(),

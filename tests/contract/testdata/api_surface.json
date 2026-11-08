@@ -1,5 +1,5 @@
 {
- "api_version": "15.6.0",
+ "api_version": "15.7.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -2214,7 +2214,9 @@
    "quittable:boolean",
    "rooms:array\u003cstring\u003e",
    "timestamp:string",
-   "type:string"
+   "type:string",
+   "value:string",
+   "value_text:string"
   ],
   "Session": [
    "fabric_index:integer",

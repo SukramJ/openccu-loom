@@ -304,9 +304,15 @@ type ServiceMessageDTO struct {
 	// DisplayName is the localized rendering of the message code; see
 	// [AlarmMessageDTO.DisplayName].
 	DisplayName string `json:"display_name,omitempty"`
-	Address     string `json:"address,omitempty"`
-	DeviceName  string `json:"device_name,omitempty"`
-	Type        string `json:"type,omitempty"`
+	// Value is the alarm's value as the CCU prints it, ValueText the
+	// value-list entry it resolves to for an enum trigger datapoint
+	// ("7" / "SABOTAGE" for an HM-Sec-SCo sabotage). Both omitted when
+	// the CCU reports none.
+	Value      string `json:"value,omitempty"`
+	ValueText  string `json:"value_text,omitempty"`
+	Address    string `json:"address,omitempty"`
+	DeviceName string `json:"device_name,omitempty"`
+	Type       string `json:"type,omitempty"`
 	// Timestamp is when the message first appeared. Omitted on the rare
 	// CCU report that carries no occurrence at all.
 	Timestamp time.Time `json:"timestamp,omitzero"`
@@ -1165,6 +1171,8 @@ func ListServiceMessages(idx HubIndex) http.HandlerFunc {
 					ID:            m.ID,
 					Name:          m.Name,
 					DisplayName:   m.DisplayName,
+					Value:         m.Value,
+					ValueText:     m.ValueText,
 					Address:       m.Address,
 					DeviceName:    m.DeviceName,
 					Type:          m.Type.String(),

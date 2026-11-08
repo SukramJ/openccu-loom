@@ -257,6 +257,8 @@ func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string)
 			Rooms         []string `json:"rooms"`
 			Functions     []string `json:"functions"`
 			Quittable     bool     `json:"quittable"`
+			Value         string   `json:"value"`
+			ValueText     string   `json:"value_text"`
 		}
 		var msgs []svcMsg
 		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptGetServiceMessages, nil, &msgs); err != nil {
@@ -280,6 +282,8 @@ func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string)
 				"rooms":          m.Rooms,
 				"functions":      m.Functions,
 				"quittable":      m.Quittable,
+				"value":          m.Value,
+				"value_text":     m.ValueText,
 			})
 		}
 		return out, nil

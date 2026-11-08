@@ -1551,7 +1551,9 @@ func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit
 			Rooms:         decodeRegaFields(m.Rooms),
 			Functions:     decodeRegaFields(m.Functions),
 			Quittable:     m.Quittable,
-			DisplayName:   messageDisplayName(catalogs, locale, decodedName),
+			Value:         m.Value,
+			ValueText:     decodeRegaField(m.ValueText),
+			DisplayName:   messageDisplayName(catalogs, locale, decodedName, decodeRegaField(m.ValueText)),
 		})
 	}
 	unit.HubModel.ServiceMessages.Replace(all)
@@ -1582,7 +1584,7 @@ func loadAlarmMessages(ctx context.Context, r *rega.Runner, h *hub.Hub, catalogs
 			Timestamp:     regaUnixTime(m.Timestamp),
 			LastTimestamp: regaUnixTime(m.LastTimestamp),
 			Counter:       m.Counter,
-			DisplayName:   messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
+			DisplayName:   messageDisplayName(catalogs, locale, decodeRegaField(m.Name), ""),
 		})
 	}
 	h.Messages.Replace(msgs)
@@ -1605,34 +1607,93 @@ func regaUnixTime(sec int64) time.Time {
 // the last dot) and returns the translated string from catalogs using the
 // given locale. Falls back to the raw code when catalogs is nil or the key is
 // absent, and to rawName itself when no dot is present.
-func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName string) string {
-	code := rawName
+// messageDisplayName renders a CCU alarm name for an operator. The code is
+// the segment after the last dot of rawName, less the value the CCU appends
+// to an enum alarm (see [splitMessageCode]). valueText is the value-list
+// entry the CCU resolved that value to, "" when there is none.
+//
+// Lookup order, each a `message.code.<key>` catalogue entry: the code
+// qualified by the entry ("ERROR.SABOTAGE"), the entry alone ("SABOTAGE",
+// which is how an HM-Sec-SCo sabotage reads "Sabotage" like in the CCU
+// WebUI), then the code. Without a translation for the entry the code's
+// text carries the entry ("Error: SOMETHING_NEW"), or the raw value
+// ("Error (3)") when the list slot had no name, so nothing the CCU reported
+// is lost.
+func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName, valueText string) string {
+	code, value := splitMessageCode(rawName)
+	if valueText != "" {
+		if t, ok := translateMessageCode(catalogs, locale, code+"."+valueText); ok {
+			return t
+		}
+		if t, ok := translateMessageCode(catalogs, locale, valueText); ok {
+			return t
+		}
+	}
+	codeText := code
+	if t, ok := translateMessageCode(catalogs, locale, code); ok {
+		codeText = t
+	}
+	switch {
+	case valueText != "":
+		return codeText + ": " + valueText
+	case value != "":
+		return codeText + " (" + value + ")"
+	}
+	return codeText
+}
+
+// translateMessageCode looks up `message.code.<key>`; ok is false when the
+// catalogue has no entry (T returns the key itself then) or there are no
+// catalogues at all.
+func translateMessageCode(catalogs *i18n.Catalogs, locale, key string) (string, bool) {
+	if catalogs == nil || key == "" {
+		return "", false
+	}
+	full := "message.code." + key
+	if t := catalogs.T(locale, full); t != full {
+		return t, true
+	}
+	return "", false
+}
+
+// splitMessageCode takes the segment after the last dot of a CCU alarm name
+// ("AL-ADDRESS:CHANNEL.PARAM", the whole name when it has no dot) and splits
+// off the value the CCU appends to an enum alarm: "ERROR-7" is parameter
+// ERROR at value 7 (measured on an HM-Sec-SCo sabotage).
+// Only a hyphen followed by digits counts — parameter ids carry no hyphen,
+// and a trailing or leading one is left in the code untouched.
+func splitMessageCode(rawName string) (code, value string) {
+	code = rawName
 	if _, after, found := strings.CutLast(rawName, "."); found {
 		code = after
 	}
-	if catalogs == nil || code == "" {
-		return code
+	i := strings.IndexByte(code, '-')
+	if i <= 0 || i == len(code)-1 {
+		return code, ""
 	}
-	key := "message.code." + code
-	translated := catalogs.T(locale, key)
-	// T returns the key itself when no translation is found.
-	if translated == key {
-		return code
+	for _, r := range code[i+1:] {
+		if r < '0' || r > '9' {
+			return code, ""
+		}
 	}
-	return translated
+	return code[:i], code[i+1:]
 }
 
 // serviceMessageParameter extracts the service parameter from a raw CCU
 // service-message name. The name format is "AL-ADDRESS:CHANNEL.PARAM";
-// the parameter is the segment after the last dot. Device / channel
-// addresses never contain a dot, so the split is unambiguous. Returns ""
-// when the name carries no parameter segment — the caller then suppresses
-// every service parameter of the channel.
+// the parameter is the segment after the last dot, less the value the CCU
+// appends to an enum alarm ("AL-NEQ0632439:1.ERROR-7" is parameter ERROR —
+// Interface.suppressServiceMessages takes the parameter id, and "ERROR-7"
+// names none). Device / channel addresses never contain a dot, so the
+// split is unambiguous. Returns "" when the name carries no parameter
+// segment — the caller then suppresses every service parameter of the
+// channel.
 func serviceMessageParameter(rawName string) string {
-	if _, after, found := strings.CutLast(rawName, "."); found {
-		return after
+	if _, _, found := strings.CutLast(rawName, "."); !found {
+		return ""
 	}
-	return ""
+	code, _ := splitMessageCode(rawName)
+	return code
 }
 
 // interfaceForChannel resolves the CCU interface (e.g. "HmIP-RF") that

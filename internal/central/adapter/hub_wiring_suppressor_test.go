@@ -40,6 +40,11 @@ func TestServiceMessageParameter(t *testing.T) {
 		{"empty", "", ""},
 		{"multiple dots takes last segment", "AL-ABC.123:1.UNREACH", "UNREACH"},
 		{"trailing dot yields empty parameter", "AL-ABC:1.", ""},
+		// The CCU appends the value of an enum alarm to the name; the
+		// parameter id Interface.suppressServiceMessages takes is ERROR.
+		{"enum value split off", "AL-NEQ0632439:1.ERROR-7", "ERROR"},
+		{"non-numeric suffix is part of the parameter", "AL-ABC:1.ERROR-X", "ERROR-X"},
+		{"leading hyphen is part of the parameter", "AL-ABC:1.-7", "-7"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.97.2
+
+- **Service messages show the CCU's text.** A sabotage of a classic Homematic
+  window contact read `ERROR-7` in Home Assistant and over MQTT; it reads
+  "Sabotage" now, like in the CCU. Acknowledging or suppressing such a message
+  works as before.
+- **API clients:** REST API 15.7.0. `ServiceMessage` gains the optional
+  `value` and `value_text`; the MQTT service-messages rows gain
+  `display_name`, `value` and `value_text`. Nothing else changes.
+
 ## 0.97.1
 
 - **Glass wall thermostats: the heating schedule has its own id.** Since

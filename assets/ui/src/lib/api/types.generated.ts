@@ -8066,8 +8066,23 @@ export interface components {
             /** @description Functions (Gewerke) assigned to the triggering channel. */
             functions?: string[];
             quittable: boolean;
-            /** @description Human-readable translation of the message code. */
+            /**
+             * @description Human-readable translation of the message code. For an enum
+             *     trigger datapoint it is the translation of `value_text` when
+             *     there is one (ERROR 7 reads "Sabotage" like in the CCU WebUI).
+             */
             display_name?: string;
+            /**
+             * @description The alarm's value as the CCU prints it ("7"). Omitted when the
+             *     CCU reports none.
+             */
+            value?: string;
+            /**
+             * @description The value-list entry the CCU resolved `value` to for an enum
+             *     trigger datapoint ("SABOTAGE"). Omitted for every other
+             *     datapoint type and for a list slot without a name.
+             */
+            value_text?: string;
         };
         SuppressedServiceMessage: {
             /** @description CCU this suppression belongs to (multi-central grouping). */
