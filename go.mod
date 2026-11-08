@@ -38,7 +38,7 @@ require (
 	github.com/SukramJ/go-fabric v0.16.0
 	github.com/SukramJ/go-fabric-ui v0.3.0
 	github.com/SukramJ/go-ha-catalog v0.3.1
-	github.com/SukramJ/go-hamqtt v0.38.0
+	github.com/SukramJ/go-hamqtt v0.39.0
 	github.com/SukramJ/go-mqtt v1.7.0
 	github.com/SukramJ/go-openccu-data v0.3.0
 	github.com/SukramJ/godevccu v0.11.0
@@ -58,12 +58,12 @@ require (
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0
 	golang.org/x/time v0.16.0
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
