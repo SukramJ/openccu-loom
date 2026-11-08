@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.97.3] - 2026-11-08
+
+### Fixed
+
+- **A device becomes visible only once it is composed.** The device pipeline
+  put a device into the central's model registry as soon as its description
+  arrived and applied the usage marks — custom-data-point suppression,
+  ignored and hidden parameters, operation-mode gating — at the end of the
+  same ingest. `GET /snapshot`, `GET /devices` and every other reader walk
+  that registry, so a request during the daemon's bring-up (or during a
+  hot-plug ingest) saw `BOOTED`, `UNREACH`, the generic `STATE` under a
+  switch profile, `WINDOW_STATE` and the like as `usage=data_point`. A client
+  re-bootstrapping right after a daemon restart — Home Assistant's
+  Homematic(IP) Local after a `replay_lost` — created entities for them that
+  a cold start never creates, and the next cold start left them as orphans
+  (1,950 on one installation). Devices are now staged inside the pipeline
+  and published together once every mark is applied; a reader gets the
+  composed device or none. The client-side half (waiting for readiness
+  before a re-bootstrap, honouring the post-bring-up resync, re-announcing
+  without duplicates) is
+  [openccu-loom-client#236](https://github.com/SukramJ/openccu-loom-client/issues/236)
+  ([#1053](https://github.com/SukramJ/openccu-loom/issues/1053)).
+
 ## [0.97.2] - 2026-11-08
 
 ### Fixed

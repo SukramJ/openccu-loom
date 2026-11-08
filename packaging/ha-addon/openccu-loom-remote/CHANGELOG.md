@@ -4,6 +4,18 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.97.3
+
+- **No surplus entities after an add-on restart.** While the add-on was
+  starting, a Homematic(IP) Local that was already running could read devices
+  whose visibility rules were not yet applied and create entities for
+  maintenance parameters, duplicate channel switches and the like; after the
+  next Home Assistant restart those stayed behind as unavailable orphans.
+  Devices are now handed out only once they are complete. Remove the orphans
+  once (Settings → Devices & services → Entities, filter "unavailable"); they
+  do not come back. The matching client fix is tracked in
+  openccu-loom-client#236.
+
 # 0.97.2
 
 - **Service messages show the CCU's text.** A sabotage of a classic Homematic
