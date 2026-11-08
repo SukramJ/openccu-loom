@@ -760,14 +760,16 @@ func (b *EventBridge) PublishCentralSnapshot(ctx context.Context, centralName st
 // ([PublishInitialSnapshot]) and the per-central southbound-ready path.
 func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Unit) {
 	// A central whose readiness-gated bring-up has not latched ready is
-	// still hydrating: its devices already sit in the ModelRegistry with
-	// seeded values, but the visibility passes at the end of finishIngest
-	// have not run yet, so every suppressed parameter still reads
-	// Visible() == true. Snapshotting that window published entire
-	// MASTER paramsets (75-slot week programs, router tables) retained to
-	// the broker. Skip the central; the CentralSouthboundReadyEvent
-	// subscription publishes it the moment the bring-up completes — the
-	// ready latch is set before that event fires.
+	// still loading. The pipeline publishes a device into the ModelRegistry
+	// only once its visibility marks are applied, so a snapshot of that
+	// window would be correct but partial: interfaces still loading
+	// contribute nothing yet. Skip the central; the
+	// CentralSouthboundReadyEvent subscription publishes it whole the
+	// moment the bring-up completes — the ready latch is set before that
+	// event fires. (Before the pipeline staged its devices, this gate was
+	// also what kept half-composed devices, with every suppressed parameter
+	// reading Visible() == true and entire MASTER paramsets, off the
+	// broker's retained topics.)
 	if !u.IsSouthboundReady() {
 		return
 	}

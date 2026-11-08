@@ -155,6 +155,16 @@ type DevicePipeline struct {
 	// the shallow copy [scopedTo] returns for hot-plug ingests; the
 	// bring-up pipeline keeps it nil and sees every device.
 	addressScope map[string]struct{}
+
+	// staging holds the devices an ingest run is still composing. A device
+	// reaches the central's model registry only through [publishStaged], at
+	// the end of [finishIngest], once its usage marks are applied — the
+	// registry is the surface every north-bound reader walks (REST snapshot,
+	// MQTT discovery, the WS catalogue), and a device it hands out must be
+	// complete: a reader that sees it mid-hydration reads every suppressed
+	// parameter as `usage=data_point` and spawns entities a composed model
+	// never exposes. A pointer so [scopedTo]'s shallow copy shares it.
+	staging *stagedDevices
 }
 
 // NewDevicePipeline constructs a pipeline bound to c.
@@ -170,6 +180,93 @@ func NewDevicePipeline(u *central.Unit) *DevicePipeline {
 		cdpEnableFirmwareCheck:     true,
 		ingestMu:                   &sync.Mutex{},
 		masterRefreshHooks:         newMasterRefreshHookSet(),
+		staging:                    newStagedDevices(),
+	}
+}
+
+// stagedDevices is the pipeline-private holding area for devices under
+// composition (see [DevicePipeline.staging]). It carries its own lock because
+// the backed ingests serialise on ingestMu but the standalone [Ingest] does
+// not, and the two may run on the same pipeline.
+type stagedDevices struct {
+	mu        sync.Mutex
+	byAddress map[string]*device.Device
+}
+
+func newStagedDevices() *stagedDevices {
+	return &stagedDevices{byAddress: map[string]*device.Device{}}
+}
+
+func (s *stagedDevices) get(address string) (*device.Device, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.byAddress[address]
+	return d, ok
+}
+
+func (s *stagedDevices) put(d *device.Device) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byAddress[d.Address] = d
+}
+
+// list returns the staged devices of one interface, sorted by address.
+func (s *stagedDevices) list(interfaceID string) []*device.Device {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*device.Device, 0, len(s.byAddress))
+	for _, d := range s.byAddress {
+		if d != nil && d.InterfaceID == interfaceID {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
+	return out
+}
+
+func (s *stagedDevices) remove(address string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.byAddress, address)
+}
+
+// lookupDevice resolves a device root the pipeline may act on: a published
+// one from the model registry, or one still under composition in staging.
+func (p *DevicePipeline) lookupDevice(address string) (*device.Device, bool) {
+	if p.unit != nil && p.unit.ModelRegistry != nil {
+		if d, ok := p.unit.ModelRegistry.Get(address); ok {
+			return d, true
+		}
+	}
+	if p.staging != nil {
+		return p.staging.get(address)
+	}
+	return nil, false
+}
+
+// inScope reports whether address passes the pipeline's address scope.
+func (p *DevicePipeline) inScope(address string) bool {
+	if p.addressScope == nil {
+		return true
+	}
+	_, ok := p.addressScope[address]
+	return ok
+}
+
+// publishStaged moves every staged device of interfaceID that lies within
+// the pipeline's scope into the model registry. It is the single point at
+// which a newly ingested device becomes visible to readers, and it runs once
+// the device is composed; see [DevicePipeline.staging] for why.
+func (p *DevicePipeline) publishStaged(interfaceID string) {
+	if p.unit == nil || p.unit.ModelRegistry == nil || p.staging == nil {
+		return
+	}
+	for _, d := range p.staging.list(interfaceID) {
+		if !p.inScope(d.Address) {
+			continue
+		}
+		p.unit.ModelRegistry.Put(d)
+		p.staging.remove(d.Address)
 	}
 }
 
@@ -235,15 +332,20 @@ func (p *DevicePipeline) devicesFor(interfaceID string) []*device.Device {
 		return nil
 	}
 	all := p.unit.ModelRegistry.List()
+	// Devices under composition are not in the registry yet; the passes of
+	// finishIngest run over them through this helper, so they are appended
+	// here. An address is in exactly one of the two: publishStaged removes
+	// it from staging as it puts it into the registry.
+	if p.staging != nil {
+		all = append(all, p.staging.list(interfaceID)...)
+	}
 	out := make([]*device.Device, 0, len(all))
 	for _, d := range all {
 		if d == nil || d.InterfaceID != interfaceID {
 			continue
 		}
-		if p.addressScope != nil {
-			if _, ok := p.addressScope[d.Address]; !ok {
-				continue
-			}
+		if !p.inScope(d.Address) {
+			continue
 		}
 		out = append(out, d)
 	}
@@ -377,9 +479,24 @@ func (p *DevicePipeline) WithVisibility(v *visibility.Registry) *DevicePipeline 
 // deduplicates by address — existing records are refreshed in
 // place so callers don't lose subscriptions.
 //
+// Standalone, Ingest publishes the new devices at once: without a backend
+// there are no data points to compose, so a channel-only device is complete
+// as built. The backed paths ([IngestFromBackend], [IngestNewDevices]) use
+// [ingestDescriptions] instead and publish at the end of [finishIngest].
+//
 // `interfaceID` tags every device; it is typically the backend's
 // logical id (e.g. "HmIP-RF").
 func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface hmenum.Interface, descs []hmproto.DeviceDescription) error {
+	if err := p.ingestDescriptions(ctx, interfaceID, iface, descs); err != nil {
+		return err
+	}
+	p.publishStaged(interfaceID)
+	return nil
+}
+
+// ingestDescriptions is [Ingest] without the publish: new device roots stay in
+// [DevicePipeline.staging] for the caller to compose and publish.
+func (p *DevicePipeline) ingestDescriptions(ctx context.Context, interfaceID string, iface hmenum.Interface, descs []hmproto.DeviceDescription) error {
 	if p.unit == nil {
 		return errors.New("pipeline: no central")
 	}
@@ -519,7 +636,9 @@ func (p *DevicePipeline) channelAssignments(address string) (name string, rooms,
 }
 
 func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID string, iface hmenum.Interface) *device.Device {
-	if existing, ok := p.unit.ModelRegistry.Get(dd.Address); ok {
+	// A published device is refreshed in place; one a previous, failed
+	// attempt left in staging is composed again from where it stands.
+	if existing, ok := p.lookupDevice(dd.Address); ok {
 		return existing
 	}
 	var displayName string
@@ -608,7 +727,9 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 	if p.unit.DeviceDetails != nil {
 		d.SetTaxonomy(p.unit.DeviceDetails.DeviceAssignments(dd.Address))
 	}
-	p.unit.ModelRegistry.Put(d)
+	// Staged, not published: the caller decides when the device is complete
+	// enough for readers (see [DevicePipeline.staging]).
+	p.staging.put(d)
 	return d
 }
 
@@ -662,7 +783,7 @@ func (p *DevicePipeline) IngestFromBackend(
 		}
 	}
 	descs, held := p.withholdParked(ctx, interfaceID, descs, logger)
-	if err := p.Ingest(ctx, interfaceID, iface, descs); err != nil {
+	if err := p.ingestDescriptions(ctx, interfaceID, iface, descs); err != nil {
 		return err
 	}
 	// The inventory is registered: from here on an unknown device
@@ -828,7 +949,7 @@ func (p *DevicePipeline) IngestNewDevices(
 			scopedDescs = append(scopedDescs, dd)
 		}
 	}
-	if err := p.Ingest(ctx, interfaceID, iface, scopedDescs); err != nil {
+	if err := p.ingestDescriptions(ctx, interfaceID, iface, scopedDescs); err != nil {
 		return nil, err
 	}
 	scoped := p.scopedTo(newRoots)
@@ -850,6 +971,10 @@ func (p *DevicePipeline) IngestNewDevices(
 // interface bring-up and the hot-plug path funnel through this method
 // so the two can never drift apart; the hot-plug caller narrows the
 // view via [scopedTo] first. Callers must hold ingestMu.
+//
+// The devices it works on are still staged; the publish into the model
+// registry is its last step, so a reader never sees a device whose marks
+// have not been applied.
 func (p *DevicePipeline) finishIngest(
 	ctx context.Context,
 	interfaceID string,
@@ -1033,6 +1158,9 @@ func (p *DevicePipeline) finishIngest(
 	// MQTT/REST surfaces can iterate over them. Must run after every DP,
 	// custom-DP, and event attachment step above.
 	p.finalizeChannelInit(interfaceID)
+	// Last, once every mark above is on the data points: readers get the
+	// composed device or none.
+	p.publishStaged(interfaceID)
 	return nil
 }
 
@@ -1330,7 +1458,7 @@ func (p *DevicePipeline) Reseed(
 	applied, delivered := 0, 0
 	for channelAddr, params := range values {
 		delivered += len(params)
-		dev, ok := p.unit.ModelRegistry.Get(deviceAddressOf(channelAddr))
+		dev, ok := p.lookupDevice(deviceAddressOf(channelAddr))
 		if !ok {
 			continue
 		}
