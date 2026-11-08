@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.6.0
+  version: 15.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -11537,7 +11537,21 @@ components:
         quittable: { type: boolean }
         display_name:
           type: string
-          description: Human-readable translation of the message code.
+          description: |
+            Human-readable translation of the message code. For an enum
+            trigger datapoint it is the translation of `value_text` when
+            there is one (ERROR 7 reads "Sabotage" like in the CCU WebUI).
+        value:
+          type: string
+          description: |
+            The alarm's value as the CCU prints it ("7"). Omitted when the
+            CCU reports none.
+        value_text:
+          type: string
+          description: |
+            The value-list entry the CCU resolved `value` to for an enum
+            trigger datapoint ("SABOTAGE"). Omitted for every other
+            datapoint type and for a list slot without a name.
     SuppressedServiceMessage:
       type: object
       required: [channel]

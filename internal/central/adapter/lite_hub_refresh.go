@@ -86,7 +86,7 @@ func (r *liteHubRefresh) serviceMessages(ctx context.Context) error {
 			InterfaceID: m.Interface,
 			Type:        liteServiceMessageType(m.Key),
 			Timestamp:   m.Since,
-			DisplayName: messageDisplayName(r.catalogs, r.locale, id),
+			DisplayName: messageDisplayName(r.catalogs, r.locale, id, ""),
 		}
 		if dev, ok := r.unit.ModelRegistry.Get(m.Address); ok && dev != nil {
 			msg.DeviceName = dev.Name()

@@ -6,6 +6,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.97.2] - 2026-11-08
+
+### Fixed
+
+- **Service messages of an enum parameter read like the CCU WebUI.** The CCU
+  names such an alarm after parameter and value — an HM-Sec-SCo sabotage is
+  `AL-NEQ0632439:1.ERROR-7` — and the daemon took the segment after the last
+  dot verbatim, so REST, MQTT, MCP and the Home Assistant hub sensor showed
+  `ERROR-7` where the CCU shows "Sabotage". `get_service_messages.fn` now
+  reports the alarm's `value` and, for an enum trigger datapoint, the
+  `value_text` the CCU resolves it to from the datapoint's value list, the
+  way `serviceMessages.htm` does. `display_name` prefers that entry's
+  translation (`message.code.SABOTAGE`), then the parameter's, and keeps the
+  raw value when nothing translates (`Error (3)`); both new fields are on the
+  REST `ServiceMessage`, the MQTT service-messages rows (which also carry
+  `display_name` now) and the MCP `list_service_messages` summary. Suppressing
+  such a message sends the parameter id `ERROR` to the CCU, no longer
+  `ERROR-7`, which named no parameter. Ten `message.code.*` entries for the
+  remaining `ERROR` list values of the CCU stringtable were added
+  ([homematicip_local#1356](https://github.com/SukramJ/homematicip_local/discussions/1356),
+  API 15.7.0).
+
 ## [0.97.1] - 2026-11-07
 
 ### Fixed

@@ -344,6 +344,12 @@ type ServiceMessage struct {
 	Rooms         []string `json:"rooms"`
 	Functions     []string `json:"functions"`
 	Quittable     bool     `json:"quittable"`
+	// Value is the alarm's own value as the CCU prints it. ValueText is
+	// the value-list entry at that index for an enum trigger datapoint
+	// (ERROR 7 -> "SABOTAGE"), percent-encoded like Name; empty for every
+	// other datapoint type.
+	Value     string `json:"value"`
+	ValueText string `json:"value_text"`
 }
 
 // GetServiceMessages returns all active service messages from the CCU by

@@ -317,15 +317,18 @@ func (s *ServiceMessages) State() payload.StatePayload {
 	rows := make([]payload.ServiceMessageRow, len(items))
 	for i := range items {
 		rows[i] = payload.ServiceMessageRow{
-			ID:         items[i].ID,
-			Name:       items[i].Name,
-			Address:    items[i].Address,
-			DeviceName: items[i].DeviceName,
-			Type:       items[i].Type.String(),
-			Counter:    items[i].Counter,
-			Rooms:      items[i].Rooms,
-			Functions:  items[i].Functions,
-			Quittable:  items[i].Quittable,
+			ID:          items[i].ID,
+			Name:        items[i].Name,
+			Address:     items[i].Address,
+			DeviceName:  items[i].DeviceName,
+			Type:        items[i].Type.String(),
+			Counter:     items[i].Counter,
+			Rooms:       items[i].Rooms,
+			Functions:   items[i].Functions,
+			Quittable:   items[i].Quittable,
+			DisplayName: items[i].DisplayName,
+			Value:       items[i].Value,
+			ValueText:   items[i].ValueText,
 		}
 		// A zero time means the CCU reported no such occurrence. Emit an
 		// empty string rather than formatting it, so subscribers never

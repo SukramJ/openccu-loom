@@ -20,7 +20,7 @@ func TestMessageDisplayNameSeparatorEdges(t *testing.T) {
 		"x.":       "",
 		".C":       "C",
 	} {
-		if got := messageDisplayName(nil, "en", in); got != want {
+		if got := messageDisplayName(nil, "en", in, ""); got != want {
 			t.Errorf("messageDisplayName(%q) = %q, want %q", in, got, want)
 		}
 	}

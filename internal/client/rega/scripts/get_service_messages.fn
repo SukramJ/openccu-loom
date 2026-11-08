@@ -3,10 +3,20 @@
 !#
 !# Walks ID_SERVICES; for each alarm with AlState == 1 emits a record
 !# with id, name, timestamp, type, address, device_name,
-!# last_timestamp, counter, rooms, functions, quittable.
+!# last_timestamp, counter, rooms, functions, quittable, value,
+!# value_text.
 !#
 !# quittable is true iff the alarm's trigger datapoint has the
 !# OPERATION_WRITE bit set (bit 2 in .Operations()).
+!#
+!# value is the alarm's own value (oAlarm.Value()) as a string. For an
+!# enum trigger datapoint value_text is the entry of its value list at
+!# that index — the CCU names such an alarm after parameter and value
+!# ("AL-NEQ0632439:1.ERROR-7") and its WebUI resolves the text the same
+!# way (serviceMessages.htm: web.webGetValueFromList(oLastTrigger
+!# .ValueList(), oAlarm.Value()), e.g. ERROR 7 -> SABOTAGE). value_text
+!# is empty for every other datapoint type and for a list slot without
+!# a name.
 !#
 !# rooms and functions are JSON arrays. They used to be one string with
 !# the entries joined by a raw tab, which is a control character and
@@ -29,9 +39,10 @@
 
 string sAlarmId; string sRawName; string sName; string sAddress; string sRest;
 string sDeviceName; string sRooms; string sFunctions; string sRoomId; string sFuncId;
+string sValue; string sValueText;
 object oAlarm; object oTrigger; object oChannel; object oRoom; object oFunc;
 integer iOccurred; integer iLast; integer iType; integer iCounter; integer iColon;
-integer iTriggerDP; integer iOps; integer iChnId;
+integer iTriggerDP; integer iOps; integer iChnId; integer iValue;
 boolean bQuittable; boolean bFirstRoom; boolean bFirstFunc;
 boolean bFirst = true;
 
@@ -52,6 +63,8 @@ if (oServices) {
         iType = 0;
         iCounter = 0;
         bQuittable = false;
+        sValue = "";
+        sValueText = "";
         if (oAlarm) {
             if (oAlarm.AlState() == 1) {
                 if (oAlarm.Name()) {
@@ -63,6 +76,7 @@ if (oServices) {
                 iLast = oAlarm.LastTimestampSeconds();
                 iType = oAlarm.AlType();
                 iCounter = oAlarm.AlCounter();
+                sValue = "" # oAlarm.Value();
 
                 !# Service-message name format is "AL-ADDRESS:CHANNEL.PARAM";
                 !# extract the address prefix if the pattern matches.
@@ -81,6 +95,15 @@ if (oServices) {
                         iOps = oTrigger.Operations();
                         if (iOps & 2) {
                             bQuittable = true;
+                        }
+                        if ((oTrigger.ValueType() == ivtInteger) && (oTrigger.ValueSubType() == istEnum)) {
+                            iValue = sValue.ToInteger();
+                            sValueText = oTrigger.ValueList().StrValueByIndex(";", iValue);
+                            if (sValueText) {
+                                sValueText = sValueText.UriEncode();
+                            } else {
+                                sValueText = "";
+                            }
                         }
                         iChnId = oTrigger.Channel();
                         if (iChnId) {
@@ -139,7 +162,9 @@ if (oServices) {
                 Write('"counter":' # iCounter # ',');
                 Write('"rooms":[' # sRooms # '],');
                 Write('"functions":[' # sFunctions # '],');
-                Write('"quittable":' # bQuittable # '}');
+                Write('"quittable":' # bQuittable # ',');
+                Write('"value":"' # sValue # '",');
+                Write('"value_text":"' # sValueText # '"}');
             }
         }
     }

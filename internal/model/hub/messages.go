@@ -312,8 +312,16 @@ type ServiceMessage struct {
 	Rooms         []string
 	Functions     []string
 	Quittable     bool
+	// Value is the alarm's value as the CCU prints it, ValueText the
+	// value-list entry the CCU resolved it to for an enum trigger
+	// datapoint ("SABOTAGE" for ERROR 7). Both are empty when the CCU
+	// script did not report them.
+	Value     string
+	ValueText string
 	// DisplayName is the human-readable translation of the message code
-	// extracted from the raw CCU name (the part after the last dot).
+	// extracted from the raw CCU name (the part after the last dot, less
+	// the value the CCU appends to an enum alarm), preferring the
+	// translation of ValueText when there is one.
 	DisplayName string
 }
 
@@ -855,6 +863,12 @@ func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 		}
 		if msgs[i].DisplayName != "" {
 			entry["display_name"] = msgs[i].DisplayName
+		}
+		if msgs[i].Value != "" {
+			entry["value"] = msgs[i].Value
+		}
+		if msgs[i].ValueText != "" {
+			entry["value_text"] = msgs[i].ValueText
 		}
 		if len(msgs[i].Rooms) > 0 {
 			entry["rooms"] = msgs[i].Rooms

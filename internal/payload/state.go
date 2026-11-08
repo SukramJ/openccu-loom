@@ -281,6 +281,13 @@ type ServiceMessageRow struct {
 	Rooms         []string `json:"rooms"`
 	Functions     []string `json:"functions"`
 	Quittable     bool     `json:"quittable"`
+	// DisplayName is the localized rendering of the message code, Value
+	// the alarm's value as the CCU prints it and ValueText the value-list
+	// entry it resolves to for an enum trigger datapoint. Each omitted
+	// when empty; see the REST ServiceMessage schema.
+	DisplayName string `json:"display_name,omitempty"`
+	Value       string `json:"value,omitempty"`
+	ValueText   string `json:"value_text,omitempty"`
 }
 
 // ServiceMessagesState is the live service-messages aggregate state.
