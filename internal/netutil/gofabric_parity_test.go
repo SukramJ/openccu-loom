@@ -32,9 +32,10 @@ import (
 //
 // # What the check measures, and against what
 //
-// The oracle is `mdns.NewZeroconf().InterfaceFilter`, which go-fabric documents
-// as installing its own `isVirtualInterfaceName` and which is reachable through
-// the exported field. That is the *compiled* predicate of the module version
+// The oracle is `mdns.DefaultInterfaceFilter`, which go-fabric exports as the
+// default `Responder.InterfaceFilter` and which a host's own filter composes, so
+// an operator's interface allow-list keeps the bridges out as well. That is the
+// *compiled* predicate of the module version
 // this repository builds against — the one whose decisions actually reach the
 // wire in a release built from this commit. It is therefore a stronger oracle
 // than the go-fabric source tree a developer happens to have checked out, which
@@ -66,11 +67,7 @@ import (
 func TestVirtualInterfaceNameAgreesWithGoFabric(t *testing.T) {
 	t.Parallel()
 
-	theirs := gofabricmdns.NewZeroconf().InterfaceFilter
-	if theirs == nil {
-		t.Fatal("mdns.NewZeroconf().InterfaceFilter is nil: go-fabric no longer installs its default " +
-			"interface filter, so this guard has no oracle and the two copies of the rule are unpinned again")
-	}
+	theirs := gofabricmdns.DefaultInterfaceFilter
 
 	prefixes := append([]string(nil), virtualIfacePrefixes...)
 	if extra, why := goFabricPrefixesFromCheckout(); why != "" {

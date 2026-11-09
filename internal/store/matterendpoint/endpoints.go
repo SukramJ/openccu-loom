@@ -84,6 +84,16 @@ func (s *Store) RemoveEndpoint(ctx context.Context, key fabricendpoint.SourceKey
 	return s.endpoints.RemoveEndpoint(ctx, k)
 }
 
+// EraseEndpoints implements [fabricendpoint.Store]: every endpoint record
+// of every central goes and the allocation restarts at the first bridged
+// number, in one transaction (go-fabric's sqlitestore). It is the factory
+// reset's erase, never a removal: [Store.RemoveEndpoint] keeps the
+// never-reissue rule, this alone hands numbers out again. The exposure
+// allowlist is the operator's choice, not endpoint identity, and stays.
+func (s *Store) EraseEndpoints(ctx context.Context) error {
+	return s.endpoints.EraseEndpoints(ctx)
+}
+
 // recordKey recovers rec's key and rejects a record whose scope
 // contradicts it. The central is the scope, so the two must not be able
 // to disagree: a record written under one central's scope but keyed to

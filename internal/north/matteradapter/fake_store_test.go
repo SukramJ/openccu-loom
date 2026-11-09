@@ -68,6 +68,14 @@ func (s *fakeStore) RemoveEndpoint(_ context.Context, key endpoint.SourceKey) er
 	return nil
 }
 
+// EraseEndpoints drops every row and restarts the numbering at the first
+// bridged endpoint, as the SQLite store does in one transaction.
+func (s *fakeStore) EraseEndpoints(context.Context) error {
+	clear(s.rows)
+	s.nextID = 2
+	return nil
+}
+
 // srcKey recovers this daemon's 5-tuple from an assembled endpoint. The
 // bridge module carries the key opaquely, so a test that wants to assert
 // on a channel number or a dp kind asks for the value back by type
