@@ -228,3 +228,21 @@ func TestApplyVisibilityUnIgnore_EmptyRegistry_NoPatterns_ReturnsZero(t *testing
 		t.Errorf("expected 0, got %d", got)
 	}
 }
+
+// TestMatterNodeConfigViewShowsTheConfiguredNode pins the status page's
+// configuration block onto the north.matter values the node is built from:
+// the defaulted label, discriminator and ids, the root's vendor and product
+// names, and the Matter port for an unset listen address.
+func TestMatterNodeConfigViewShowsTheConfiguredNode(t *testing.T) {
+	t.Parallel()
+	got := matterNodeConfigView(config.NorthMatter{}.WithDefaults())
+	if got.Source != "configuration" || got.Label != "openccu-loom" || got.Listen != ":5540" ||
+		got.Discriminator != 0xF00 || got.VendorID != 0xFFF1 || got.ProductID != 0x8000 ||
+		got.VendorName != matterVendorName || got.ProductName != matterProductName {
+		t.Errorf("defaulted view = %+v", *got)
+	}
+	got = matterNodeConfigView(config.NorthMatter{Listen: "[::]:5541", NodeLabel: "Home Bridge"}.WithDefaults())
+	if got.Listen != "[::]:5541" || got.Label != "Home Bridge" {
+		t.Errorf("configured view = %+v", *got)
+	}
+}

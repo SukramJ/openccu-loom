@@ -1,5 +1,5 @@
 {
- "api_version": "15.7.0",
+ "api_version": "15.8.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -137,6 +137,8 @@
   "GET /metrics": "metrics",
   "GET /node/compatibility": "getCompatibility",
   "GET /node/endpoints": "listEndpoints",
+  "GET /node/endpoints/{ep}": "getEndpointDetail",
+  "GET /node/endpoints/{ep}/events": "listEndpointEvents",
   "GET /node/events": "listDiagnosticEvents",
   "GET /node/exposure": "listExposure",
   "GET /node/exposure/schema": "getExposureSchema",
@@ -147,6 +149,7 @@
   "GET /node/status": "getNodeStatus",
   "GET /node/stream": "stream",
   "GET /node/surface": "getNodeSurface",
+  "GET /node/topology": "getNodeTopology",
   "GET /pairing-requests": "listPairingRequests",
   "GET /pairing/{id}": "pollPairing",
   "GET /programs": "listPrograms",
@@ -258,8 +261,10 @@
   "POST /install-mode/search": "installModeSearch",
   "POST /interfaces/{id}/reconnect": "reconnectInterface",
   "POST /node/exposure/preview": "previewExposure",
+  "POST /node/maintenance/erase": "erase",
   "POST /node/maintenance/factory-reset": "factoryReset",
   "POST /node/maintenance/reassemble": "reassemble",
+  "POST /node/mdns/reannounce": "reannounce",
   "POST /node/pairing/window": "openWindow",
   "POST /node/pairing/window/close": "closeWindow",
   "POST /pairing": "startPairing",
@@ -669,6 +674,11 @@
    "central:string",
    "room:string"
   ],
+  "AttributeChangedEvent": [
+   "attributes:array\u003cstring\u003e",
+   "cluster_hex:string",
+   "endpoint:integer"
+  ],
   "AuditEntry": [
    "action:string",
    "central:string",
@@ -888,6 +898,36 @@
    "name:string",
    "revision:integer"
   ],
+  "ClusterAttribute": [
+   "id:integer",
+   "id_hex:string",
+   "name:string",
+   "status:integer",
+   "value:unknown"
+  ],
+  "ClusterDetail": [
+   "accepted:array\u003c$ref:ClusterElement\u003e",
+   "attributes:array\u003c$ref:ClusterAttribute\u003e",
+   "data_version:integer",
+   "events:array\u003c$ref:ClusterElement\u003e",
+   "feature_map_hex:string",
+   "features:array\u003c$ref:ClusterFeature\u003e",
+   "generated:array\u003c$ref:ClusterElement\u003e",
+   "id:integer",
+   "id_hex:string",
+   "name:string",
+   "revision:integer"
+  ],
+  "ClusterElement": [
+   "id:integer",
+   "id_hex:string",
+   "name:string"
+  ],
+  "ClusterFeature": [
+   "bit:integer",
+   "code:string",
+   "title:string"
+  ],
   "Column": [
    "filter:boolean",
    "key:string",
@@ -945,6 +985,18 @@
    "config:object",
    "sources:object"
   ],
+  "ConformanceVerdict": [
+   "status:$ref:NodeConformanceStatus",
+   "unjudged:array\u003c$ref:ClusterElement\u003e",
+   "violations:array\u003c$ref:ConformanceViolation\u003e"
+  ],
+  "ConformanceViolation": [
+   "detail:string",
+   "device_type:string",
+   "device_type_id:integer",
+   "kind:string",
+   "requirement:string"
+  ],
   "CopyProfileRequest": [
    "source_profile:integer",
    "target_channel_address:string",
@@ -952,6 +1004,11 @@
   ],
   "CopyScheduleRequest": [
    "target_device_address:string"
+  ],
+  "Counter": [
+   "code:string",
+   "message:string",
+   "value:integer"
   ],
   "CreateFunctionRequest": [
    "central:string",
@@ -1256,8 +1313,34 @@
    "reachable:boolean",
    "source:object"
   ],
+  "EndpointDetail": [
+   "clusters:array\u003c$ref:ClusterDetail\u003e",
+   "conformance:$ref:ConformanceVerdict",
+   "decisions:array\u003c$ref:SurfaceDecision\u003e",
+   "device_types:array\u003c$ref:EndpointDeviceType\u003e",
+   "endpoint_id:integer",
+   "labels:array\u003c$ref:EndpointLabel\u003e",
+   "name:string",
+   "parent_endpoint_id:integer",
+   "parts:array\u003cinteger\u003e",
+   "reachable:boolean",
+   "scope:string",
+   "tags:array\u003c$ref:SemanticTag\u003e"
+  ],
+  "EndpointDeviceType": [
+   "id:integer",
+   "id_hex:string",
+   "name:string",
+   "revision:integer"
+  ],
+  "EndpointLabel": [
+   "label:string",
+   "user:boolean",
+   "value:string"
+  ],
   "EndpointList": [
-   "endpoints:array\u003c$ref:Endpoint\u003e"
+   "endpoints:array\u003c$ref:Endpoint\u003e",
+   "structural:array\u003c$ref:StructuralEndpoint\u003e"
   ],
   "EnergyBucket": [
    "avg_power_w:number",
@@ -1288,6 +1371,9 @@
    "entries:object",
    "locale:string"
   ],
+  "EraseRequest": [
+   "confirm:string"
+  ],
   "EventGroupSummary": [
    "available:boolean",
    "channel_address:string",
@@ -1296,6 +1382,19 @@
    "last_triggered_event:$ref:TriggeredEventSummary",
    "parameters:array\u003cstring\u003e",
    "unique_id:string"
+  ],
+  "EventRecord": [
+   "cluster_hex:string",
+   "data:unknown",
+   "endpoint:integer",
+   "epoch_ms:integer",
+   "event_hex:string",
+   "name:string",
+   "number:integer",
+   "priority:$ref:NodeEventPriority"
+  ],
+  "EventRecordList": [
+   "events:array\u003c$ref:EventRecord\u003e"
   ],
   "ExportedConfiguration": [
    "central_name:string",
@@ -1411,6 +1510,11 @@
   "Health": [
    "components:array\u003cobject\u003e",
    "status:string"
+  ],
+  "HealthSampleEvent": [
+   "healthy:boolean",
+   "note:string",
+   "sampled_at:string"
   ],
   "HistoryBucket": [
    "avg:number",
@@ -1699,9 +1803,24 @@
    "subtypes:array\u003cstring\u003e",
    "txt:object"
   ],
+  "NodeConfig": [
+   "discriminator:integer",
+   "label:string",
+   "listen:string",
+   "product_id:integer",
+   "product_name:string",
+   "source:$ref:NodeConfigSource",
+   "source_note:string",
+   "store:string",
+   "vendor_id:integer",
+   "vendor_name:string"
+  ],
+  "NodeConfigSource": [],
+  "NodeConformanceStatus": [],
   "NodeDiagnosticEventKind": [],
   "NodeDiagnosticEventSeverity": [],
   "NodeEndpointsChangedPayload": [],
+  "NodeEventPriority": [],
   "NodeMdnsFindingSeverity": [],
   "NodePairingSource": [],
   "NodeRef": [
@@ -1712,6 +1831,11 @@
   "NodeSurfaceElementKind": [],
   "NodeSurfaceElementOrigin": [],
   "NodeSurfaceVerdict": [],
+  "NodeTopologyEdgeKind": [],
+  "NodeTopologyEdgeStrength": [],
+  "NodeTopologyFamily": [],
+  "NodeTopologyNodeKind": [],
+  "NodeTopologyNodeState": [],
   "NodeVerdictState": [],
   "NodeWarning": [
    "code:string",
@@ -1719,6 +1843,9 @@
    "since:string"
   ],
   "NodeWindowKind": [],
+  "NodesChangedEvent": [
+   "keys:array\u003cstring\u003e"
+  ],
   "Occupancy": [
    "capacity:integer",
    "free:integer",
@@ -2201,6 +2328,12 @@
    "sources:array\u003c$ref:AlarmSource\u003e",
    "state:string"
   ],
+  "SemanticTag": [
+   "label:string",
+   "mfg_code:integer",
+   "namespace:integer",
+   "tag:integer"
+  ],
   "ServiceMessage": [
    "address:string",
    "central:string",
@@ -2232,9 +2365,36 @@
    "session_id:integer",
    "subscriptions:integer"
   ],
+  "SessionEvent": [
+   "fabric_index:integer",
+   "idle_seconds:integer",
+   "is_pase:boolean",
+   "last_activity:string",
+   "last_peer_activity:string",
+   "local_node_id:integer",
+   "local_node_id_hex:string",
+   "peer_idle_seconds:integer",
+   "peer_node_id:integer",
+   "peer_node_id_hex:string",
+   "session_id:integer",
+   "subscriptions:integer"
+  ],
   "SessionList": [
    "occupancy:$ref:Occupancy",
+   "parameters:$ref:SessionParameters",
    "sessions:array\u003c$ref:Session\u003e"
+  ],
+  "SessionParameters": [
+   "active_interval_ms:integer",
+   "active_threshold_ms:integer",
+   "data_model_revision:integer",
+   "idle_interval_ms:integer",
+   "interaction_model_revision:integer",
+   "max_paths_per_invoke:integer",
+   "max_tcp_message_size:integer",
+   "specification_version_hex:string",
+   "supported_transports:integer",
+   "tcp:boolean"
   ],
   "SetActiveProfileRequest": [
    "profile:string"
@@ -2302,23 +2462,38 @@
    "enabled:boolean"
   ],
   "Status": [
+   "admin:boolean",
    "advertising:boolean",
+   "attestation_error:string",
+   "boot_reason:integer",
    "commissioning_window_duration_seconds:integer",
    "commissioning_window_open:boolean",
+   "config:$ref:NodeConfig",
+   "counters:array\u003c$ref:Counter\u003e",
    "csrf_token:string",
    "enabled:boolean",
    "enabled_count:integer",
    "endpoint_count:integer",
+   "erase:boolean",
    "exposure:boolean",
+   "exposure_reason:string",
    "fabric_count:integer",
    "health_note:string",
    "healthy:boolean",
    "listen_addr:string",
    "listening:boolean",
+   "node_registry:boolean",
    "surface:object",
    "warnings:array\u003c$ref:NodeWarning\u003e",
    "window_deadline:string",
    "window_kind:$ref:NodeWindowKind"
+  ],
+  "StructuralEndpoint": [
+   "device_types:array\u003c$ref:EndpointDeviceType\u003e",
+   "endpoint_id:integer",
+   "name:string",
+   "parent_endpoint_id:integer",
+   "parts:array\u003cinteger\u003e"
   ],
   "SuitableMemberEntry": [
    "address:string",
@@ -2626,6 +2801,48 @@
    "last_seen_at:string",
    "role:string",
    "subject:string"
+  ],
+  "TopologyDetail": [
+   "key:string",
+   "value:string"
+  ],
+  "TopologyEdge": [
+   "kind:$ref:NodeTopologyEdgeKind",
+   "label:string",
+   "lqi:integer",
+   "rssi:integer",
+   "source:string",
+   "strength:$ref:NodeTopologyEdgeStrength",
+   "target:string"
+  ],
+  "TopologyGraph": [
+   "as_of:string",
+   "edges:array\u003c$ref:TopologyEdge\u003e",
+   "family:$ref:NodeTopologyFamily",
+   "nodes:array\u003c$ref:TopologyNode\u003e"
+  ],
+  "TopologyNode": [
+   "bssid:string",
+   "details:array\u003c$ref:TopologyDetail\u003e",
+   "endpoint:integer",
+   "fabric_index:integer",
+   "id:string",
+   "is_pase:boolean",
+   "kind:$ref:NodeTopologyNodeKind",
+   "label:string",
+   "node_id_hex:string",
+   "reachable:boolean",
+   "ref:$ref:TopologyRef",
+   "rloc16:integer",
+   "role:string",
+   "session_id:integer",
+   "ssid:string",
+   "state:$ref:NodeTopologyNodeState",
+   "subscriptions:integer"
+  ],
+  "TopologyRef": [
+   "id:string",
+   "page:string"
   ],
   "TriggerBackupRequest": [
    "central_name:string"

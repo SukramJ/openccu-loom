@@ -4386,8 +4386,79 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The bridged endpoints a controller sees. */
+        /**
+         * The bridged endpoints a controller sees.
+         * @description `endpoints` are the bridged endpoints of the node's topology
+         *     (go-fabric `Node.Topology`), each device followed by its parts.
+         *     `structural` (0.5.0) are the endpoints no bridged device declares —
+         *     the root and the Aggregator — from the node's endpoint tree
+         *     (go-fabric `Node.Endpoints`), root first, then by number.
+         */
         get: operations["listEndpoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/endpoints/{ep}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint number. */
+                ep: components["parameters"]["EndpointNumber"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One endpoint the node serves, with its attribute values (0.4.1).
+         * @description Read through the node's own read path (go-fabric `Node.ReadCluster`),
+         *     as a controller's read reaches it, without access control: the
+         *     Descriptor's DeviceTypeList, TagList and PartsList, the FixedLabel
+         *     and UserLabel entries, and every server cluster of its ServerList
+         *     with its revision, feature map, attribute values (JSON by field
+         *     name), data version and the names go-fabric's schema gives its
+         *     attributes, commands and events. An attribute whose read failed
+         *     carries the IM `status` it was answered with and no `value` (0.5.0,
+         *     go-fabric `AttributeValue.Status`). The endpoint's parent, parts,
+         *     device types, name and scope come from the node's endpoint tree
+         *     (go-fabric `Node.Endpoints`, 0.5.0). `decisions` are the surface
+         *     report's decisions on this endpoint. The root endpoint and the
+         *     Aggregator answer too. 404 for an endpoint the node does not serve,
+         *     503 before the node started.
+         */
+        get: operations["getEndpointDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/endpoints/{ep}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint number. */
+                ep: components["parameters"]["EndpointNumber"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The events the node's event log holds for one endpoint (0.4.1).
+         * @description The records a controller's event read is answered from (go-fabric
+         *     `Node.Events` with the endpoint's filter), oldest first: the log is
+         *     bounded and volatile, emptied when the node stops. An endpoint no
+         *     longer served keeps the events it emitted while the log holds them,
+         *     so an unknown endpoint is an empty list, not 404. Not the
+         *     diagnostic trace of `GET /node/events`.
+         */
+        get: operations["listEndpointEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4438,6 +4509,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/node/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The node as a graph — its bridge, its fabrics and the sessions on them.
+         * @description Built from go-fabric's `Topology`, `FabricInfos` and
+         *     `SessionDiagnostics`: the node, its Aggregator, the bridged devices
+         *     and their parts (`contains`), each fabric with the sessions on it
+         *     (`contains`) and every session to the node (`session`). A PASE
+         *     session (fabric index 0) hangs on the node without a fabric. Node
+         *     ids are `node`, `ep:<n>`, `fabric:<index>`, `session:<id>`.
+         *     Subscriptions are counts per session. 503 while the host serves no
+         *     node or the node has not assembled its endpoints.
+         */
+        get: operations["getNodeTopology"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/node/mdns": {
         parameters: {
             query?: never;
@@ -4449,6 +4547,30 @@ export interface paths {
         get: operations["getMdns"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/node/mdns/reannounce": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Announce the node's DNS-SD records now.
+         * @description Publishes every advertised service once per interface, with the
+         *     goodbyes of the addresses that left (go-fabric
+         *     `Node.TriggerReannounce`, 0.7.0) — for an operator who changed the
+         *     network and does not want to wait for the advertiser's schedule. A
+         *     no-op on an advertiser that cannot reannounce; 204 either way.
+         */
+        post: operations["reannounce"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4575,6 +4697,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/node/maintenance/erase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase the node — its store and endpoint records — and end it. The body must name the action.
+         * @description The host's erase (0.7.0, `Options.Erase`): go-fabric
+         *     `Node.FactoryReset` removes every fabric, stops the node and erases
+         *     what it persisted; the node is single-use, so the host builds a new
+         *     one on the erased store or restarts. `Status.erase` says whether the
+         *     host wires it. Unlike `POST /node/maintenance/factory-reset`, which
+         *     removes the fabrics and keeps the node running, this ends the node:
+         *     until the host brings one back, the node routes may answer with the
+         *     old node's state or fail. 501 `not_implemented` when the host wires
+         *     no erase.
+         */
+        post: operations["erase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/node/stream": {
         parameters: {
             query?: never;
@@ -4584,10 +4734,39 @@ export interface paths {
         };
         /**
          * Server-sent events.
-         * @description `event:` is one of fabric_added, fabric_removed, window_opened,
-         *     window_closed, endpoints_changed, exposure_changed, surface_changed;
-         *     `data:` is the JSON payload (`FabricEvent`, `WindowEvent`, `{}`,
-         *     `ExposureEvent`, `SurfaceChangedEvent`).
+         * @description `event:` is one of fabric_added, fabric_removed, fabric_updated,
+         *     commissioning_complete, window_opened, window_closed,
+         *     endpoints_changed, exposure_changed, surface_changed,
+         *     session_opened, session_closed, subscriptions_changed,
+         *     attribute_changed, cluster_event, health_sample, diagnostic_event,
+         *     nodes_changed; `data:` is the JSON payload (`FabricEvent`,
+         *     `WindowEvent`, `{}`, `ExposureEvent`, `SurfaceChangedEvent`,
+         *     `SessionEvent`, `AttributeChangedEvent`, `EventRecord`,
+         *     `HealthSampleEvent`, `DiagnosticEvent`, `NodesChangedEvent`).
+         *     fabric_added (an AddNOC installed the fabric), fabric_updated (an
+         *     UpdateNOC, UpdateFabricLabel or SetVIDVerificationStatement changed
+         *     it; `FabricEvent` as fabric_added) and commissioning_complete (a
+         *     CommissioningComplete succeeded; `FabricEvent` with `fabric_index`
+         *     alone) are go-fabric's node.Observers OnFabricAdded,
+         *     OnFabricUpdated and OnCommissioningComplete (0.7.0): a
+         *     commissioning reports fabric_added, then commissioning_complete.
+         *     cluster_event (0.7.0) is every event a cluster server emitted and
+         *     the node's event log recorded (node.Observers.OnEvent), in the
+         *     shape of `GET /node/endpoints/{ep}/events`.
+         *     nodes_changed (0.6.0) follows `POST /nodes`, `PUT
+         *     /nodes/{node}/label` and `DELETE /nodes/{node}` on every node's
+         *     stream, with the keys of the nodes created, renamed or deleted: a
+         *     page reloads `GET /nodes`.
+         *     attribute_changed (0.4.1) names the attributes that changed, never
+         *     their values: a page refetches what it shows.
+         *     health_sample (0.5.0) is every verdict of the node's health probe
+         *     (go-fabric `Node.OnHealthSample`); diagnostic_event (0.5.0) is every
+         *     entry the node adds to the trace `GET /node/events` serves (go-fabric
+         *     `Node.OnDiagnosticEvent`), in the same shape.
+         *     session_opened reports CASE sessions only (go-fabric
+         *     node.Observers.OnSessionOpened); a PASE session is not reported, and
+         *     session_closed and subscriptions_changed follow only a session
+         *     session_opened reported.
          *     A comment line arrives every 15 s. No payload carries a passcode.
          */
         get: operations["stream"];
@@ -11435,10 +11614,25 @@ export interface components {
             window_deadline?: string;
             /** @description Whether the host serves a selection. */
             exposure: boolean;
+            /** @description Why the host serves no selection, in the host's language; absent when it serves one or gives no reason (0.5.0). */
+            exposure_reason?: string;
             /** @description The admin token of token mode; absent when the host decides admin rights. */
             csrf_token?: string;
+            /** @description Whether the host's admin check admits this request (0.6.0); present when the host decides admin rights, absent in token mode, where `csrf_token` says it. */
+            admin?: boolean;
+            /** @description Whether the host keeps a node registry (0.6.0): `POST /nodes` creates a node and a `managed` node can be renamed and deleted. Absent without one. */
+            node_registry?: boolean;
+            config?: components["schemas"]["NodeConfig"];
+            /** @description Why the node's attestation files did not load (0.7.0, go-fabric `Node.AttestationError`): the node runs on the test chain and refuses every commissioning until the files are fixed and a new node is built. Absent when the files loaded, named nothing, or without a node. */
+            attestation_error?: string;
+            /** @description The GeneralDiagnostics BootReason the node was built with (0.7.0, go-fabric `Node.BootReason`; BootReasonEnum: 0 Unspecified, 1 PowerOnReboot, 2 BrownOutReset, 3 SoftwareWatchdogReset, 4 HardwareWatchdogReset, 5 SoftwareUpdateCompleted, 6 SoftwareReset). Absent without a node. */
+            boot_reason?: number;
+            /** @description Whether the host wires an erase of this node (0.7.0, `Options.Erase` or `NodeEntry.Erase`): `POST /node/maintenance/erase` is served. Absent without one. */
+            erase?: boolean;
             /** @description The host's findings about its own configuration; absent when the host reports none (no Options.Warnings), empty when it finds nothing. */
             warnings?: components["schemas"]["NodeWarning"][];
+            /** @description The host's own counters a scraper reads beside the health (0.8.0), e.g. `discards`, commands the host answered with success and acted on nothing; absent when the host reports none (no Options.Counters), empty when it has none to report. Host-wide: every node's status carries the same list. */
+            counters?: components["schemas"]["Counter"][];
             /** @description The policies the node's served surface is composed under (go-fabric node.Node.Surface) and the counts that tell whether to look further; absent without a node. */
             surface?: {
                 /** @description The specification level the surface is composed at (go-fabric surface.Report.Level), e.g. "1.6.1". */
@@ -11469,6 +11663,15 @@ export interface components {
              * @description When the host first saw it; absent when unknown.
              */
             since?: string;
+        };
+        /** @description One of the host's counters (0.8.0, Options.Counters). */
+        Counter: {
+            /** @description The counter's stable machine name, e.g. discards. */
+            code: string;
+            /** @description The count since the host started. */
+            value: number;
+            /** @description What the counter counts, in one line in the host's language. */
+            message: string;
         };
         Fabric: {
             fabric_index: number;
@@ -11533,6 +11736,20 @@ export interface components {
         };
         EndpointList: {
             endpoints: components["schemas"]["Endpoint"][];
+            /** @description The root and the Aggregator — the endpoints `endpoints` does not list — root first, then by number (0.5.0). */
+            structural?: components["schemas"]["StructuralEndpoint"][];
+        };
+        /** @description An endpoint of the node's endpoint tree no bridged device declares (go-fabric `Node.Endpoints`, 0.5.0). */
+        StructuralEndpoint: {
+            endpoint_id: number;
+            /** @description The endpoint whose parts list names this one; absent for the root and top-level endpoints. */
+            parent_endpoint_id?: number;
+            /** @description The endpoint's node label; its first device type's name without one. */
+            name: string;
+            /** @description The Descriptor's DeviceTypeList in its order. */
+            device_types: components["schemas"]["EndpointDeviceType"][];
+            /** @description The endpoint numbers of its direct children — the endpoints whose parent it is, not every descendant its PartsList names. */
+            parts: number[];
         };
         Session: {
             session_id: number;
@@ -11561,6 +11778,101 @@ export interface components {
         SessionList: {
             sessions: components["schemas"]["Session"][];
             occupancy: components["schemas"]["Occupancy"];
+            parameters?: components["schemas"]["SessionParameters"];
+        };
+        /** @description The session parameters the node reports to every PASE and CASE peer (0.7.0, go-fabric `Node.SessionParameters`, the SessionParameters structure of PBKDFParamResponse and Sigma2). A zero value is not stated: the peer falls back to the specification's default. */
+        SessionParameters: {
+            /** @description SESSION_IDLE_INTERVAL. */
+            idle_interval_ms: number;
+            /** @description SESSION_ACTIVE_INTERVAL. */
+            active_interval_ms: number;
+            /** @description SESSION_ACTIVE_THRESHOLD. */
+            active_threshold_ms: number;
+            data_model_revision: number;
+            interaction_model_revision: number;
+            /** @description SPECIFICATION_VERSION as 8 uppercase hex digits, e.g. "01050000". */
+            specification_version_hex: string;
+            max_paths_per_invoke: number;
+            /** @description The SUPPORTED_TRANSPORTS bitmap, the transports beside MRP over UDP. */
+            supported_transports: number;
+            /** @description The bitmap names TCP in either role. */
+            tcp: boolean;
+            /** @description MAX_TCP_MESSAGE_SIZE in bytes; present with tcp. */
+            max_tcp_message_size?: number;
+        };
+        /** @description A family's topology as nodes and edges; the renderer needs no knowledge per kind. */
+        TopologyGraph: {
+            /**
+             * Format: date-time
+             * @description When the graph was read, on the node's or the controller's clock.
+             */
+            as_of: string;
+            family: components["schemas"]["NodeTopologyFamily"];
+            nodes: components["schemas"]["TopologyNode"][];
+            edges: components["schemas"]["TopologyEdge"][];
+        };
+        /**
+         * @description One node of the graph. `details` is the ordered list a page shows
+         *     for it; the typed fields are the ones a page links or colours by,
+         *     each present only for the kinds it belongs to.
+         */
+        TopologyNode: {
+            /** @description Unique in the graph: `node`, `ep:<n>`, `fabric:<index>`, `session:<id>`, `peer:<node_id_hex>`. */
+            id: string;
+            kind: components["schemas"]["NodeTopologyNodeKind"];
+            label: string;
+            state: components["schemas"]["NodeTopologyNodeState"];
+            ref?: components["schemas"]["TopologyRef"];
+            details: components["schemas"]["TopologyDetail"][];
+            /** @description aggregator, device, part: the endpoint number. */
+            endpoint?: number;
+            /** @description fabric, session: the fabric index; 0 for a PASE session. */
+            fabric_index?: number;
+            /** @description session: the local session id. */
+            session_id?: number;
+            /** @description fabric: our node id on it; session: the peer's; peer: the node's. */
+            node_id_hex?: string;
+            /** @description device, part: Reachable as a controller reads it. */
+            reachable?: boolean;
+            /** @description session: a commissioning (PASE) session. */
+            is_pase?: boolean;
+            /** @description session: the subscriptions riding on it. */
+            subscriptions?: number;
+            /** @description peer: its Thread routing role or network kind. */
+            role?: string;
+            /** @description peer: its Thread RLOC16. */
+            rloc16?: number;
+            /** @description wifi_ap, peer: the Wi-Fi network. */
+            ssid?: string;
+            /** @description wifi_ap, peer: the access point's BSSID. */
+            bssid?: string;
+        };
+        TopologyEdge: {
+            /** @description A node id. */
+            source: string;
+            /** @description A node id. */
+            target: string;
+            kind: components["schemas"]["NodeTopologyEdgeKind"];
+            strength?: components["schemas"]["NodeTopologyEdgeStrength"];
+            /** @description link: Thread link quality indicator. */
+            lqi?: number;
+            /** @description link: received signal strength, dBm. */
+            rssi?: number;
+            label?: string;
+        };
+        /**
+         * @description The page that already lists the node and the id it lists it by:
+         *     `endpoints` (endpoint number), `fabrics` (fabric index),
+         *     `diagnostics` (session id), `controller_node` (`node_id_hex`).
+         */
+        TopologyRef: {
+            page: string;
+            id: string;
+        };
+        TopologyDetail: {
+            /** @description A stable key a page translates (`device_type`, `clusters`, …). */
+            key: string;
+            value: string;
         };
         MdnsService: {
             service_type: string;
@@ -11610,6 +11922,46 @@ export interface components {
             detail?: {
                 [key: string]: string;
             };
+        };
+        /** @description The payload of health_sample (0.5.0) — one verdict of the node's health probe. */
+        HealthSampleEvent: {
+            healthy: boolean;
+            /** @description The probe's stable English note. */
+            note: string;
+            /**
+             * Format: date-time
+             * @description When the handler received the verdict, on the node's clock.
+             */
+            sampled_at: string;
+        };
+        /**
+         * @description The node's configuration as the host shows it, read-only (0.6.0);
+         *     absent when the host supplies none. One shape for every node. It
+         *     never carries the passcode, which stays with the admin route
+         *     `GET /node/pairing`. Of a `registry` node only the label is
+         *     editable (`PUT /nodes/{node}/label`); the host allocated the rest.
+         *     A `configuration` node is set in the host's configuration and
+         *     nothing of it is editable in the page.
+         */
+        NodeConfig: {
+            source: components["schemas"]["NodeConfigSource"];
+            /** @description The host's wording of where a configured node's values come from ("add-on options", "the --bridge-* flags"); absent when it gives none. */
+            source_note?: string;
+            /** @description The node's configured name; absent when it has none. */
+            label?: string;
+            /** @description The address the node listens on, as configured ("[::]:5540"). */
+            listen: string;
+            discriminator: number;
+            vendor_id: number;
+            vendor_name?: string;
+            product_id: number;
+            product_name?: string;
+            /** @description Where the node keeps its state (a file name); absent when the host does not say. */
+            store?: string;
+        };
+        /** @description The payload of nodes_changed (0.6.0) — the keys of the nodes created, renamed or deleted. */
+        NodesChangedEvent: {
+            keys: string[];
         };
         DiagnosticEventList: {
             events: components["schemas"]["DiagnosticEvent"][];
@@ -11680,6 +12032,10 @@ export interface components {
             /** @constant */
             confirm: "remove-all-fabrics";
         };
+        EraseRequest: {
+            /** @constant */
+            confirm: "erase-node";
+        };
         FabricEvent: {
             fabric_index: number;
             vendor_id?: number;
@@ -11690,12 +12046,39 @@ export interface components {
             discriminator?: number;
             duration_seconds?: number;
         };
+        /** @description The payload of session_opened, session_closed and subscriptions_changed — the session as `/node/sessions` lists it, with its new subscription count. */
+        SessionEvent: {
+            session_id: number;
+            fabric_index: number;
+            /** @description Informational; use peer_node_id_hex. */
+            peer_node_id: number;
+            peer_node_id_hex: string;
+            /** @description Informational; use local_node_id_hex. */
+            local_node_id: number;
+            local_node_id_hex: string;
+            is_pase: boolean;
+            subscriptions: number;
+            /** Format: date-time */
+            last_activity: string;
+            /** Format: date-time */
+            last_peer_activity: string;
+            idle_seconds: number;
+            peer_idle_seconds: number;
+        };
         ExposureEvent: {
             keys: string[];
         };
         SurfaceChangedEvent: {
             /** @description The key of the endpoint whose served surface an assembly changed (go-fabric node.Observers.OnSurfaceChanged, one endpoint per event); "" is the root endpoint. */
             endpoints: string[];
+        };
+        /** @description The payload of attribute_changed (0.4.1) — go-fabric node.Observers.OnAttributeChanged, one cluster of one endpoint per event, ids only. */
+        AttributeChangedEvent: {
+            endpoint: number;
+            /** @description The cluster id as `id_hex` elsewhere: "0x" and at least four uppercase hex digits. */
+            cluster_hex: string;
+            /** @description The ids of the attributes that changed, ascending, in hex. */
+            attributes: string[];
         };
         /** @description go-fabric surface.Report (surface/policy.go wireReport). */
         SurfaceReport: {
@@ -11812,6 +12195,134 @@ export interface components {
             kind: components["schemas"]["NodeSurfaceElementKind"];
         };
         /**
+         * @description One endpoint with its inventory (contract 0.4.0), one shape for both
+         *     families. The controller family fills it from its image of the node:
+         *     `conformance`, never `scope` or `decisions`; its `clusters` carry no
+         *     attribute values. The node family (0.4.1) fills it from what the node
+         *     serves: `scope` for a bridged endpoint, `decisions`, never
+         *     `conformance`; its `clusters` carry the values.
+         */
+        EndpointDetail: {
+            endpoint_id: number;
+            /** @description The endpoint whose parts list names this one; absent for the root and top-level endpoints. */
+            parent_endpoint_id?: number;
+            /** @description The device type's name as the controller names the endpoint. */
+            name: string;
+            /** @description BridgedDeviceBasicInformation Reachable where the endpoint serves it; true elsewhere. */
+            reachable: boolean;
+            /** @description The Descriptor's DeviceTypeList in its order. */
+            device_types: components["schemas"]["EndpointDeviceType"][];
+            /** @description The snapshot scope a node-side endpoint was assembled from; absent on the controller side. */
+            scope?: string;
+            /** @description The Descriptor's TagList; empty when the endpoint serves none. */
+            tags: components["schemas"]["SemanticTag"][];
+            /** @description The FixedLabel LabelList, then the UserLabel LabelList. */
+            labels: components["schemas"]["EndpointLabel"][];
+            /** @description The endpoint numbers of its direct children — the endpoints whose parent it is, not every descendant its PartsList names. */
+            parts: number[];
+            /** @description The server clusters in id order. */
+            clusters: components["schemas"]["ClusterDetail"][];
+            conformance?: components["schemas"]["ConformanceVerdict"];
+            /** @description The node's surface decisions on this endpoint (0.4.1, node family only), as `GET /node/surface` lists them. */
+            decisions?: components["schemas"]["SurfaceDecision"][];
+        };
+        EndpointDeviceType: {
+            id: number;
+            id_hex: string;
+            /** @description The device type's name; absent for one the schema does not know. */
+            name?: string;
+            revision: number;
+        };
+        SemanticTag: {
+            namespace: number;
+            tag: number;
+            /** @description The manufacturer code of a manufacturer-specific namespace; absent when null. */
+            mfg_code?: number;
+            label?: string;
+        };
+        EndpointLabel: {
+            label: string;
+            value: string;
+            /** @description An entry of UserLabel; FixedLabel's otherwise. */
+            user: boolean;
+        };
+        /** @description The device type conformance of the endpoint as the controller judges its image. */
+        ConformanceVerdict: {
+            status: components["schemas"]["NodeConformanceStatus"];
+            violations: components["schemas"]["ConformanceViolation"][];
+            /** @description The server clusters the ServerList names whose inside was not judged. */
+            unjudged: components["schemas"]["ClusterElement"][];
+        };
+        ConformanceViolation: {
+            device_type: string;
+            /** @description Absent for Base and where the violation names no device type. */
+            device_type_id?: number;
+            requirement: string;
+            kind: string;
+            detail: string;
+        };
+        /** @description One server cluster with its inventory (contract 0.4.0). */
+        ClusterDetail: {
+            id: number;
+            id_hex: string;
+            /** @description The cluster's name; absent for one no definition names. */
+            name?: string;
+            revision: number;
+            feature_map_hex: string;
+            /** @description The features the feature map sets, in bit order. */
+            features: components["schemas"]["ClusterFeature"][];
+            /** @description The cluster's DataVersion; absent while unknown. */
+            data_version?: number;
+            /** @description The AttributeList in id order. */
+            attributes: components["schemas"]["ClusterAttribute"][];
+            /** @description The AcceptedCommandList. */
+            accepted: components["schemas"]["ClusterElement"][];
+            /** @description The GeneratedCommandList. */
+            generated: components["schemas"]["ClusterElement"][];
+            /** @description The EventList where the peer reports one. */
+            events: components["schemas"]["ClusterElement"][];
+        };
+        ClusterFeature: {
+            /** @description The short name ("LT"). */
+            code: string;
+            /** @description The long name ("Lighting"); absent where no definition names it. */
+            title?: string;
+            bit: number;
+        };
+        ClusterAttribute: {
+            id: number;
+            id_hex: string;
+            name?: string;
+            /** @description The attribute's value as JSON by field name; absent in a structure-only answer or while unknown. */
+            value?: unknown;
+            /** @description The IM status the attribute was answered with; absent on success. The node family sets it, without a `value`, for an attribute its read path failed (0.5.0). */
+            status?: number;
+        };
+        ClusterElement: {
+            id: number;
+            id_hex: string;
+            name?: string;
+        };
+        /** @description One Matter event (0.4.1), one shape for both families — an event the node served, or one the controller received from a node. */
+        EventRecord: {
+            /** @description The node-wide event number (Matter Core §7.14.2.1). */
+            number: number;
+            priority: components["schemas"]["NodeEventPriority"];
+            endpoint: number;
+            cluster_hex: string;
+            event_hex: string;
+            /** @description The event's name in go-fabric's schema; absent for one it does not name. */
+            name?: string;
+            /** @description The event's epoch timestamp in milliseconds; absent when the event carries a system timestamp only. */
+            epoch_ms?: number;
+            /** @description The event's data as JSON by field name; absent without data or when it cannot be rendered. */
+            data?: unknown;
+        };
+        EventRecordList: {
+            /** @description Oldest first. */
+            events: components["schemas"]["EventRecord"][];
+        };
+        /**
          * @description Where the pairing codes come from — the configured credentials, or the window the handler opened on fresh ones.
          * @enum {string}
          */
@@ -11847,6 +12358,28 @@ export interface components {
          * @enum {string}
          */
         NodeSurfaceVerdict: "keep" | "warn" | "remove" | "refuse";
+        /** @enum {string} */
+        NodeTopologyFamily: "node" | "controller";
+        /** @enum {string} */
+        NodeTopologyNodeKind: "node" | "aggregator" | "device" | "part" | "fabric" | "session" | "peer" | "thread_router" | "thread_end_device" | "wifi_ap" | "ethernet" | "border_router";
+        /** @enum {string} */
+        NodeTopologyNodeState: "ok" | "unreachable" | "idle" | "unknown";
+        /** @enum {string} */
+        NodeTopologyEdgeKind: "contains" | "session" | "link";
+        /**
+         * @description link: the link's quality class; `none` is a link observed dead (LQI 0), `unknown` one without a measurement.
+         * @enum {string}
+         */
+        NodeTopologyEdgeStrength: "strong" | "medium" | "weak" | "none" | "unknown";
+        /**
+         * @description Where the values come from: the host's configuration, or its node registry.
+         * @enum {string}
+         */
+        NodeConfigSource: "configuration" | "registry";
+        /** @enum {string} */
+        NodeConformanceStatus: "unknown" | "incomplete" | "clean" | "violated";
+        /** @enum {string} */
+        NodeEventPriority: "debug" | "info" | "critical";
         /** @description The payload of the `node.endpoints_changed` broadcast: empty. The node reassembled its bridged endpoints; a subscriber reloads GET /node/endpoints. */
         NodeEndpointsChangedPayload: Record<string, never>;
     };
@@ -11961,6 +12494,12 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The endpoint number. */
+        EndpointNumber: number;
+        /** @description The lowest event number returned (inclusive); absent is every event the log holds. A page passes the last number it has plus one to fetch only the newer ones. */
+        EventSince: number;
+        /** @description Only the newest `limit` of the matching events; absent is 100. */
+        EventLimit: number;
         Address: string;
         ChannelNo: number;
         Parameter: string;
@@ -18761,6 +19300,63 @@ export interface operations {
             503: components["responses"]["NodeProblem"];
         };
     };
+    getEndpointDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint number. */
+                ep: components["parameters"]["EndpointNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The endpoint. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointDetail"];
+                };
+            };
+            400: components["responses"]["NodeProblem"];
+            404: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    listEndpointEvents: {
+        parameters: {
+            query?: {
+                /** @description The lowest event number returned (inclusive); absent is every event the log holds. A page passes the last number it has plus one to fetch only the newer ones. */
+                since?: components["parameters"]["EventSince"];
+                /** @description Only the newest `limit` of the matching events; absent is 100. */
+                limit?: components["parameters"]["EventLimit"];
+            };
+            header?: never;
+            path: {
+                /** @description The endpoint number. */
+                ep: components["parameters"]["EndpointNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The events, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRecordList"];
+                };
+            };
+            400: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
     getNodeSurface: {
         parameters: {
             query?: never;
@@ -18803,6 +19399,28 @@ export interface operations {
             503: components["responses"]["NodeProblem"];
         };
     };
+    getNodeTopology: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The graph. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyGraph"];
+                };
+            };
+            500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
     getMdns: {
         parameters: {
             query?: never;
@@ -18821,6 +19439,26 @@ export interface operations {
                     "application/json": components["schemas"]["Mdns"];
                 };
             };
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    reannounce: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Announced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19017,6 +19655,33 @@ export interface operations {
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
+        };
+    };
+    erase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EraseRequest"];
+            };
+        };
+        responses: {
+            /** @description Erased; the host brings the node back or restarts. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
+            501: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };

@@ -14,6 +14,10 @@ top-level CHANGELOG.md. Newest version first.
 - **Matter stack go-fabric 0.19.1**, with its own mDNS responder: records
   expire within two minutes once the bridge is gone, and the bridge announces
   again when the host's addresses change.
+- **Matter pages from go-fabric-ui 0.8**: every endpoint has its own page
+  with its clusters and recent events, the Status tab shows the bridge's
+  configuration, and Diagnostics can make the bridge announce itself again
+  at once.
 
 # 0.97.3
 

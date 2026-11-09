@@ -18,7 +18,8 @@ import (
 // `enabled: false` on a running bridge; leave Exposure unset and the
 // selection page is hidden; leave Events unset and no page hears a
 // controller commissioning the node; leave Reassemble unset and a saved
-// selection takes effect on the next restart. Every one of those reads as
+// selection takes effect on the next restart; leave NodeConfig unset and
+// the status page shows no configuration. Every one of those reads as
 // "Matter is off" or "the UI is slow", never as a wiring defect — which is
 // why the wiring is pinned here, in the source the daemon ships.
 func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
@@ -33,6 +34,7 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 		{"the audit ledger", "Audit: auditRec,"},
 		{"the reassemble hook", "Reassemble: matterReassembler(bundle.sync, auditRec),"},
 		{"the event source", "Events: bundle.events,"},
+		{"the configuration the status page shows", "NodeConfig: matterNodeConfigView(mcfg),"},
 	} {
 		if !strings.Contains(matter, want.expr) {
 			t.Errorf("wireMatterRuntime never hands go-fabric-ui %s (%q)", want.what, want.expr)

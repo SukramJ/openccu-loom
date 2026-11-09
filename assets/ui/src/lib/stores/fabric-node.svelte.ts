@@ -21,13 +21,18 @@ import { subscribe as subscribeHub } from "./events.svelte";
 import { prefs } from "./preferences.svelte";
 import { toastStore } from "./toast.svelte";
 
-/** The hrefs of the seven Matter pages under loom's hash router. */
+/**
+ * The hrefs of the seven Matter pages under loom's hash router, and the
+ * prefix of one endpoint's page, which the endpoints page links each
+ * endpoint to with its number appended.
+ */
 export const matterRoutes = {
   status: "#/matter",
   pair: "#/matter/pair",
   fabrics: "#/matter/fabrics",
   selection: "#/matter/selection",
   endpoints: "#/matter/endpoints",
+  endpoint: "#/matter/endpoint/",
   surface: "#/matter/surface",
   diagnostics: "#/matter/diagnostics",
 } as const;

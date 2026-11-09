@@ -213,6 +213,11 @@
   "central",
   "room"
  ],
+ "AttributeChangedEvent": [
+  "attributes",
+  "cluster_hex",
+  "endpoint"
+ ],
  "AuditEntry": [
   "action",
   "id",
@@ -336,6 +341,29 @@
  "Cluster": [
   "id"
  ],
+ "ClusterAttribute": [
+  "id",
+  "id_hex"
+ ],
+ "ClusterDetail": [
+  "accepted",
+  "attributes",
+  "events",
+  "feature_map_hex",
+  "features",
+  "generated",
+  "id",
+  "id_hex",
+  "revision"
+ ],
+ "ClusterElement": [
+  "id",
+  "id_hex"
+ ],
+ "ClusterFeature": [
+  "bit",
+  "code"
+ ],
  "Column": [
   "filter",
   "key",
@@ -373,6 +401,17 @@
   "config",
   "sources"
  ],
+ "ConformanceVerdict": [
+  "status",
+  "unjudged",
+  "violations"
+ ],
+ "ConformanceViolation": [
+  "detail",
+  "device_type",
+  "kind",
+  "requirement"
+ ],
  "CopyProfileRequest": [
   "source_profile",
   "target_channel_address",
@@ -380,6 +419,11 @@
  ],
  "CopyScheduleRequest": [
   "target_device_address"
+ ],
+ "Counter": [
+  "code",
+  "message",
+  "value"
  ],
  "CreateFunctionRequest": [
   "name"
@@ -586,6 +630,26 @@
   "reachable",
   "source"
  ],
+ "EndpointDetail": [
+  "clusters",
+  "device_types",
+  "endpoint_id",
+  "labels",
+  "name",
+  "parts",
+  "reachable",
+  "tags"
+ ],
+ "EndpointDeviceType": [
+  "id",
+  "id_hex",
+  "revision"
+ ],
+ "EndpointLabel": [
+  "label",
+  "user",
+  "value"
+ ],
  "EndpointList": [
   "endpoints"
  ],
@@ -616,6 +680,9 @@
   "entries",
   "locale"
  ],
+ "EraseRequest": [
+  "confirm"
+ ],
  "EventGroupSummary": [
   "available",
   "channel_address",
@@ -623,6 +690,16 @@
   "kind",
   "parameters",
   "unique_id"
+ ],
+ "EventRecord": [
+  "cluster_hex",
+  "endpoint",
+  "event_hex",
+  "number",
+  "priority"
+ ],
+ "EventRecordList": [
+  "events"
  ],
  "ExportedConfiguration": [
   "channel_address",
@@ -718,6 +795,11 @@
  "Health": [
   "components",
   "status"
+ ],
+ "HealthSampleEvent": [
+  "healthy",
+  "note",
+  "sampled_at"
  ],
  "HistoryBucket": [
   "avg",
@@ -931,6 +1013,13 @@
   "subtypes",
   "txt"
  ],
+ "NodeConfig": [
+  "discriminator",
+  "listen",
+  "product_id",
+  "source",
+  "vendor_id"
+ ],
  "NodeEndpointsChangedPayload": [],
  "NodeRef": [
   "central",
@@ -939,6 +1028,9 @@
  "NodeWarning": [
   "code",
   "message"
+ ],
+ "NodesChangedEvent": [
+  "keys"
  ],
  "Occupancy": [
   "capacity",
@@ -1244,6 +1336,10 @@
   "slug",
   "state"
  ],
+ "SemanticTag": [
+  "namespace",
+  "tag"
+ ],
  "ServiceMessage": [
   "counter",
   "id",
@@ -1264,9 +1360,34 @@
   "session_id",
   "subscriptions"
  ],
+ "SessionEvent": [
+  "fabric_index",
+  "idle_seconds",
+  "is_pase",
+  "last_activity",
+  "last_peer_activity",
+  "local_node_id",
+  "local_node_id_hex",
+  "peer_idle_seconds",
+  "peer_node_id",
+  "peer_node_id_hex",
+  "session_id",
+  "subscriptions"
+ ],
  "SessionList": [
   "occupancy",
   "sessions"
+ ],
+ "SessionParameters": [
+  "active_interval_ms",
+  "active_threshold_ms",
+  "data_model_revision",
+  "idle_interval_ms",
+  "interaction_model_revision",
+  "max_paths_per_invoke",
+  "specification_version_hex",
+  "supported_transports",
+  "tcp"
  ],
  "SetActiveProfileRequest": [
   "profile"
@@ -1316,6 +1437,12 @@
   "exposure",
   "fabric_count",
   "listening"
+ ],
+ "StructuralEndpoint": [
+  "device_types",
+  "endpoint_id",
+  "name",
+  "parts"
  ],
  "SuitableMemberEntry": [
   "address"
@@ -1525,6 +1652,32 @@
   "fingerprint",
   "role",
   "subject"
+ ],
+ "TopologyDetail": [
+  "key",
+  "value"
+ ],
+ "TopologyEdge": [
+  "kind",
+  "source",
+  "target"
+ ],
+ "TopologyGraph": [
+  "as_of",
+  "edges",
+  "family",
+  "nodes"
+ ],
+ "TopologyNode": [
+  "details",
+  "id",
+  "kind",
+  "label",
+  "state"
+ ],
+ "TopologyRef": [
+  "id",
+  "page"
  ],
  "TriggerBackupRequest": [],
  "TriggeredEventSummary": [

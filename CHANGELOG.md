@@ -32,6 +32,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that a factory reset erases back to the first bridged number. The daemon's
   bridged endpoint numbers are unchanged. `golang.org/x/net` moves to
   v0.62.0 with it.
+- **go-fabric-ui v0.3.0 → v0.8.0** (the Go module and `@sukramj/fabric-ui`).
+  The Matter pages gain an endpoint page — device types, clusters with
+  their attributes, features and conformance, recent events — opened from
+  the Endpoints tab; the bridge's configuration on the Status tab; the
+  session parameters and an administrator's "announce now" on the
+  Diagnostics tab. REST API 15.8.0 documents the new node routes:
+  `GET /node/endpoints/{ep}`, `GET /node/endpoints/{ep}/events`,
+  `GET /node/topology`, `POST /node/mdns/reannounce` and
+  `POST /node/maintenance/erase`, which answers 501 here — the daemon
+  offers no erase; the factory reset stays the removal of every fabric.
+  `jsqr` 1.4.0 (Apache-2.0) enters the SPA's lockfile as the package's
+  dependency, for a QR scanner the Matter pages here do not import.
 ## [0.97.3] - 2026-11-08
 
 ### Fixed
