@@ -101,6 +101,14 @@ func (s *smokeFakeStore) RemoveEndpoint(_ context.Context, key endpoint.SourceKe
 	return nil
 }
 
+// EraseEndpoints drops every row and restarts the numbering at the first
+// bridged endpoint, as the SQLite store does in one transaction.
+func (s *smokeFakeStore) EraseEndpoints(context.Context) error {
+	clear(s.rows)
+	s.nextID = 2
+	return nil
+}
+
 // smokeStubCluster is a read-only, no-op Matter cluster server used as a
 // placeholder in smokeEndpointSource so that ClusterServers() receives a
 // non-empty inner slice and attaches the mandatory BDBI + Descriptor clusters.
