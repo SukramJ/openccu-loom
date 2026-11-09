@@ -46,8 +46,9 @@ func (s *reconcilerSite) reserve(t *testing.T, key matterendpoint.SourceKey, don
 		t.Fatalf("add %s: %v", key, err)
 	}
 	var number uint16
-	for _, d := range s.node.Topology().Devices {
-		if d.Key != nil && d.Key.String() == key.String() {
+	devices := s.node.Topology().Devices
+	for i := range devices {
+		if d := &devices[i]; d.Key != nil && d.Key.String() == key.String() {
 			number = d.Endpoint
 		}
 	}

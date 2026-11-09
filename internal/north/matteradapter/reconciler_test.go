@@ -74,8 +74,9 @@ func (s *reconcilerSite) sync(t *testing.T, snaps ...matteradapter.DeviceSnapsho
 // served returns the served endpoint number and name of the bridged
 // device at addr, or false.
 func (s *reconcilerSite) served(addr string) (number uint16, name string, ok bool) {
-	for _, d := range s.node.Topology().Devices {
-		if d.Key != nil && strings.Contains(d.Key.String(), addr) {
+	devices := s.node.Topology().Devices
+	for i := range devices {
+		if d := &devices[i]; d.Key != nil && strings.Contains(d.Key.String(), addr) {
 			return d.Endpoint, d.Name, true
 		}
 	}

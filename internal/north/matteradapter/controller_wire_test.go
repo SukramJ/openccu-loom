@@ -72,8 +72,8 @@ func TestGoldenFleetAnswersAControllerOverCASE(t *testing.T) {
 // of deviceType in the node's served topology.
 func endpointOfType(t *testing.T, topo node.BridgeTopology, deviceType uint16) uint16 {
 	t.Helper()
-	for _, d := range topo.Devices {
-		if d.DeviceType == deviceType {
+	for i := range topo.Devices {
+		if d := &topo.Devices[i]; d.DeviceType == deviceType {
 			return d.Endpoint
 		}
 	}
