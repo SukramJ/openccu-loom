@@ -38,7 +38,7 @@ require (
 	github.com/SukramJ/go-fabric v0.19.1
 	github.com/SukramJ/go-fabric-ui v0.8.0
 	github.com/SukramJ/go-ha-catalog v0.3.1
-	github.com/SukramJ/go-hamqtt v0.38.0
+	github.com/SukramJ/go-hamqtt v0.39.0
 	github.com/SukramJ/go-mqtt v1.7.0
 	github.com/SukramJ/go-openccu-data v0.3.0
 	github.com/SukramJ/godevccu v0.11.0
@@ -65,5 +65,5 @@ require (
 	golang.org/x/time v0.16.0
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
