@@ -369,6 +369,35 @@ func TestValidateChecksTheMatterBridgeParameters(t *testing.T) {
 		}
 	})
 
+	t.Run("mdns interfaces", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name       string
+			interfaces []string
+			wantErr    string
+		}{
+			{"empty keeps every interface", nil, ""},
+			{"one name", []string{"eth0"}, ""},
+			{"a name the host may not have", []string{"eth0", "does-not-exist0"}, ""},
+			{"an empty name", []string{"eth0", ""}, "north.matter.mdns_interfaces[1] is empty"},
+			{"a blank name", []string{" "}, "north.matter.mdns_interfaces[0] is empty"},
+			{"a repeated name", []string{"eth0", "wlan0", "eth0"}, `north.matter.mdns_interfaces names "eth0" twice`},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				cfg := Default()
+				cfg.North.Matter.MDNSInterfaces = tc.interfaces
+				err := cfg.Validate()
+				if tc.wantErr != "" {
+					assertRejected(t, err, tc.wantErr)
+					return
+				}
+				assertAccepted(t, err)
+			})
+		}
+	})
+
 	t.Run("spec level and controller profile", func(t *testing.T) {
 		t.Parallel()
 		cases := []struct {

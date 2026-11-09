@@ -5,6 +5,7 @@
   import { onMount, onDestroy } from "svelte";
   import {
     NodeDiagnostics,
+    NodeEndpointDetail,
     NodeEndpoints,
     NodeFabrics,
     NodePair,
@@ -42,8 +43,17 @@
   };
   type Page = keyof typeof pages;
 
+  const segments = $derived(subpath.replace(/^\//, "").split(/[/?]/));
+
+  // One endpoint's page (#/matter/endpoint/<number>), which the endpoints
+  // page links each endpoint to; it sits under the endpoints tab.
+  const endpointNumber = $derived.by<number | null>(() =>
+    segments[0] === "endpoint" && /^\d+$/.test(segments[1] ?? "") ? Number(segments[1]) : null,
+  );
+
   const activeTab = $derived.by<Page>(() => {
-    const key = subpath.replace(/^\//, "").split(/[/?]/)[0];
+    const key = segments[0];
+    if (endpointNumber !== null) return "endpoints";
     // The selection page was the "expose" tab; old bookmarks keep working.
     if (key === "expose") return "selection";
     return key in pages ? (key as Page) : "status";
@@ -99,7 +109,13 @@
   {:else}
     <Tabs class="mt-4" active={activeTab} items={tabs} fill />
     <div class="mt-4">
-      <Current />
+      {#if endpointNumber !== null}
+        {#key endpointNumber}
+          <NodeEndpointDetail endpoint={endpointNumber} />
+        {/key}
+      {:else}
+        <Current />
+      {/if}
     </div>
   {/if}
 </PageShell>

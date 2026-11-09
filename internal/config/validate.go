@@ -178,6 +178,18 @@ func validateMatter(m *NorthMatter) error {
 		return fmt.Errorf("config: north.matter.tcp must be one of %s (empty selects %q), got %q",
 			strings.Join(MatterTCPModes, "|"), MatterTCPOff, m.TCP)
 	}
+	// go-fabric's node.Config.Validate refuses an empty or a repeated
+	// interface name and the bridge would stay down at start; the validator
+	// names the field instead. A name the host does not have is not refused
+	// here either — the node's mDNS diagnosis reports it.
+	for i, name := range m.MDNSInterfaces {
+		switch {
+		case strings.TrimSpace(name) == "":
+			return fmt.Errorf("config: north.matter.mdns_interfaces[%d] is empty", i)
+		case slices.Contains(m.MDNSInterfaces[:i], name):
+			return fmt.Errorf("config: north.matter.mdns_interfaces names %q twice", name)
+		}
+	}
 	// go-fabric's node refuses policies it does not know, which would
 	// leave the bridge down at start; the validator names the field
 	// instead. The level and the profile are checked together because a

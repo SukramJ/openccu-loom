@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,10 +57,12 @@ func matterTCPConfig(mode string) node.TCPConfig {
 
 // matterMDNS selects the node's DNS-SD from mc.MDNSAdvertise. "noop" is an
 // explicit opt-out; empty or "zeroconf" leaves the advertiser to the node
-// facade, which builds Zeroconf with the subtype responder — the side-car
-// that answers the `_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub` and
-// `_CM._sub` browses Apple Home and Google Home filter by — and closes both
-// at Stop. An unknown value falls back to the opt-out and says so.
+// facade, which builds go-fabric's own mDNS responder — it publishes the
+// records and the `_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub` and
+// `_CM._sub` subtypes Apple Home and Google Home filter by — and closes it
+// at Stop, on the interfaces mc.MDNSInterfaces names (empty: every
+// multicast-capable one). An unknown value falls back to the opt-out and
+// says so.
 func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 	switch mc.MDNSAdvertise {
 	case "noop":
@@ -69,8 +72,9 @@ func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 		return node.MDNS{Off: true}
 	case "", "zeroconf":
 		logger.Info("matter.bridge.mdns.zeroconf",
-			slog.String("hint", "primary record via grandcat/zeroconf, subtypes via the facade's side-car responder"))
-		return node.MDNS{}
+			slog.String("hint", "records and subtypes via the node's mDNS responder"),
+			slog.Any("interfaces", mc.MDNSInterfaces))
+		return node.MDNS{Interfaces: slices.Clone(mc.MDNSInterfaces)}
 	default:
 		logger.Warn("matter.bridge.mdns.unknown",
 			slog.String("value", mc.MDNSAdvertise),
@@ -78,6 +82,13 @@ func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 		return node.MDNS{Off: true}
 	}
 }
+
+// The root BasicInformation's vendor and product names, which the status
+// page's configuration block shows as well.
+const (
+	matterVendorName  = "openccu-loom"
+	matterProductName = "openccu-loom Matter Bridge"
+)
 
 // matterBridgeBundle is what startMatterBridge hands wireMatterRuntime:
 // the node facade that runs the bridge, and the daemon-side collaborators
@@ -390,8 +401,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			ProductID:  mc.ProductID,
 		},
 		BasicInformation: node.BasicInformation{
-			VendorName:   "openccu-loom",
-			ProductName:  "openccu-loom Matter Bridge",
+			VendorName:   matterVendorName,
+			ProductName:  matterProductName,
 			NodeLabel:    mc.NodeLabel,
 			SerialNumber: rootSerial,
 			// UniqueID stays empty: the facade pins it (quality F) on the
@@ -973,8 +984,30 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Events:           bundle.events,
 		Logger:           logger,
 		ConfiguredWindow: bundle.configuredCommissioning && !mcfg.Commissioning.EphemeralWindow,
+		NodeConfig:       matterNodeConfigView(mcfg),
 	}
 	return wiring, closers, teardown
+}
+
+// matterNodeConfigView is the node's configuration as the status page
+// shows it, read-only: the north.matter values the node was built from
+// (startMatterBridge), mc already defaulted. An empty listen address is the
+// Matter port on every address, as the node binds it.
+func matterNodeConfigView(mc config.NorthMatter) *fabricui.NodeConfigView {
+	listen := mc.Listen
+	if listen == "" {
+		listen = ":5540"
+	}
+	return &fabricui.NodeConfigView{
+		Source:        fabricui.NodeConfigSourceConfiguration,
+		Label:         mc.NodeLabel,
+		Listen:        listen,
+		Discriminator: mc.Discriminator,
+		VendorID:      mc.VendorID,
+		VendorName:    matterVendorName,
+		ProductID:     mc.ProductID,
+		ProductName:   matterProductName,
+	}
 }
 
 // matterColumnTranslator renders the exposure provider's column headers

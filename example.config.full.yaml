@@ -419,6 +419,14 @@ north:
     # [default: zeroconf]
     mdns_advertise: zeroconf
 
+    # mDNS interface allow-list: announce and answer only on these host
+    # interfaces, with their addresses. Empty = every multicast-capable
+    # interface. For a host on two networks behind an mDNS reflector.
+    # Container bridges (docker0, hassio, …) stay filtered even when named;
+    # a name the host does not have is reported on the Matter view's Diagnostics tab.
+    # [default: empty]
+    mdns_interfaces: []
+
     # Intentional UniqueID rotation on every boot (for T11 chip-tool test).
     # false = stable UniqueID across restarts (production: Apple Home / Google Home).
     # true = breaks accessory recognition after daemon restart (dev/test only).

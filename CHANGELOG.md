@@ -6,6 +6,44 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.98.0] - 2026-11-09
+
+### Added
+
+- **Matter: the mDNS interface allow-list.** The new expert option
+  `north.matter.mdns_interfaces` restricts the bridge's mDNS responder to the
+  named host interfaces: it announces and answers on them alone, with their
+  addresses. Empty, the default, keeps every multicast-capable interface, as
+  before. It is meant for a host on two networks behind an mDNS reflector,
+  whose controllers would otherwise cache the far network's address too.
+  Container bridges such as `docker0` or `hassio` stay filtered even when
+  named. An empty or repeated name is refused when the configuration is
+  saved; a name the host does not have is accepted and reported on the
+  Diagnostics tab of the Matter view. Takes effect after a restart.
+
+### Changed
+
+- **go-fabric v0.16.0 → v0.19.1.** The Matter stack answers DNS-SD with its
+  own responder in place of grandcat/zeroconf: every record carries a
+  120-second TTL, announcements follow matter.js's schedule, and the node
+  follows the host's network interfaces, announcing again when an address
+  changes. It brings the mDNS interface allow-list above, the attestation
+  checks and CASE rules of the matter.js pin lift, and an endpoint store
+  that a factory reset erases back to the first bridged number. The daemon's
+  bridged endpoint numbers are unchanged. `golang.org/x/net` moves to
+  v0.62.0 with it.
+- **go-fabric-ui v0.3.0 → v0.8.0** (the Go module and `@sukramj/fabric-ui`).
+  The Matter pages gain an endpoint page — device types, clusters with
+  their attributes, features and conformance, recent events — opened from
+  the Endpoints tab; the bridge's configuration on the Status tab; the
+  session parameters and an administrator's "announce now" on the
+  Diagnostics tab. REST API 15.8.0 documents the new node routes:
+  `GET /node/endpoints/{ep}`, `GET /node/endpoints/{ep}/events`,
+  `GET /node/topology`, `POST /node/mdns/reannounce` and
+  `POST /node/maintenance/erase`, which answers 501 here — the daemon
+  offers no erase; the factory reset stays the removal of every fabric.
+  `jsqr` 1.4.0 (Apache-2.0) enters the SPA's lockfile as the package's
+  dependency, for a QR scanner the Matter pages here do not import.
 ## [0.97.3] - 2026-11-08
 
 ### Fixed

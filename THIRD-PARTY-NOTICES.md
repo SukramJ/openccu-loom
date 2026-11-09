@@ -250,7 +250,7 @@ Matter pages; the exact versions are pinned in
 
 | Package | License (family) |
 | --- | --- |
-| `@sukramj/fabric-ui` | Apache-2.0 — the Matter node pages (status, pairing, fabrics, selection, endpoints, diagnostics), their UI kit, the `--ha-*` design tokens and the theme helpers; shipped as Svelte / TypeScript sources and compiled by the SPA build |
+| `@sukramj/fabric-ui` | Apache-2.0 — the Matter node pages (status, pairing, fabrics, selection, endpoints and the endpoint page, surface, diagnostics), their UI kit, the `--ha-*` design tokens and the theme helpers; shipped as Svelte / TypeScript sources and compiled by the SPA build |
 | `@lucide/svelte` | ISC — `@sukramj/fabric-ui` pins its own copy alongside the SPA's |
 | `clsx` | MIT |
 | `qrcode` | MIT — draws the pairing QR code |

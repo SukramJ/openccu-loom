@@ -35,8 +35,8 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.16.0
-	github.com/SukramJ/go-fabric-ui v0.3.0
+	github.com/SukramJ/go-fabric v0.19.1
+	github.com/SukramJ/go-fabric-ui v0.8.0
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.38.0
 	github.com/SukramJ/go-mqtt v1.7.0
@@ -58,7 +58,7 @@ require (
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0

@@ -16,9 +16,10 @@
 // advertiser, which lives in the go-fabric module's `mdns` package
 // and keeps its own copy of the interface filter — the two consumers have
 // different lifecycle and tuning requirements (Matter advertises
-// commissioning + operational records with subtype responders;
-// daemon-discovery wants exactly one straightforward service). The
-// underlying library (`github.com/grandcat/zeroconf`) is shared.
+// commissioning + operational records with their subtypes;
+// daemon-discovery wants exactly one straightforward service). This
+// package publishes through `github.com/grandcat/zeroconf`; go-fabric
+// answers DNS-SD with a responder of its own.
 package mdns
 
 import (

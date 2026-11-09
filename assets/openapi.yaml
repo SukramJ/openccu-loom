@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.7.0
+  version: 15.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6357,7 +6357,7 @@ paths:
   # The daemon mounts go-fabric-ui's handler under /api/v1/node
   # (internal/north/rest/router.go, fabricui.Mount); these operations and
   # the schemas named Node*/Fabric*/… below are its contract
-  # (contract/openapi.yaml of go-fabric-ui v0.1.1, paths /node/*), copied
+  # (contract/openapi.yaml of go-fabric-ui v0.8.0, paths /node/*), copied
   # so the request validator and the clients generated from this file
   # know them. tests/contract/node_contract_sync_test.go holds the copy
   # to the pinned module version. `x-admin: true` is go-fabric-ui's own
@@ -6473,12 +6473,75 @@ paths:
       tags: [node]
       operationId: listEndpoints
       summary: The bridged endpoints a controller sees.
+      description: |
+        `endpoints` are the bridged endpoints of the node's topology
+        (go-fabric `Node.Topology`), each device followed by its parts.
+        `structural` (0.5.0) are the endpoints no bridged device declares —
+        the root and the Aggregator — from the node's endpoint tree
+        (go-fabric `Node.Endpoints`), root first, then by number.
       responses:
         "200":
           description: The endpoints.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EndpointList" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/endpoints/{ep}:
+    parameters:
+      - $ref: "#/components/parameters/EndpointNumber"
+    get:
+      tags: [node]
+      operationId: getEndpointDetail
+      summary: One endpoint the node serves, with its attribute values (0.4.1).
+      description: |
+        Read through the node's own read path (go-fabric `Node.ReadCluster`),
+        as a controller's read reaches it, without access control: the
+        Descriptor's DeviceTypeList, TagList and PartsList, the FixedLabel
+        and UserLabel entries, and every server cluster of its ServerList
+        with its revision, feature map, attribute values (JSON by field
+        name), data version and the names go-fabric's schema gives its
+        attributes, commands and events. An attribute whose read failed
+        carries the IM `status` it was answered with and no `value` (0.5.0,
+        go-fabric `AttributeValue.Status`). The endpoint's parent, parts,
+        device types, name and scope come from the node's endpoint tree
+        (go-fabric `Node.Endpoints`, 0.5.0). `decisions` are the surface
+        report's decisions on this endpoint. The root endpoint and the
+        Aggregator answer too. 404 for an endpoint the node does not serve,
+        503 before the node started.
+      responses:
+        "200":
+          description: The endpoint.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EndpointDetail" }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "404": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/endpoints/{ep}/events:
+    parameters:
+      - $ref: "#/components/parameters/EndpointNumber"
+    get:
+      tags: [node]
+      operationId: listEndpointEvents
+      summary: The events the node's event log holds for one endpoint (0.4.1).
+      description: |
+        The records a controller's event read is answered from (go-fabric
+        `Node.Events` with the endpoint's filter), oldest first: the log is
+        bounded and volatile, emptied when the node stops. An endpoint no
+        longer served keeps the events it emitted while the log holds them,
+        so an unknown endpoint is an empty list, not 404. Not the
+        diagnostic trace of `GET /node/events`.
+      parameters:
+        - $ref: "#/components/parameters/EventSince"
+        - $ref: "#/components/parameters/EventLimit"
+      responses:
+        "200":
+          description: The events, oldest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventRecordList" }
+        "400": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/surface:
     get:
@@ -6511,6 +6574,28 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SessionList" }
         "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/topology:
+    get:
+      tags: [node]
+      operationId: getNodeTopology
+      summary: The node as a graph — its bridge, its fabrics and the sessions on them.
+      description: |
+        Built from go-fabric's `Topology`, `FabricInfos` and
+        `SessionDiagnostics`: the node, its Aggregator, the bridged devices
+        and their parts (`contains`), each fabric with the sessions on it
+        (`contains`) and every session to the node (`session`). A PASE
+        session (fabric index 0) hangs on the node without a fabric. Node
+        ids are `node`, `ep:<n>`, `fabric:<index>`, `session:<id>`.
+        Subscriptions are counts per session. 503 while the host serves no
+        node or the node has not assembled its endpoints.
+      responses:
+        "200":
+          description: The graph.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TopologyGraph" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
   /node/mdns:
     get:
       tags: [node]
@@ -6522,6 +6607,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Mdns" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/mdns/reannounce:
+    post:
+      tags: [node]
+      operationId: reannounce
+      summary: Announce the node's DNS-SD records now.
+      description: |
+        Publishes every advertised service once per interface, with the
+        goodbyes of the addresses that left (go-fabric
+        `Node.TriggerReannounce`, 0.7.0) — for an operator who changed the
+        network and does not want to wait for the advertiser's schedule. A
+        no-op on an advertiser that cannot reannounce; 204 either way.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Announced. }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/compatibility:
     get:
@@ -6659,16 +6764,77 @@ paths:
         "403": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
+  /node/maintenance/erase:
+    post:
+      tags: [node]
+      operationId: erase
+      summary: Erase the node — its store and endpoint records — and end it. The body must name the action.
+      description: |
+        The host's erase (0.7.0, `Options.Erase`): go-fabric
+        `Node.FactoryReset` removes every fabric, stops the node and erases
+        what it persisted; the node is single-use, so the host builds a new
+        one on the erased store or restarts. `Status.erase` says whether the
+        host wires it. Unlike `POST /node/maintenance/factory-reset`, which
+        removes the fabrics and keeps the node running, this ends the node:
+        until the host brings one back, the node routes may answer with the
+        old node's state or fail. 501 `not_implemented` when the host wires
+        no erase.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EraseRequest" }
+      responses:
+        "204": { description: Erased; the host brings the node back or restarts. }
+        "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
+        "501": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
   /node/stream:
     get:
       tags: [node]
       operationId: stream
       summary: Server-sent events.
       description: |
-        `event:` is one of fabric_added, fabric_removed, window_opened,
-        window_closed, endpoints_changed, exposure_changed, surface_changed;
-        `data:` is the JSON payload (`FabricEvent`, `WindowEvent`, `{}`,
-        `ExposureEvent`, `SurfaceChangedEvent`).
+        `event:` is one of fabric_added, fabric_removed, fabric_updated,
+        commissioning_complete, window_opened, window_closed,
+        endpoints_changed, exposure_changed, surface_changed,
+        session_opened, session_closed, subscriptions_changed,
+        attribute_changed, cluster_event, health_sample, diagnostic_event,
+        nodes_changed; `data:` is the JSON payload (`FabricEvent`,
+        `WindowEvent`, `{}`, `ExposureEvent`, `SurfaceChangedEvent`,
+        `SessionEvent`, `AttributeChangedEvent`, `EventRecord`,
+        `HealthSampleEvent`, `DiagnosticEvent`, `NodesChangedEvent`).
+        fabric_added (an AddNOC installed the fabric), fabric_updated (an
+        UpdateNOC, UpdateFabricLabel or SetVIDVerificationStatement changed
+        it; `FabricEvent` as fabric_added) and commissioning_complete (a
+        CommissioningComplete succeeded; `FabricEvent` with `fabric_index`
+        alone) are go-fabric's node.Observers OnFabricAdded,
+        OnFabricUpdated and OnCommissioningComplete (0.7.0): a
+        commissioning reports fabric_added, then commissioning_complete.
+        cluster_event (0.7.0) is every event a cluster server emitted and
+        the node's event log recorded (node.Observers.OnEvent), in the
+        shape of `GET /node/endpoints/{ep}/events`.
+        nodes_changed (0.6.0) follows `POST /nodes`, `PUT
+        /nodes/{node}/label` and `DELETE /nodes/{node}` on every node's
+        stream, with the keys of the nodes created, renamed or deleted: a
+        page reloads `GET /nodes`.
+        attribute_changed (0.4.1) names the attributes that changed, never
+        their values: a page refetches what it shows.
+        health_sample (0.5.0) is every verdict of the node's health probe
+        (go-fabric `Node.OnHealthSample`); diagnostic_event (0.5.0) is every
+        entry the node adds to the trace `GET /node/events` serves (go-fabric
+        `Node.OnDiagnosticEvent`), in the same shape.
+        session_opened reports CASE sessions only (go-fabric
+        node.Observers.OnSessionOpened); a PASE session is not reported, and
+        session_closed and subscriptions_changed follow only a session
+        session_opened reported.
         A comment line arrives every 15 s. No payload carries a passcode.
       responses:
         "200":
@@ -8448,6 +8614,23 @@ components:
             interfaces, edit Matter fabrics)
       openIdConnectUrl: /.well-known/openid-configuration
   parameters:
+    # The node page family's parameters (go-fabric-ui contract v0.8.0).
+    EndpointNumber:
+      name: ep
+      in: path
+      required: true
+      description: The endpoint number.
+      schema: { type: integer, minimum: 0, maximum: 65535 }
+    EventSince:
+      name: since
+      in: query
+      description: The lowest event number returned (inclusive); absent is every event the log holds. A page passes the last number it has plus one to fetch only the newer ones.
+      schema: { type: integer, minimum: 0 }
+    EventLimit:
+      name: limit
+      in: query
+      description: Only the newest `limit` of the matching events; absent is 100.
+      schema: { type: integer, minimum: 1, maximum: 1000 }
     Address:
       name: addr
       in: path
@@ -16280,7 +16463,7 @@ components:
             about itself — the collaborator IS wired, so nothing
             else about the daemon looks wrong.
           items: { type: string }
-    # The node page family's schemas (go-fabric-ui contract v0.1.1,
+    # The node page family's schemas (go-fabric-ui contract v0.8.0,
     # components.schemas): see the /node/* paths above. `Problem` is
     # loom's own; the contract's `Warning` is `NodeWarning` here because
     # loom already carries a `Warning`.
@@ -16302,11 +16485,26 @@ components:
         window_kind: { $ref: "#/components/schemas/NodeWindowKind" }
         window_deadline: { type: string, format: date-time, description: "When the open window's timer closes it, on the node's clock; absent while no window is open." }
         exposure: { type: boolean, description: Whether the host serves a selection. }
+        exposure_reason: { type: string, description: "Why the host serves no selection, in the host's language; absent when it serves one or gives no reason (0.5.0)." }
         csrf_token: { type: string, description: The admin token of token mode; absent when the host decides admin rights. }
+        admin: { type: boolean, description: "Whether the host's admin check admits this request (0.6.0); present when the host decides admin rights, absent in token mode, where `csrf_token` says it." }
+        node_registry: { type: boolean, description: "Whether the host keeps a node registry (0.6.0): `POST /nodes` creates a node and a `managed` node can be renamed and deleted. Absent without one." }
+        config: { $ref: "#/components/schemas/NodeConfig" }
+        attestation_error: { type: string, description: "Why the node's attestation files did not load (0.7.0, go-fabric `Node.AttestationError`): the node runs on the test chain and refuses every commissioning until the files are fixed and a new node is built. Absent when the files loaded, named nothing, or without a node." }
+        boot_reason:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: "The GeneralDiagnostics BootReason the node was built with (0.7.0, go-fabric `Node.BootReason`; BootReasonEnum: 0 Unspecified, 1 PowerOnReboot, 2 BrownOutReset, 3 SoftwareWatchdogReset, 4 HardwareWatchdogReset, 5 SoftwareUpdateCompleted, 6 SoftwareReset). Absent without a node."
+        erase: { type: boolean, description: "Whether the host wires an erase of this node (0.7.0, `Options.Erase` or `NodeEntry.Erase`): `POST /node/maintenance/erase` is served. Absent without one." }
         warnings:
           type: array
           description: The host's findings about its own configuration; absent when the host reports none (no Options.Warnings), empty when it finds nothing.
           items: { $ref: "#/components/schemas/NodeWarning" }
+        counters:
+          type: array
+          description: "The host's own counters a scraper reads beside the health (0.8.0), e.g. `discards`, commands the host answered with success and acted on nothing; absent when the host reports none (no Options.Counters), empty when it has none to report. Host-wide: every node's status carries the same list."
+          items: { $ref: "#/components/schemas/Counter" }
         surface:
           type: object
           description: The policies the node's served surface is composed under (go-fabric node.Node.Surface) and the counts that tell whether to look further; absent without a node.
@@ -16327,6 +16525,14 @@ components:
         code: { type: string, description: "The kind of finding, stable across host releases." }
         message: { type: string, description: "What is wrong, in the host's language." }
         since: { type: string, format: date-time, description: "When the host first saw it; absent when unknown." }
+    Counter:
+      type: object
+      description: "One of the host's counters (0.8.0, Options.Counters)."
+      required: [code, value, message]
+      properties:
+        code: { type: string, description: "The counter's stable machine name, e.g. discards." }
+        value: { type: integer, minimum: 0, description: The count since the host started. }
+        message: { type: string, description: "What the counter counts, in one line in the host's language." }
     Fabric:
       type: object
       required: [fabric_index, fabric_id, fabric_id_hex, node_id, node_id_hex, vendor_id, vendor_name, compressed_id, root_public_key]
@@ -16404,6 +16610,26 @@ components:
         endpoints:
           type: array
           items: { $ref: "#/components/schemas/Endpoint" }
+        structural:
+          type: array
+          description: The root and the Aggregator — the endpoints `endpoints` does not list — root first, then by number (0.5.0).
+          items: { $ref: "#/components/schemas/StructuralEndpoint" }
+    StructuralEndpoint:
+      type: object
+      description: An endpoint of the node's endpoint tree no bridged device declares (go-fabric `Node.Endpoints`, 0.5.0).
+      required: [endpoint_id, name, device_types, parts]
+      properties:
+        endpoint_id: { type: integer }
+        parent_endpoint_id: { type: integer, description: The endpoint whose parts list names this one; absent for the root and top-level endpoints. }
+        name: { type: string, description: "The endpoint's node label; its first device type's name without one." }
+        device_types:
+          type: array
+          description: The Descriptor's DeviceTypeList in its order.
+          items: { $ref: "#/components/schemas/EndpointDeviceType" }
+        parts:
+          type: array
+          description: The endpoint numbers of its direct children — the endpoints whose parent it is, not every descendant its PartsList names.
+          items: { type: integer }
     Session:
       type: object
       required: [session_id, fabric_index, peer_node_id, peer_node_id_hex, local_node_id, local_node_id_hex, is_pase, subscriptions, last_activity, last_peer_activity, idle_seconds, peer_idle_seconds]
@@ -16436,6 +16662,89 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Session" }
         occupancy: { $ref: "#/components/schemas/Occupancy" }
+        parameters: { $ref: "#/components/schemas/SessionParameters" }
+    SessionParameters:
+      type: object
+      description: "The session parameters the node reports to every PASE and CASE peer (0.7.0, go-fabric `Node.SessionParameters`, the SessionParameters structure of PBKDFParamResponse and Sigma2). A zero value is not stated: the peer falls back to the specification's default."
+      required: [idle_interval_ms, active_interval_ms, active_threshold_ms, data_model_revision, interaction_model_revision, specification_version_hex, max_paths_per_invoke, supported_transports, tcp]
+      properties:
+        idle_interval_ms: { type: integer, description: SESSION_IDLE_INTERVAL. }
+        active_interval_ms: { type: integer, description: SESSION_ACTIVE_INTERVAL. }
+        active_threshold_ms: { type: integer, description: SESSION_ACTIVE_THRESHOLD. }
+        data_model_revision: { type: integer }
+        interaction_model_revision: { type: integer }
+        specification_version_hex: { type: string, description: "SPECIFICATION_VERSION as 8 uppercase hex digits, e.g. \"01050000\"." }
+        max_paths_per_invoke: { type: integer }
+        supported_transports: { type: integer, description: "The SUPPORTED_TRANSPORTS bitmap, the transports beside MRP over UDP." }
+        tcp: { type: boolean, description: The bitmap names TCP in either role. }
+        max_tcp_message_size: { type: integer, description: MAX_TCP_MESSAGE_SIZE in bytes; present with tcp. }
+    TopologyGraph:
+      type: object
+      description: A family's topology as nodes and edges; the renderer needs no knowledge per kind.
+      required: [as_of, family, nodes, edges]
+      properties:
+        as_of: { type: string, format: date-time, description: "When the graph was read, on the node's or the controller's clock." }
+        family: { $ref: "#/components/schemas/NodeTopologyFamily" }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/TopologyNode" }
+        edges:
+          type: array
+          items: { $ref: "#/components/schemas/TopologyEdge" }
+    TopologyNode:
+      type: object
+      description: |
+        One node of the graph. `details` is the ordered list a page shows
+        for it; the typed fields are the ones a page links or colours by,
+        each present only for the kinds it belongs to.
+      required: [id, kind, label, state, details]
+      properties:
+        id: { type: string, description: "Unique in the graph: `node`, `ep:<n>`, `fabric:<index>`, `session:<id>`, `peer:<node_id_hex>`." }
+        kind: { $ref: "#/components/schemas/NodeTopologyNodeKind" }
+        label: { type: string }
+        state: { $ref: "#/components/schemas/NodeTopologyNodeState" }
+        ref: { $ref: "#/components/schemas/TopologyRef" }
+        details:
+          type: array
+          items: { $ref: "#/components/schemas/TopologyDetail" }
+        endpoint: { type: integer, description: "aggregator, device, part: the endpoint number." }
+        fabric_index: { type: integer, description: "fabric, session: the fabric index; 0 for a PASE session." }
+        session_id: { type: integer, description: "session: the local session id." }
+        node_id_hex: { type: string, description: "fabric: our node id on it; session: the peer's; peer: the node's." }
+        reachable: { type: boolean, description: "device, part: Reachable as a controller reads it." }
+        is_pase: { type: boolean, description: "session: a commissioning (PASE) session." }
+        subscriptions: { type: integer, description: "session: the subscriptions riding on it." }
+        role: { type: string, description: "peer: its Thread routing role or network kind." }
+        rloc16: { type: integer, description: "peer: its Thread RLOC16." }
+        ssid: { type: string, description: "wifi_ap, peer: the Wi-Fi network." }
+        bssid: { type: string, description: "wifi_ap, peer: the access point's BSSID." }
+    TopologyEdge:
+      type: object
+      required: [source, target, kind]
+      properties:
+        source: { type: string, description: A node id. }
+        target: { type: string, description: A node id. }
+        kind: { $ref: "#/components/schemas/NodeTopologyEdgeKind" }
+        strength: { $ref: "#/components/schemas/NodeTopologyEdgeStrength" }
+        lqi: { type: integer, description: "link: Thread link quality indicator." }
+        rssi: { type: integer, description: "link: received signal strength, dBm." }
+        label: { type: string }
+    TopologyRef:
+      type: object
+      description: |
+        The page that already lists the node and the id it lists it by:
+        `endpoints` (endpoint number), `fabrics` (fabric index),
+        `diagnostics` (session id), `controller_node` (`node_id_hex`).
+      required: [page, id]
+      properties:
+        page: { type: string }
+        id: { type: string }
+    TopologyDetail:
+      type: object
+      required: [key, value]
+      properties:
+        key: { type: string, description: "A stable key a page translates (`device_type`, `clusters`, …)." }
+        value: { type: string }
     MdnsService:
       type: object
       required: [service_type, instance_name, host_name, port, addresses, subtypes, txt]
@@ -16502,6 +16811,42 @@ components:
         severity: { $ref: "#/components/schemas/NodeDiagnosticEventSeverity" }
         message: { type: string }
         detail: { type: object, additionalProperties: { type: string } }
+    HealthSampleEvent:
+      type: object
+      description: The payload of health_sample (0.5.0) — one verdict of the node's health probe.
+      required: [healthy, note, sampled_at]
+      properties:
+        healthy: { type: boolean }
+        note: { type: string, description: "The probe's stable English note." }
+        sampled_at: { type: string, format: date-time, description: "When the handler received the verdict, on the node's clock." }
+    NodeConfig:
+      type: object
+      description: |
+        The node's configuration as the host shows it, read-only (0.6.0);
+        absent when the host supplies none. One shape for every node. It
+        never carries the passcode, which stays with the admin route
+        `GET /node/pairing`. Of a `registry` node only the label is
+        editable (`PUT /nodes/{node}/label`); the host allocated the rest.
+        A `configuration` node is set in the host's configuration and
+        nothing of it is editable in the page.
+      required: [source, listen, discriminator, vendor_id, product_id]
+      properties:
+        source: { $ref: "#/components/schemas/NodeConfigSource" }
+        source_note: { type: string, description: "The host's wording of where a configured node's values come from (\"add-on options\", \"the --bridge-* flags\"); absent when it gives none." }
+        label: { type: string, description: The node's configured name; absent when it has none. }
+        listen: { type: string, description: "The address the node listens on, as configured (\"[::]:5540\")." }
+        discriminator: { type: integer, minimum: 0, maximum: 4095 }
+        vendor_id: { type: integer, minimum: 0, maximum: 65535 }
+        vendor_name: { type: string }
+        product_id: { type: integer, minimum: 0, maximum: 65535 }
+        product_name: { type: string }
+        store: { type: string, description: Where the node keeps its state (a file name); absent when the host does not say. }
+    NodesChangedEvent:
+      type: object
+      description: The payload of nodes_changed (0.6.0) — the keys of the nodes created, renamed or deleted.
+      required: [keys]
+      properties:
+        keys: { type: array, items: { type: string } }
     DiagnosticEventList:
       type: object
       required: [events]
@@ -16599,6 +16944,11 @@ components:
       required: [confirm]
       properties:
         confirm: { type: string, const: remove-all-fabrics }
+    EraseRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { type: string, const: erase-node }
     FabricEvent:
       type: object
       required: [fabric_index]
@@ -16612,6 +16962,23 @@ components:
       properties:
         discriminator: { type: integer }
         duration_seconds: { type: integer }
+    SessionEvent:
+      description: The payload of session_opened, session_closed and subscriptions_changed — the session as `/node/sessions` lists it, with its new subscription count.
+      type: object
+      required: [session_id, fabric_index, peer_node_id, peer_node_id_hex, local_node_id, local_node_id_hex, is_pase, subscriptions, last_activity, last_peer_activity, idle_seconds, peer_idle_seconds]
+      properties:
+        session_id: { type: integer }
+        fabric_index: { type: integer }
+        peer_node_id: { type: integer, description: Informational; use peer_node_id_hex. }
+        peer_node_id_hex: { type: string }
+        local_node_id: { type: integer, description: Informational; use local_node_id_hex. }
+        local_node_id_hex: { type: string }
+        is_pase: { type: boolean }
+        subscriptions: { type: integer }
+        last_activity: { type: string, format: date-time }
+        last_peer_activity: { type: string, format: date-time }
+        idle_seconds: { type: integer }
+        peer_idle_seconds: { type: integer }
     ExposureEvent:
       type: object
       required: [keys]
@@ -16625,6 +16992,17 @@ components:
           type: array
           items: { type: string }
           description: The key of the endpoint whose served surface an assembly changed (go-fabric node.Observers.OnSurfaceChanged, one endpoint per event); "" is the root endpoint.
+    AttributeChangedEvent:
+      type: object
+      description: The payload of attribute_changed (0.4.1) — go-fabric node.Observers.OnAttributeChanged, one cluster of one endpoint per event, ids only.
+      required: [endpoint, cluster_hex, attributes]
+      properties:
+        endpoint: { type: integer }
+        cluster_hex: { type: string, description: 'The cluster id as `id_hex` elsewhere: "0x" and at least four uppercase hex digits.' }
+        attributes:
+          type: array
+          description: The ids of the attributes that changed, ascending, in hex.
+          items: { type: string }
     SurfaceReport:
       type: object
       description: go-fabric surface.Report (surface/policy.go wireReport).
@@ -16741,6 +17119,167 @@ components:
         endpoint: { type: string }
         id: { type: string }
         kind: { $ref: "#/components/schemas/NodeSurfaceElementKind" }
+    EndpointDetail:
+      type: object
+      description: |
+        One endpoint with its inventory (contract 0.4.0), one shape for both
+        families. The controller family fills it from its image of the node:
+        `conformance`, never `scope` or `decisions`; its `clusters` carry no
+        attribute values. The node family (0.4.1) fills it from what the node
+        serves: `scope` for a bridged endpoint, `decisions`, never
+        `conformance`; its `clusters` carry the values.
+      required: [endpoint_id, name, reachable, device_types, tags, labels, parts, clusters]
+      properties:
+        endpoint_id: { type: integer }
+        parent_endpoint_id: { type: integer, description: The endpoint whose parts list names this one; absent for the root and top-level endpoints. }
+        name: { type: string, description: "The device type's name as the controller names the endpoint." }
+        reachable: { type: boolean, description: BridgedDeviceBasicInformation Reachable where the endpoint serves it; true elsewhere. }
+        device_types:
+          type: array
+          description: The Descriptor's DeviceTypeList in its order.
+          items: { $ref: "#/components/schemas/EndpointDeviceType" }
+        scope: { type: string, description: The snapshot scope a node-side endpoint was assembled from; absent on the controller side. }
+        tags:
+          type: array
+          description: The Descriptor's TagList; empty when the endpoint serves none.
+          items: { $ref: "#/components/schemas/SemanticTag" }
+        labels:
+          type: array
+          description: The FixedLabel LabelList, then the UserLabel LabelList.
+          items: { $ref: "#/components/schemas/EndpointLabel" }
+        parts:
+          type: array
+          description: The endpoint numbers of its direct children — the endpoints whose parent it is, not every descendant its PartsList names.
+          items: { type: integer }
+        clusters:
+          type: array
+          description: The server clusters in id order.
+          items: { $ref: "#/components/schemas/ClusterDetail" }
+        conformance: { $ref: "#/components/schemas/ConformanceVerdict" }
+        decisions:
+          type: array
+          description: The node's surface decisions on this endpoint (0.4.1, node family only), as `GET /node/surface` lists them.
+          items: { $ref: "#/components/schemas/SurfaceDecision" }
+    EndpointDeviceType:
+      type: object
+      required: [id, id_hex, revision]
+      properties:
+        id: { type: integer }
+        id_hex: { type: string }
+        name: { type: string, description: The device type's name; absent for one the schema does not know. }
+        revision: { type: integer }
+    SemanticTag:
+      type: object
+      required: [namespace, tag]
+      properties:
+        namespace: { type: integer }
+        tag: { type: integer }
+        mfg_code: { type: integer, description: The manufacturer code of a manufacturer-specific namespace; absent when null. }
+        label: { type: string }
+    EndpointLabel:
+      type: object
+      required: [label, value, user]
+      properties:
+        label: { type: string }
+        value: { type: string }
+        user: { type: boolean, description: An entry of UserLabel; FixedLabel's otherwise. }
+    ConformanceVerdict:
+      type: object
+      description: The device type conformance of the endpoint as the controller judges its image.
+      required: [status, violations, unjudged]
+      properties:
+        status: { $ref: "#/components/schemas/NodeConformanceStatus" }
+        violations:
+          type: array
+          items: { $ref: "#/components/schemas/ConformanceViolation" }
+        unjudged:
+          type: array
+          description: The server clusters the ServerList names whose inside was not judged.
+          items: { $ref: "#/components/schemas/ClusterElement" }
+    ConformanceViolation:
+      type: object
+      required: [device_type, requirement, kind, detail]
+      properties:
+        device_type: { type: string }
+        device_type_id: { type: integer, description: Absent for Base and where the violation names no device type. }
+        requirement: { type: string }
+        kind: { type: string }
+        detail: { type: string }
+    ClusterDetail:
+      type: object
+      description: One server cluster with its inventory (contract 0.4.0).
+      required: [id, id_hex, revision, feature_map_hex, features, attributes, accepted, generated, events]
+      properties:
+        id: { type: integer }
+        id_hex: { type: string }
+        name: { type: string, description: The cluster's name; absent for one no definition names. }
+        revision: { type: integer }
+        feature_map_hex: { type: string }
+        features:
+          type: array
+          description: The features the feature map sets, in bit order.
+          items: { $ref: "#/components/schemas/ClusterFeature" }
+        data_version: { type: integer, description: The cluster's DataVersion; absent while unknown. }
+        attributes:
+          type: array
+          description: The AttributeList in id order.
+          items: { $ref: "#/components/schemas/ClusterAttribute" }
+        accepted:
+          type: array
+          description: The AcceptedCommandList.
+          items: { $ref: "#/components/schemas/ClusterElement" }
+        generated:
+          type: array
+          description: The GeneratedCommandList.
+          items: { $ref: "#/components/schemas/ClusterElement" }
+        events:
+          type: array
+          description: The EventList where the peer reports one.
+          items: { $ref: "#/components/schemas/ClusterElement" }
+    ClusterFeature:
+      type: object
+      required: [code, bit]
+      properties:
+        code: { type: string, description: 'The short name ("LT").' }
+        title: { type: string, description: 'The long name ("Lighting"); absent where no definition names it.' }
+        bit: { type: integer }
+    ClusterAttribute:
+      type: object
+      required: [id, id_hex]
+      properties:
+        id: { type: integer }
+        id_hex: { type: string }
+        name: { type: string }
+        value: { description: The attribute's value as JSON by field name; absent in a structure-only answer or while unknown., x-go-type: json.RawMessage }
+        status: { type: integer, description: "The IM status the attribute was answered with; absent on success. The node family sets it, without a `value`, for an attribute its read path failed (0.5.0)." }
+    ClusterElement:
+      type: object
+      required: [id, id_hex]
+      properties:
+        id: { type: integer }
+        id_hex: { type: string }
+        name: { type: string }
+    EventRecord:
+      type: object
+      description: One Matter event (0.4.1), one shape for both families — an event the node served, or one the controller received from a node.
+      required: [number, priority, endpoint, cluster_hex, event_hex]
+      properties:
+        number: { type: integer, description: The node-wide event number (Matter Core §7.14.2.1). }
+        priority: { $ref: "#/components/schemas/NodeEventPriority" }
+        endpoint: { type: integer }
+        cluster_hex: { type: string }
+        event_hex: { type: string }
+        name: { type: string, description: The event's name in go-fabric's schema; absent for one it does not name. }
+        epoch_ms: { type: integer, description: The event's epoch timestamp in milliseconds; absent when the event carries a system timestamp only. }
+        data: { description: The event's data as JSON by field name; absent without data or when it cannot be rendered., x-go-type: json.RawMessage }
+    EventRecordList:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          description: Oldest first.
+          items: { $ref: "#/components/schemas/EventRecord" }
     # The node contract's inline enums, named here because a generated
     # client numbers anonymous enums by document position
     # (TestOpenAPIInlineEnumsAreFrozen); the values are the contract's.
@@ -16777,6 +17316,32 @@ components:
       type: string
       description: A policy's verdict on a surface element (go-fabric surface.Verdict), in ascending precedence.
       enum: [keep, warn, remove, refuse]
+    NodeTopologyFamily:
+      type: string
+      enum: [node, controller]
+    NodeTopologyNodeKind:
+      type: string
+      enum: [node, aggregator, device, part, fabric, session, peer, thread_router, thread_end_device, wifi_ap, ethernet, border_router]
+    NodeTopologyNodeState:
+      type: string
+      enum: [ok, unreachable, idle, unknown]
+    NodeTopologyEdgeKind:
+      type: string
+      enum: [contains, session, link]
+    NodeTopologyEdgeStrength:
+      type: string
+      description: "link: the link's quality class; `none` is a link observed dead (LQI 0), `unknown` one without a measurement."
+      enum: [strong, medium, weak, none, unknown]
+    NodeConfigSource:
+      type: string
+      description: "Where the values come from: the host's configuration, or its node registry."
+      enum: [configuration, registry]
+    NodeConformanceStatus:
+      type: string
+      enum: [unknown, incomplete, clean, violated]
+    NodeEventPriority:
+      type: string
+      enum: [debug, info, critical]
     NodeEndpointsChangedPayload:
       type: object
       description: >-
