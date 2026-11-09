@@ -6,6 +6,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.98.0] - 2026-11-09
+
+### Added
+
+- **Matter: the mDNS interface allow-list.** The new expert option
+  `north.matter.mdns_interfaces` restricts the bridge's mDNS responder to the
+  named host interfaces: it announces and answers on them alone, with their
+  addresses. Empty, the default, keeps every multicast-capable interface, as
+  before. It is meant for a host on two networks behind an mDNS reflector,
+  whose controllers would otherwise cache the far network's address too.
+  Container bridges such as `docker0` or `hassio` stay filtered even when
+  named. An empty or repeated name is refused when the configuration is
+  saved; a name the host does not have is accepted and reported on the
+  Diagnostics tab of the Matter view. Takes effect after a restart.
+
+### Changed
+
+- **go-fabric v0.16.0 → v0.19.1.** The Matter stack answers DNS-SD with its
+  own responder in place of grandcat/zeroconf: every record carries a
+  120-second TTL, announcements follow matter.js's schedule, and the node
+  follows the host's network interfaces, announcing again when an address
+  changes. It brings the mDNS interface allow-list above, the attestation
+  checks and CASE rules of the matter.js pin lift, and an endpoint store
+  that a factory reset erases back to the first bridged number. The daemon's
+  bridged endpoint numbers are unchanged. `golang.org/x/net` moves to
+  v0.62.0 with it.
 ## [0.97.3] - 2026-11-08
 
 ### Fixed

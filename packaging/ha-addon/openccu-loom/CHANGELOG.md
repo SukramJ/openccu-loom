@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.98.0
+
+- **Matter: choose the network interfaces the bridge announces on.** The new
+  expert option `north.matter.mdns_interfaces` (Config UI, Matter) limits
+  the bridge's network announcements to the named interfaces. Empty keeps
+  every interface, as before. Useful when the host is attached to two
+  networks and a controller picks up the wrong address.
+- **Matter stack go-fabric 0.19.1**, with its own mDNS responder: records
+  expire within two minutes once the bridge is gone, and the bridge announces
+  again when the host's addresses change.
+
 ## 0.97.3
 
 - **No surplus entities after an add-on restart.** While the add-on was
