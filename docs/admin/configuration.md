@@ -424,6 +424,16 @@ commissioning are covered on the Matter user page (`docs/user/matter.md`).
   publishes the commissionable records) or `noop` (in-memory only, no
   multicast — a hermetic-test opt-out; QR-scan pairing cannot work in
   this mode).
+- `mdns_interfaces` (expert) restricts the mDNS responder to the named
+  host interfaces: the bridge announces and answers on them alone, with
+  their addresses. Empty (the default) keeps every multicast-capable
+  interface. Use it on a host attached to two networks behind an mDNS
+  reflector, whose controllers would otherwise cache the far network's
+  address too. Container and virtualisation bridges (`docker0`, `hassio`,
+  …) stay filtered even when named. An empty or repeated name is refused
+  at save; a name the host does not have is accepted and reported as a
+  finding on the Diagnostics tab of the Matter view. Restart the daemon after
+  changing it.
 - `tcp` (expert) selects the Matter TCP transport roles: `off`
   (default — UDP only), `incoming` (accept TCP connections on the same
   port as the UDP listener), `outgoing` (the bridge may open TCP

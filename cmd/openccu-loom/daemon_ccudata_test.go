@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -120,6 +121,30 @@ func TestLoadProfiles_Embedded_ReturnsNonNil(t *testing.T) {
 }
 
 // ── matterMDNS ───────────────────────────────────────────────────────────────
+
+// TestMatterMDNSCarriesTheInterfaceAllowList pins that mdns_interfaces
+// reaches the node's responder configuration while the bridge advertises,
+// as a copy the config cannot alias, and that the opt-out ignores it.
+func TestMatterMDNSCarriesTheInterfaceAllowList(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.DiscardHandler)
+	names := []string{"eth0", "wlan0"}
+	for _, adv := range []string{"", "zeroconf"} {
+		got := matterMDNS(config.NorthMatter{MDNSAdvertise: adv, MDNSInterfaces: names}, logger)
+		if !slices.Equal(got.Interfaces, names) {
+			t.Errorf("matterMDNS(%q).Interfaces = %v, want %v", adv, got.Interfaces, names)
+		}
+		if len(got.Interfaces) > 0 && &got.Interfaces[0] == &names[0] {
+			t.Errorf("matterMDNS(%q).Interfaces aliases the config's slice", adv)
+		}
+	}
+	if got := matterMDNS(config.NorthMatter{MDNSAdvertise: "zeroconf"}, logger); got.Interfaces != nil {
+		t.Errorf("unset mdns_interfaces gave %v, want nil (every interface)", got.Interfaces)
+	}
+	if got := matterMDNS(config.NorthMatter{MDNSAdvertise: "noop", MDNSInterfaces: names}, logger); !got.Off || got.Interfaces != nil {
+		t.Errorf("noop gave %+v, want Off without interfaces", got)
+	}
+}
 
 // TestMatterMDNSSelectsTheNodesDNSSD pins the mapping of mdns_advertise onto
 // the node facade's DNS-SD: the unset default and "zeroconf" leave the

@@ -279,6 +279,14 @@ func matterRestartRules() []RestartRule {
 				return b.North.Matter.WithDefaults().MDNSAdvertise != e.North.Matter.WithDefaults().MDNSAdvertise
 			},
 		},
+		// The interface allow-list is part of the node's configuration and
+		// is read when the responder is built at bring-up.
+		{
+			Path: "north.matter.mdns_interfaces",
+			Differs: func(b, e *Config) bool {
+				return !slices.Equal(b.North.Matter.MDNSInterfaces, e.North.Matter.MDNSInterfaces)
+			},
+		},
 	}
 }
 

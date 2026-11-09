@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,10 +57,12 @@ func matterTCPConfig(mode string) node.TCPConfig {
 
 // matterMDNS selects the node's DNS-SD from mc.MDNSAdvertise. "noop" is an
 // explicit opt-out; empty or "zeroconf" leaves the advertiser to the node
-// facade, which builds Zeroconf with the subtype responder — the side-car
-// that answers the `_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub` and
-// `_CM._sub` browses Apple Home and Google Home filter by — and closes both
-// at Stop. An unknown value falls back to the opt-out and says so.
+// facade, which builds go-fabric's own mDNS responder — it publishes the
+// records and the `_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub` and
+// `_CM._sub` subtypes Apple Home and Google Home filter by — and closes it
+// at Stop, on the interfaces mc.MDNSInterfaces names (empty: every
+// multicast-capable one). An unknown value falls back to the opt-out and
+// says so.
 func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 	switch mc.MDNSAdvertise {
 	case "noop":
@@ -69,8 +72,9 @@ func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 		return node.MDNS{Off: true}
 	case "", "zeroconf":
 		logger.Info("matter.bridge.mdns.zeroconf",
-			slog.String("hint", "primary record via grandcat/zeroconf, subtypes via the facade's side-car responder"))
-		return node.MDNS{}
+			slog.String("hint", "records and subtypes via the node's mDNS responder"),
+			slog.Any("interfaces", mc.MDNSInterfaces))
+		return node.MDNS{Interfaces: slices.Clone(mc.MDNSInterfaces)}
 	default:
 		logger.Warn("matter.bridge.mdns.unknown",
 			slog.String("value", mc.MDNSAdvertise),

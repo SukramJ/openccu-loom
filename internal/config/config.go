@@ -1038,6 +1038,16 @@ type NorthMatter struct {
 	//     mode; commissioners never see the bridge.
 	MDNSAdvertise string `yaml:"mdns_advertise" json:"mdns_advertise" cfg:"expert"`
 
+	// MDNSInterfaces restricts the node's mDNS responder to the named host
+	// interfaces (go-fabric node.MDNS.Interfaces): it announces and answers
+	// on them alone, with their addresses. Empty, the default, keeps every
+	// multicast-capable interface. A container or virtualisation bridge
+	// (docker0, hassio, …) stays filtered even when named. A name the host
+	// does not have is accepted and reported by the node's mDNS diagnosis.
+	// Meant for a dual-homed host behind an mDNS reflector, whose
+	// controllers would otherwise cache the far network's address too.
+	MDNSInterfaces []string `yaml:"mdns_interfaces,omitempty" json:"mdns_interfaces,omitempty" cfg:"expert"`
+
 	// Commissioning configures the PASE credentials the node facade
 	// runs the bridge's own commissioning window on. A valid Passcode
 	// is the long-lived setup code (printed labels, the REST window on

@@ -1427,6 +1427,7 @@ const EN: Catalog = {
   "config.field.north.matter.spec_level": "Matter specification level",
   "config.field.north.matter.controller_profile": "Matter controller profile",
   "config.field.north.matter.mdns_advertise": "mDNS advertiser",
+  "config.field.north.matter.mdns_interfaces": "mDNS interfaces",
   "config.field.north.matter.dev_rotate_unique_ids":
     "Rotate unique IDs each boot (dev)",
   "config.field.north.matter.commissioning.passcode": "Passcode",
@@ -1675,6 +1676,8 @@ const EN: Catalog = {
     "Empty by default. Name the controller the bridge is paired with (alexa, apple-home, google-home, home-assistant, smartthings). A profile leaves out what that controller has been reproduced failing on and logs a warning for what was only reported. No profile leaves anything out yet; apple-home warns about thermostat week programs. Takes effect after a restart.",
   "config.help.north.matter.mdns_advertise":
     "mDNS advertiser implementation. Unset defaults to `zeroconf`, which publishes the operational + commissionable records on the network — required for pairing by QR code. `noop` keeps the records in-memory only (tests / out-of-band discovery); commissioners cannot discover the bridge in that mode.",
+  "config.help.north.matter.mdns_interfaces":
+    "Empty by default: the bridge announces and answers mDNS on every multicast-capable interface. Name host interfaces (eth0, end0, …) to announce and answer on those alone, with their addresses — for a host on two networks behind an mDNS reflector, whose controllers would otherwise also cache the other network's address. Container bridges such as docker0 or hassio stay filtered even when named. A name the host does not have is accepted and shown as a finding on the Diagnostics tab of the Matter view. Takes effect after a restart.",
   "config.help.north.matter.dev_rotate_unique_ids":
     "Development-only: mix a per-boot 16-byte random salt into every bridged endpoint's Matter UniqueID. Apple Home / Google Home need a STABLE UniqueID across restarts to recognise accessories — leave this off in production.",
   "config.help.north.matter.commissioning.passcode":
@@ -5672,6 +5675,7 @@ const DE: Catalog = {
   "config.field.north.matter.spec_level": "Matter-Spezifikationsstand",
   "config.field.north.matter.controller_profile": "Matter-Controller-Profil",
   "config.field.north.matter.mdns_advertise": "mDNS-Advertiser",
+  "config.field.north.matter.mdns_interfaces": "mDNS-Schnittstellen",
   "config.field.north.matter.dev_rotate_unique_ids":
     "UniqueID pro Boot rotieren (Dev)",
   "config.field.north.matter.commissioning.passcode": "Setup-Code",
@@ -5924,6 +5928,8 @@ const DE: Catalog = {
     "Standardmäßig leer. Den Controller nennen, mit dem die Bridge gekoppelt ist (alexa, apple-home, google-home, home-assistant, smartthings). Ein Profil lässt weg, woran dieser Controller nachweislich scheitert, und protokolliert eine Warnung für das, was nur gemeldet wurde. Noch lässt kein Profil etwas weg; apple-home warnt vor Thermostat-Wochenprogrammen. Wirkt nach einem Neustart.",
   "config.help.north.matter.mdns_advertise":
     "mDNS-Advertiser-Implementierung. Ohne Wert gilt `zeroconf`: operational + commissionable Records werden im Netz veröffentlicht — Voraussetzung für das Koppeln per QR-Code. `noop` hält die Records nur in-memory (Tests / Out-of-band-Discovery); Commissioner finden die Bridge dann nicht.",
+  "config.help.north.matter.mdns_interfaces":
+    "Standardmäßig leer: Die Bridge kündigt sich per mDNS auf jeder multicastfähigen Schnittstelle an und antwortet dort. Mit Namen von Host-Schnittstellen (eth0, end0, …) kündigt und antwortet sie nur auf diesen, mit deren Adressen — für einen Host in zwei Netzen hinter einem mDNS-Reflektor, dessen Controller sonst auch die Adresse des anderen Netzes zwischenspeichern. Container-Bridges wie docker0 oder hassio bleiben auch dann gefiltert, wenn sie genannt sind. Ein Name, den der Host nicht hat, wird angenommen und im Reiter Diagnose der Matter-Ansicht als Befund angezeigt. Wirkt nach einem Neustart.",
   "config.help.north.matter.dev_rotate_unique_ids":
     "Nur für Entwicklung: mischt einen pro-Boot 16-Byte-Random-Salt in die Matter UniqueID jedes Bridged-Endpoints. Apple Home / Google Home brauchen eine STABILE UniqueID über Restarts hinweg, um Geräte wiederzuerkennen — in Produktion AUS lassen.",
   "config.help.north.matter.commissioning.passcode":
