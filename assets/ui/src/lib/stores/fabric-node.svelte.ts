@@ -35,6 +35,7 @@ export const matterRoutes = {
   endpoint: "#/matter/endpoint/",
   surface: "#/matter/surface",
   diagnostics: "#/matter/diagnostics",
+  topology: "#/matter/topology",
 } as const;
 
 // The daemon publishes the node events on the hub as `node.<event>` with

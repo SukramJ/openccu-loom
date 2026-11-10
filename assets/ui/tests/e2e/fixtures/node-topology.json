@@ -1,0 +1,367 @@
+{
+  "as_of": "2026-10-25T12:00:00Z",
+  "edges": [
+    {
+      "kind": "contains",
+      "source": "node",
+      "target": "ep:1"
+    },
+    {
+      "kind": "contains",
+      "source": "ep:1",
+      "target": "ep:2"
+    },
+    {
+      "kind": "contains",
+      "source": "ep:1",
+      "target": "ep:3"
+    },
+    {
+      "kind": "contains",
+      "source": "ep:3",
+      "target": "ep:4"
+    },
+    {
+      "kind": "contains",
+      "source": "fabric:1",
+      "target": "session:17"
+    },
+    {
+      "kind": "session",
+      "source": "session:17",
+      "target": "node"
+    },
+    {
+      "kind": "contains",
+      "source": "fabric:2",
+      "target": "session:19"
+    },
+    {
+      "kind": "session",
+      "source": "session:19",
+      "target": "node"
+    },
+    {
+      "kind": "session",
+      "source": "session:18",
+      "target": "node"
+    }
+  ],
+  "family": "node",
+  "nodes": [
+    {
+      "details": [
+        {
+          "key": "address",
+          "value": "[::]:5540"
+        },
+        {
+          "key": "endpoints",
+          "value": "3"
+        },
+        {
+          "key": "fabrics",
+          "value": "2"
+        },
+        {
+          "key": "sessions",
+          "value": "3"
+        }
+      ],
+      "id": "node",
+      "kind": "node",
+      "label": "Node",
+      "ref": {
+        "id": "",
+        "page": "status"
+      },
+      "state": "ok"
+    },
+    {
+      "details": [
+        {
+          "key": "endpoint",
+          "value": "1"
+        },
+        {
+          "key": "devices",
+          "value": "2"
+        }
+      ],
+      "endpoint": 1,
+      "id": "ep:1",
+      "kind": "aggregator",
+      "label": "Aggregator",
+      "ref": {
+        "id": "1",
+        "page": "endpoints"
+      },
+      "state": "ok"
+    },
+    {
+      "details": [
+        {
+          "key": "endpoint",
+          "value": "2"
+        },
+        {
+          "key": "device_type",
+          "value": "On/Off Light"
+        },
+        {
+          "key": "device_type_revision",
+          "value": "4"
+        },
+        {
+          "key": "clusters",
+          "value": "4"
+        },
+        {
+          "key": "key",
+          "value": "lamp-1"
+        }
+      ],
+      "endpoint": 2,
+      "id": "ep:2",
+      "kind": "device",
+      "label": "Kitchen lamp",
+      "reachable": true,
+      "ref": {
+        "id": "2",
+        "page": "endpoints"
+      },
+      "state": "ok"
+    },
+    {
+      "details": [
+        {
+          "key": "endpoint",
+          "value": "3"
+        },
+        {
+          "key": "device_type",
+          "value": "Temperature Sensor"
+        },
+        {
+          "key": "device_type_revision",
+          "value": "3"
+        },
+        {
+          "key": "clusters",
+          "value": "3"
+        },
+        {
+          "key": "key",
+          "value": "sensor-2"
+        }
+      ],
+      "endpoint": 3,
+      "id": "ep:3",
+      "kind": "device",
+      "label": "Hall sensor",
+      "reachable": false,
+      "ref": {
+        "id": "3",
+        "page": "endpoints"
+      },
+      "state": "unreachable"
+    },
+    {
+      "details": [
+        {
+          "key": "endpoint",
+          "value": "4"
+        },
+        {
+          "key": "device_type",
+          "value": "Humidity Sensor"
+        },
+        {
+          "key": "device_type_revision",
+          "value": "3"
+        },
+        {
+          "key": "clusters",
+          "value": "2"
+        },
+        {
+          "key": "key",
+          "value": "sensor-2/humidity"
+        }
+      ],
+      "endpoint": 4,
+      "id": "ep:4",
+      "kind": "part",
+      "label": "Hall humidity",
+      "reachable": true,
+      "ref": {
+        "id": "4",
+        "page": "endpoints"
+      },
+      "state": "ok"
+    },
+    {
+      "details": [
+        {
+          "key": "label",
+          "value": "Home"
+        },
+        {
+          "key": "vendor",
+          "value": "Apple Home"
+        },
+        {
+          "key": "vendor_id",
+          "value": "0x1349"
+        },
+        {
+          "key": "node_id",
+          "value": "B2C3D4E5F6071829"
+        },
+        {
+          "key": "fabric_id",
+          "value": "0000000000000001"
+        }
+      ],
+      "fabric_index": 1,
+      "id": "fabric:1",
+      "kind": "fabric",
+      "label": "Home",
+      "node_id_hex": "B2C3D4E5F6071829",
+      "ref": {
+        "id": "1",
+        "page": "fabrics"
+      },
+      "state": "ok"
+    },
+    {
+      "details": [
+        {
+          "key": "vendor",
+          "value": "Google"
+        },
+        {
+          "key": "vendor_id",
+          "value": "0x6006"
+        },
+        {
+          "key": "node_id",
+          "value": "0000000000000042"
+        },
+        {
+          "key": "fabric_id",
+          "value": "00000000000000AB"
+        }
+      ],
+      "fabric_index": 2,
+      "id": "fabric:2",
+      "kind": "fabric",
+      "label": "Google",
+      "node_id_hex": "0000000000000042",
+      "ref": {
+        "id": "2",
+        "page": "fabrics"
+      },
+      "state": "ok"
+    },
+    {
+      "details": [
+        {
+          "key": "session_type",
+          "value": "CASE"
+        },
+        {
+          "key": "peer_node_id",
+          "value": "000000000001B669"
+        },
+        {
+          "key": "subscriptions",
+          "value": "2"
+        },
+        {
+          "key": "peer_idle_seconds",
+          "value": "45"
+        }
+      ],
+      "fabric_index": 1,
+      "id": "session:17",
+      "is_pase": false,
+      "kind": "session",
+      "label": "000000000001B669",
+      "node_id_hex": "000000000001B669",
+      "ref": {
+        "id": "17",
+        "page": "diagnostics"
+      },
+      "session_id": 17,
+      "state": "ok",
+      "subscriptions": 2
+    },
+    {
+      "details": [
+        {
+          "key": "session_type",
+          "value": "CASE"
+        },
+        {
+          "key": "peer_node_id",
+          "value": "0000000000000077"
+        },
+        {
+          "key": "subscriptions",
+          "value": "0"
+        },
+        {
+          "key": "peer_idle_seconds",
+          "value": "90"
+        }
+      ],
+      "fabric_index": 2,
+      "id": "session:19",
+      "is_pase": false,
+      "kind": "session",
+      "label": "0000000000000077",
+      "node_id_hex": "0000000000000077",
+      "ref": {
+        "id": "19",
+        "page": "diagnostics"
+      },
+      "session_id": 19,
+      "state": "idle",
+      "subscriptions": 0
+    },
+    {
+      "details": [
+        {
+          "key": "session_type",
+          "value": "PASE"
+        },
+        {
+          "key": "peer_node_id",
+          "value": "0000000000000000"
+        },
+        {
+          "key": "subscriptions",
+          "value": "0"
+        },
+        {
+          "key": "peer_idle_seconds",
+          "value": "2"
+        }
+      ],
+      "fabric_index": 0,
+      "id": "session:18",
+      "is_pase": true,
+      "kind": "session",
+      "label": "PASE",
+      "node_id_hex": "0000000000000000",
+      "ref": {
+        "id": "18",
+        "page": "diagnostics"
+      },
+      "session_id": 18,
+      "state": "ok",
+      "subscriptions": 0
+    }
+  ]
+}

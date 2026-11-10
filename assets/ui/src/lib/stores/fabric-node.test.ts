@@ -21,10 +21,10 @@ describe("nodeEventFromEnvelope", () => {
 });
 
 describe("matterRoutes", () => {
-  it("puts the seven node pages and the endpoint page under loom's #/matter routes", () => {
+  it("puts the eight node pages and the endpoint page under loom's #/matter routes", () => {
     expect(Object.values(matterRoutes).every((href) => href.startsWith("#/matter"))).toBe(true);
     expect(Object.keys(matterRoutes).sort()).toEqual(
-      ["diagnostics", "endpoint", "endpoints", "fabrics", "pair", "selection", "status", "surface"],
+      ["diagnostics", "endpoint", "endpoints", "fabrics", "pair", "selection", "status", "surface", "topology"],
     );
     // The endpoints page appends the number to this prefix.
     expect(matterRoutes.endpoint + 7).toBe("#/matter/endpoint/7");
