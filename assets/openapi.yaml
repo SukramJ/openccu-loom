@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.8.0
+  version: 15.9.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6357,7 +6357,7 @@ paths:
   # The daemon mounts go-fabric-ui's handler under /api/v1/node
   # (internal/north/rest/router.go, fabricui.Mount); these operations and
   # the schemas named Node*/Fabric*/… below are its contract
-  # (contract/openapi.yaml of go-fabric-ui v0.8.0, paths /node/*), copied
+  # (contract/openapi.yaml of go-fabric-ui v0.9.0, paths /node/*), copied
   # so the request validator and the clients generated from this file
   # know them. tests/contract/node_contract_sync_test.go holds the copy
   # to the pinned module version. `x-admin: true` is go-fabric-ui's own
@@ -8614,7 +8614,7 @@ components:
             interfaces, edit Matter fabrics)
       openIdConnectUrl: /.well-known/openid-configuration
   parameters:
-    # The node page family's parameters (go-fabric-ui contract v0.8.0).
+    # The node page family's parameters (go-fabric-ui contract v0.9.0).
     EndpointNumber:
       name: ep
       in: path
@@ -16463,7 +16463,7 @@ components:
             about itself — the collaborator IS wired, so nothing
             else about the daemon looks wrong.
           items: { type: string }
-    # The node page family's schemas (go-fabric-ui contract v0.8.0,
+    # The node page family's schemas (go-fabric-ui contract v0.9.0,
     # components.schemas): see the /node/* paths above. `Problem` is
     # loom's own; the contract's `Warning` is `NodeWarning` here because
     # loom already carries a `Warning`.
@@ -16646,6 +16646,10 @@ components:
         last_peer_activity: { type: string, format: date-time }
         idle_seconds: { type: integer }
         peer_idle_seconds: { type: integer }
+        created_at: { type: string, format: date-time, description: "When the session was established (0.9.0); the controller's sessions only, absent on the node." }
+        resumed: { type: boolean, description: "The session came from a CASE resumption (0.9.0); the controller's sessions only." }
+        transport: { $ref: "#/components/schemas/NodeSessionTransport" }
+        peer_lost: { type: boolean, description: "The session was given up because the peer is gone or closed it, still listed while it closes (0.9.0); the controller's sessions only." }
     Occupancy:
       type: object
       required: [live, reserved, capacity, free]
@@ -17292,7 +17296,12 @@ components:
       enum: [error, warning]
     NodeDiagnosticEventKind:
       type: string
-      enum: [pairing, session, discovery]
+      description: "pairing, session and discovery on both families; reachability, icd, ota and camera on the controller's trace (0.9.0)."
+      enum: [pairing, session, discovery, reachability, icd, ota, camera]
+    NodeSessionTransport:
+      type: string
+      description: "The session's carrier (0.9.0); the controller's sessions only, absent when unknown."
+      enum: [udp, tcp, ble]
     NodeDiagnosticEventSeverity:
       type: string
       enum: [info, warning, error]
