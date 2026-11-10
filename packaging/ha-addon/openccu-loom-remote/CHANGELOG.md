@@ -4,6 +4,19 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.99.0
+
+- **Matter: a Topology tab** draws the bridge as a graph — the bridged
+  devices on one side, the paired controllers and their connections on the
+  other.
+- **Matter: a misnamed mDNS interface is logged at start.** With
+  `north.matter.mdns_interfaces` set, a name the host does not have, a
+  filtered container bridge or an interface without an address appears in
+  the add-on log once the bridge is up.
+- **Matter stack go-fabric 0.21** and **Matter pages from go-fabric-ui 0.9**;
+  removing a controller or resetting the bridge finishes within a bounded
+  time.
+
 # 0.98.0
 
 - **Matter: choose the network interfaces the bridge announces on.** The new
