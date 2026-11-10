@@ -1,5 +1,5 @@
 {
- "api_version": "15.8.0",
+ "api_version": "15.9.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1828,6 +1828,7 @@
    "parent_path:string",
    "path:string"
   ],
+  "NodeSessionTransport": [],
   "NodeSurfaceElementKind": [],
   "NodeSurfaceElementOrigin": [],
   "NodeSurfaceVerdict": [],
@@ -2352,6 +2353,7 @@
    "value_text:string"
   ],
   "Session": [
+   "created_at:string",
    "fabric_index:integer",
    "idle_seconds:integer",
    "is_pase:boolean",
@@ -2360,10 +2362,13 @@
    "local_node_id:integer",
    "local_node_id_hex:string",
    "peer_idle_seconds:integer",
+   "peer_lost:boolean",
    "peer_node_id:integer",
    "peer_node_id_hex:string",
+   "resumed:boolean",
    "session_id:integer",
-   "subscriptions:integer"
+   "subscriptions:integer",
+   "transport:$ref:NodeSessionTransport"
   ],
   "SessionEvent": [
    "fabric_index:integer",

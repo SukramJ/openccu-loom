@@ -6,6 +6,47 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.99.0] - 2026-11-10
+
+### Added
+
+- **Matter: the Topology tab.** The Matter view gains a tab that draws the
+  bridge as a graph (`#/matter/topology`): the Aggregator with the bridged
+  devices and their parts on one side, the paired controllers' fabrics with
+  the sessions they hold on the other. Selecting a node shows its details
+  and leads to the tab that lists it; the graph redraws when a session, a
+  fabric or the endpoints change. It reads `GET /api/v1/node/topology`,
+  which the daemon already served.
+- **Matter: mDNS interface findings at start.** With
+  `north.matter.mdns_interfaces` set, the daemon logs once after the bridge
+  started what the node's mDNS diagnosis finds about the named interfaces —
+  a name the host does not have, a container bridge that stays filtered, an
+  interface without an address — at warn level as
+  `matter.bridge.mdns.interface` with `code`, `severity` and `message`. The
+  Diagnostics tab still shows the whole diagnosis.
+
+### Changed
+
+- **go-fabric v0.19.1 → v0.21.0.** An erase and a fabric removal flush
+  their records within a bounded 500 ms. The other changes are on the
+  controller side, which this daemon does not run; the bridge's node is
+  unchanged.
+- **go-fabric-ui v0.8.0 → v0.9.0** (the Go module and `@sukramj/fabric-ui`).
+  It brings the Topology page above and the controller's diagnostics, which
+  this daemon does not mount. REST API 15.9.0: the node's `Session` schema
+  documents four optional fields (`created_at`, `resumed`, `transport`,
+  `peer_lost`) that only a controller's sessions carry, and the diagnostic
+  event kinds the controller's trace adds.
+- **Go dependencies:** `github.com/getkin/kin-openapi` v0.153.0 (its YAML
+  parser is now `go.yaml.in/yaml/v4`, MIT / Apache-2.0),
+  `github.com/pressly/goose/v3` v3.30.0, `modernc.org/sqlite` v1.62.0,
+  `golang.org/x/mod` v0.43.0, `golang.org/x/sync` v0.25.0,
+  `golang.org/x/term` v0.48.0, `golang.org/x/text` v0.44.0.
+- **SPA dependencies:** `@lucide/svelte` 1.71.0, `bits-ui` 2.20.6,
+  `tailwindcss` and `@tailwindcss/vite` 4.3.5, `vite` 8.3.7, `vitest` 5.1.0,
+  `svelte-check` 4.7.8, `@playwright/test` 1.65.0 (CI's Playwright container
+  follows).
+
 ## [0.98.0] - 2026-11-09
 
 ### Added

@@ -785,6 +785,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     mdns: 'node-mdns.json',
     endpoints: 'node-endpoints.json',
     surface: 'node-surface.json',
+    topology: 'node-topology.json',
     compatibility: 'node-compatibility.json',
     events: 'node-events.json',
     exposure: 'node-exposure.json',

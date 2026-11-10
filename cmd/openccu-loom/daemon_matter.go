@@ -83,6 +83,30 @@ func matterMDNS(mc config.NorthMatter, logger *slog.Logger) node.MDNS {
 	}
 }
 
+// logMatterMDNSInterfaces writes, once after the node started, what
+// go-fabric's diagnosis finds about the north.matter.mdns_interfaces
+// allow-list: a name the host does not have, a named container bridge the
+// default filter keeps out, a named interface without an address to
+// advertise (Node.DiagnoseMDNS, the interface_* codes). The validator
+// accepts a name the host lacks, because interfaces come and go, so the
+// start-up log is where an operator who set the list reads the miss; the
+// Matter view's Diagnostics tab shows the whole diagnosis. Without the list
+// nothing is diagnosed and nothing written.
+func logMatterMDNSInterfaces(diagnose func() []node.MDNSFinding, names []string, logger *slog.Logger) {
+	if len(names) == 0 {
+		return
+	}
+	for _, f := range diagnose() {
+		if !strings.HasPrefix(f.Code, "interface_") {
+			continue
+		}
+		logger.Warn("matter.bridge.mdns.interface",
+			slog.String("code", f.Code),
+			slog.String("severity", string(f.Severity)),
+			slog.String("message", f.Message))
+	}
+}
+
 // The root BasicInformation's vendor and product names, which the status
 // page's configuration block shows as well.
 const (
@@ -503,6 +527,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		slog.String("addr", n.LocalAddr()),
 		slog.Bool("ipv4_only", mc.PreferIPv4),
 		slog.Bool("configured_passcode", configured))
+	logMatterMDNSInterfaces(n.DiagnoseMDNS, mc.MDNSInterfaces, logger)
 
 	// The node's health probe (node.Config.Health, matterHealth) reports
 	// the `matter` component alongside `mqtt` and `sqlite` so the

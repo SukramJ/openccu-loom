@@ -215,6 +215,33 @@ test.describe('Visual regression - light mode', () => {
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-pair-light.png');
   });
+
+  // The node as a graph: the bridged devices under the Aggregator on one
+  // side, the fabrics and their controllers' sessions on the other, drawn
+  // from the go-fabric-ui contract fixture of GET /node/topology.
+  test('MatterTopology light', async ({ page }) => {
+    await page.route('**/api/v1/node/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          exposure: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/topology');
+    await page.waitForSelector('#main');
+    await page.getByText('Kitchen lamp').first().waitFor();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-topology-light.png');
+  });
 });
 
 test.describe('Visual regression - dark mode', () => {
@@ -415,5 +442,32 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-pair-dark.png');
+  });
+
+  // The node as a graph: the bridged devices under the Aggregator on one
+  // side, the fabrics and their controllers' sessions on the other, drawn
+  // from the go-fabric-ui contract fixture of GET /node/topology.
+  test('MatterTopology dark', async ({ page }) => {
+    await page.route('**/api/v1/node/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          exposure: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/topology');
+    await page.waitForSelector('#main');
+    await page.getByText('Kitchen lamp').first().waitFor();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-topology-dark.png');
   });
 });

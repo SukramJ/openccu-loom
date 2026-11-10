@@ -11768,6 +11768,16 @@ export interface components {
             last_peer_activity: string;
             idle_seconds: number;
             peer_idle_seconds: number;
+            /**
+             * Format: date-time
+             * @description When the session was established (0.9.0); the controller's sessions only, absent on the node.
+             */
+            created_at?: string;
+            /** @description The session came from a CASE resumption (0.9.0); the controller's sessions only. */
+            resumed?: boolean;
+            transport?: components["schemas"]["NodeSessionTransport"];
+            /** @description The session was given up because the peer is gone or closed it, still listed while it closes (0.9.0); the controller's sessions only. */
+            peer_lost?: boolean;
         };
         Occupancy: {
             live: number;
@@ -12329,8 +12339,16 @@ export interface components {
         NodePairingSource: "configured" | "window";
         /** @enum {string} */
         NodeMdnsFindingSeverity: "error" | "warning";
-        /** @enum {string} */
-        NodeDiagnosticEventKind: "pairing" | "session" | "discovery";
+        /**
+         * @description pairing, session and discovery on both families; reachability, icd, ota and camera on the controller's trace (0.9.0).
+         * @enum {string}
+         */
+        NodeDiagnosticEventKind: "pairing" | "session" | "discovery" | "reachability" | "icd" | "ota" | "camera";
+        /**
+         * @description The session's carrier (0.9.0); the controller's sessions only, absent when unknown.
+         * @enum {string}
+         */
+        NodeSessionTransport: "udp" | "tcp" | "ble";
         /** @enum {string} */
         NodeDiagnosticEventSeverity: "info" | "warning" | "error";
         /**

@@ -55,7 +55,7 @@ To pair, your phone app needs either the **setup QR code** or the **11-digit man
 
 ## The Matter view
 
-The **Matter** view (shown only while the bridge is enabled) has seven tabs. The pages are the node page family of [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui), shared by every daemon built on go-fabric; what is OpenCCU-Loom's own is the list of exposable CCU channels and their names.
+The **Matter** view (shown only while the bridge is enabled) has eight tabs. The pages are the node page family of [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui), shared by every daemon built on go-fabric; what is OpenCCU-Loom's own is the list of exposable CCU channels and their names.
 
 - **Status** — whether the bridge listens and advertises, how many endpoints it serves, how many controllers are paired, and whether a commissioning window is open; below it the bridge's configuration as `north.matter` sets it (label, listen address, discriminator, vendor and product), read-only.
 - **Pair** — open a commissioning window with its QR code, manual code and countdown, and close it again early.
@@ -64,6 +64,7 @@ The **Matter** view (shown only while the bridge is enabled) has seven tabs. The
 - **Endpoints** — the bridged endpoints a controller sees, with their device types and clusters. An endpoint whose served surface changed since the start is marked. Each endpoint opens its own page: its device types, clusters with their attributes, features and conformance, and its recent events.
 - **Surface** — what the bridge serves per endpoint, the root endpoint first, and why: the specification level and controller profiles it is composed under, every policy decision (filter by verdict and endpoint), the elements the level withheld and the surface changes announced since the start.
 - **Diagnostics** — whether the bridge advertises correctly on the network (including a name in `north.matter.mdns_interfaces` the host does not have), the connected controllers' sessions and the session parameters the bridge reports to them, how each paired ecosystem treats the exposed device types, and recent bridge events. An administrator can make the bridge announce its records again at once.
+- **Topology** — the bridge as a graph: the Aggregator with the bridged devices and their parts on one side, the paired controllers' fabrics with the sessions they hold on the other. Selecting a node shows its details and leads to the tab that lists it; the graph redraws when a session, a fabric or the endpoints change.
 
 Removing a fabric, the factory reset, reassembling, changing the selection, announcing the records again and opening or closing a commissioning window need an administrator account, as does reading the pairing codes. The same actions are available over the REST API under `/api/v1/node/` — see the [REST reference](../reference/rest.md).
 
