@@ -23,12 +23,12 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
+	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
@@ -147,7 +147,6 @@ type restMountDeps struct {
 	userSvc     handlers.UserAdminService
 	passwordSvc handlers.SelfPasswordService
 	prefSvc     handlers.UserPreferencesService
-	diagramSvc  handlers.DiagramConfigService
 	areaSvc     handlers.AreaAdmin
 	tokenSvc    handlers.TokenAdminService
 	centSvc     handlers.CentralAdminService
@@ -179,8 +178,7 @@ type restMountDeps struct {
 	visibilityAdapter       *visibilityAdapter
 
 	valuesCacheStore    *sqlitestore.ValuesCacheStore
-	historyStore        *sqlitestore.MeasurementStore
-	recordingOverrides  *history.RecordingOverrides
+	recordingOverrides  *measurements.RecordingOverrides
 	channelFlagsStore   *sqlitestore.ChannelFlagsStore
 	channelFlagsOverlay *channelflags.Overlay
 }
@@ -379,7 +377,6 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TokenPurger:       d.tokenPurger,
 		TokenSockets:      d.tokenSocketRevoker(),
 		Preferences:       d.prefSvc,
-		Diagrams:          d.diagramSvc,
 		Areas:             d.areaSvc,
 		RoomFunctionAdmin: d.roomFunctionAdmin,
 		TaxonomyAdmin:     adapter.NewTaxonomyAdmin(d.reg),
@@ -447,21 +444,14 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// tracks whether the /alarm routes exist, not whether the
 			// engine is armed/healthy.
 			alarm: d.alarm != nil,
-			// History is enabled when the recorder store was wired (the
-			// same opt-in flag that mounts /history and /history/recording).
-			history: d.historyStore != nil,
+			// Mirrors the condition that mounts /measurements/recording:
+			// the overlay exists and forwarding is switched on.
+			measurements: d.recordingOverrides != nil && cfg.North.Measurements.IsEnabled(),
 			// Each of the four below mirrors the condition that mounts the
 			// surface it names, read from the same value the mount reads —
 			// not from a second source that could drift away from it.
-			mqttRaw:        cfg.North.MQTT.Enabled && cfg.North.MQTT.RawEnabled,
-			webhookInbound: cfg.North.Webhook.Inbound.Enabled,
-			diagrams:       d.diagramSvc != nil,
-			// Each token reads the condition that mounts ITS OWN surface,
-			// even though both resolve to the same opened database today:
-			// /diagrams mounts on the diagram service, the admin routes on
-			// the stored-user store. Deriving one from the other would make
-			// the tokens agree by construction and hide the day they stop
-			// being the same question.
+			mqttRaw:          cfg.North.MQTT.Enabled && cfg.North.MQTT.RawEnabled,
+			webhookInbound:   cfg.North.Webhook.Inbound.Enabled,
 			adminPersistence: d.sqUsers != nil,
 			// addonSelfUpdate mirrors wireAddonUpdate's capability gate
 			// (add-on build + firmware installer present) — d.addonUpdater
@@ -535,11 +525,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// SupervisedRestart capability — fails closed.
 		EnableRestartEndpoint: detectSupervisedRestart(),
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
-		History:               newHistoryHandlerAdapter(d.historyStore),
-		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides),
+		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides, cfg.North.Measurements.IsEnabled()),
 		ChannelFlags:          channelFlagsWriterFrom(d.channelFlagsStore),
 		ChannelFlagsOverlay:   d.channelFlagsOverlay,
-		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg, cfg.Persistence.History.EnergyPricePerKWh, cfg.Persistence.History.EnergyCurrency),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		WiringManifest:        d.reg.Manifest(),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
@@ -822,14 +810,9 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Groups:     newGroupsAdapter(d.groupsDomain),
 		Areas:      d.areaSvc,
 		Interfaces: d.ifaceAdapter,
-		History:    newHistoryHandlerAdapter(d.historyStore),
 		Visibility: d.visibilityUnIgnoreStore,
-		Energy: newEnergyHandlerAdapter(
-			d.historyStore, d.reg,
-			cfg.Persistence.History.EnergyPricePerKWh, cfg.Persistence.History.EnergyCurrency,
-		),
-		Links:     d.linksDomain,
-		Schedules: d.schedulesDomain,
+		Links:      d.linksDomain,
+		Schedules:  d.schedulesDomain,
 	}))
 	// Rebuild the same two request-volume guards rest.NewRouter mounts —
 	// see the doc comment above for why the MCP path needs its own copy.
@@ -854,16 +837,15 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 }
 
 // appDBServices constructs the main-app-DB-backed REST services
-// (per-user preferences, diagram configs, areas). All three return nil
-// when persistence is disabled so their routes drop.
-func appDBServices(auditDB *sql.DB) (handlers.UserPreferencesService, handlers.DiagramConfigService, handlers.AreaAdmin) {
+// (per-user preferences, areas). Both return nil when persistence is
+// disabled so their routes drop.
+func appDBServices(auditDB *sql.DB) (handlers.UserPreferencesService, handlers.AreaAdmin) {
 	if auditDB == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 	// *sqlitestore.AreaStore satisfies handlers.AreaAdmin directly — no
 	// adapter needed.
 	return sqlitestore.NewUserPreferencesStore(auditDB),
-		newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB)),
 		sqlitestore.NewAreaStore(auditDB)
 }
 

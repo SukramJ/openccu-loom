@@ -28,16 +28,15 @@ var restartPathsNotDiffableByMutation = map[string]string{
 	// restart-required, so the rule needs two configs sharing a central name —
 	// TestCentralsRestartRuleNeedsAnInPlaceModification covers it directly.
 	"centrals": "add/remove are live operations; only an in-place change counts",
-	// The mutator turns an unset tri-state into an explicit false. The three
+	// The mutator turns an unset tri-state into an explicit false. The two
 	// gates below default to OFF, so that mutation changes the encoding and
 	// not the state — and a rule that reported a restart for it would light
 	// the pending-restart banner for a save that changed nothing. Their rules
 	// compare the resolved value; the edit that matters (turning the feature
 	// on) is covered by TestRestartRequiredDiff_OptInGatesTurnedOn in
 	// internal/config.
-	"persistence.history.enabled":        "unset and explicit false are the same state (opt-in feature)",
-	"persistence.history.export.enabled": "unset and explicit false are the same state (opt-in exporter)",
-	"north.matter.enable_time_sync":      "unset and explicit false are the same state (cluster not mounted)",
+	"north.measurements.enabled":    "unset and explicit false are the same state (opt-in feature)",
+	"north.matter.enable_time_sync": "unset and explicit false are the same state (cluster not mounted)",
 }
 
 // TestEveryRestartRequiredFieldIsDetectedByDiff is the guard that keeps the

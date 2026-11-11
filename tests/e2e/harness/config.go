@@ -59,6 +59,63 @@ type configInputs struct {
 	// DelayNewDeviceCreation writes behavior.delay_new_device_creation
 	// on the central. Nil omits the key, leaving the daemon default.
 	DelayNewDeviceCreation *bool
+	// Measurements writes north.measurements. Nil omits the block,
+	// leaving measurement forwarding off, which is the daemon default.
+	Measurements *Measurements
+}
+
+// Measurements is the north.measurements block of a test daemon: the
+// measurement forwarder and its InfluxDB target. Every field maps to the
+// config key of the same name; a zero field is not written.
+type Measurements struct {
+	Enabled          bool
+	Endpoint         string
+	Org              string
+	Bucket           string
+	TokenEnv         string
+	FlushInterval    time.Duration
+	Include          []string
+	Exclude          []string
+	DisabledCentrals []string
+}
+
+// yaml renders the block, indented as a child of `north:`.
+func (m *Measurements) yaml() string {
+	if m == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "  measurements:\n    enabled: %s\n", boolYAML(m.Enabled))
+	for _, kv := range []struct{ key, value string }{
+		{"endpoint", m.Endpoint},
+		{"org", m.Org},
+		{"bucket", m.Bucket},
+		{"token_env", m.TokenEnv},
+	} {
+		if kv.value != "" {
+			fmt.Fprintf(&b, "    %s: %q\n", kv.key, kv.value)
+		}
+	}
+	if m.FlushInterval > 0 {
+		fmt.Fprintf(&b, "    flush_interval: %s\n", m.FlushInterval.String())
+	}
+	for _, list := range []struct {
+		key    string
+		values []string
+	}{
+		{"include", m.Include},
+		{"exclude", m.Exclude},
+		{"disabled_centrals", m.DisabledCentrals},
+	} {
+		if len(list.values) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "    %s:\n", list.key)
+		for _, v := range list.values {
+			fmt.Fprintf(&b, "      - %q\n", v)
+		}
+	}
+	return b.String()
 }
 
 // buildConfigYAML returns a complete openccu-loom config that wires
@@ -151,6 +208,7 @@ func buildConfigYAML(in configInputs) string {
 	// port-pinned parallel daemon startups.
 	fmt.Fprintf(&b, "  discovery:\n    mdns:\n      enabled: false\n    ssdp:\n      enabled: false\n")
 	fmt.Fprintf(&b, "%s", mqttBlock)
+	fmt.Fprintf(&b, "%s", in.Measurements.yaml())
 	if in.NoCentral {
 		fmt.Fprintf(&b, "centrals: []\n")
 		return b.String()

@@ -93,8 +93,8 @@ func TestInfo_ContentTypeIsJSON(t *testing.T) {
 }
 
 type fakeCapDetector struct {
-	mqtt, matter, oidc, alarm                           bool
-	mqttRaw, webhookInbound, diagrams, adminPersistence bool
+	mqtt, matter, oidc, alarm                 bool
+	mqttRaw, webhookInbound, adminPersistence bool
 	// paths switches login paths on by the name LoginPaths reports them under.
 	paths map[string]bool
 }
@@ -113,11 +113,10 @@ func (f fakeCapDetector) HasSupervisedRestart() bool { return false }
 func (f fakeCapDetector) HasMCP() bool               { return false }
 func (f fakeCapDetector) HasMCPWrite() bool          { return false }
 func (f fakeCapDetector) HasAlarm() bool             { return f.alarm }
-func (f fakeCapDetector) HasHistory() bool           { return false }
+func (f fakeCapDetector) HasMeasurements() bool      { return false }
 func (f fakeCapDetector) HasAddonSelfUpdate() bool   { return false }
 func (f fakeCapDetector) HasMQTTRaw() bool           { return f.mqttRaw }
 func (f fakeCapDetector) HasWebhookInbound() bool    { return f.webhookInbound }
-func (f fakeCapDetector) HasDiagrams() bool          { return f.diagrams }
 func (f fakeCapDetector) HasAdminPersistence() bool  { return f.adminPersistence }
 
 func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {

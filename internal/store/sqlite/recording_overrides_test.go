@@ -10,7 +10,7 @@ import (
 
 func freshRecordingOverrideStore(t *testing.T) *RecordingOverrideStore {
 	t.Helper()
-	return NewRecordingOverrideStore(openHistoryDB(t, "hist.db"))
+	return NewRecordingOverrideStore(openTestDB(t, "main.db"))
 }
 
 func TestRecordingOverrides_SetGetRoundTrip(t *testing.T) {

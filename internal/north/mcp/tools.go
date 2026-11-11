@@ -289,8 +289,8 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 		registerGetAddonUpdateStatus(s, d)
 	}
 	// The REST-parity tools (tests/contract/mcp_rest_parity_test.go keeps
-	// restDomainsAwaitingMCPTools empty): groups, areas, interfaces, history,
-	// visibility, energy, links, schedules. Each projects a single narrow
+	// restDomainsAwaitingMCPTools empty): groups, areas, interfaces,
+	// visibility, links, schedules. Each projects a single narrow
 	// REST facade; a nil seam leaves its tool unregistered.
 	if d.Groups != nil {
 		registerListGroups(s, d)
@@ -304,14 +304,8 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.Interfaces != nil {
 		registerListInterfaces(s, d)
 	}
-	if d.History != nil {
-		registerGetMeasurements(s, d)
-	}
 	if d.Visibility != nil && d.Centrals != nil {
 		registerListHiddenParameters(s, d)
-	}
-	if d.Energy != nil {
-		registerGetEnergy(s, d)
 	}
 	if d.Links != nil {
 		registerListLinks(s, d)

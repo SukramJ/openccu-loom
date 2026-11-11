@@ -6,7 +6,6 @@ package mcp_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -57,21 +56,6 @@ type fakeInterfaceLister struct {
 
 func (f *fakeInterfaceLister) Interfaces() []hmapi.InterfaceState { return f.interfaces }
 
-type fakeHistoryReader struct {
-	lastQuery handlers.HistoryQuery
-	buckets   []handlers.HistoryBucket
-	tier      string
-	err       error
-}
-
-func (f *fakeHistoryReader) Query(_ context.Context, q handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error) {
-	f.lastQuery = q
-	if f.err != nil {
-		return nil, "", f.err
-	}
-	return f.buckets, f.tier, nil
-}
-
 type fakeVisibilityLister struct {
 	byCentral map[string][]sqlite.UnIgnoreEntry
 	err       error
@@ -82,20 +66,6 @@ func (f *fakeVisibilityLister) List(_ context.Context, centralName string) ([]sq
 		return nil, f.err
 	}
 	return f.byCentral[centralName], nil
-}
-
-type fakeEnergyReader struct {
-	lastQuery handlers.EnergyQuery
-	resp      handlers.EnergyResponse
-	err       error
-}
-
-func (f *fakeEnergyReader) Energy(_ context.Context, q handlers.EnergyQuery) (handlers.EnergyResponse, error) {
-	f.lastQuery = q
-	if f.err != nil {
-		return handlers.EnergyResponse{}, f.err
-	}
-	return f.resp, nil
 }
 
 type fakeLinkLister struct {
@@ -126,7 +96,7 @@ func (f *fakeScheduleLister) ListScheduleDevices(context.Context) ([]hmapi.Sched
 	return f.items, nil
 }
 
-// fleetDeps builds a Deps with all eight fleet seams present, plus a
+// fleetDeps builds a Deps with all six fleet seams present, plus a
 // two-central roster so central-scoping and unknown-central rejection can
 // be exercised.
 func fleetDeps() mcp.Deps {
@@ -138,7 +108,7 @@ func fleetDeps() mcp.Deps {
 
 // ─── registration gating ─────────────────────────────────────────────────────
 
-// TestFleetTools_NilSeamsLeaveToolsUnregistered proves each of the eight
+// TestFleetTools_NilSeamsLeaveToolsUnregistered proves each of the six
 // tools stays off the catalogue when its own dependency is nil, even
 // though every other Deps field is wired — an unwired seam must never
 // advertise a tool that cannot answer.
@@ -147,8 +117,8 @@ func TestFleetTools_NilSeamsLeaveToolsUnregistered(t *testing.T) {
 	defer cs.Close()
 	names := toolNames(t, cs)
 	for _, tool := range []string{
-		"list_groups", "list_areas", "list_interfaces", "get_measurements",
-		"list_hidden_parameters", "get_energy", "list_links", "list_schedules",
+		"list_groups", "list_areas", "list_interfaces",
+		"list_hidden_parameters", "list_links", "list_schedules",
 	} {
 		if names[tool] {
 			t.Errorf("%s: registered despite a nil seam", tool)
@@ -163,9 +133,7 @@ func TestFleetTools_WiredSeamsRegisterTools(t *testing.T) {
 	deps.Groups = &fakeGroupsReader{}
 	deps.Areas = &fakeAreaLister{}
 	deps.Interfaces = &fakeInterfaceLister{}
-	deps.History = &fakeHistoryReader{}
 	deps.Visibility = &fakeVisibilityLister{}
-	deps.Energy = &fakeEnergyReader{}
 	deps.Links = &fakeLinkLister{}
 	deps.Schedules = &fakeScheduleLister{}
 
@@ -173,8 +141,8 @@ func TestFleetTools_WiredSeamsRegisterTools(t *testing.T) {
 	defer cs.Close()
 	names := toolNames(t, cs)
 	for _, tool := range []string{
-		"list_groups", "list_areas", "list_interfaces", "get_measurements",
-		"list_hidden_parameters", "get_energy", "list_links", "list_schedules",
+		"list_groups", "list_areas", "list_interfaces",
+		"list_hidden_parameters", "list_links", "list_schedules",
 	} {
 		if !names[tool] {
 			t.Errorf("%s: not registered despite a wired seam", tool)
@@ -304,57 +272,6 @@ func TestListInterfaces_ProjectsState(t *testing.T) {
 	}
 }
 
-// ─── get_measurements ────────────────────────────────────────────────────────
-
-func TestGetMeasurements_MissingRequiredFieldErrors(t *testing.T) {
-	deps := fleetDeps()
-	deps.History = &fakeHistoryReader{}
-	cs := connect(t, deps)
-	defer cs.Close()
-
-	res := callTool(t, cs, "get_measurements", map[string]any{
-		"central": "alpha",
-		// interface_id, channel, parameter, from, to all missing.
-	})
-	if !res.IsError {
-		t.Fatal("expected an error for missing required fields")
-	}
-}
-
-func TestGetMeasurements_HappyPath(t *testing.T) {
-	reader := &fakeHistoryReader{
-		buckets: []handlers.HistoryBucket{{TS: time.Unix(0, 0).UTC(), Avg: 21.5, Count: 3}},
-		tier:    "hour",
-	}
-	deps := fleetDeps()
-	deps.History = reader
-	cs := connect(t, deps)
-	defer cs.Close()
-
-	res := callTool(t, cs, "get_measurements", map[string]any{
-		"central":      "alpha",
-		"interface_id": "HmIP-RF",
-		"channel":      "0001D3C99C1234:1",
-		"parameter":    "TEMPERATURE",
-		"from":         "2026-01-01T00:00:00Z",
-		"to":           "2026-01-02T00:00:00Z",
-	})
-	if res.IsError {
-		t.Fatalf("get_measurements returned error: %v", res.Content)
-	}
-	if reader.lastQuery.Buckets != 200 {
-		t.Errorf("expected default bucket count 200, got %d", reader.lastQuery.Buckets)
-	}
-	var out struct {
-		Buckets []handlers.HistoryBucket `json:"buckets"`
-		Tier    string                   `json:"tier"`
-	}
-	unmarshalStructured(t, res, &out)
-	if len(out.Buckets) != 1 || out.Tier != "hour" {
-		t.Errorf("unexpected result: %+v", out)
-	}
-}
-
 // ─── list_hidden_parameters ──────────────────────────────────────────────────
 
 func TestListHiddenParameters_SpansCentrals(t *testing.T) {
@@ -406,60 +323,6 @@ func TestListHiddenParameters_ScopedToOneCentral(t *testing.T) {
 	unmarshalStructured(t, res, &out)
 	if len(out.Patterns) != 1 || out.Patterns[0].Central != "alpha" {
 		t.Errorf("unexpected result: %+v", out.Patterns)
-	}
-}
-
-// ─── get_energy ──────────────────────────────────────────────────────────────
-
-func TestGetEnergy_DefaultsGroupToDay(t *testing.T) {
-	reader := &fakeEnergyReader{resp: handlers.EnergyResponse{Group: "day"}}
-	deps := fleetDeps()
-	deps.Energy = reader
-	cs := connect(t, deps)
-	defer cs.Close()
-
-	res := callTool(t, cs, "get_energy", map[string]any{
-		"central": "alpha",
-		"from":    "2026-01-01T00:00:00Z",
-		"to":      "2026-01-02T00:00:00Z",
-	})
-	if res.IsError {
-		t.Fatalf("get_energy returned error: %v", res.Content)
-	}
-	if reader.lastQuery.Group != "day" {
-		t.Errorf("group: want day, got %q", reader.lastQuery.Group)
-	}
-}
-
-func TestGetEnergy_InvalidGroupErrors(t *testing.T) {
-	deps := fleetDeps()
-	deps.Energy = &fakeEnergyReader{}
-	cs := connect(t, deps)
-	defer cs.Close()
-
-	res := callTool(t, cs, "get_energy", map[string]any{
-		"central": "alpha",
-		"from":    "2026-01-01T00:00:00Z",
-		"to":      "2026-01-02T00:00:00Z",
-		"group":   "week",
-	})
-	if !res.IsError {
-		t.Fatal("expected an error for an invalid group")
-	}
-}
-
-func TestGetEnergy_MissingCentralErrors(t *testing.T) {
-	deps := fleetDeps()
-	deps.Energy = &fakeEnergyReader{}
-	cs := connect(t, deps)
-	defer cs.Close()
-
-	res := callTool(t, cs, "get_energy", map[string]any{
-		"from": "2026-01-01T00:00:00Z",
-		"to":   "2026-01-02T00:00:00Z",
-	})
-	if !res.IsError {
-		t.Fatal("expected an error for a missing central")
 	}
 }
 

@@ -32,14 +32,6 @@
   "name": "format"
  },
  {
-  "path": "paths//history/get/responses/200/headers/X-History-Tier/schema",
-  "name": "X-History-Tier"
- },
- {
-  "path": "paths//energy/get/parameters/3/schema",
-  "name": "group"
- },
- {
   "path": "paths//diagnostics/get/parameters/0/schema",
   "name": "anonymize"
  },
@@ -174,10 +166,6 @@
  {
   "path": "components/schemas/RecordingState/properties/source",
   "name": "source"
- },
- {
-  "path": "components/schemas/EnergyResponse/properties/group",
-  "name": "group"
  },
  {
   "path": "components/schemas/Identity/properties/role",
@@ -394,14 +382,6 @@
  {
   "path": "components/schemas/TargetChannelSummary/properties/channel_type",
   "name": "channel_type"
- },
- {
-  "path": "components/schemas/DiagramConfig/properties/visibility",
-  "name": "visibility"
- },
- {
-  "path": "components/schemas/DiagramWriteRequest/properties/visibility",
-  "name": "visibility"
  },
  {
   "path": "components/schemas/AddonUpdateStatus/properties/state",

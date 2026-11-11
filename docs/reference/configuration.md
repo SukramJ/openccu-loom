@@ -177,6 +177,21 @@ and API tokens, navigation profiles) are not part of this list.
 | `north.mcp.enabled` | `bool` |  | basic | yes | Master switch for the MCP server, served over Streamable-HTTP on the REST listener. Off by default. Takes effect after a daemon restart. |
 | `north.mcp.path` | `string` | `/mcp` | expert | yes | HTTP mount path for the MCP transport on the REST listener. Empty defaults to /mcp. Takes effect after a daemon restart. |
 
+## `north.measurements` {#north-measurements}
+
+| Key | Type | Default | Class | Restart | Description |
+|---|---|---|---|---|---|
+| `north.measurements.bucket` | `string` |  | expert | yes | InfluxDB v2 bucket the samples are written into. |
+| `north.measurements.disabled_centrals` | `[]string` |  | expert | yes | Central names (one per line) whose data points are not forwarded. Empty forwards every CCU. |
+| `north.measurements.enabled` | `*bool` |  | expert | yes | Send numeric data-point values to an external time-series store. Off by default. The daemon keeps no measurement history itself; charts and long-term storage belong to the store you forward to. |
+| `north.measurements.endpoint` | `string` |  | expert | yes | Base URL of the store, e.g. http://influx:8086. Required while forwarding is enabled. |
+| `north.measurements.exclude` | `[]string` |  | expert | yes | Parameter-name patterns never to forward. Exclude wins over include. Empty excludes nothing. |
+| `north.measurements.flush_interval` | `time.Duration` |  | expert | yes | How often buffered samples are written to the store. Zero uses the default of 5 s. |
+| `north.measurements.include` | `[]string` |  | expert | yes | Parameter-name patterns to forward (e.g. TEMPERATURE, \*POWER\*). Empty forwards every numeric VALUES parameter. A single data point can be switched on or off on the device's History tab. |
+| `north.measurements.kind` | `string` |  | expert | yes | Kind of store to forward to. Empty or "influxdb" selects the InfluxDB v2 line protocol, the only target today. |
+| `north.measurements.org` | `string` |  | expert | yes | InfluxDB v2 organisation that owns the bucket. |
+| `north.measurements.token_env` | `string` |  | expert | yes | Name of the environment variable that holds the write token. The token itself is never stored in the configuration. Without a token nothing is forwarded. |
+
 ## `north.mqtt` {#north-mqtt}
 
 | Key | Type | Default | Class | Restart | Description |
@@ -263,22 +278,6 @@ and API tokens, navigation profiles) are not part of this list.
 
 | Key | Type | Default | Class | Restart | Description |
 |---|---|---|---|---|---|
-| `persistence.history.disabled_centrals` | `[]string` |  | expert | yes | Central names whose data points must not be recorded; empty (default) records all enabled centrals. |
-| `persistence.history.enabled` | `*bool` |  | expert | yes | Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job. |
-| `persistence.history.energy_currency` | `string` |  | basic | yes | Label for the amounts derived from the tariff (symbol or code, e.g. € or CHF). Defaults to the euro sign. Purely a label — no conversion happens. |
-| `persistence.history.energy_price_per_kwh` | `float64` |  | basic | yes | Price of one kilowatt-hour, used by the energy view to show costs next to consumption. Leave at 0 to show no costs at all — a tariff of 0 would render every amount as 0.00. |
-| `persistence.history.exclude` | `[]string` |  | expert | yes | Parameter-name globs to drop from recording; exclude always wins over include — empty (default) excludes nothing. |
-| `persistence.history.export.bucket` | `string` |  | expert | yes | InfluxDB v2 bucket into which samples are written. |
-| `persistence.history.export.enabled` | `*bool` |  | expert | yes | Turn on the push exporter that forwards each recorded sample to an external time-series store (InfluxDB by default); disabled by default. |
-| `persistence.history.export.endpoint` | `string` |  | expert | yes | Base URL of the target time-series store, e.g. http://influx:8086. |
-| `persistence.history.export.kind` | `string` |  | expert | yes | Exporter backend; empty or "influxdb" selects the InfluxDB v2 line-protocol writer (the only available backend today). |
-| `persistence.history.export.org` | `string` |  | expert | yes | InfluxDB v2 organisation name that owns the target bucket. |
-| `persistence.history.export.token_env` | `string` |  | expert | yes | Name of the environment variable that holds the InfluxDB write token; the token is never stored inline in config. |
-| `persistence.history.flush_interval` | `time.Duration` | `5s` | expert | yes | How often the recorder flushes a batch of samples to history.db; zero falls back to the daemon default of 5 s. |
-| `persistence.history.include` | `[]string` |  | expert | yes | Parameter-name globs to record (e.g. TEMPERATURE, \*POWER\*); empty (default) records every numeric VALUES parameter. |
-| `persistence.history.retention` | `time.Duration` | `720h0m0s` | expert | yes | How long raw samples are kept; zero falls back to 30 days (720 h), after which the retention job purges older rows. |
-| `persistence.history.retention_daily` | `time.Duration` |  | expert | yes | How long the daily rollup tier is kept; zero (default) keeps daily rows forever since they are tiny (one row per data point per day). |
-| `persistence.history.retention_hourly` | `time.Duration` |  | expert | yes | How long the hourly rollup tier is kept; zero falls back to 13 months. Hourly rows are folded into the daily tier before this cutoff removes them. |
 | `persistence.values_cache.disabled_centrals` | `[]string` |  | expert | yes | List of central names (one per line) whose data points are kept out of the cache. Useful for test rigs in a multi-CCU deployment. |
 | `persistence.values_cache.enabled` | `*bool` | `true` | expert | yes | Cache the most recent VALUES paramset of every data point locally so a daemon restart picks up where it left off without a full CCU re-read. Default: ON. |
 | `persistence.values_cache.flush_interval` | `time.Duration` | `1m0s` | expert | yes | How often to flush queued cache writes to disk. Default 60 s — short enough to survive a crash with minimal loss, long enough to coalesce bursts. |

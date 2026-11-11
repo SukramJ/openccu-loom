@@ -40,6 +40,10 @@ func sectionTarget(sec Section) any {
 	case SectionAddonUpdate:
 		// Same reasoning as SectionMCP.
 		return new(config.AddonUpdateConfig)
+	case SectionMeasurements:
+		// Same reasoning as SectionMCP: the write token is read from the
+		// environment, so the block holds no secret today.
+		return new(config.NorthMeasurements)
 	case SectionWebhook:
 		// Has the north.webhook.secret signing key (cfg:"secret"), so the
 		// section store seals it at rest by reflection.

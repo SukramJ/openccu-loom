@@ -352,8 +352,6 @@ func TestNoPackageLevelMutableSingletons(t *testing.T) {
 		"sqlite:ErrDeviceNotFound":     "reason: immutable sentinel error",
 		"sqlite:ErrMigrationFailed":    "reason: immutable sentinel error",
 		"sqlite:migrationsFS":          "reason: go:embed FS is read-only at runtime",
-		"sqlite:energyParameters":      "reason: immutable lookup table of energy parameter names (POWER/ENERGY_COUNTER/…), no CCU-scoped state",
-		"sqlite:measurementTables":     "reason: immutable lookup table of the three measurement tier table names; exists so a delete-by-central or -device cannot walk one tier and forget the rollups",
 	}
 
 	dirs := []struct {
@@ -515,16 +513,8 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"TokenStore:DeleteBySubject":  "reason: tokens table is daemon-global; subject is the natural key, not a CCU",
 		"UserPreferencesStore:Get":    "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
 		"UserPreferencesStore:Delete": "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
-		// diagram_configs is per-user daemon-global metadata; a diagram
-		// spans multiple centrals (each series carries its own central), so
-		// the owner subject / diagram id is the natural key, not a CCU.
-		"DiagramConfigStore:List":   "reason: diagram_configs is per-user daemon-global; owner subject is the key, and a diagram spans centrals",
-		"DiagramConfigStore:Get":    "reason: diagram_configs is per-user daemon-global; diagram id is the key, and a diagram spans centrals",
-		"DiagramConfigStore:Create": "reason: diagram_configs is per-user daemon-global; owner subject is the key, and a diagram spans centrals",
-		"DiagramConfigStore:Update": "reason: diagram_configs is per-user daemon-global; diagram id is the key, and a diagram spans centrals",
-		"DiagramConfigStore:Delete": "reason: diagram_configs is per-user daemon-global; diagram id is the key, and a diagram spans centrals",
-		"ConfigSectionStore:Get":    "reason: config_sections is daemon-global; section is the natural key",
-		"ConfigSectionStore:Delete": "reason: config_sections is daemon-global; section is the natural key",
+		"ConfigSectionStore:Get":      "reason: config_sections is daemon-global; section is the natural key",
+		"ConfigSectionStore:Delete":   "reason: config_sections is daemon-global; section is the natural key",
 		// auth_sessions is daemon-global, not per-CCU: a login session
 		// belongs to a user in the single auth realm, never to a CCU.
 		// DeleteSession's natural key is the session id; the purge sweep
@@ -539,17 +529,6 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"WarningSilenceStore:Delete":          "reason: silences are keyed (username, warning_id); the central lives inside warning_id where it applies",
 		"WarningSilenceStore:DeleteExpired":   "reason: global time-based purge over per-user silences; the central lives inside warning_id where it applies",
 		"WarningSilenceStore:DeleteOtherThan": "reason: per-user prune against the active warning set; silences are keyed (username, warning_id), never by central",
-		// Measurement-history retention is a time-based purge over the one
-		// history.db file: it drops every row older than the cutoff
-		// regardless of central. Per-central scoping would be wrong — the
-		// retention window is global. Per-central deletes use DeleteDevice
-		// (which DOES carry central) instead. See ADR 0040.
-		"MeasurementStore:DeleteOlderThan": "reason: retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
-		// The hourly/daily rollup tiers are purged the same way as the raw
-		// tier above: a global time-based cutoff over history.db, not a
-		// per-central operation. See ADR 0040.
-		"MeasurementStore:DeleteHourlyOlderThan": "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
-		"MeasurementStore:DeleteDailyOlderThan":  "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
 		// Alarm zones are daemon-level partitions that may span
 		// multiple centrals (notes/concepts/alarm-concept.md §13.1, §14): the
 		// zone/incident/journal keys are zone-scoped by design, and the

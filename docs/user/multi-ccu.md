@@ -347,7 +347,6 @@ scoped by a `central_name` column:
 ```
 <data_dir>/
 ├── openccu-loom.db     # devices, paramsets, incidents, users, tokens, sessions, sysvar cache
-├── history.db          # measurement history (opt-in; ADR 0040)
 ├── backups/            # generated backup archives
 ├── secret.key          # config-secret encryption key
 └── .env                # optional env overlay

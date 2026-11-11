@@ -18,8 +18,8 @@ XML-RPC, BIN-RPC and JSON-RPC, and **openccu-lite** boxes over
 occulited's HTTP API and event stream — and exposes them through MQTT,
 a REST + WebSocket API, a web Config UI, a native Matter bridge and an
 MCP server. It runs several centrals at once, administers them
-(pairing, firmware, links, programs, system variables, groups), records
-measurement history, and ships a complete local alarm system.
+(pairing, firmware, links, programs, system variables, groups), forwards
+measurements to InfluxDB, and ships a complete local alarm system.
 
 Single static binary, no CGo, no cloud, no Home Assistant required —
 though it integrates with Home Assistant through MQTT Discovery,
@@ -130,10 +130,9 @@ re-runnable setup wizard. Surfaces as a Home Assistant
 
 ### Data & insight
 
-- **Measurement history** — opt-in recorder with per-datapoint toggle,
-  persisted to SQLite, rendered as in-SPA charts.
-- **Diagrams & energy** — named multi-series diagrams with a guided
-  series editor, plus a dedicated energy view.
+- **Measurement forwarding** — opt-in forwarding of numeric values to
+  InfluxDB, with a per-datapoint toggle. Storing and charting belong to
+  the time-series store; the daemon keeps no history of its own.
 - **Audit log** — every configuration change appended and queryable.
 - **Metrics & tracing** — Prometheus collectors and an OTLP span
   exporter.
@@ -283,7 +282,7 @@ owns the CCU connection and how devices travel from there.
   talking to the CCU directly; the daemon adds nothing.
 - **Want one CCU connection, several CCUs as one fleet, CCU
   administration outside the CCU WebUI, a local alarm system or
-  measurement history?** Let the daemon own the CCU and feed HA over
+  measurements in InfluxDB?** Let the daemon own the CCU and feed HA over
   **MQTT Discovery**.
 - **Only a third system (Node-RED, InfluxDB, evcc, …) needs the data?**
   Run the daemon with the **raw topic plane** and Discovery **off** —

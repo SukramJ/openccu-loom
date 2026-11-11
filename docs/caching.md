@@ -32,7 +32,6 @@ refresh.
 | Embedded static data | n/a (compiled in) | device profiles, paramset templates, translations, Matter schema |
 | In-memory caches | no — rebuilt on start | last-observed values, hub catalogues (programs, sysvars, rooms), device details, visibility decisions |
 | SQLite store (`<data_dir>/openccu-loom.db`) | yes | last-known values snapshot, MASTER values, paramset/device descriptors, audit log, sessions, Matter fabrics and endpoints |
-| SQLite store (`<data_dir>/history.db`) | yes | measurement history ([ADR 0040](adr/0040-measurement-history.md)) |
 | Filesystem | yes | CCU backups (`<data_dir>/backups`, or `backup.dir`) |
 
 The key persistent layer for performance is the **values cache** in
@@ -204,8 +203,7 @@ Surfaces (all drive the same operation):
 ## Where this data lives
 
 - Persistent caches and daemon state: `<data_dir>/openccu-loom.db`
-  (default `<data_dir>` is `./var`); the measurement history lives in
-  `<data_dir>/history.db`. Back them up — see
+  (default `<data_dir>` is `./var`). Back it up — see
   [Backup & restore](admin/backup.md).
 - CCU backups land in `<data_dir>/backups` unless `backup.dir` points
   elsewhere. A translation override, if any, is the file named by

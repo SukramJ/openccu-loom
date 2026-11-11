@@ -48,7 +48,7 @@ The table below catalogues every ADR. Each entry links to the record itself — 
 | [0037](../adr/0037-otlp-span-exporter.md) | OTLP span exporter | accepted | A pluggable span exporter ships a lean OTLP/HTTP exporter, not the OTel-gRPC SDK. |
 | [0038](../adr/0038-cross-stack-ci-gate.md) | Cross-stack CI gate | accepted | The cross-stack model-snapshot parity gate runs in nightly CI. |
 | [0039](../adr/0039-subscribe-dispatch-seam.md) | Subscribe dispatch seam | moved to go-fabric | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0006](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0006-subscribe-dispatch-seam.md). This page forwards. |
-| [0040](../adr/0040-measurement-history.md) | Measurement history | accepted | Measurement history is stored in embedded SQLite with an opt-in push exporter. |
+| [0040](../adr/0040-measurement-history.md) | Measurement history | partly superseded | The capture point, the provenance guard and the push exporter stand as `north.measurements`; the embedded SQLite store and its read surface are removed by ADR 0088. |
 | [0041](../adr/0041-persist-auth-sessions.md) | Persist auth sessions | accepted | Auth sessions persist in SQLite as a save-through cache. |
 | [0042](../adr/0042-clear-ccu-cache-and-repull.md) | Clear CCU cache and re-pull | accepted | Clearing CCU-derivable caches and re-pulling is a first-class operation. |
 | [0043](../adr/0043-ccu-authentication-provider.md) | CCU as an authentication provider | accepted | Login can be delegated to a CCU's own user database. |

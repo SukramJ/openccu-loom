@@ -44,6 +44,7 @@ var expectedWiringSeams = []string{
 	"secret.config_store_crypto",
 	"store.channel_flags_eviction",
 	"store.master_values_eviction",
+	"store.recording_override_eviction",
 	"store.values_cache_eviction",
 	"store.values_cache_flush",
 	"visibility.un_ignore",
@@ -63,10 +64,10 @@ var expectedWiringSeams = []string{
 // teaches the wrong lesson.
 //
 // That the manifest distinguishes these two groups at all is the point
-// of serving it: "this deployment did not wire the history recorder"
+// of serving it: "this deployment did not wire the measurement forwarder"
 // used to be answerable only by reading the config next to the code.
 var configGatedWiringSeams = map[string]string{
-	"history.recorder":       "persistence.history.enabled",
+	"measurements.forwarder": "north.measurements.enabled, with a target the exporter can be built for",
 	"webhook.outbound":       "north.webhook.outbound",
 	"ws.addon_update_status": "the add-on self-updater, which only exists on a supervised install",
 	"security.index_refresh": "the alarm and security services (both need the persistence tier)",

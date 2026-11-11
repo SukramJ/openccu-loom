@@ -25,9 +25,7 @@ var mcpFleetSeams = []string{
 	"Groups",
 	"Areas",
 	"Interfaces",
-	"History",
 	"Visibility",
-	"Energy",
 	"Links",
 	"Schedules",
 	// Features lets the hub list tools name a central that does not offer

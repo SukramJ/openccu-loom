@@ -20,7 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
-	"github.com/SukramJ/openccu-loom/internal/history"
+	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -74,9 +74,8 @@ type centralOrchestrator struct {
 
 	valuesCacheStore    *sqlite.ValuesCacheStore
 	masterValuesStore   *sqlite.MasterValuesStore
-	historyStore        *sqlite.MeasurementStore
 	recordingStore      *sqlite.RecordingOverrideStore
-	recordingOverrides  *history.RecordingOverrides
+	recordingOverrides  *measurements.RecordingOverrides
 	channelFlagsStore   *sqlite.ChannelFlagsStore
 	channelFlagsOverlay *channelflags.Overlay
 
@@ -399,9 +398,8 @@ func newCentralOrchestrator(
 	instanceName string,
 	valuesCacheStore *sqlite.ValuesCacheStore,
 	masterValuesStore *sqlite.MasterValuesStore,
-	historyStore *sqlite.MeasurementStore,
 	recordingStore *sqlite.RecordingOverrideStore,
-	recordingOverrides *history.RecordingOverrides,
+	recordingOverrides *measurements.RecordingOverrides,
 	channelFlagsStore *sqlite.ChannelFlagsStore,
 	channelFlagsOverlay *channelflags.Overlay,
 ) *centralOrchestrator {
@@ -417,7 +415,6 @@ func newCentralOrchestrator(
 		instanceName:        instanceName,
 		valuesCacheStore:    valuesCacheStore,
 		masterValuesStore:   masterValuesStore,
-		historyStore:        historyStore,
 		recordingStore:      recordingStore,
 		recordingOverrides:  recordingOverrides,
 		channelFlagsStore:   channelFlagsStore,
@@ -729,7 +726,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		h.detachBridge()
 	}
 
-	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore,
+	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.recordingStore,
 		o.recordingOverrides, o.sbDeps.visibilityUnIgnoreStore, o.channelFlagsStore, o.channelFlagsOverlay,
 		h.cc, o.logger)
 	if o.matterExposureStore != nil {
@@ -852,7 +849,7 @@ func evictModel(u *central.Unit) {
 }
 
 // purgeCentralState deletes every derived SQLite row keyed to a removed
-// central: per-interface VALUES/MASTER cache rows, the measurement history,
+// central: per-interface VALUES/MASTER cache rows,
 // the recording overrides, the visibility un-ignore patterns and the
 // channel-flags overlay (hidden/locked overrides) — plus its in-memory
 // mirror. Without the last two, a central re-adopted under the same name
@@ -868,9 +865,8 @@ func purgeCentralState(
 	ctx context.Context,
 	valuesCacheStore *sqlite.ValuesCacheStore,
 	masterValuesStore *sqlite.MasterValuesStore,
-	historyStore *sqlite.MeasurementStore,
 	recordingStore *sqlite.RecordingOverrideStore,
-	recordingOverrides *history.RecordingOverrides,
+	recordingOverrides *measurements.RecordingOverrides,
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore,
 	channelFlagsStore *sqlite.ChannelFlagsStore,
 	channelFlagsOverlay *channelflags.Overlay,
@@ -896,11 +892,6 @@ func purgeCentralState(
 			}
 		}
 	}
-	if historyStore != nil {
-		if err := historyStore.DeleteForCentral(ctx, cc.Name); err != nil {
-			logger.Warn("central.remove.purge_history", slog.String("central", cc.Name), slog.String("err", err.Error()))
-		}
-	}
 	if recordingStore != nil {
 		if err := recordingStore.DeleteForCentral(ctx, cc.Name); err != nil {
 			logger.Warn("central.remove.purge_recording_overrides",
@@ -908,7 +899,7 @@ func purgeCentralState(
 		}
 	}
 	// The durable delete above does not reach the in-memory overlay the
-	// recorder consults on every value-changed event: RecordingOverrides is
+	// forwarder consults on every value-changed event: RecordingOverrides is
 	// loaded once at wire time, so without this a central removed and
 	// re-adopted under the same name keeps serving the stale "never record"
 	// verdict from rows the store no longer has, until the daemon restarts.

@@ -164,7 +164,8 @@ func TestPutConfigSection_RestartRequiredPerField(t *testing.T) {
 // whose values are captured once, while the daemon wires itself, and are never
 // re-read: the OIDC client, the rate limiter, the TLS listener, the locale the
 // label/bridge wiring bakes in, the CCU metadata archives, the reliability
-// stack of each interface client, and the persistence recorders.
+// stack of each interface client, the values cache and the measurement
+// forwarder.
 //
 // The response asserted here is the operator's only signal — the SPA renders
 // the save result and the restart-pending banner from it. While these sections
@@ -216,9 +217,9 @@ func TestPutConfigSection_RestartRequiredForBootWiredSections(t *testing.T) {
 			body:    `{"values_cache":{"enabled":false}}`,
 		},
 		{
-			name:    "history recorder enabled",
-			section: "persistence",
-			body:    `{"history":{"enabled":true}}`,
+			name:    "measurement forwarding enabled",
+			section: "north.measurements",
+			body:    `{"enabled":true,"endpoint":"http://influx:8086"}`,
 		},
 	}
 	for _, tc := range cases {

@@ -156,11 +156,6 @@ Live config section read / write / delete + schema introspection
 | Method | Path | Summary | Access |
 |---|---|---|---|
 | GET | `/config` | Sanitized effective configuration | viewer |
-| GET | `/diagrams` | List saved diagram definitions (own + shared) | viewer |
-| POST | `/diagrams` | Create a diagram definition | operator |
-| GET | `/diagrams/{id}` | Read a diagram definition | viewer |
-| PUT | `/diagrams/{id}` | Update a diagram definition (owner or admin) | operator |
-| DELETE | `/diagrams/{id}` | Delete a diagram definition (owner or admin) | operator |
 | GET | `/groups` | Heating-group listing (read-only) | viewer |
 | POST | `/groups` | Create a heating group (admin) | admin |
 | GET | `/groups/suitable-members` | Devices assignable to a group of a given type | viewer |
@@ -269,15 +264,6 @@ Live config section read / write / delete + schema introspection
 |---|---|---|---|
 | GET | `/events` | Upgrade to the WebSocket event stream | viewer |
 
-## history {#history}
-
-| Method | Path | Summary | Access |
-|---|---|---|---|
-| GET | `/energy` | Per-device power/energy breakdown over time | viewer |
-| GET | `/history` | Bucketed measurement history for one data point | viewer |
-| GET | `/history/recording` | Effective per-datapoint recording state (read-only) | viewer |
-| PUT | `/history/recording` | Set or clear a per-datapoint recording override | operator |
-
 ## hub {#hub}
 
 | Method | Path | Summary | Access |
@@ -350,6 +336,13 @@ Live config section read / write / delete + schema introspection
 | PATCH | `/devices/{addr}/links` | Rename a direct link (change name / description) | operator |
 | DELETE | `/devices/{addr}/links` | Remove a direct link | operator |
 | POST | `/devices/{addr}/links/test` | Test a direct link at the device (activate link paramset) | operator |
+
+## measurements {#measurements}
+
+| Method | Path | Summary | Access |
+|---|---|---|---|
+| GET | `/measurements/recording` | Effective per-datapoint recording state (read-only) | viewer |
+| PUT | `/measurements/recording` | Set or clear a per-datapoint recording override | operator |
 
 ## messages {#messages}
 

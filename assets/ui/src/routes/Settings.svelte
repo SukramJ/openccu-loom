@@ -300,6 +300,7 @@
     { id: "mqtt", label: t("settings.tab.mqtt") },
     { id: "matter", label: t("settings.tab.matter") },
     { id: "mcp", label: t("settings.tab.mcp") },
+    { id: "measurements", label: t("settings.tab.measurements"), expertOnly: true },
     { id: "discovery", label: t("settings.tab.discovery") },
     { id: "rest", label: t("settings.tab.rest") },
     { id: "oidc", label: t("settings.tab.oidc") },
@@ -329,7 +330,7 @@
 
   const TAB_GROUPS: TabGroup[] = [
     { id: "general", tabIds: ["general", "system", "navviews"] },
-    { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
+    { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "measurements", "rest", "discovery"] },
     { id: "ccus", tabIds: ["ccus", "callback"] },
     { id: "security", tabIds: ["oidc", "ccu_auth", "users", "groups", "tokens"] },
     { id: "advanced", tabIds: ["visibility", "reliability", "persistence"] },
@@ -761,6 +762,21 @@
             {effectiveConfig}
           />
         {/if}
+
+      {:else if activeTab === "measurements"}
+        <ExpertGate>
+          {#if schemaLoading}
+            <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+          {:else}
+            <SectionEditor
+              section="north.measurements"
+              {schemaFields}
+              {sources}
+              allSections={schemaSections}
+              {effectiveConfig}
+            />
+          {/if}
+        </ExpertGate>
 
       {:else if activeTab === "discovery"}
         {#if schemaLoading}

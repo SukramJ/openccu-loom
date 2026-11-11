@@ -20,8 +20,8 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
+	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -55,9 +55,7 @@ type southboundWiringDeps struct {
 	// sqCentrals persists per-central serials backfilled at bring-up so SSDP
 	// discovery recognises configured centrals by serial. Nil disables backfill.
 	sqCentrals              *sqlite.CentralsStore
-	historyStore            *sqlite.MeasurementStore
-	recordingOverrides      *history.RecordingOverrides
-	recordingStore          *sqlite.RecordingOverrideStore
+	recordingOverrides      *measurements.RecordingOverrides
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
@@ -313,11 +311,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		}))
 	teardowns = append(teardowns, flusher.Stop)
 	// Evict a device's persisted cache rows when it is removed, so an
-	// unpaired device does not leave orphaned values_cache rows behind;
-	// and wire the opt-in measurement-history recorder, which subscribes
-	// to genuine live wire value changes and persists a numeric
-	// time-series for SPA charts (no-op when history is off — nil store).
-	// See ADR 0040. Both helpers manage their own daemon-lifetime context.
+	// unpaired device does not leave orphaned values_cache rows behind.
+	// The helper manages its own daemon-lifetime context.
 	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger) //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
 	// Same eviction, for the persisted MASTER-paramset cache: DevicePipeline's
 	// MASTER hydration is cache-first, so without this a device re-paired at
@@ -332,20 +327,28 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// re-init removes every device without the operator asking for any of them
 	// to go (see hmevent.DeviceRemovedEvent.ModelTeardown).
 	channelFlagsEvictor := adapter.WireChannelFlagsEviction(reg, d.channelFlagsStore, d.channelFlagsOverlay, logger) //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
-	// And the measurement history plus the operator's recording overrides.
-	// Both stores had carried a DeleteDevice documented as running on unpair
-	// and neither was ever called, so an unpaired device's series and its
-	// recording decisions outlived it — and a replacement at the same address
-	// inherited both.
-	measurementEvictor := adapter.WireMeasurementEviction(reg, d.historyStore, d.recordingStore, logger)                //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
-	stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
+	// And the operator's recording overrides of the measurement forwarder,
+	// for the same reason as the channel flags: a replacement at the same
+	// address must not inherit the previous device's decisions. The typed
+	// nil is turned into an untyped one here, because the seam disables
+	// itself on a nil purger and an interface holding a nil overlay is not
+	// nil.
+	var recordingPurger adapter.RecordingOverridePurger
+	if d.recordingOverrides != nil {
+		recordingPurger = d.recordingOverrides
+	}
+	recordingOverrideEvictor := adapter.WireRecordingOverrideEviction(reg, recordingPurger, logger)
+	// The measurement forwarder subscribes to genuine live wire value
+	// changes and hands numeric samples to the configured target (no-op
+	// while forwarding is off). It manages its own shutdown context.
+	stopMeasurementForwarder := wireMeasurementForwarder(cfg, reg, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the forwarder bounds its own shutdown context
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
 		masterEvictor.Stop,
 		channelFlagsEvictor.Stop,
-		measurementEvictor.Stop,
-		stopHistoryRecorder,
+		recordingOverrideEvictor.Stop,
+		stopMeasurementForwarder,
 	)
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many

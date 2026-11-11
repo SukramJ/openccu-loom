@@ -235,8 +235,12 @@ across several CCUs.
 - The REST contract loses `/history`, `/energy` and `/diagrams`, and the MCP tool set
   loses `get_measurements` and `get_energy`: a new REST major version, followed by the clients that mirror
   the contract. The `favorites` user preference goes with its view.
-- The `persistence.history` section shrinks to capture and export. Its name and the
-  new home of the recording overrides are set in the implementing change.
+- The `persistence.history` section becomes `north.measurements`: the forwarder is a
+  north-bound plane, not a store. The recording route is `/measurements/recording`,
+  the capability `measurements.v1`. The recording overrides live in the main database
+  and are taken over once from an existing `history.db`, which is otherwise left
+  untouched. A config file that still sets `persistence.history` is refused at start.
+  Owner decisions of 2026-11-11.
 - Operators who use the removed views lose them on upgrade, and recorded measurements
   are not migrated. The CHANGELOG entry names the replacement for each: the exporter
   for measurements, Home Assistant or another client for operating.

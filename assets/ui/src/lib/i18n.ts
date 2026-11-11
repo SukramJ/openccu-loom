@@ -1469,24 +1469,6 @@ const EN: Catalog = {
   "config.field.alarm.journal_retention_days": "Journal retention (days)",
   "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
   "config.field.alarm.duress_visibility": "Duress and silent panic visibility",
-  "config.field.persistence.history.enabled": "Enable history recorder",
-  "config.field.persistence.history.retention": "Sample retention period",
-  "config.field.persistence.history.energy_price_per_kwh":
-    "Electricity tariff per kWh",
-  "config.field.persistence.history.energy_currency": "Currency label",
-  "config.field.persistence.history.retention_hourly":
-    "Hourly rollup retention",
-  "config.field.persistence.history.retention_daily": "Daily rollup retention",
-  "config.field.persistence.history.flush_interval": "History flush interval",
-  "config.field.persistence.history.include": "Include parameters",
-  "config.field.persistence.history.exclude": "Exclude parameters",
-  "config.field.persistence.history.disabled_centrals": "Excluded CCUs",
-  "config.field.persistence.history.export.enabled": "Enable history export",
-  "config.field.persistence.history.export.kind": "Export backend",
-  "config.field.persistence.history.export.endpoint": "Export endpoint",
-  "config.field.persistence.history.export.org": "InfluxDB org",
-  "config.field.persistence.history.export.bucket": "InfluxDB bucket",
-  "config.field.persistence.history.export.token_env": "Token env var",
   "config.field.reliability.command_retry_initial_delay": "Retry initial delay",
   "config.field.reliability.command_throttle_inter_command_delay":
     "Throttle inter-command delay",
@@ -1533,6 +1515,16 @@ const EN: Catalog = {
   "config.field.north.mcp.enabled": "Enable MCP server",
   "config.field.north.mcp.allow_writes": "Allow writes",
   "config.field.north.mcp.path": "MCP mount path",
+  "config.field.north.measurements.enabled": "Forward measurements",
+  "config.field.north.measurements.kind": "Target type",
+  "config.field.north.measurements.endpoint": "Target URL",
+  "config.field.north.measurements.org": "InfluxDB organisation",
+  "config.field.north.measurements.bucket": "InfluxDB bucket",
+  "config.field.north.measurements.token_env": "Token environment variable",
+  "config.field.north.measurements.flush_interval": "Write interval",
+  "config.field.north.measurements.include": "Include parameters",
+  "config.field.north.measurements.exclude": "Exclude parameters",
+  "config.field.north.measurements.disabled_centrals": "Excluded CCUs",
   "config.field.north.webhook.enabled": "Enable outbound webhook",
   "config.field.north.webhook.url": "Webhook URL",
   "config.field.north.webhook.secret": "Signing secret",
@@ -1665,6 +1657,24 @@ const EN: Catalog = {
     "Enable write-capable MCP tools (e.g. set_datapoint). Off by default — the server alone is read-only; turn this on for agent-driven control. Takes effect after a daemon restart.",
   "config.help.north.mcp.path":
     "HTTP mount path for the MCP transport on the REST listener. Empty defaults to /mcp. Takes effect after a daemon restart.",
+  "config.help.north.measurements.enabled":
+    "Send numeric data-point values to an external time-series store. Off by default. The daemon keeps no measurement history itself; charts and long-term storage belong to the store you forward to.",
+  "config.help.north.measurements.kind":
+    "Kind of store to forward to. Empty or \"influxdb\" selects the InfluxDB v2 line protocol, the only target today.",
+  "config.help.north.measurements.endpoint":
+    "Base URL of the store, e.g. http://influx:8086. Required while forwarding is enabled.",
+  "config.help.north.measurements.org": "InfluxDB v2 organisation that owns the bucket.",
+  "config.help.north.measurements.bucket": "InfluxDB v2 bucket the samples are written into.",
+  "config.help.north.measurements.token_env":
+    "Name of the environment variable that holds the write token. The token itself is never stored in the configuration. Without a token nothing is forwarded.",
+  "config.help.north.measurements.flush_interval":
+    "How often buffered samples are written to the store. Zero uses the default of 5 s.",
+  "config.help.north.measurements.include":
+    "Parameter-name patterns to forward (e.g. TEMPERATURE, *POWER*). Empty forwards every numeric VALUES parameter. A single data point can be switched on or off on the device's History tab.",
+  "config.help.north.measurements.exclude":
+    "Parameter-name patterns never to forward. Exclude wins over include. Empty excludes nothing.",
+  "config.help.north.measurements.disabled_centrals":
+    "Central names (one per line) whose data points are not forwarded. Empty forwards every CCU.",
   "config.help.north.webhook.enabled":
     "Master switch for the outbound webhook. When on, the daemon POSTs a signed JSON payload to the configured URL on datapoint, system-status and incident events. Off by default. Takes effect after a daemon restart.",
   "config.help.north.webhook.url":
@@ -1811,38 +1821,6 @@ const EN: Catalog = {
     "Caps how many times a restore-driven output may re-fire within one incident before the engine degrades to optical signalling and notifications only.",
   "config.help.alarm.duress_visibility":
     "Where a duress-code use or a silent panic trigger may appear. 'hidden' reaches the webhook and nothing else — with no webhook configured, nobody is told at all. 'notify_only' (default) additionally sends the notification event, so a phone is reached, but never writes it to retained state or the local screens. 'full' treats it like any other alarm. The threat is not an insecure Home Assistant — it is that whoever stands next to you sees the same screen. Whether Home Assistant shows the notification as a lock-screen banner is outside this setting; use a notify channel without preview if that matters.",
-  "config.help.persistence.history.enabled":
-    "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
-  "config.help.persistence.history.retention":
-    "How long raw samples are kept; zero falls back to 30 days (720 h), after which the retention job purges older rows.",
-  "config.help.persistence.history.energy_price_per_kwh":
-    "Price of one kilowatt-hour, used by the energy view to show costs next to consumption. Leave at 0 to show no costs at all — a tariff of 0 would render every amount as 0.00.",
-  "config.help.persistence.history.energy_currency":
-    "Label for the amounts derived from the tariff (symbol or code, e.g. € or CHF). Defaults to the euro sign. Purely a label — no conversion happens.",
-  "config.help.persistence.history.retention_hourly":
-    "How long the hourly rollup tier is kept; zero falls back to 13 months. Hourly rows are folded into the daily tier before this cutoff removes them.",
-  "config.help.persistence.history.retention_daily":
-    "How long the daily rollup tier is kept; zero (default) keeps daily rows forever since they are tiny (one row per data point per day).",
-  "config.help.persistence.history.flush_interval":
-    "How often the recorder flushes a batch of samples to history.db; zero falls back to the daemon default of 5 s.",
-  "config.help.persistence.history.include":
-    "Parameter-name globs to record (e.g. TEMPERATURE, *POWER*); empty (default) records every numeric VALUES parameter.",
-  "config.help.persistence.history.exclude":
-    "Parameter-name globs to drop from recording; exclude always wins over include — empty (default) excludes nothing.",
-  "config.help.persistence.history.disabled_centrals":
-    "Central names whose data points must not be recorded; empty (default) records all enabled centrals.",
-  "config.help.persistence.history.export.enabled":
-    "Turn on the push exporter that forwards each recorded sample to an external time-series store (InfluxDB by default); disabled by default.",
-  "config.help.persistence.history.export.kind":
-    'Exporter backend; empty or "influxdb" selects the InfluxDB v2 line-protocol writer (the only available backend today).',
-  "config.help.persistence.history.export.endpoint":
-    "Base URL of the target time-series store, e.g. http://influx:8086.",
-  "config.help.persistence.history.export.org":
-    "InfluxDB v2 organisation name that owns the target bucket.",
-  "config.help.persistence.history.export.bucket":
-    "InfluxDB v2 bucket into which samples are written.",
-  "config.help.persistence.history.export.token_env":
-    "Name of the environment variable that holds the InfluxDB write token; the token is never stored inline in config.",
   "config.help.reliability.command_retry_initial_delay":
     "First backoff delay after a transient CCU write failure (the retry-stack doubles on each step). Default 2 s (production-hardened); lower it for fast test rigs.",
   "config.help.reliability.command_throttle_inter_command_delay":
@@ -2043,6 +2021,7 @@ const EN: Catalog = {
   "settings.tab.mqtt": "MQTT",
   "settings.tab.matter": "Matter",
   "settings.tab.mcp": "MCP",
+  "settings.tab.measurements": "Measurements",
   "settings.tab.discovery": "Discovery (mDNS)",
   "settings.tab.rest": "API & WebSocket",
   "settings.tab.oidc": "OIDC",
@@ -2166,7 +2145,6 @@ const EN: Catalog = {
   "navviews.why.identity":
     "in standalone, this is the only place to rotate a password or a token.",
   "navviews.gate.matter": "the Matter bridge is switched off.",
-  "navviews.gate.history": "measurement-history recording is switched off.",
   "feature.name.hub.sysvars": "System variables",
   "feature.name.hub.programs": "Programs",
   "feature.name.hub.alarm_messages": "Alarm messages",
@@ -2328,6 +2306,8 @@ const EN: Catalog = {
     "Matter bridge, commissioning and paired controllers.",
   "surface.desc.settings.mcp":
     "The Model Context Protocol server and its write tools.",
+  "surface.desc.settings.measurements":
+    "Forwarding of measurements to an external time-series store.",
   "surface.desc.settings.rest": "Listener, TLS and CORS for the northbound API.",
   "surface.desc.settings.discovery":
     "How this daemon announces itself on the network.",
@@ -2347,7 +2327,7 @@ const EN: Catalog = {
   "surface.desc.settings.reliability":
     "Retry, throttle and circuit-breaker tuning.",
   "surface.desc.settings.persistence":
-    "Database location, retention and vacuum schedule.",
+    "The local cache of data-point values.",
 
   "surface.desc.device.overview":
     "Live values and controls for the selected device.",
@@ -5583,25 +5563,6 @@ const DE: Catalog = {
     "Neustart-Schleifenbegrenzer (Reaktivierungen)",
   "config.field.alarm.duress_visibility":
     "Sichtbarkeit von Bedrohungscode und stiller Panik",
-  "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
-  "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
-  "config.field.persistence.history.energy_price_per_kwh": "Strompreis pro kWh",
-  "config.field.persistence.history.energy_currency": "Währungsbezeichnung",
-  "config.field.persistence.history.retention_hourly":
-    "Aufbewahrung Stunden-Rollup",
-  "config.field.persistence.history.retention_daily":
-    "Aufbewahrung Tages-Rollup",
-  "config.field.persistence.history.flush_interval": "Verlaufs-Flush-Intervall",
-  "config.field.persistence.history.include": "Parameter einschließen",
-  "config.field.persistence.history.exclude": "Parameter ausschließen",
-  "config.field.persistence.history.disabled_centrals": "Ausgeschlossene CCUs",
-  "config.field.persistence.history.export.enabled": "Verlaufsexport aktiv",
-  "config.field.persistence.history.export.kind": "Export-Backend",
-  "config.field.persistence.history.export.endpoint": "Export-Endpunkt",
-  "config.field.persistence.history.export.org": "InfluxDB-Organisation",
-  "config.field.persistence.history.export.bucket": "InfluxDB-Bucket",
-  "config.field.persistence.history.export.token_env":
-    "Token-Umgebungsvariable",
   "config.field.reliability.command_retry_initial_delay":
     "Retry-Anfangsverzögerung",
   "config.field.reliability.command_throttle_inter_command_delay":
@@ -5651,6 +5612,16 @@ const DE: Catalog = {
   "config.field.north.mcp.enabled": "MCP-Server aktiv",
   "config.field.north.mcp.allow_writes": "Schreibzugriff erlauben",
   "config.field.north.mcp.path": "MCP-Mount-Pfad",
+  "config.field.north.measurements.enabled": "Messwerte weiterleiten",
+  "config.field.north.measurements.kind": "Art des Ziels",
+  "config.field.north.measurements.endpoint": "Ziel-URL",
+  "config.field.north.measurements.org": "InfluxDB-Organisation",
+  "config.field.north.measurements.bucket": "InfluxDB-Bucket",
+  "config.field.north.measurements.token_env": "Umgebungsvariable des Tokens",
+  "config.field.north.measurements.flush_interval": "Schreibintervall",
+  "config.field.north.measurements.include": "Parameter einschließen",
+  "config.field.north.measurements.exclude": "Parameter ausschließen",
+  "config.field.north.measurements.disabled_centrals": "Ausgeschlossene CCUs",
   "config.field.north.webhook.enabled": "Ausgehenden Webhook aktivieren",
   "config.field.north.webhook.url": "Webhook-URL",
   "config.field.north.webhook.secret": "Signatur-Schlüssel",
@@ -5780,6 +5751,24 @@ const DE: Catalog = {
     "Schreibfähige MCP-Tools (z. B. set_datapoint) freischalten. Standardmäßig aus — der Server allein ist nur lesend; für Agenten-gesteuerte Steuerung aktivieren. Greift erst nach einem Daemon-Neustart.",
   "config.help.north.mcp.path":
     "HTTP-Mount-Pfad des MCP-Transports auf dem REST-Listener. Leer = /mcp. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.measurements.enabled":
+    "Numerische Datenpunktwerte an einen externen Zeitreihenspeicher senden. Standardmäßig aus. Der Daemon hält selbst keine Messwert-Historie; Diagramme und Langzeitspeicherung gehören in den Speicher, an den weitergeleitet wird.",
+  "config.help.north.measurements.kind":
+    "Art des Speichers, an den weitergeleitet wird. Leer oder \"influxdb\" wählt das InfluxDB-v2-Line-Protokoll, das derzeit einzige Ziel.",
+  "config.help.north.measurements.endpoint":
+    "Basis-URL des Speichers, z. B. http://influx:8086. Erforderlich, solange die Weiterleitung aktiv ist.",
+  "config.help.north.measurements.org": "InfluxDB-v2-Organisation, der der Bucket gehört.",
+  "config.help.north.measurements.bucket": "InfluxDB-v2-Bucket, in den die Messwerte geschrieben werden.",
+  "config.help.north.measurements.token_env":
+    "Name der Umgebungsvariable mit dem Schreib-Token. Das Token selbst wird nie in der Konfiguration gespeichert. Ohne Token wird nichts weitergeleitet.",
+  "config.help.north.measurements.flush_interval":
+    "Wie oft gepufferte Messwerte in den Speicher geschrieben werden. Null verwendet den Standard von 5 s.",
+  "config.help.north.measurements.include":
+    "Parameternamen-Muster, die weitergeleitet werden (z. B. TEMPERATURE, *POWER*). Leer leitet jeden numerischen VALUES-Parameter weiter. Ein einzelner Datenpunkt lässt sich im Verlauf-Tab des Geräts ein- oder ausschalten.",
+  "config.help.north.measurements.exclude":
+    "Parameternamen-Muster, die nie weitergeleitet werden. Ausschluss gewinnt gegen Einschluss. Leer schließt nichts aus.",
+  "config.help.north.measurements.disabled_centrals":
+    "Namen der Zentralen (eine pro Zeile), deren Datenpunkte nicht weitergeleitet werden. Leer leitet jede CCU weiter.",
   "config.help.north.webhook.enabled":
     "Hauptschalter für den ausgehenden Webhook. Aktiv sendet der Daemon bei Datenpunkt-, System-Status- und Incident-Ereignissen eine signierte JSON-Nutzlast per POST an die konfigurierte URL. Standardmäßig aus. Greift erst nach einem Daemon-Neustart.",
   "config.help.north.webhook.url":
@@ -5930,38 +5919,6 @@ const DE: Catalog = {
     "Begrenzt, wie oft ein wiederherstellungsgetriebener Ausgang innerhalb eines Vorfalls erneut auslösen darf, bevor die Anlage auf reine optische Signalisierung und Benachrichtigungen zurückstuft.",
   "config.help.alarm.duress_visibility":
     "Wo die Verwendung eines Bedrohungscodes oder eine stille Panikauslösung erscheinen darf. „hidden“ erreicht ausschließlich den Webhook — ohne konfigurierten Webhook wird niemand benachrichtigt. „notify_only“ (Standard) sendet zusätzlich die Meldung, erreicht also ein Handy, schreibt sie aber nie in gespeicherte Zustände oder auf lokale Bildschirme. „full“ behandelt sie wie jeden anderen Alarm. Die Gefahr ist nicht ein unsicheres Home Assistant, sondern dass die Person neben Ihnen denselben Bildschirm sieht. Ob Home Assistant die Meldung als Banner auf dem Sperrbildschirm anzeigt, steuert diese Einstellung nicht — dafür einen Benachrichtigungskanal ohne Vorschau einrichten.",
-  "config.help.persistence.history.enabled":
-    "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
-  "config.help.persistence.history.retention":
-    "Wie lange Rohmesswerte aufbewahrt werden; 0 = Standardwert von 30 Tagen (720 h), ältere Zeilen werden vom Retention-Job gelöscht.",
-  "config.help.persistence.history.energy_price_per_kwh":
-    "Preis einer Kilowattstunde; die Energie-Ansicht zeigt damit Kosten neben dem Verbrauch. Bei 0 werden gar keine Kosten angezeigt — ein Tarif von 0 würde jeden Betrag als 0,00 darstellen.",
-  "config.help.persistence.history.energy_currency":
-    "Bezeichnung für die aus dem Tarif berechneten Beträge (Symbol oder Code, z. B. € oder CHF). Standard ist das Euro-Zeichen. Reine Beschriftung — es wird nichts umgerechnet.",
-  "config.help.persistence.history.retention_hourly":
-    "Wie lange die Stunden-Rollup-Ebene aufbewahrt wird; 0 = Standardwert von 13 Monaten. Stunden-Zeilen werden vor diesem Cutoff in die Tages-Ebene gefaltet.",
-  "config.help.persistence.history.retention_daily":
-    "Wie lange die Tages-Rollup-Ebene aufbewahrt wird; 0 (Standard) = für immer, da Tages-Zeilen sehr klein sind (eine Zeile pro Datenpunkt und Tag).",
-  "config.help.persistence.history.flush_interval":
-    "Wie oft der Recorder einen Batch von Messwerten in history.db schreibt; 0 = Daemon-Standard von 5 s.",
-  "config.help.persistence.history.include":
-    "Parameter-Name-Globs, die aufgezeichnet werden (z. B. TEMPERATURE, *POWER*); leer (Standard) = alle numerischen VALUES-Parameter.",
-  "config.help.persistence.history.exclude":
-    "Parameter-Name-Globs, die von der Aufzeichnung ausgeschlossen werden; Exclude gewinnt immer über Include — leer (Standard) = kein Ausschluss.",
-  "config.help.persistence.history.disabled_centrals":
-    "Central-Namen, deren Datenpunkte nicht aufgezeichnet werden; leer (Standard) = alle aktiven Centrals.",
-  "config.help.persistence.history.export.enabled":
-    "Push-Exporter aktivieren, der jeden aufgezeichneten Messwert an einen externen Zeitreihenspeicher weiterleitet (Standard: InfluxDB); standardmäßig aus.",
-  "config.help.persistence.history.export.kind":
-    'Exporter-Backend; leer oder "influxdb" wählt den InfluxDB-v2-Line-Protocol-Writer (aktuell einziges Backend).',
-  "config.help.persistence.history.export.endpoint":
-    "Basis-URL des Zeitreihenspeichers, z. B. http://influx:8086.",
-  "config.help.persistence.history.export.org":
-    "InfluxDB-v2-Organisationsname, dem der Ziel-Bucket gehört.",
-  "config.help.persistence.history.export.bucket":
-    "InfluxDB-v2-Bucket, in den die Messwerte geschrieben werden.",
-  "config.help.persistence.history.export.token_env":
-    "Name der Umgebungsvariablen, die das InfluxDB-Schreib-Token hält; das Token wird nie direkt in der Konfiguration gespeichert.",
   "config.help.centrals":
     "Alle konfigurierten CCUs. Verwaltung im dedizierten CCUs-Tab — Einträge in config.yaml werden als Bootstrap-Seeds behandelt.",
   "config.help.centrals.name": "Im CCUs-Tab verwaltet.",
@@ -6161,6 +6118,7 @@ const DE: Catalog = {
   "settings.tab.mqtt": "MQTT",
   "settings.tab.matter": "Matter",
   "settings.tab.mcp": "MCP",
+  "settings.tab.measurements": "Messwerte",
   "settings.tab.discovery": "Discovery (mDNS)",
   "settings.tab.rest": "API & WebSocket",
   "settings.tab.oidc": "OIDC",
@@ -6288,7 +6246,6 @@ const DE: Catalog = {
   "navviews.why.identity":
     "im eigenständigen Betrieb ist das die einzige Stelle, um Passwort oder Token zu wechseln.",
   "navviews.gate.matter": "die Matter-Bridge ist ausgeschaltet.",
-  "navviews.gate.history": "die Messwert-Historie ist ausgeschaltet.",
   "feature.name.hub.sysvars": "Systemvariablen",
   "feature.name.hub.programs": "Programme",
   "feature.name.hub.alarm_messages": "Alarmmeldungen",
@@ -6449,6 +6406,8 @@ const DE: Catalog = {
     "Matter-Bridge, Inbetriebnahme und gekoppelte Controller.",
   "surface.desc.settings.mcp":
     "Der Model-Context-Protocol-Server und seine Schreibwerkzeuge.",
+  "surface.desc.settings.measurements":
+    "Die Weiterleitung von Messwerten an einen externen Zeitreihenspeicher.",
   "surface.desc.settings.rest":
     "Listener, TLS und CORS für die Northbound-API.",
   "surface.desc.settings.discovery":
@@ -6469,7 +6428,7 @@ const DE: Catalog = {
   "surface.desc.settings.reliability":
     "Retry-, Drossel- und Circuit-Breaker-Einstellungen.",
   "surface.desc.settings.persistence":
-    "Datenbankort, Aufbewahrung und Vacuum-Zeitplan.",
+    "Der lokale Cache der Datenpunktwerte.",
 
   "surface.desc.device.overview":
     "Live-Werte und Bedienelemente des gewählten Geräts.",

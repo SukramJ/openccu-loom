@@ -13,7 +13,7 @@ import (
 )
 
 // RecordingOverrideService is the per-datapoint recording-toggle surface
-// the SPA history tab consumes (SV10). A present override forces
+// the SPA consumes. A present override forces
 // recording on/off for one (central, interface, channel, parameter)
 // tuple; clearing it reverts to the parameter-name glob policy.
 type RecordingOverrideService interface {
@@ -26,17 +26,17 @@ type RecordingOverrideService interface {
 	Clear(ctx context.Context, central, iface, channel, parameter, updatedBy string) error
 }
 
-// recordingResponse is the body of GET /api/v1/history/recording.
+// recordingResponse is the body of GET /api/v1/measurements/recording.
 type recordingResponse struct {
 	// Record is the effective decision: whether this data point's live
-	// values are currently persisted to history.
+	// values are currently forwarded.
 	Record bool `json:"record"`
 	// Source is "override" when an explicit toggle applies, "policy" when
 	// the parameter-name glob policy decides.
 	Source string `json:"source"`
 }
 
-// recordingWriteRequest is the body of PUT /api/v1/history/recording.
+// recordingWriteRequest is the body of PUT /api/v1/measurements/recording.
 // A null `record` clears the override (revert to policy); true/false
 // forces recording on/off.
 type recordingWriteRequest struct {
@@ -47,7 +47,7 @@ type recordingWriteRequest struct {
 	Record    *bool  `json:"record"`
 }
 
-// GetRecordingOverride serves GET /api/v1/history/recording — the
+// GetRecordingOverride serves GET /api/v1/measurements/recording — the
 // effective recording state for one data point.
 func GetRecordingOverride(svc RecordingOverrideService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func GetRecordingOverride(svc RecordingOverrideService) http.HandlerFunc {
 	}
 }
 
-// PutRecordingOverride serves PUT /api/v1/history/recording — set or
+// PutRecordingOverride serves PUT /api/v1/measurements/recording — set or
 // clear a data point's recording override.
 func PutRecordingOverride(svc RecordingOverrideService, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

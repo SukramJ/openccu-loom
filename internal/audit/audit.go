@@ -141,9 +141,9 @@ const (
 	// the operation and target name.
 	ActionRoomFunction Action = "room_function"
 
-	// ActionDiagramConfig records create / update / delete of a named
-	// multi-series diagram definition (SV03). The Note carries the
-	// operation and the diagram name.
+	// ActionDiagramConfig labels rows a daemon with named chart
+	// definitions wrote. Nothing writes it any more; the constant stays so
+	// those stored rows keep a known action when the log is read.
 	ActionDiagramConfig Action = "diagram_config"
 
 	// ActionAreaChange records create / rename / reorder / delete of an

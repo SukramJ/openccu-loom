@@ -2582,21 +2582,21 @@ export type CentralBehavior = {
  * the daemon (the route returns 404). Callers distinguish this from a
  * generic 404 so the recording switch can hide itself.
  */
-export class HistoryDisabledError extends Error {
+export class MeasurementsDisabledError extends Error {
   constructor() {
-    super("history feature not enabled");
-    this.name = "HistoryDisabledError";
+    super("measurement forwarding is not enabled");
+    this.name = "MeasurementsDisabledError";
   }
 }
 
-/** Effective per-datapoint recording state (SV10). */
+/** Effective per-datapoint recording state. */
 export type RecordingState = { record: boolean; source: "override" | "policy" };
 
 /**
- * Read whether a data point's live values are currently recorded to
- * history, and whether that decision is an explicit override or the glob
- * policy (GET /api/v1/history/recording). Throws HistoryDisabledError
- * when the history feature is off (404).
+ * Read whether a data point's live values are currently forwarded, and
+ * whether that decision is an explicit override or the glob policy
+ * (GET /api/v1/measurements/recording). Throws MeasurementsDisabledError
+ * while measurement forwarding is off (404).
  */
 export async function getRecordingOverride(params: {
   central: string;
@@ -2611,10 +2611,10 @@ export async function getRecordingOverride(params: {
     parameter: params.parameter,
   });
   try {
-    return await request<RecordingState>(`/history/recording?${qs.toString()}`);
+    return await request<RecordingState>(`/measurements/recording?${qs.toString()}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      throw new HistoryDisabledError();
+      throw new MeasurementsDisabledError();
     }
     throw err;
   }
@@ -2623,8 +2623,8 @@ export async function getRecordingOverride(params: {
 /**
  * Force recording on/off for a data point, or clear the override
  * (record: null → revert to the glob policy) via
- * PUT /api/v1/history/recording. Throws HistoryDisabledError when the
- * history feature is off (404).
+ * PUT /api/v1/measurements/recording. Throws MeasurementsDisabledError while
+ * measurement forwarding is off (404).
  */
 export async function setRecordingOverride(params: {
   central: string;
@@ -2634,7 +2634,7 @@ export async function setRecordingOverride(params: {
   record: boolean | null;
 }): Promise<RecordingState> {
   try {
-    return await request<RecordingState>(`/history/recording`, {
+    return await request<RecordingState>(`/measurements/recording`, {
       method: "PUT",
       body: JSON.stringify({
         central: params.central,
@@ -2646,7 +2646,7 @@ export async function setRecordingOverride(params: {
     });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      throw new HistoryDisabledError();
+      throw new MeasurementsDisabledError();
     }
     throw err;
   }

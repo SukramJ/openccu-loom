@@ -13,7 +13,7 @@ type Resolution struct {
 	// Profile names the live profile.
 	Profile string
 	// Visible maps every registered surface to its resolved visibility.
-	// Runtime capability gates (Matter, history) and role gates are NOT
+	// Runtime capability gates (Matter, per-central features) and role gates are NOT
 	// folded in here — they are the client's to apply, and they answer a
 	// different question. Resolution says what the operator configured;
 	// the gates say what the daemon can currently serve.

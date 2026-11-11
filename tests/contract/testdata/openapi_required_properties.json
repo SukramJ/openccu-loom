@@ -586,18 +586,6 @@
  "DiagnosticEventList": [
   "events"
  ],
- "DiagramConfig": [
-  "config",
-  "created_at_ms",
-  "id",
-  "name",
-  "owner",
-  "updated_at_ms",
-  "visibility"
- ],
- "DiagramWriteRequest": [
-  "name"
- ],
  "DiscoveredCentral": [
   "already_configured",
   "host",
@@ -652,29 +640,6 @@
  ],
  "EndpointList": [
   "endpoints"
- ],
- "EnergyBucket": [
-  "avg_power_w",
-  "consumed_wh",
-  "feed_in_wh",
-  "peak_power_w",
-  "reset",
-  "ts"
- ],
- "EnergyDevice": [
-  "address",
-  "buckets",
-  "name",
-  "total_consumed_wh",
-  "total_feed_in_wh"
- ],
- "EnergyResponse": [
-  "devices",
-  "from",
-  "group",
-  "to",
-  "total_consumed_wh",
-  "total_feed_in_wh"
  ],
  "EntityNameCatalogue": [
   "entries",
@@ -800,13 +765,6 @@
   "healthy",
   "note",
   "sampled_at"
- ],
- "HistoryBucket": [
-  "avg",
-  "count",
-  "max",
-  "min",
-  "ts"
  ],
  "HubConnectivityChangedPayload": [
   "central",
@@ -954,9 +912,6 @@
  ],
  "ListDeviceReplaceCandidatesResponse": [
   "candidates"
- ],
- "ListDiagramsResponse": [
-  "diagrams"
  ],
  "ListGroupTypesResponse": [
   "types"

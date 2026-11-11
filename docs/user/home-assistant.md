@@ -26,7 +26,7 @@ Work down this list and stop at the first match.
    OpenCCU-Loom buys you nothing. [Scenario 1](#s1-home-assistant-only-no-daemon)
 2. **You want one connection to the CCU and a lean path into HA** —
    or you run several CCUs, want CCU administration outside the CCU
-   WebUI, a local alarm system, or measurement history.
+   WebUI, a local alarm system, or measurements forwarded to InfluxDB.
    → Run the daemon and feed HA with **MQTT Discovery**.
    [Scenario 2](#s2-daemon-owns-the-ccu-ha-fed-by-mqtt-discovery)
 3. **A third system (Node-RED, InfluxDB/Telegraf, evcc, ioBroker, a
@@ -104,7 +104,7 @@ CCU directly. No OpenCCU-Loom anywhere.
 configure devices in the CCU WebUI, and nothing hurts today.
 
 **What you give up:** multi-CCU as one fleet, CCU administration from a
-modern UI, the daemon's alarm system, measurement history, and any
+modern UI, the daemon's alarm system, measurement forwarding, and any
 non-HA consumer.
 
 **Cost of adding the daemon later:** low, but not zero — entity
@@ -286,8 +286,8 @@ accessory.
 
 **What you get:** device control through the SPA, MQTT for anything
 scriptable, Matter for Apple/Google/Alexa, the local alarm system,
-measurement history and charts, and full CCU administration without the
-CCU WebUI.
+measurement forwarding to InfluxDB, and CCU administration from the
+daemon.
 
 This is the configuration the Matter bridge exists for.
 
@@ -479,9 +479,8 @@ the topology the split architecture was designed for.
   neutral host is the more honest topology — or put the daemon on the CCU
   that carries the most devices.
 - **You want the heavy optional features on stronger hardware.** A stock
-  CCU3 is the weakest supported platform (armv7l); the Matter bridge,
-  measurement history across many data points and large device fleets are
-  more comfortable on OpenCCU on a Pi 4 / x86 box, or off-CCU
+  CCU3 is the weakest supported platform (armv7l); the Matter bridge and
+  large device fleets are more comfortable on OpenCCU on a Pi 4 / x86 box, or off-CCU
   entirely. Start on the CCU, move if you actually feel it.
 - **Storage matters to you.** Persistent state (SQLite + files) lives in
   `/usr/local/addons/openccu-loom/var` — on the CCU's own SD card or

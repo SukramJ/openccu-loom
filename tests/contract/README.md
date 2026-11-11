@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 555.
+Guards without a doc comment: 8 of 554.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -408,7 +408,6 @@ Guards without a doc comment: 8 of 555.
 | TestVisibilityReadOnlyDPSkipDocumented | visibility_read_only_audit_test.go | TestVisibilityReadOnlyDPSkipDocumented documents the read-only DP skip Logic:.py:180-189) skips DP creation when Operations has neither EVENT nor WRITE. |
 | TestVisibilityFlagOperationsTriple | visibility_triple_test.go | TestVisibilityFlagOperationsTriple pins the FLAGS × OPERATIONS filter table against the Python reference (_should_skip_data_point, model/__init__.py:180-189). |
 | TestW2CstRFLockStatePolarityIsOneRule | w2Cst_lock_rf_state_parity_test.go | TestW2CstRFLockStatePolarityIsOneRule crosses the three live readers of the RF lock's STATE polarity — the daemon's own write, the state accessor, and the payloads Home Assistant is handed — against each other. |
-| TestW2StoDiagramBlobCapHasOneValue | w2Sto_diagram_blob_cap_single_source_test.go | TestW2StoDiagramBlobCapHasOneValue pins the two literals that cap a diagram config blob to one value. |
 | TestW2ParBoolTruthSetsAgree | w2par_bool_truth_set_test.go | TestW2ParBoolTruthSetsAgree pins the two declarations of one rule — which CCU-reported strings count as boolean true — against each other. |
 | TestW2PkgHmtypesPathDataHasNoDaemonConsumer | w2pkg_hmtypes_pathdata_consumers_test.go | hmtypes.PathData used to document itself as the type that "drives MQTT topic generation, REST URL routing, and UI breadcrumbs". |
 | TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType | w2pkg_matter_device_type_name_coverage_test.go | TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType holds the table's own claim: every device type the model can put into an eligibility verdict has an operator-facing name. |

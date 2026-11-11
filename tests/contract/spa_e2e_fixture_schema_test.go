@@ -114,7 +114,6 @@ var fixtureRoutes = []fixtureRoute{
 	{"node-exposure-schema.json", "/node/exposure/schema", "GET"},
 	{"visibility-candidates.json", "/visibility/unignore/candidates", "GET"},
 	{"visibility-unignore.json", "/visibility/unignore", "GET"},
-	{"energy.json", "/energy", "GET"},
 }
 
 // driftedFixtures ratchets fixture/route pairs that fail schema validation

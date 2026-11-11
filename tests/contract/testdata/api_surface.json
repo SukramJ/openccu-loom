@@ -1,5 +1,5 @@
 {
- "api_version": "15.9.2",
+ "api_version": "16.0.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -16,7 +16,6 @@
   "DELETE /devices/{addr}/central-links": "removeCentralLinks",
   "DELETE /devices/{addr}/links": "removeLink",
   "DELETE /diagnostics/log-levels/{path}": "deleteLogLevel",
-  "DELETE /diagrams/{id}": "deleteDiagram",
   "DELETE /functions/{name}": "deleteFunction",
   "DELETE /groups/{id}": "deleteGroup",
   "DELETE /incidents": "clearIncidents",
@@ -113,17 +112,12 @@
   "GET /diagnostics/rssi/matrix": "getDiagnosticsRSSIMatrix",
   "GET /diagnostics/rssi/receiver-proposal": "getReceiverProposal",
   "GET /diagnostics/wiring": "getDiagnosticsWiring",
-  "GET /diagrams": "listDiagrams",
-  "GET /diagrams/{id}": "getDiagram",
-  "GET /energy": "getEnergy",
   "GET /events": "streamEvents",
   "GET /functions": "listFunctions",
   "GET /groups": "listGroups",
   "GET /groups/suitable-members": "listSuitableGroupMembers",
   "GET /groups/types": "listGroupTypes",
   "GET /health": "getHealth",
-  "GET /history": "getHistory",
-  "GET /history/recording": "getRecordingOverride",
   "GET /hub/data-points": "getHubDataPoints",
   "GET /i18n/entities": "getEntityNames",
   "GET /inbox": "listInbox",
@@ -134,6 +128,7 @@
   "GET /interfaces/{id}": "getInterface",
   "GET /links": "listAllLinks",
   "GET /me/preferences/{key}": "getPreference",
+  "GET /measurements/recording": "getRecordingOverride",
   "GET /metrics": "metrics",
   "GET /node/compatibility": "getCompatibility",
   "GET /node/endpoints": "listEndpoints",
@@ -254,7 +249,6 @@
   "POST /diagnostics/capture/{id}/stop": "stopCapture",
   "POST /diagnostics/rpc-recording": "startRpcRecording",
   "POST /diagnostics/rpc-recording/stop": "stopRpcRecording",
-  "POST /diagrams": "createDiagram",
   "POST /functions": "createFunction",
   "POST /groups": "createGroup",
   "POST /install-mode/interfaces": "setInstallModeInterface",
@@ -317,10 +311,9 @@
   "PUT /devices/{addr}/schedule": "putDeviceSchedule",
   "PUT /diagnostics/log-level": "putDefaultLogLevel",
   "PUT /diagnostics/log-levels/{path}": "putLogLevel",
-  "PUT /diagrams/{id}": "updateDiagram",
   "PUT /groups/{id}": "updateGroup",
-  "PUT /history/recording": "putRecordingOverride",
   "PUT /me/preferences/{key}": "putPreference",
+  "PUT /measurements/recording": "putRecordingOverride",
   "PUT /node/exposure": "applyExposure",
   "PUT /security/sources/{ref}": "putSecuritySourceOverride",
   "PUT /system/ccu/{central}/position": "setSystemCCUPosition",
@@ -1257,20 +1250,6 @@
   "DiagnosticEventList": [
    "events:array\u003c$ref:DiagnosticEvent\u003e"
   ],
-  "DiagramConfig": [
-   "config:object",
-   "created_at_ms:integer",
-   "id:string",
-   "name:string",
-   "owner:string",
-   "updated_at_ms:integer",
-   "visibility:string"
-  ],
-  "DiagramWriteRequest": [
-   "config:object",
-   "name:string",
-   "visibility:string"
-  ],
   "DiscoveredCentral": [
    "already_configured:boolean",
    "host:string",
@@ -1341,31 +1320,6 @@
   "EndpointList": [
    "endpoints:array\u003c$ref:Endpoint\u003e",
    "structural:array\u003c$ref:StructuralEndpoint\u003e"
-  ],
-  "EnergyBucket": [
-   "avg_power_w:number",
-   "consumed_wh:number",
-   "feed_in_wh:number",
-   "peak_power_w:number",
-   "reset:boolean",
-   "ts:string"
-  ],
-  "EnergyDevice": [
-   "address:string",
-   "buckets:array\u003c$ref:EnergyBucket\u003e",
-   "name:string",
-   "total_consumed_wh:number",
-   "total_feed_in_wh:number"
-  ],
-  "EnergyResponse": [
-   "currency:string",
-   "devices:array\u003c$ref:EnergyDevice\u003e",
-   "from:string",
-   "group:string",
-   "price_per_kwh:number",
-   "to:string",
-   "total_consumed_wh:number",
-   "total_feed_in_wh:number"
   ],
   "EntityNameCatalogue": [
    "entries:object",
@@ -1515,14 +1469,6 @@
    "healthy:boolean",
    "note:string",
    "sampled_at:string"
-  ],
-  "HistoryBucket": [
-   "avg:number",
-   "count:integer",
-   "covered_ms:integer",
-   "max:number",
-   "min:number",
-   "ts:string"
   ],
   "HubConnectivityChangedPayload": [
    "central:string",
@@ -1738,9 +1684,6 @@
   ],
   "ListDeviceReplaceCandidatesResponse": [
    "candidates:array\u003c$ref:ReplaceCandidate\u003e"
-  ],
-  "ListDiagramsResponse": [
-   "diagrams:array\u003c$ref:DiagramConfig\u003e"
   ],
   "ListGroupTypesResponse": [
    "types:array\u003c$ref:GroupTypeEntry\u003e"

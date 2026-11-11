@@ -103,26 +103,6 @@ func (fakeAreaAdmin) ReplaceRooms(context.Context, string, []sqlite.RoomAreaRow)
 	return nil
 }
 
-type fakeDiagramConfigService struct{}
-
-func (fakeDiagramConfigService) List(context.Context, string) ([]handlers.DiagramConfig, error) {
-	return nil, nil
-}
-
-func (fakeDiagramConfigService) Get(context.Context, string, string, bool) (handlers.DiagramConfig, error) {
-	return handlers.DiagramConfig{}, nil
-}
-
-func (fakeDiagramConfigService) Create(context.Context, string, string, string, string) (handlers.DiagramConfig, error) {
-	return handlers.DiagramConfig{}, nil
-}
-
-func (fakeDiagramConfigService) Update(context.Context, string, string, bool, string, string, string) (handlers.DiagramConfig, error) {
-	return handlers.DiagramConfig{}, nil
-}
-
-func (fakeDiagramConfigService) Delete(context.Context, string, string, bool) error { return nil }
-
 type fakeDeviceIndex struct{}
 
 func (fakeDeviceIndex) Devices() []*device.Device            { return nil }
@@ -199,18 +179,6 @@ func (fakeScheduleService) ListScheduleDevices(context.Context) ([]hmapi.Schedul
 type fakeAuditService struct{}
 
 func (fakeAuditService) List(int) []audit.Entry { return nil }
-
-type fakeHistoryService struct{}
-
-func (fakeHistoryService) Query(context.Context, handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error) {
-	return nil, "raw", nil
-}
-
-type fakeEnergyService struct{}
-
-func (fakeEnergyService) Energy(context.Context, handlers.EnergyQuery) (handlers.EnergyResponse, error) {
-	return handlers.EnergyResponse{}, nil
-}
 
 type fakeRecordingOverrideService struct{}
 
@@ -688,7 +656,6 @@ func fullyWiredRouterDeps() rest.Deps {
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},
-		Diagrams:                fakeDiagramConfigService{},
 		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
 		Taxonomy:                fakeTaxonomySource{},
@@ -696,9 +663,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Links:                   fakeLinksService{},
 		Schedules:               fakeScheduleService{},
 		Audit:                   fakeAuditService{},
-		History:                 fakeHistoryService{},
 		RecordingOverrides:      fakeRecordingOverrideService{},
-		Energy:                  fakeEnergyService{},
 		DeviceAdmin:             fakeDeviceAdmin{},
 		DeviceReplacer:          fakeDeviceReplacer{},
 		InstallModeSearch:       fakeDeviceSearch{},

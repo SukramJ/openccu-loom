@@ -33,9 +33,9 @@ under the Apache License 2.0.
   appear in Apple Home, Google Home, and Alexa.
 - **Alarm system and Security & Safety** — zones, arming, codes and a
   fault overview across your sensors, on MQTT, REST and the web UI.
-- **History, webhooks and MCP** — measurement history, outbound and
-  inbound webhooks, and an MCP server so an AI assistant can drive the
-  daemon.
+- **Measurements, webhooks and MCP** — forwarding of measurements to
+  InfluxDB, outbound and inbound webhooks, and an MCP server so an AI
+  assistant can drive the daemon.
 - **Multi-CCU** — one daemon, many centrals, first-class from day one —
   full CCUs and [openccu-lite](admin/openccu-lite.md) boxes side by side.
 

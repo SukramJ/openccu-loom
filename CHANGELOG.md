@@ -8,6 +8,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Measurement forwarding is `north.measurements` (REST API 16.0.0).**
+  What was the export of the history recorder is now a north-bound plane
+  of its own: numeric live values go to InfluxDB v2, nothing is kept in
+  the daemon. Breaking for configuration and clients:
+
+  | Before | Now |
+  |---|---|
+  | `persistence.history.enabled` and `persistence.history.export.enabled` | `north.measurements.enabled` (one switch) |
+  | `persistence.history.export.kind` / `endpoint` / `org` / `bucket` / `token_env` | `north.measurements.kind` / `endpoint` / `org` / `bucket` / `token_env` |
+  | `persistence.history.flush_interval` / `include` / `exclude` / `disabled_centrals` | the same keys under `north.measurements` |
+  | `persistence.history.retention`, `retention_hourly`, `retention_daily`, `energy_price_per_kwh`, `energy_currency` | removed |
+  | `GET` / `PUT /history/recording` | `GET` / `PUT /measurements/recording` |
+  | capabilities `history.v1`, `diagrams.v1` | `measurements.v1` |
+  | surface gate `history` | removed |
+  | health gauges `history.*` | `measurements.forwarded`, `measurements.exported`, `measurements.export_failures`, `measurements.export_dropped` |
+
+  Settings saved through the Config UI are taken over on upgrade;
+  forwarding stays on only where recording and export were both enabled
+  and a target was named. A `config.yaml` that still sets
+  `persistence.history` is refused at start with an error that names the
+  block. An enabled `north.measurements` without an `endpoint` fails
+  validation. The per-data-point recording overrides move to the main
+  database and are taken over once from `history.db`; removing a device
+  now also clears its overrides in the running daemon, not only on disk.
+  The Config UI gains a Measurements settings tab.
 - **Built with Go 1.27.4.** The release picks up the standard library's fix
   for a crash of the HTTP/1 server through a header race in
   `MaxBytesReader` (GO-2026-6859), which the REST server and the XML-RPC
@@ -15,6 +40,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **The embedded measurement history.** The daemon stores no measurements
+  any more: `history.db` with its retention and rollup tiers, `GET
+  /history`, `GET /energy`, the `/diagrams` routes and the MCP tools
+  `get_measurements` and `get_energy` are gone
+  ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)). A
+  measurement belongs in a time-series store; the daemon forwards to one
+  (see Changed). Recorded measurements are not migrated. An existing
+  `history.db` is left untouched, is no longer read, written or included
+  in backups, and can be deleted; the daemon says so in its log at start.
+  Stored chart definitions are dropped.
 - **Config UI: the Diagrams and Energy views and the chart on the device
   detail.** The Config UI draws no charts any more
   ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)); a

@@ -92,6 +92,17 @@ type Options struct {
 	// /api/v1/health wait is unaffected.
 	StartCCUNotReady bool
 
+	// Measurements writes the north.measurements block. Nil leaves
+	// measurement forwarding off.
+	Measurements *Measurements
+
+	// Env is appended to the daemon's environment as KEY=VALUE entries,
+	// on top of what the test process passes down. Use it for a value the
+	// daemon reads from its environment, such as the token a
+	// Measurements.TokenEnv names, without setting it process-wide for
+	// every parallel test.
+	Env []string
+
 	// PublicURL sets north.rest.public_url — the externally-reachable
 	// address an operator configures behind a reverse proxy. Empty is the
 	// default deployment, where the daemon reports no Config-UI URL.
@@ -152,6 +163,25 @@ type Harness struct {
 	stopOnce sync.Once
 }
 
+// startSidecars boots the optional collaborators a test asked for: the
+// MQTT broker and the mock OpenID provider. Either may be unavailable on
+// the host, in which case its address stays empty.
+func (h *Harness) startSidecars(t *testing.T, opts Options) {
+	t.Helper()
+	if opts.EnableMQTT {
+		h.mqtt = startMQTTBroker(t)
+		if h.mqtt != nil {
+			h.mqttBroker = h.mqtt.URL()
+		}
+	}
+	if opts.AuthMode == AuthOIDC {
+		h.op = startMockOP(t)
+		if h.op != nil {
+			h.opIssuer = h.op.IssuerURL()
+		}
+	}
+}
+
 // Start brings up godevccu, the embedded MQTT broker (if enabled),
 // the mock OIDC OP (if AuthOIDC), and the openccu-loom daemon, all
 // on loopback ephemeral ports. It returns once /api/v1/health
@@ -189,18 +219,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		south.JSONRPC = jsonrpcPort(h.ccu)
 	}
 
-	if opts.EnableMQTT {
-		h.mqtt = startMQTTBroker(t)
-		if h.mqtt != nil {
-			h.mqttBroker = h.mqtt.URL()
-		}
-	}
-	if opts.AuthMode == AuthOIDC {
-		h.op = startMockOP(t)
-		if h.op != nil {
-			h.opIssuer = h.op.IssuerURL()
-		}
-	}
+	h.startSidecars(t, opts)
 
 	// Every daemon-side port is left to the OS: the daemon binds it and
 	// reports what it got, rather than being handed a number a probe
@@ -246,6 +265,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		CheckConnectionInterval: opts.CheckConnectionInterval,
 		PublicURL:               opts.PublicURL,
 		DelayNewDeviceCreation:  opts.DelayNewDeviceCreation,
+		Measurements:            opts.Measurements,
 	})
 	if err := os.WriteFile(h.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		t.Fatalf("write config.yaml: %v", err)
@@ -255,6 +275,9 @@ func Start(t *testing.T, opts Options) *Harness {
 	h.cmd = exec.CommandContext(ctx, binPath, "run", "--config", h.cfgPath) //nolint:gosec // G204: launching the locally built daemon binary is the harness's purpose
 	h.cmd.Stdout = h.stdoutBuf
 	h.cmd.Stderr = h.stderrBuf
+	if len(opts.Env) > 0 {
+		h.cmd.Env = append(os.Environ(), opts.Env...)
+	}
 	if runtime.GOOS != "windows" {
 		// New process group so SIGTERM addresses children too.
 		h.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

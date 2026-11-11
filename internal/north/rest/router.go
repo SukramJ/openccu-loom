@@ -197,12 +197,9 @@ type Deps struct {
 	SystemStatus handlers.SystemStatusReader
 	// Audit feeds the change-history view: GET /api/v1/audit.
 	Audit handlers.AuditService
-	// History feeds the measurement-history chart: GET /api/v1/history.
-	// Nil when the opt-in history feature is disabled (the default).
-	History handlers.HistoryService
 	// RecordingOverrides feeds the per-datapoint recording toggle:
-	// GET/PUT /api/v1/history/recording. Nil when the opt-in history
-	// feature is disabled (the same flag /history depends on).
+	// GET/PUT /api/v1/measurements/recording. Nil while measurement
+	// forwarding is disabled (the default).
 	RecordingOverrides handlers.RecordingOverrideService
 	// ChannelFlags + ChannelFlagsOverlay back the per-channel operator
 	// override endpoints (G12): GET/PUT
@@ -210,10 +207,6 @@ type Deps struct {
 	// durable DB; the routes stay mounted and PUT answers 503.
 	ChannelFlags        handlers.ChannelFlagsWriter
 	ChannelFlagsOverlay *channelflags.Overlay
-	// Energy feeds the energy view's per-device power/energy breakdown:
-	// GET /api/v1/energy. Nil when the opt-in history feature is
-	// disabled (the same feature flag /history depends on).
-	Energy handlers.EnergyService
 	// Auth exposes login/logout/me endpoints at /api/v1/auth so the
 	// SPA can authenticate without the HTMX pages. Nil leaves the
 	// endpoints unmounted.
@@ -276,9 +269,6 @@ type Deps struct {
 	// Preferences backs per-user UI state (the start route) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
-	// Diagrams backs the named multi-series diagram CRUD at /diagrams.
-	// Nil disables those routes.
-	Diagrams handlers.DiagramConfigService
 
 	// Areas backs the operator-defined area (room grouping) CRUD at
 	// /areas, incl. full-set room-assignment replace at
@@ -895,13 +885,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Put("/me/preferences/{key}", handlers.PutPreference(d.Preferences))
 				pr.Delete("/me/preferences/{key}", handlers.DeletePreference(d.Preferences))
 			}
-			if d.Diagrams != nil {
-				pr.Get("/diagrams", handlers.ListDiagrams(d.Diagrams))
-				pr.Get("/diagrams/{id}", handlers.GetDiagram(d.Diagrams))
-				pr.With(op).Post("/diagrams", handlers.CreateDiagram(d.Diagrams, d.AuditRecorder))
-				pr.With(op).Put("/diagrams/{id}", handlers.UpdateDiagram(d.Diagrams, d.AuditRecorder))
-				pr.With(op).Delete("/diagrams/{id}", handlers.DeleteDiagram(d.Diagrams, d.AuditRecorder))
-			}
 			if d.Areas != nil {
 				// Read-only list is available to any authenticated caller;
 				// the write routes are operator-gated further down
@@ -1014,15 +997,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// a viewer / operator identity must not read it.
 				pr.With(admin).Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
 			}
-			if d.History != nil {
-				pr.Get("/history", handlers.GetHistory(d.History))
-			}
 			if d.RecordingOverrides != nil {
-				pr.Get("/history/recording", handlers.GetRecordingOverride(d.RecordingOverrides))
-				pr.With(op).Put("/history/recording", handlers.PutRecordingOverride(d.RecordingOverrides, d.AuditRecorder))
-			}
-			if d.Energy != nil {
-				pr.Get("/energy", handlers.GetEnergy(d.Energy))
+				pr.Get("/measurements/recording", handlers.GetRecordingOverride(d.RecordingOverrides))
+				pr.With(op).Put("/measurements/recording", handlers.PutRecordingOverride(d.RecordingOverrides, d.AuditRecorder))
 			}
 			if d.DeviceAdmin != nil {
 				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))

@@ -156,8 +156,9 @@ var restDomainsWithoutMCPTools = map[string]string{
 	// off the surface (see the `install-mode` entry). An assistant makes
 	// one call per thing it wants; the saving this endpoint exists for is
 	// a client's, not an assistant's.
-	"hub":      "single-fetch aggregate for clients building hub singleton entities; every part of it is already projected individually",
-	"diagrams": "SPA-side floor-plan editor state, not a fleet capability",
+	"hub": "single-fetch aggregate for clients building hub singleton entities; every part of it is already projected individually",
+	"measurements": "the per-data-point switch of the measurement forwarder, set by an operator next to the data point; " +
+		"the route carries no fleet state an assistant reasons over, and what was forwarded lives in the external store",
 	"install-mode": "pairing window control actuates the radio; deliberately kept off the assistant surface " +
 		"until the write posture for physical pairing is designed",
 	"users": "account administration; an assistant that can create or delete accounts can lock the operator " +
@@ -227,7 +228,7 @@ func restDomains(t *testing.T) []restDomain {
 //
 // The match is on the tool's noun rather than the whole tool name,
 // because a domain legitimately projects under a related word —
-// `security` is served by fault tools, `history` by measurement tools.
+// `security` is served by fault tools, `system` by the system-info and health tools.
 // Every such word is declared in [mcpDomainAliases].
 //
 // The comparison is exact, never a substring. A substring match made
@@ -256,8 +257,6 @@ func domainHasTool(d restDomain, tools []string) bool {
 var mcpDomainAliases = map[string][]string{
 	"devices":          {"device", "channel", "paramset", "datapoint"},
 	"security":         {"security_status", "fault", "hazard"},
-	"history":          {"measurement", "measurements"},
-	"energy":           {"measurement", "power"},
 	"system":           {"system_info", "health"},
 	"info":             {"system_info"},
 	"diagnostics":      {"health", "diagnostic"},
@@ -319,9 +318,7 @@ func fullyWiredMCPDeps() mcp.Deps {
 		Groups:       mcpParityFleet{},
 		Areas:        mcpParityFleet{},
 		Interfaces:   mcpParityFleet{},
-		History:      mcpParityFleet{},
 		Visibility:   mcpParityVisibility{},
-		Energy:       mcpParityFleet{},
 		Links:        mcpParityFleet{},
 		Schedules:    mcpParityFleet{},
 		AllowWrites:  true,
@@ -350,14 +347,6 @@ func (mcpParityFleet) ListAssignments(context.Context) ([]sqlitestore.RoomAreaRo
 }
 
 func (mcpParityFleet) Interfaces() []hmapi.InterfaceState { return nil }
-
-func (mcpParityFleet) Query(context.Context, handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error) {
-	return nil, "", nil
-}
-
-func (mcpParityFleet) Energy(context.Context, handlers.EnergyQuery) (handlers.EnergyResponse, error) {
-	return handlers.EnergyResponse{}, nil
-}
 
 func (mcpParityFleet) ListAllLinks(context.Context, string, string) ([]hmapi.Link, error) {
 	return nil, nil

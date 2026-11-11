@@ -21,7 +21,7 @@ export type SurfaceGroup =
 export type SurfaceFloor = "always" | "standalone";
 
 /** A runtime capability a surface additionally depends on. */
-export type SurfaceGate = "matter" | "history" | `feature:${string}`;
+export type SurfaceGate = "matter" | `feature:${string}`;
 
 /** A condition under which hiding asks for confirmation first. */
 export type SurfaceWarn = "alarm_armed" | "security_faults" | "last_ccu_editor";

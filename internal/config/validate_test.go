@@ -582,17 +582,10 @@ func TestValidateRejectsNegativeDurations(t *testing.T) {
 			},
 		},
 		{
-			name: "history retention",
-			path: "persistence.history.retention",
+			name: "measurements flush interval",
+			path: "north.measurements.flush_interval",
 			apply: func(c *Config) {
-				c.Persistence.History.Retention = -time.Second
-			},
-		},
-		{
-			name: "history flush interval",
-			path: "persistence.history.flush_interval",
-			apply: func(c *Config) {
-				c.Persistence.History.FlushInterval = -time.Second
+				c.North.Measurements.FlushInterval = -time.Second
 			},
 		},
 		{
@@ -726,20 +719,24 @@ func setAllDurationLeavesNegative(rv reflect.Value, count *int) {
 	}
 }
 
-// TestValidateRejectsNonFiniteFloats pins the finite-float rule on a leaf that
-// has no range check of its own. YAML spells `.nan` and `.inf`, both survive
-// parsing, and both are unrepresentable in JSON — the encoding every deep copy
-// of the config goes through. Accepting one would make [Clone] fail on a
-// config the operator wrote and validated.
+// TestValidateRejectsNonFiniteFloats pins the reflective finite-float rule.
+// YAML spells `.nan` and `.inf`, both survive parsing, and both are
+// unrepresentable in JSON — the encoding every deep copy of the config goes
+// through. Accepting one would make [Clone] fail on a config the operator
+// wrote and validated.
+//
+// The only float leaf the config carries today has a range check of its own
+// that runs first in Validate, so the walker is driven directly: the case it
+// exists for is the next float leaf somebody adds without one.
 func TestValidateRejectsNonFiniteFloats(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
-		price float64
-		want  bool
+		name string
+		rps  float64
+		want bool
 	}{
-		{"a real tariff", 0.32, false},
+		{"a real rate", 10, false},
 		{"unset", 0, false},
 		{"not a number", math.NaN(), true},
 		{"positive infinity", math.Inf(1), true},
@@ -750,10 +747,10 @@ func TestValidateRejectsNonFiniteFloats(t *testing.T) {
 			t.Parallel()
 			cfg := Default()
 			cfg.Centrals = []CentralConfig{validCentral()}
-			cfg.Persistence.History.EnergyPricePerKWh = tc.price
-			err := cfg.Validate()
+			cfg.North.REST.RateLimit.RequestsPerSecond = tc.rps
+			err := validateFiniteFloats(cfg)
 			if tc.want {
-				assertRejected(t, err, "persistence.history.energy_price_per_kwh")
+				assertRejected(t, err, "north.rest.rate_limit.requests_per_second")
 				return
 			}
 			assertAccepted(t, err)
@@ -768,9 +765,10 @@ func TestParseRejectsNonFiniteFloatLiteral(t *testing.T) {
 	t.Parallel()
 
 	const doc = `
-persistence:
-  history:
-    energy_price_per_kwh: .nan
+north:
+  rest:
+    rate_limit:
+      requests_per_second: .nan
 centrals:
   - name: ccu1
     host: 192.0.2.10
@@ -778,8 +776,8 @@ centrals:
       - HmIP-RF
 `
 	if _, err := Parse([]byte(doc)); err == nil {
-		t.Fatal("Parse accepted energy_price_per_kwh: .nan")
-	} else if !strings.Contains(err.Error(), "energy_price_per_kwh") {
+		t.Fatal("Parse accepted requests_per_second: .nan")
+	} else if !strings.Contains(err.Error(), "requests_per_second") {
 		t.Errorf("error does not name the offending field: %v", err)
 	}
 }

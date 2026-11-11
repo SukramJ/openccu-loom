@@ -71,8 +71,6 @@ const (
 	GateNone Gate = ""
 	// GateMatter marks surfaces that need the Matter bridge.
 	GateMatter Gate = "matter"
-	// GateHistory marks surfaces that need measurement-history recording.
-	GateHistory Gate = "history"
 	// GateFeaturePrograms and the other feature gates mark a surface that
 	// needs a per-central feature; it is offered while at least one
 	// central offers it. On a fleet of openccu-lite systems there are no
@@ -240,6 +238,7 @@ var registry = []Surface{
 	{ID: "settings.mqtt", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.matter", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
 	{ID: "settings.mcp", Group: GroupSettings, Defaults: both()},
+	{ID: "settings.measurements", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.rest", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.discovery", Group: GroupSettings, Defaults: both()},
 	{

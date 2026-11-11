@@ -734,8 +734,8 @@ func centralRowRequest(t *testing.T, h http.HandlerFunc, target string, id *auth
 }
 
 // TestCentralRowsAreNarrowedForNonAdmins pins the reconnaissance boundary on
-// the two read routes: they are not admin-gated because the energy, backup
-// and rooms/functions views need the central list, so the row itself has to
+// the two read routes: they are not admin-gated because the backup and
+// rooms/functions views need the central list, so the row itself has to
 // stop naming the CCU's address, account and TLS posture for anyone below
 // admin. The identity-less case is the auth-disabled deployment, where there
 // is no viewer to narrow the row for.
