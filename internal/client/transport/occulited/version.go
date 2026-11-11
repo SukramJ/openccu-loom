@@ -46,6 +46,10 @@ type Version struct {
 	Implementation string        `json:"implementation"`
 	HMIP           *hmipKeyMode  `json:"hmip"`
 	Capabilities   *Capabilities `json:"capabilities"`
+	// Interfaces names the interfaces the box's RPC proxy offers, sorted.
+	// It is readable without a credential. Nil on a box that does not
+	// name them; an empty list says the box offers none.
+	Interfaces []string `json:"interfaces"`
 	// Raw is the whole answer.
 	Raw json.RawMessage `json:"-"`
 }

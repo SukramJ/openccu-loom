@@ -2511,7 +2511,7 @@ it, "open" that nothing in Loom reads or sends it yet.
 | Stream: `updateDevice` carries `hint` as the interface sent it (0 when the call had none); `replaceDevice` carries `old` and `new` beside `addresses` | `2fc25cb` (2026-10-02) | adopted |
 | Stream: new message type `firmware {interface, address, update_state, transfer?, ts}`, at most one per device per 10 s | `11bed1d` (2026-10-14) | adopted — triggers a coalesced re-read of the interface's device descriptions |
 | `GET /api/rpc/v1/paramsets`, `POST /paramsets/{interface}`: the paramset description cache, one description per device model, firmware and channel type | `2d9c804` (2026-10-22) | open |
-| `GET /api/meta/v1/version` carries `commit`, and `interfaces` (the names lite-rpc offers, readable without a credential) | `50f7e39` (2026-10-04), `9ee3588` (2026-11-10) | open |
+| `GET /api/meta/v1/version` carries `commit`, and `interfaces` (the names lite-rpc offers, readable without a credential) | `50f7e39` (2026-10-04), `9ee3588` (2026-11-10) | `interfaces` adopted — the onboarding probe passes them on; `commit` is not read (the implementation string already carries it) |
 | `GET /system-update` carries `busy`; download, upload and install answer `409 busy` while one runs | `7b69d5e` (2026-10-23) | adopted for download and install (`hmerr.ErrBusy`, REST 409); the `busy` member of `GET /system-update` is not read |
 | Pairing request: optional `access.backup` and `addons`; the administrator's list carries `needs_confirmation`, `token_ips` | `e0f5227` (2026-10-01), `ccbaf56` (2026-10-31) | open — the code derivation is unchanged |
 | A metadata `PATCH` with an empty `name` is `422 invalid-name` | `2a78ed5` (2026-10-29) | adopted — refused before the box is asked |

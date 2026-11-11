@@ -36,6 +36,10 @@ type LiteProbeInfo struct {
 	APIMajors map[string]int `json:"api_majors,omitempty"`
 	// PairingAvailable reports whether the box offers client pairing.
 	PairingAvailable bool `json:"pairing_available"`
+	// Interfaces names the interfaces the box offers, sorted, so a client
+	// can propose exactly those before it holds a credential. Absent on a
+	// box that does not name them; an empty list says it offers none.
+	Interfaces []string `json:"interfaces,omitzero"`
 	// HMIPKeyMode summarises the HomeMatic IP key mode; it never carries a
 	// key. Absent on a box that does not report it.
 	HMIPKeyMode *HMIPKeyMode `json:"hmip_key_mode,omitempty"`

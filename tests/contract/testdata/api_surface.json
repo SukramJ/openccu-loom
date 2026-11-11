@@ -1708,6 +1708,7 @@
    "api_majors:object",
    "hmip_key_mode:$ref:HMIPKeyMode",
    "implementation:string",
+   "interfaces:array\u003cstring\u003e",
    "pairing_available:boolean"
   ],
   "LogRecord": [

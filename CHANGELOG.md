@@ -68,6 +68,13 @@ clients (API 16).
   the next scheduled refresh. A transfer's burst of messages is one
   refresh and at most one more.
 
+- **openccu-lite: adding a box proposes the interfaces it has.** The box
+  names its interfaces without a credential (occulited since 2026-11-10).
+  The probe of `POST /centrals/probe` and `POST /setup/probe` passes them
+  on as `lite.interfaces`, and the Config UI ticks exactly those when a
+  box is added, instead of its own default set. A box that does not name
+  them leaves the default in place. REST API 15.10.0.
+
 ### Changed
 
 - **openccu-lite: a second system update is a conflict, not a failure.**

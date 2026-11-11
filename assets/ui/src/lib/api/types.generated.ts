@@ -9797,6 +9797,14 @@ export interface components {
                 [key: string]: number;
             };
             pairing_available: boolean;
+            /**
+             * @description The interfaces the box offers (`BidCos-RF`, `HmIP-RF`, …),
+             *     sorted, as it names them without a credential. A client
+             *     proposes exactly these when the box is added. Absent on a box
+             *     that does not name them — the client then keeps its own
+             *     default; an empty list says the box offers none.
+             */
+            interfaces?: string[];
             hmip_key_mode?: components["schemas"]["HMIPKeyMode"];
         };
         /** @description The key-mode summary of a box's HomeMatic IP radio; it never carries a key. */
