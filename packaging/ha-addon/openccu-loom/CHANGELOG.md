@@ -20,7 +20,13 @@
 - **A navigation profile for openccu-lite**: opened through the interface
   of an openccu-lite system, the Config UI hides what that system provides
   itself (users, sign-in, device firmware).
-- **REST API 16.1.0.** Clients built against API 15 need an update.
+- **openccu-lite systems are followed as they are today.** A restore onto
+  an openccu-lite system works again, sign-in through its interface
+  follows the account's level there (a read-only account is a viewer),
+  devices load faster, and a start no longer asks sleeping or unreachable
+  BidCos-RF devices for their values. Run as the add-on on such a system,
+  the daemon's warnings appear on its Status page.
+- **REST API 16.2.0.** Clients built against API 15 need an update.
 
 ## 0.99.0
 
