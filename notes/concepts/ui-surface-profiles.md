@@ -230,6 +230,12 @@ nothing. `embedded` ships the ownership matrix of the [embedded UI mode](./embed
 | Settings | `settings.ccus`, `settings.oidc`, `settings.ccu_auth`, `settings.users`, `settings.groups`, `settings.tokens`, `settings.matter` |
 | Device detail | `device.configure` (with its `channels` / `links` / `schedule` sub-tabs) |
 
+> **Superseded for the device-detail row (2026-11-11, ADR 0088, #1060).** The row rested
+> on the Home Assistant panel showing the same editor. `homematicip_local` no longer
+> registers its panel for an entry on the loom backend (`_any_entry_has_panel_enabled`),
+> so `device.configure` and its sub-tabs are visible in both profiles and carry neither
+> `HAOwns` nor the fleet rule of §2.7a, which now covers `settings.ccus` alone.
+
 Everything else stays visible, including `nav.devices`, `nav.alarm`, `nav.security`,
 `nav.inbox`, `nav.fleet`, the whole automation cluster, the ops cluster and
 `device.history`.

@@ -13,6 +13,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `MaxBytesReader` (GO-2026-6859), which the REST server and the XML-RPC
   callback server reach.
 
+### Fixed
+
+- **Config UI: the embedded profile no longer hides the device editor.**
+  With `north.ui.embedded` on, one CCU and the UI opened through Home
+  Assistant, the Configure tab with its channel, link and schedule
+  sub-tabs was hidden on the grounds that Home Assistant shows the same
+  editor. The Home Assistant integration registers no configuration panel
+  for a CCU served by this daemon, so such an installation was left with
+  no editor. The tabs are now visible in both profiles; an operator can
+  still hide them in the navigation editor
+  ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)). REST API
+  15.9.1: the description of `multi_central_visible` follows; no route
+  or schema changed.
+
 ## [0.99.0] - 2026-11-10
 
 ### Added

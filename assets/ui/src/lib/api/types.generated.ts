@@ -9702,9 +9702,9 @@ export interface components {
              * @description The embedded default of this surface flips back to visible
              *     when the daemon serves more than one CCU. A Home Assistant
              *     config entry addresses one CCU, so on a multi-CCU daemon HA
-             *     cannot own the config surface of the CCUs it has no entry
-             *     for — hiding these would leave their devices without an
-             *     editor anywhere. The `defaults` above already reflect the
+             *     cannot own the administration of the CCUs it has no entry
+             *     for — hiding it would leave those CCUs without a place to
+             *     edit them. The `defaults` above already reflect the
              *     current fleet; this flag only explains why.
              */
             multi_central_visible?: boolean;

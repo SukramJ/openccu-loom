@@ -165,16 +165,15 @@ type Surface struct {
 	// MultiCentralVisible flips the embedded default back to visible on a
 	// daemon serving more than one CCU.
 	//
-	// The embedded profile assumes Home Assistant owns the config surface
+	// The embedded profile assumes Home Assistant owns CCU administration
 	// — but a Home Assistant config entry addresses ONE CCU (the loom
 	// backend passes a serial), while this switch is daemon-wide. Bind
 	// one of three CCUs into HA and the shipped default would hide the
-	// paramset editor for the other two in a UI that is their only
-	// editor: HA has no entry for them, and the panel therefore offers
-	// nothing. Same for CCU administration.
+	// CCU settings for the other two in the only UI that can edit them:
+	// HA has no entry for them.
 	//
 	// So the default follows the fleet. An operator who genuinely wants
-	// them hidden still can — this moves the default, not the ceiling.
+	// it hidden still can — this moves the default, not the ceiling.
 	MultiCentralVisible bool
 }
 
@@ -270,28 +269,18 @@ var registry = []Surface{
 
 	// --- device-detail tabs ---------------------------------------
 	{ID: "device.overview", Group: GroupDevice, Defaults: both()},
-	{
-		ID: "device.configure", Group: GroupDevice, Defaults: haOwned(),
-		HAOwns: true, MultiCentralVisible: true,
-	},
+	// The device editor is visible in both profiles. Home Assistant does
+	// not provide it for a CCU this daemon serves: the integration
+	// registers no configuration panel of its own for such an entry, so
+	// this is the only place its users can edit a paramset, a link or a
+	// schedule.
+	{ID: "device.configure", Group: GroupDevice, Defaults: both()},
 	// The device and channel parameters on one page, as the CCU WebUI's
 	// "Geräte-/Kanalparameter". A stored override for the former
 	// device.configure.device-config sub-tab is reported as Ignored.
-	{
-		ID: "device.configure.channels", Group: GroupDevice, Defaults: haOwned(),
-		MultiCentralVisible: true,
-		Parent:              "device.configure", HAOwns: true,
-	},
-	{
-		ID: "device.configure.links", Group: GroupDevice, Defaults: haOwned(),
-		MultiCentralVisible: true,
-		Parent:              "device.configure", HAOwns: true,
-	},
-	{
-		ID: "device.configure.schedule", Group: GroupDevice, Defaults: haOwned(),
-		MultiCentralVisible: true,
-		Parent:              "device.configure", HAOwns: true,
-	},
+	{ID: "device.configure.channels", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
+	{ID: "device.configure.links", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
+	{ID: "device.configure.schedule", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
 	{ID: "device.history", Group: GroupDevice, Defaults: both(), Gate: GateHistory},
 }
 
