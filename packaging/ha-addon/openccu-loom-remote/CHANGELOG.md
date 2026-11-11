@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.100.0
+
+- **Version follows OpenCCU-Loom 0.100.0.** The daemon behind the proxy
+  no longer stores measurements or draws charts, and its Overview,
+  Favorites, Diagrams and Energy views are gone; see the OpenCCU-Loom
+  changelog. The proxy itself is unchanged.
+
 # 0.99.0
 
 - **Matter: a Topology tab** draws the bridge as a graph — the bridged

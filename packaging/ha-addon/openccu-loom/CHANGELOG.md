@@ -1,5 +1,27 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.100.0
+
+- **Breaking: the daemon no longer stores measurements or draws charts.**
+  The Diagrams and Energy views and the chart on the device detail are
+  gone, and the embedded history with them. Measurements are forwarded to
+  InfluxDB v2 instead (Settings, Measurements); draw charts there or in
+  Home Assistant. Recorded measurements are not migrated; the old
+  `history.db` is left in place and can be deleted.
+- **Breaking: a `config.yaml` that still sets `persistence.history` is
+  refused at start.** Move the export settings to `north.measurements`;
+  settings saved through the Config UI are taken over automatically.
+- **The Overview and Favorites views are gone.** The Config UI is the
+  console of the bridge; operate devices from Home Assistant or another
+  client. The device list and device detail keep their values and
+  controls.
+- **The device editor is visible again when the UI is opened through Home
+  Assistant** with `north.ui.embedded` on and one CCU.
+- **A navigation profile for openccu-lite**: opened through the interface
+  of an openccu-lite system, the Config UI hides what that system provides
+  itself (users, sign-in, device firmware).
+- **REST API 16.1.0.** Clients built against API 15 need an update.
+
 ## 0.99.0
 
 - **Matter: a Topology tab** draws the bridge as a graph — the bridged

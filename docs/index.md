@@ -18,6 +18,26 @@ Assistant integration *Homematic(IP) Local*; OpenCCU-Loom serves users
 who want MQTT / REST / UI / Matter access without it. It is open source
 under the Apache License 2.0.
 
+## Where it fits
+
+OpenCCU-Loom is a bridge, and its Config UI is the console of that bridge:
+connections, the device model, device configuration, the north-bound
+planes, diagnostics. It is not a replacement for the CCU WebUI and not a
+dashboard
+([ADR 0088](adr/0088-config-ui-is-the-bridges-console.md)).
+
+- **Operating devices** belongs to Home Assistant, a Matter controller or
+  any client of the MQTT and REST planes.
+- **Charts and long-term data** belong to a time-series store; the daemon
+  forwards measurements to one and keeps none.
+- **On an [openccu-lite](admin/openccu-lite.md) box**, users, sign-in and
+  device firmware belong to the box; opened through the box's interface,
+  the Config UI hides them.
+
+What the daemon adds is one process for many CCUs of both system types,
+with one typed device model projected onto MQTT, REST, WebSocket, Matter
+and MCP.
+
 ---
 
 ## What it gives you
