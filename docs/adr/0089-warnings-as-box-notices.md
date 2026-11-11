@@ -126,10 +126,15 @@ composed in the REST mount and has no pin of its own yet.
   and German, server-side catalogue entries for the warning sentences.
 - godevccu's `litefake` gains the notice routes and the control token; a
   godevccu release and a version bump here.
-- The first write to a real box is a live write and is done on a box the
-  owner names. Until then the routes are verified against godevccu's fake
-  and occulited's handlers (`internal/httpapi/addonnotices.go` at
-  `04ee7b6`), not against a box.
+- Written to a box on 2026-11-11 (openccu-lite 1.2.1, occulited
+  `04ee7b6`), with the daemon installed there as the add-on: the box's
+  journal shows the add-on posting a notice for a component that was
+  degraded while the daemon started and clearing it two seconds later,
+  when the component was healthy — the health tracker's hook at work,
+  minutes before any resynchronisation. The pairing path was not
+  exercised there: a request counts as waiting only once its client has
+  polled, and a poll cannot pass the box's gate, which claims the same
+  header.
 - A daemon that stops leaves its notices on the box until it starts again
   and reconciles; the box offers a time-to-live per notice, which this
   decision does not use.
