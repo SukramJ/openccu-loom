@@ -92,6 +92,17 @@ type Options struct {
 	// /api/v1/health wait is unaffected.
 	StartCCUNotReady bool
 
+	// Measurements writes the north.measurements block. Nil leaves
+	// measurement forwarding off.
+	Measurements *Measurements
+
+	// Env is appended to the daemon's environment as KEY=VALUE entries,
+	// on top of what the test process passes down. Use it for a value the
+	// daemon reads from its environment, such as the token a
+	// Measurements.TokenEnv names, without setting it process-wide for
+	// every parallel test.
+	Env []string
+
 	// PublicURL sets north.rest.public_url — the externally-reachable
 	// address an operator configures behind a reverse proxy. Empty is the
 	// default deployment, where the daemon reports no Config-UI URL.
@@ -246,6 +257,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		CheckConnectionInterval: opts.CheckConnectionInterval,
 		PublicURL:               opts.PublicURL,
 		DelayNewDeviceCreation:  opts.DelayNewDeviceCreation,
+		Measurements:            opts.Measurements,
 	})
 	if err := os.WriteFile(h.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		t.Fatalf("write config.yaml: %v", err)
@@ -255,6 +267,9 @@ func Start(t *testing.T, opts Options) *Harness {
 	h.cmd = exec.CommandContext(ctx, binPath, "run", "--config", h.cfgPath) //nolint:gosec // G204: launching the locally built daemon binary is the harness's purpose
 	h.cmd.Stdout = h.stdoutBuf
 	h.cmd.Stderr = h.stderrBuf
+	if len(opts.Env) > 0 {
+		h.cmd.Env = append(os.Environ(), opts.Env...)
+	}
 	if runtime.GOOS != "windows" {
 		// New process group so SIGTERM addresses children too.
 		h.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
