@@ -6,6 +6,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Built with Go 1.27.4.** The release picks up the standard library's fix
+  for a crash of the HTTP/1 server through a header race in
+  `MaxBytesReader` (GO-2026-6859), which the REST server and the XML-RPC
+  callback server reach.
+
 ## [0.99.0] - 2026-11-10
 
 ### Added
