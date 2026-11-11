@@ -13,6 +13,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `MaxBytesReader` (GO-2026-6859), which the REST server and the XML-RPC
   callback server reach.
 
+### Removed
+
+- **Config UI: the Overview and Favorites views.** The page of control
+  tiles grouped by room, function and CCU (`#/overview`) and the pinned
+  items (`#/favorites`) are gone, together with the pin buttons on the
+  device detail and the program list. The Config UI is the console of the
+  bridge, not an operating UI
+  ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)); Home
+  Assistant or another client is the place to operate devices. The device
+  list and the device detail keep their values and controls. Stored
+  favourites are deleted on upgrade, a start route that pointed at one of
+  the two views falls back to the device list, and a navigation profile
+  that named them reports the entries as ignored. REST API 15.9.2: the
+  preference route's description names `start_route`; no route or schema
+  changed.
+
 ### Fixed
 
 - **Config UI: the embedded profile no longer hides the device editor.**

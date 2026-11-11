@@ -1,8 +1,7 @@
 <!--
-  ChannelTiles — the flat CDP-tile + AutoTile-fallback grid, factored
-  out of CdpTilesPanel so the fleet-wide Overview route (B8) can render
-  the exact same per-device tile set without forking the dispatch
-  logic. See ADR 0016 and docs/ui/auto-tile-concept.md.
+  ChannelTiles — the flat CDP-tile + AutoTile-fallback grid of one
+  device, kept apart from CdpTilesPanel so the dispatch logic stays in
+  one place. See ADR 0016 and docs/ui/auto-tile-concept.md.
 
   Pure presentational component: the caller owns fetching `cdps`
   (`api.listCustomDataPoints`) plus loading/error/empty handling —
@@ -13,17 +12,14 @@
   import type { CustomDPSummary, DeviceDetail } from "$lib/api/types";
   import { isOverviewExcluded } from "$lib/quickcontrol/domain";
   import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
-  import ChannelPinButton from "./ChannelPinButton.svelte";
   import { cdpWidgetFor, isCdpRenderable } from "./dispatch";
 
   type Props = {
     detail: DeviceDetail;
     cdps: CustomDPSummary[];
-    /** Forwarded to AutoTile: show the pin toggle on each channel tile. */
-    pinnable?: boolean;
   };
 
-  let { detail, cdps, pinnable = false }: Props = $props();
+  let { detail, cdps }: Props = $props();
 
   // CDPs with a registered widget — these render as CDP tiles.
   const renderable = $derived(cdps.filter(isCdpRenderable));
@@ -76,28 +72,11 @@
       {@const ch = detail.channels.find((c) => c.number === cdp.channel_no)}
       {@const title = ch?.name || ch?.type_label || `${detail.address}:${cdp.channel_no}`}
       {#if Widget}
-        <!-- The pin sits in an overlay rather than inside the widget:
-             every CDP tile renders through the same ControlTile frame,
-             and threading a pin prop through all eight widgets would
-             couple each of them to the favourites feature for one
-             corner affordance. The tile's top-right is free — its header
-             row is icon + left-aligned text. -->
-        {#if pinnable}
-          <div class="relative">
-            <Widget address={detail.address} {cdp} {title} />
-            <ChannelPinButton
-              channelAddress={`${detail.address}:${cdp.channel_no}`}
-              label={title}
-              class="absolute right-1.5 top-1.5"
-            />
-          </div>
-        {:else}
-          <Widget address={detail.address} {cdp} {title} />
-        {/if}
+        <Widget address={detail.address} {cdp} {title} />
       {/if}
     {/each}
     {#each autoTileChannels as ch (ch.address)}
-      <AutoTile address={detail.address} channel={ch} {pinnable} />
+      <AutoTile address={detail.address} channel={ch} />
     {/each}
   </div>
 {/if}

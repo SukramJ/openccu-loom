@@ -19,7 +19,7 @@ test.describe('Alarm', () => {
   });
 
   test('nav entry exists and routes to the overview', async ({ page }) => {
-    await page.goto('http://localhost:5173/app/#/overview');
+    await page.goto('http://localhost:5173/app/#/devices');
     await page.waitForSelector('#main');
 
     await page.getByRole('link', { name: 'Alarm system' }).click();

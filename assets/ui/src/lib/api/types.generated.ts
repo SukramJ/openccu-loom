@@ -1857,7 +1857,7 @@ export interface paths {
         };
         /**
          * Read the caller's UI preference for {key}
-         * @description Per-user UI state (e.g. key `favorites`). The value is opaque JSON owned by the SPA. Scoped to the authenticated subject. A key that was never stored is not an error: the response is 200 with `value: null`.
+         * @description Per-user UI state (e.g. key `start_route`). The value is opaque JSON owned by the SPA. Scoped to the authenticated subject. A key that was never stored is not an error: the response is 200 with `value: null`.
          */
         get: operations["getPreference"];
         /**

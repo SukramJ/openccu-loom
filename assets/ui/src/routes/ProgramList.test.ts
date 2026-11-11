@@ -12,8 +12,8 @@ vi.mock("$lib/api/client", () => ({
     deleteProgram: (...args: unknown[]) => mockDeleteProgram(...args),
     setProgramEnabled: vi.fn(),
   },
-  // Module-load hook of the auth store, which the favorites store imports
-  // to scope pinned items to the signed-in operator.
+  // Module-load hook of the auth store, which the view reaches through
+  // its store imports.
   setUnauthorizedHandler: vi.fn(),
   ApiError: class ApiError extends Error {
     constructor(

@@ -33,7 +33,7 @@ describe("i18n catalogue coverage", () => {
     expect(de.has("areas.toast.rooms_saved")).toBe(true);
   });
 
-  // Favorites.svelte's program-card run button label / running state.
+  // ProgramList.svelte's run button label / running state.
   it("resolves programs.run and programs.running in both locales", () => {
     prefs.locale = "en";
     expect(t("programs.run")).not.toBe("programs.run");

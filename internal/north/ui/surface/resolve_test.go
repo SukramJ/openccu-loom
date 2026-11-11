@@ -41,7 +41,7 @@ func TestResolveDefaultsPerProfile(t *testing.T) {
 		t.Fatalf("profile = %q, want %q", embedded.Profile, config.ProfileEmbedded)
 	}
 	wantHidden := []ID{
-		"nav.overview", "nav.favorites", "nav.energy", "nav.diagrams", "nav.matter",
+		"nav.energy", "nav.diagrams", "nav.matter",
 		"settings.ccus", "settings.oidc", "settings.ccu_auth", "settings.users",
 		"settings.groups", "settings.tokens", "settings.matter",
 	}
@@ -286,7 +286,7 @@ func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
 
 	// Everything else keeps its default: identity and the aggregated
 	// analytics belong to Home Assistant however many CCUs there are.
-	for _, id := range []ID{"settings.users", "settings.oidc", "nav.energy", "nav.overview"} {
+	for _, id := range []ID{"settings.users", "settings.oidc", "nav.energy", "nav.diagrams"} {
 		if fleet.IsVisible(id) {
 			t.Errorf("%s visible on a multi-CCU daemon — the fleet size says nothing about identity or analytics", id)
 		}

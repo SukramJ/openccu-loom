@@ -62,8 +62,8 @@ test.describe('Settings — navigation & views', () => {
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
 
-    // Favorites is an ordinary row: visible by default in standalone.
-    await page.getByRole('switch', { name: 'Favorites' }).click();
+    // Fleet is an ordinary row: visible by default in standalone.
+    await page.getByRole('switch', { name: 'Fleet', exact: true }).click();
 
     await expect(page.getByText(/Changed · default: visible/).first()).toBeVisible();
     await expect(page.getByText(/unsaved changes/)).toBeVisible();
@@ -80,8 +80,9 @@ test.describe('Settings — navigation & views', () => {
     // The preview says which profile it is showing, so an operator
     // preparing the HA layout is never in doubt about what they see.
     await expect(page.getByText(/not currently live/)).toBeVisible();
-    // The live profile is unchanged: the sidebar still carries Favorites.
-    await expect(page.getByRole('link', { name: 'Favorites' })).toBeVisible();
+    // The live profile is unchanged: the settings strip still carries a
+    // tab the embedded profile hides.
+    await expect(page.getByRole('button', { name: 'OIDC', exact: true })).toBeVisible();
   });
 
   // The scope control only makes sense while the mode is on, and the

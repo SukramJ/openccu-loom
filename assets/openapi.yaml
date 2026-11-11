@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 15.9.1
+  version: 15.9.2
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2721,7 +2721,7 @@ paths:
       operationId: getPreference
       summary: Read the caller's UI preference for {key}
       description: >
-        Per-user UI state (e.g. key `favorites`). The value is opaque
+        Per-user UI state (e.g. key `start_route`). The value is opaque
         JSON owned by the SPA. Scoped to the authenticated subject.
         A key that was never stored is not an error: the response is
         200 with `value: null`.

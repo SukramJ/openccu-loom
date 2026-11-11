@@ -14,8 +14,6 @@ import { t } from "$lib/i18n";
 
 export type RouteKind =
   | "list"
-  | "overview"
-  | "favorites"
   | "detail"
   | "backups"
   | "sysvars"
@@ -103,22 +101,10 @@ export function navClusters(gates: NavGates): NavCluster[] {
       label: t("sidebar.cluster.overview"),
       items: [
         {
-          href: "#/overview",
-          icon: "mdi:dots-grid",
-          label: t("nav.overview"),
-          matches: ["overview"],
-        },
-        {
           href: "#/devices",
           icon: "mdi:home",
           label: t("nav.devices"),
           matches: ["list", "detail"],
-        },
-        {
-          href: "#/favorites",
-          icon: "mdi:star",
-          label: t("nav.favorites"),
-          matches: ["favorites"],
         },
         {
           href: "#/alarm",

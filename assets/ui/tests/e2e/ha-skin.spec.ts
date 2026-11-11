@@ -2,7 +2,6 @@ import { test, expect } from './helpers/fixtures';
 import {
   mockAllApis,
   mockFleet,
-  mockOverviewFleet,
   addStylesForStableScreenshots,
 } from './helpers/mock-api';
 
@@ -45,25 +44,6 @@ test.describe('HA skin - Fleet visual', () => {
       await page.waitForTimeout(500);
       await addStylesForStableScreenshots(page);
       await expect(page).toHaveScreenshot(`ha-skin-fleet-${theme}.png`);
-    });
-  }
-});
-
-test.describe('HA skin - Overview visual', () => {
-  for (const theme of ['light', 'dark'] as const) {
-    test(`overview ha ${theme}`, async ({ page }) => {
-      await mockAllApis(page);
-      await mockOverviewFleet(page);
-      await page.addInitScript((prefs) => {
-        localStorage.setItem('openccu-loom.prefs.v1', prefs as string);
-      }, haPrefs(theme));
-
-      await page.goto('http://localhost:5173/app/#/overview');
-      await page.waitForSelector('#main');
-      await expect(page.getByText('Kitchen · ccu1')).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(500);
-      await addStylesForStableScreenshots(page);
-      await expect(page).toHaveScreenshot(`ha-skin-overview-${theme}.png`);
     });
   }
 });
