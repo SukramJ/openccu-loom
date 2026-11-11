@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.100.0] - 2026-11-11
+
+This release narrows the Config UI to what the daemon is: the console of a
+bridge. The views that operated devices or drew charts are gone, and so is
+the measurement store behind them
+([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)). It is a
+breaking release for configuration (`persistence.history`) and for REST
+clients (API 16).
+
 ### Added
 
 - **A surface profile for the openccu-lite shell (REST API 16.1.0).** The
@@ -62,18 +71,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `get_measurements` and `get_energy` are gone
   ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)). A
   measurement belongs in a time-series store; the daemon forwards to one
-  (see Changed). Recorded measurements are not migrated. An existing
+  (see Changed), and that store answers what the removed routes and MCP
+  tools answered. Recorded measurements are not migrated. An existing
   `history.db` is left untouched, is no longer read, written or included
   in backups, and can be deleted; the daemon says so in its log at start.
   Stored chart definitions are dropped.
 - **Config UI: the Diagrams and Energy views and the chart on the device
   detail.** The Config UI draws no charts any more
   ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)); a
-  measurement belongs in a time-series store, which the InfluxDB exporter
-  feeds. The device detail's History tab stays: it keeps the device's
-  change log and the per-data-point recording switch, and it is now shown
-  whether or not recording is enabled. The daemon's `/history`, `/energy`
-  and `/diagrams` endpoints are unchanged in this release step.
+  measurement belongs in a time-series store, which `north.measurements`
+  feeds; charts are drawn there (Grafana, Home Assistant). The device
+  detail's History tab stays: it keeps the device's change log and the
+  per-data-point recording switch, and it is shown whether or not
+  forwarding is enabled.
 - **Config UI: the Overview and Favorites views.** The page of control
   tiles grouped by room, function and CCU (`#/overview`) and the pinned
   items (`#/favorites`) are gone, together with the pin buttons on the

@@ -14,8 +14,8 @@ import "strings"
 // The rule is not "device addresses cannot contain wildcards". Nothing
 // validates the address before it reaches these statements: the cache-clear
 // scope checks only that the field is non-empty
-// (internal/central/cachereset Scope.Validate) and the energy handler passes
-// the `device` query parameter through unchecked, so the pattern is built
+// (internal/central/cachereset Scope.Validate) and the audit list passes
+// its `device` filter through unchecked, so the pattern is built
 // from untrusted text on both the destructive and the read path. Escaping
 // here is what makes a prefix delete or a device filter mean one device.
 func escapeLikePrefix(s string) string {

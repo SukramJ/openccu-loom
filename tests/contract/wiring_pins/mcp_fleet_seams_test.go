@@ -38,8 +38,8 @@ var mcpFleetSeams = []string{
 // TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every
 // fleet read seam to the MCP server.
 //
-// The eight domains behind them — groups, areas, interfaces, history,
-// visibility, energy, links, schedules — spent months in a declared
+// The domains behind them — groups, areas, interfaces, visibility, links,
+// schedules among them — spent months in a declared
 // backlog map that stayed accurate and unresolved: the REST surface
 // carried them and an assistant had no way to read any of them. The
 // tools exist now; this is the line that keeps them reachable.

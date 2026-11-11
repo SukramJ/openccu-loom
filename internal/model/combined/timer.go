@@ -391,7 +391,7 @@ func (t *Timer) SendDefault(
 // The returned value is a float64 only because the combined DP's seconds
 // domain is one; it always holds a whole count.
 //
-// loom:reachable:reason="called by Timer.SetDuration to pick the correct unit before writing to the CCU"
+// loom:reachable:reason="no production caller: Timer.SetDuration calls custom.EncodeTimerDuration itself; kept as the seconds-domain form of that encoder and exercised by the package tests"
 func RecalcUnit(seconds float64) (float64, hmenum.TimerUnit) {
 	value, unit := custom.EncodeTimerDuration(secondsToDuration(seconds))
 	return float64(value), hmenum.TimerUnit(unit)

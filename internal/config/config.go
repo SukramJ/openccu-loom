@@ -1389,8 +1389,8 @@ type NorthUI struct {
 	// Embedded declares that Home Assistant owns this daemon's config
 	// surface — the Homematic(IP) Local integration runs against THIS
 	// daemon. It selects the `embedded` surface profile, which hides what
-	// HA already owns and scopes the writes the Ingress passthrough
-	// identity may perform.
+	// HA already owns. The profile is navigation only: no permission
+	// depends on it.
 	//
 	// It is deliberately NOT derived from the Ingress signal. Being behind
 	// HA Ingress answers "am I proxied by HA?", not "does HA own my config

@@ -186,7 +186,7 @@ and API tokens, navigation profiles) are not part of this list.
 | `north.measurements.enabled` | `*bool` |  | expert | yes | Send numeric data-point values to an external time-series store. Off by default. The daemon keeps no measurement history itself; charts and long-term storage belong to the store you forward to. |
 | `north.measurements.endpoint` | `string` |  | expert | yes | Base URL of the store, e.g. http://influx:8086. Required while forwarding is enabled. |
 | `north.measurements.exclude` | `[]string` |  | expert | yes | Parameter-name patterns never to forward. Exclude wins over include. Empty excludes nothing. |
-| `north.measurements.flush_interval` | `time.Duration` |  | expert | yes | How often buffered samples are written to the store. Zero uses the default of 5 s. |
+| `north.measurements.flush_interval` | `time.Duration` | `5s` | expert | yes | How often buffered samples are written to the store. Zero uses the default of 5 s. |
 | `north.measurements.include` | `[]string` |  | expert | yes | Parameter-name patterns to forward (e.g. TEMPERATURE, \*POWER\*). Empty forwards every numeric VALUES parameter. A single data point can be switched on or off on the device's History tab. |
 | `north.measurements.kind` | `string` |  | expert | yes | Kind of store to forward to. Empty or "influxdb" selects the InfluxDB v2 line protocol, the only target today. |
 | `north.measurements.org` | `string` |  | expert | yes | InfluxDB v2 organisation that owns the bucket. |
