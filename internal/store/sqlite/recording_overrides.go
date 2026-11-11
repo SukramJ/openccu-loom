@@ -24,14 +24,12 @@ type RecordingOverride struct {
 }
 
 // RecordingOverrideStore persists per-datapoint recording overrides in
-// the history database (shared handle with [MeasurementStore]; the
-// measurement store owns closing it).
+// the main database.
 type RecordingOverrideStore struct {
 	db *sql.DB
 }
 
-// NewRecordingOverrideStore returns a store backed by the history
-// database handle.
+// NewRecordingOverrideStore returns a store backed by db.
 func NewRecordingOverrideStore(db *sql.DB) *RecordingOverrideStore {
 	return &RecordingOverrideStore{db: db}
 }
@@ -115,9 +113,8 @@ func (s *RecordingOverrideStore) Clear(
 // DeleteDevice removes every override for every channel of the given device.
 // Prefix-safe ("DEVICE" never matches "DEVICE2:0").
 //
-// Reached on device-remove / unpair alongside the measurement purge, through
-// [adapter.WireMeasurementEviction] and pinned with it. Like the measurement
-// purge it had no caller until that seam existed.
+// Reached on device-remove / unpair through the forwarder's overlay, which
+// [adapter.WireRecordingOverrideEviction] calls.
 func (s *RecordingOverrideStore) DeleteDevice(
 	ctx context.Context, centralName, interfaceID, deviceAddress string,
 ) error {

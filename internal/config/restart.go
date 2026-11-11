@@ -63,6 +63,7 @@ func restartRules() []RestartRule {
 		alarmRestartRules(),
 		southboundRestartRules(),
 		persistenceRestartRules(),
+		measurementsRestartRules(),
 	}
 	n := 0
 	for _, g := range groups {
@@ -795,12 +796,9 @@ func southboundRestartRules() []RestartRule {
 	}
 }
 
-// persistenceRestartRules covers the values cache and the measurement-history
-// recorder. Both are wired once: the cache's enablement predicate, flush
-// ticker and per-central exclusions are captured during south-bound wiring,
-// and the recorder copies its whole settings block (retention tiers, flush
-// cadence, include/exclude globs, the push exporter and the energy tariff the
-// REST energy view renders) into the running instance at construction.
+// persistenceRestartRules covers the values cache. It is wired once: the
+// cache's enablement predicate, flush ticker and per-central exclusions are
+// captured during south-bound wiring.
 //
 // The enablement gates compare their RESOLVED value: "unset" and the explicit
 // default mean the same thing to the daemon, and reporting a restart for that
@@ -822,57 +820,44 @@ func persistenceRestartRules() []RestartRule {
 					!slices.Equal(bv.DisabledCentrals, ev.DisabledCentrals)
 			},
 		},
-		{
-			Path: "persistence.history",
-			Fields: []string{
-				"persistence.history.enabled",
-				"persistence.history.retention",
-				"persistence.history.retention_hourly",
-				"persistence.history.retention_daily",
-				"persistence.history.flush_interval",
-				"persistence.history.include",
-				"persistence.history.exclude",
-				"persistence.history.disabled_centrals",
-				"persistence.history.energy_price_per_kwh",
-				"persistence.history.energy_currency",
-				"persistence.history.export.enabled",
-				"persistence.history.export.kind",
-				"persistence.history.export.endpoint",
-				"persistence.history.export.org",
-				"persistence.history.export.bucket",
-				"persistence.history.export.token_env",
-			},
-			Differs: func(b, e *Config) bool {
-				return historyDiffers(b.Persistence.History, e.Persistence.History)
-			},
-		},
 	}
 }
 
-// historyDiffers compares two history blocks the way the recorder reads them:
-// the two enablement gates resolved, everything else by value. Comparing the
-// raw structs would flag "unset" against an explicit false as a change.
-func historyDiffers(b, e HistoryConfig) bool {
-	if b.HistoryFeatureEnabled() != e.HistoryFeatureEnabled() {
-		return true
+// measurementsRestartRules covers the measurement forwarder. It is built
+// once during south-bound wiring: the exporter with its target and flush
+// cadence, the include/exclude globs and the per-central exclusions are all
+// copied into the running instance at construction.
+//
+// The enablement gate compares its RESOLVED value, for the reason stated on
+// [persistenceRestartRules].
+func measurementsRestartRules() []RestartRule {
+	return []RestartRule{
+		{
+			Path: "north.measurements",
+			Fields: []string{
+				"north.measurements.enabled",
+				"north.measurements.kind",
+				"north.measurements.endpoint",
+				"north.measurements.org",
+				"north.measurements.bucket",
+				"north.measurements.token_env",
+				"north.measurements.flush_interval",
+				"north.measurements.include",
+				"north.measurements.exclude",
+				"north.measurements.disabled_centrals",
+			},
+			Differs: func(b, e *Config) bool {
+				bm, em := b.North.Measurements, e.North.Measurements
+				return bm.IsEnabled() != em.IsEnabled() ||
+					bm.Kind != em.Kind || bm.Endpoint != em.Endpoint ||
+					bm.Org != em.Org || bm.Bucket != em.Bucket ||
+					bm.TokenEnv != em.TokenEnv || bm.FlushInterval != em.FlushInterval ||
+					!slices.Equal(bm.Include, em.Include) ||
+					!slices.Equal(bm.Exclude, em.Exclude) ||
+					!slices.Equal(bm.DisabledCentrals, em.DisabledCentrals)
+			},
+		},
 	}
-	if b.Retention != e.Retention || b.RetentionHourly != e.RetentionHourly ||
-		b.RetentionDaily != e.RetentionDaily || b.FlushInterval != e.FlushInterval {
-		return true
-	}
-	if !slices.Equal(b.Include, e.Include) || !slices.Equal(b.Exclude, e.Exclude) ||
-		!slices.Equal(b.DisabledCentrals, e.DisabledCentrals) {
-		return true
-	}
-	if b.EnergyPricePerKWh != e.EnergyPricePerKWh || b.EnergyCurrency != e.EnergyCurrency {
-		return true
-	}
-	if b.Export.ExportEnabled() != e.Export.ExportEnabled() {
-		return true
-	}
-	bx, ex := b.Export, e.Export
-	return bx.Kind != ex.Kind || bx.Endpoint != ex.Endpoint || bx.Org != ex.Org ||
-		bx.Bucket != ex.Bucket || bx.TokenEnv != ex.TokenEnv
 }
 
 // RestartRules returns the restart contract's rule table. Callers that only

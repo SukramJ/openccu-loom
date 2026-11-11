@@ -104,16 +104,11 @@ const (
 	// (which cannot distinguish a disabled subsystem from an old daemon
 	// or a reverse-proxy misroute).
 	CapabilityAlarm = "alarm.v1"
-	// CapabilityHistory is surfaced when the opt-in measurement-history
-	// feature is enabled (the same flag that mounts /history, /energy and
-	// /history/recording). It reports whether the history store exists, not
-	// whether recording is currently running: the token is set from
-	// historyStore != nil, and an operator pausing recording keeps both the
-	// store and this capability. The SPA gates its history-dependent
-	// surfaces — the Diagrams view (SV03) — on it together with
-	// CapabilityDiagrams, so they stay hidden on a daemon that has no
-	// history store at all.
-	CapabilityHistory = "history.v1"
+	// CapabilityMeasurements is surfaced while measurement forwarding is
+	// switched on — the same condition that mounts
+	// /measurements/recording. The SPA offers its per-data-point recording
+	// picker only then.
+	CapabilityMeasurements = "measurements.v1"
 	// CapabilityAddonSelfUpdate is surfaced when the CCU add-on
 	// self-update platform capability check passed (ADR 0057: an
 	// add-on build AND an executable firmware installer). The SPA's
@@ -133,27 +128,11 @@ const (
 	// Without the token a caller cannot distinguish "not enabled" from
 	// "wrong path" — both answer 404.
 	CapabilityWebhookInbound = "webhook.inbound.v1"
-	// CapabilityDiagrams is surfaced when the diagram CRUD surface is
-	// mounted. It exists because the diagram panel needs two independent
-	// things — measurement history to chart, and the app database that holds
-	// the definitions — and before this token the SPA could only ask about
-	// the first. It gates on both now, which is why the panel disappears when
-	// either is missing rather than rendering a view that then refuses
-	// itself. The two resolve to the same database today; they are wired
-	// separately so that stays an implementation detail.
-	CapabilityDiagrams = "diagrams.v1"
 	// CapabilityAdminPersistence is surfaced when the persistence-backed
 	// admin surface is mounted — stored users, tokens, centrals, config
 	// sections, preferences, areas. Without a database these routes exist
 	// but every write is refused, which a client cannot tell apart from a
 	// permission problem.
-	//
-	// It and CapabilityDiagrams are driven by the same opened database
-	// today, so a client will see both or neither. They are separate tokens
-	// because they gate separate mounts, and each detector reads the
-	// condition of its own: deriving one from the other would make them
-	// agree by construction and hide the release where they stop being the
-	// same question.
 	CapabilityAdminPersistence = "admin.persistence.v1"
 )
 
@@ -229,9 +208,9 @@ type CapabilityDetector interface {
 	// HasAlarm reports whether the daemon-level alarm service is
 	// mounted (the /alarm routes exist).
 	HasAlarm() bool
-	// HasHistory reports whether the opt-in measurement-history feature
-	// is enabled.
-	HasHistory() bool
+	// HasMeasurements reports whether measurement forwarding is
+	// switched on.
+	HasMeasurements() bool
 	// HasAddonSelfUpdate reports whether the CCU add-on self-update
 	// platform capability check passed (ADR 0057).
 	HasAddonSelfUpdate() bool
@@ -241,8 +220,6 @@ type CapabilityDetector interface {
 	// HasWebhookInbound reports whether the inbound webhook endpoints are
 	// mounted.
 	HasWebhookInbound() bool
-	// HasDiagrams reports whether the diagram CRUD surface is mounted.
-	HasDiagrams() bool
 	// HasAdminPersistence reports whether the persistence-backed admin
 	// surface has a database behind it.
 	HasAdminPersistence() bool
@@ -351,8 +328,8 @@ func capabilities(d CapabilityDetector) []string {
 	if d.HasAlarm() {
 		out = append(out, CapabilityAlarm)
 	}
-	if d.HasHistory() {
-		out = append(out, CapabilityHistory)
+	if d.HasMeasurements() {
+		out = append(out, CapabilityMeasurements)
 	}
 	if d.HasAddonSelfUpdate() {
 		out = append(out, CapabilityAddonSelfUpdate)
@@ -362,9 +339,6 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasWebhookInbound() {
 		out = append(out, CapabilityWebhookInbound)
-	}
-	if d.HasDiagrams() {
-		out = append(out, CapabilityDiagrams)
 	}
 	if d.HasAdminPersistence() {
 		out = append(out, CapabilityAdminPersistence)

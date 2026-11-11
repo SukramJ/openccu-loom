@@ -355,166 +355,10 @@ func (c AlarmConfig) AlarmEnabled() bool {
 // block defaults to "feature on, sensible defaults"; zero-valued
 // fields fall back to the hard-coded constants the wiring uses.
 //
-// Today [PersistenceConfig.ValuesCache] and [PersistenceConfig.History] are
-// wired through. Future caches (e.g. linkprofile snapshots) get their own
-// sub-block here.
+// Today [PersistenceConfig.ValuesCache] is wired through. Future caches
+// (e.g. linkprofile snapshots) get their own sub-block here.
 type PersistenceConfig struct {
 	ValuesCache ValuesCacheConfig `yaml:"values_cache,omitempty" json:"values_cache,omitzero" cfg:"expert"`
-	History     HistoryConfig     `yaml:"history,omitempty" json:"history,omitzero" cfg:"expert"`
-}
-
-// HistoryConfig configures the opt-in measurement-history recorder
-// introduced by ADR 0040. Unlike the VALUES cache, history is OPT-IN:
-// Enabled defaults to false (nil), so the recorder, the dedicated
-// history.db, and the retention job are only wired when the operator
-// turns the feature on.
-//
-// This block is DB-tier config: it is seeded into the config_sections
-// table and editable through the SPA, like persistence.values_cache and
-// north.mqtt.
-type HistoryConfig struct {
-	// Enabled is the master switch. Defaults to false (opt-in). Use
-	// *bool so the YAML decoder can distinguish "not set" from
-	// "explicitly false".
-	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
-
-	// Retention bounds how long raw samples are kept. Zero falls back to
-	// the daemon default (720h / 30 days). The retention job purges rows
-	// older than now-Retention.
-	Retention time.Duration `yaml:"retention,omitempty" json:"retention,omitempty" cfg:"expert"`
-
-	// RetentionHourly bounds how long the hourly rollup tier
-	// (measurements_hourly) is kept. Zero falls back to
-	// [RetentionHourlyDefault] (13 months). The rollup job purges hourly
-	// rows older than now-RetentionHourly, always after they have been
-	// folded into the daily tier.
-	RetentionHourly time.Duration `yaml:"retention_hourly,omitempty" json:"retention_hourly,omitempty" cfg:"expert"`
-
-	// RetentionDaily bounds how long the daily rollup tier
-	// (measurements_daily) is kept. Zero means keep forever — daily rows
-	// are tiny (one row per data point per day), so there is no default
-	// expiry.
-	RetentionDaily time.Duration `yaml:"retention_daily,omitempty" json:"retention_daily,omitempty" cfg:"expert"`
-
-	// FlushInterval overrides the recorder's batch-flush cadence. Zero
-	// falls back to the daemon default (5s).
-	FlushInterval time.Duration `yaml:"flush_interval,omitempty" json:"flush_interval,omitempty" cfg:"expert"`
-
-	// Include lists parameter-name globs to record. Empty (default)
-	// records every numeric VALUES parameter. A non-empty list records
-	// only parameters matching at least one pattern (e.g. "TEMPERATURE",
-	// "*POWER*", "ACTUAL_*").
-	Include []string `yaml:"include,omitempty" json:"include,omitempty" cfg:"expert"`
-
-	// Exclude lists parameter-name globs to drop. Exclude always wins
-	// over Include. Empty (default) excludes nothing.
-	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty" cfg:"expert"`
-
-	// DisabledCentrals lists central names whose data points must not be
-	// recorded. Empty (default) records every enabled central.
-	DisabledCentrals []string `yaml:"disabled_centrals,omitempty" json:"disabled_centrals,omitempty" cfg:"expert"`
-
-	// EnergyPricePerKWh is the electricity tariff the energy view uses to
-	// show costs next to kWh. Zero (the default) means no tariff is
-	// configured and the view omits every cost figure rather than
-	// rendering a misleading 0.00.
-	EnergyPricePerKWh float64 `yaml:"energy_price_per_kwh,omitempty" json:"energy_price_per_kwh,omitempty" cfg:"basic"`
-
-	// EnergyCurrency labels the amounts derived from EnergyPricePerKWh.
-	// Free text so any symbol or ISO code works; empty falls back to the
-	// euro sign. It is a label only - no conversion happens anywhere.
-	EnergyCurrency string `yaml:"energy_currency,omitempty" json:"energy_currency,omitempty" cfg:"basic"`
-
-	// Export configures the opt-in push exporter that forwards each
-	// recorded sample to an external time-series store (ADR 0040). The
-	// embedded history.db stays the default surface; this is additive.
-	Export HistoryExportConfig `yaml:"export,omitempty" json:"export,omitzero" cfg:"expert"`
-}
-
-// HistoryExportConfig configures the opt-in measurement-history push
-// exporter. Default off. The shipped backend speaks InfluxDB line
-// protocol; the seam allows other backends later (ADR 0040).
-//
-// The access token is a secret and is read from the named environment
-// variable (TokenEnv), never stored inline in config (ADR 0027).
-type HistoryExportConfig struct {
-	// Enabled turns the exporter on. Defaults to false.
-	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
-
-	// Kind selects the backend. Empty or "influxdb" = InfluxDB line
-	// protocol (the only backend today).
-	Kind string `yaml:"kind,omitempty" json:"kind,omitempty" cfg:"expert"`
-
-	// Endpoint is the base URL of the target (e.g. http://influx:8086).
-	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty" cfg:"expert"`
-
-	// Org and Bucket are the InfluxDB v2 write target.
-	Org    string `yaml:"org,omitempty" json:"org,omitempty" cfg:"expert"`
-	Bucket string `yaml:"bucket,omitempty" json:"bucket,omitempty" cfg:"expert"`
-
-	// TokenEnv names the environment variable that holds the write
-	// token. The daemon reads os.Getenv(TokenEnv) at wiring time.
-	TokenEnv string `yaml:"token_env,omitempty" json:"token_env,omitempty" cfg:"expert"`
-}
-
-// ExportEnabled reports whether the push exporter should be wired.
-func (c HistoryExportConfig) ExportEnabled() bool {
-	return c.Enabled != nil && *c.Enabled
-}
-
-// HistoryEnabled reports whether the history recorder should be wired
-// for the named central. True only when the feature is explicitly
-// enabled AND the central is not in DisabledCentrals.
-func (c HistoryConfig) HistoryEnabled(centralName string) bool {
-	if c.Enabled == nil || !*c.Enabled {
-		return false
-	}
-	return !slices.Contains(c.DisabledCentrals, centralName)
-}
-
-// HistoryFeatureEnabled reports whether the feature is on at all
-// (independent of any single central). Used to decide whether to open
-// history.db and wire the retention job.
-func (c HistoryConfig) HistoryFeatureEnabled() bool {
-	return c.Enabled != nil && *c.Enabled
-}
-
-// RetentionHourlyDefault is how long the hourly rollup tier is kept when
-// the operator did not override it: 13 months, chosen so a full year of
-// hourly resolution survives even a slightly late rollout of the daily
-// tier's consumers (e.g. the energy view's month-over-month comparisons).
-const RetentionHourlyDefault = 13 * 30 * 24 * time.Hour
-
-// HistoryRetentionFloor is the smallest raw-sample retention the daemon
-// accepts. It mirrors the recorder's hourly-rollup lag (one hour): a
-// retention below it would let the retention purge delete raw rows before
-// the hourly fold has folded them, permanently losing that data. An
-// explicit value below this floor is clamped up to it at config load; zero
-// still means "use the daemon default", which is far above the floor.
-//
-// The recorder derives its lag from this constant (rollupHourlyLag in
-// internal/history), so the two cannot drift: raising this value raises the
-// lag with it. They used to be independent, and the comment here said so —
-// raising the lag alone left this floor too low and the purge then deleted
-// raw rows the fold had not seen, silently and permanently, for exactly the
-// operators whose retention sat between the two values.
-const HistoryRetentionFloor = time.Hour
-
-// RetentionHourlyOrDefault returns RetentionHourly, falling back to
-// [RetentionHourlyDefault] when unset.
-func (c HistoryConfig) RetentionHourlyOrDefault() time.Duration {
-	if c.RetentionHourly > 0 {
-		return c.RetentionHourly
-	}
-	return RetentionHourlyDefault
-}
-
-// RetentionDailyOrDefault returns RetentionDaily. Unlike the raw and
-// hourly tiers, zero is a genuine value here (keep daily rows forever),
-// not a "use the default" sentinel — so this is a passthrough kept for
-// symmetry with [HistoryConfig.RetentionHourlyOrDefault] at call sites.
-func (c HistoryConfig) RetentionDailyOrDefault() time.Duration {
-	return c.RetentionDaily
 }
 
 // ValuesCacheConfig overrides the defaults baked into the wire-DP
@@ -677,6 +521,89 @@ type NorthConfig struct {
 	MCP       NorthMCP       `yaml:"mcp" json:"mcp" cfg:"basic"`
 	Discovery NorthDiscovery `yaml:"discovery" json:"discovery" cfg:"basic"`
 	Webhook   NorthWebhook   `yaml:"webhook" json:"webhook" cfg:"basic"`
+	// Measurements is omitted from a serialised config while unset, like
+	// every opt-in block that was added after the first stored sections.
+	Measurements NorthMeasurements `yaml:"measurements,omitempty" json:"measurements,omitzero" cfg:"expert"`
+}
+
+// NorthMeasurements configures the measurement forwarder: the north-bound
+// plane that hands numeric data-point values to an external time-series
+// store. The daemon keeps no measurement history of its own. Default off.
+//
+// The shipped target speaks InfluxDB line protocol; Kind leaves room for
+// further targets.
+//
+// This block is DB-tier config: it is seeded into the config_sections
+// table and editable through the SPA, like north.mqtt.
+type NorthMeasurements struct {
+	// Enabled is the master switch. Defaults to false (opt-in). Use
+	// *bool so the YAML decoder can distinguish "not set" from
+	// "explicitly false".
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
+
+	// Kind selects the target. Empty or "influxdb" = InfluxDB line
+	// protocol (the only target today).
+	Kind string `yaml:"kind,omitempty" json:"kind,omitempty" cfg:"expert"`
+
+	// Endpoint is the base URL of the target (e.g. http://influx:8086).
+	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty" cfg:"expert"`
+
+	// Org and Bucket are the InfluxDB v2 write target.
+	Org    string `yaml:"org,omitempty" json:"org,omitempty" cfg:"expert"`
+	Bucket string `yaml:"bucket,omitempty" json:"bucket,omitempty" cfg:"expert"`
+
+	// TokenEnv names the environment variable that holds the write
+	// token. The token is a secret and is never stored in config (ADR
+	// 0027); the daemon reads os.Getenv(TokenEnv) at wiring time.
+	TokenEnv string `yaml:"token_env,omitempty" json:"token_env,omitempty" cfg:"expert"`
+
+	// FlushInterval overrides how often buffered samples are written to
+	// the target. Zero falls back to the daemon default (5s).
+	FlushInterval time.Duration `yaml:"flush_interval,omitempty" json:"flush_interval,omitempty" cfg:"expert"`
+
+	// Include lists parameter-name globs to forward. Empty (default)
+	// forwards every numeric VALUES parameter. A non-empty list forwards
+	// only parameters matching at least one pattern (e.g. "TEMPERATURE",
+	// "*POWER*", "ACTUAL_*").
+	Include []string `yaml:"include,omitempty" json:"include,omitempty" cfg:"expert"`
+
+	// Exclude lists parameter-name globs to drop. Exclude always wins
+	// over Include. Empty (default) excludes nothing.
+	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty" cfg:"expert"`
+
+	// DisabledCentrals lists central names whose data points must not be
+	// forwarded. Empty (default) forwards every central.
+	DisabledCentrals []string `yaml:"disabled_centrals,omitempty" json:"disabled_centrals,omitempty" cfg:"expert"`
+}
+
+// MeasurementsKindInfluxDB is the one forwarding target the daemon ships.
+const MeasurementsKindInfluxDB = "influxdb"
+
+// IsEnabled reports whether the forwarder is switched on at all,
+// independent of any single central.
+func (c NorthMeasurements) IsEnabled() bool {
+	return c.Enabled != nil && *c.Enabled
+}
+
+// EnabledFor reports whether the named central is forwarded: the feature
+// is on and the central is not in DisabledCentrals.
+func (c NorthMeasurements) EnabledFor(centralName string) bool {
+	return c.IsEnabled() && !slices.Contains(c.DisabledCentrals, centralName)
+}
+
+// validate checks the block when it is switched on. A disabled block is
+// not validated: an operator may keep a half-filled target around.
+func (c NorthMeasurements) validate() error {
+	if !c.IsEnabled() {
+		return nil
+	}
+	if k := strings.ToLower(c.Kind); k != "" && k != MeasurementsKindInfluxDB {
+		return fmt.Errorf("config: north.measurements.kind %q is not supported (use %q)", c.Kind, MeasurementsKindInfluxDB)
+	}
+	if strings.TrimSpace(c.Endpoint) == "" {
+		return errors.New("config: north.measurements.endpoint is required when north.measurements.enabled is true")
+	}
+	return nil
 }
 
 // NorthWebhook configures the outbound webhook bridge — a north-bound
@@ -2365,19 +2292,6 @@ func (c *Config) applyDefaults() {
 	if c.AddonUpdate.CheckInterval == 0 {
 		c.AddonUpdate.CheckInterval = 24 * time.Hour
 	}
-	// Clamp an explicit history.retention below the hourly-rollup lag up
-	// to the floor: keeping it lower would let the purge delete raw rows
-	// before the hourly fold folds them (permanent loss). Zero is left
-	// untouched — it selects the daemon default, well above the floor.
-	//
-	// The clamp lives here as well as in Validate because the config store
-	// applies defaults without validating (configstore.Store.Effective),
-	// so a stored `persistence.history` row below the floor was reported
-	// by GET /api/v1/config as written while the running daemon held the
-	// clamped value.
-	if h := &c.Persistence.History; h.Retention > 0 && h.Retention < HistoryRetentionFloor {
-		h.Retention = HistoryRetentionFloor
-	}
 }
 
 // ApplyDefaults fills any still-unset field with its compiled-in default.
@@ -2421,12 +2335,6 @@ func validateCentralBehavior(idx int, b *CentralBehavior) error {
 }
 
 // Validate returns an error when required invariants are violated.
-//
-// It also normalises: an explicit history.retention below
-// [HistoryRetentionFloor] is clamped up to the floor, so the receiver is
-// written to and callers must not treat it as read-only. The same clamp runs
-// in applyDefaults; keeping it here too means every path is clamped whatever
-// its defaults/validate order.
 func (c *Config) Validate() error {
 	if err := c.Logging.validate(); err != nil {
 		return err
@@ -2483,12 +2391,8 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
-	// Clamp an explicit history.retention below the hourly-rollup lag up to
-	// the floor: keeping it lower would let the purge delete raw rows before
-	// the hourly fold folds them (permanent loss). Zero is left untouched —
-	// it selects the daemon default, which is well above the floor.
-	if h := &c.Persistence.History; h.Retention > 0 && h.Retention < HistoryRetentionFloor {
-		h.Retention = HistoryRetentionFloor
+	if err := c.North.Measurements.validate(); err != nil {
+		return err
 	}
 	return validateMQTT(&c.North.MQTT)
 }

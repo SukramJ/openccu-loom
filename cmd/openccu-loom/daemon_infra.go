@@ -17,7 +17,6 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -46,9 +45,6 @@ type sharedInfra struct {
 
 	masterValuesStore  *sqlite.MasterValuesStore
 	valuesCacheStore   *sqlite.ValuesCacheStore
-	historyStore       *sqlite.MeasurementStore
-	recordingOverrides *history.RecordingOverrides
-	recordingStore     *sqlite.RecordingOverrideStore
 	descriptorStores   adapter.DescriptorStores
 	descriptorDB       *sql.DB
 
@@ -65,11 +61,11 @@ type sharedInfra struct {
 // registries, adapters and the MQTT supervisor that the rest of the
 // composition root consumes. It mirrors the original inline phase
 // verbatim: the SQLite-backed stores, the MQTT supervisor, the OTLP
-// exporter and the history / descriptor stores each contribute a shutdown
-// step; they are all folded into the returned teardown func, which runs
-// them in a fixed order (mqtt.Shutdown, OTLP exporter, values-cache WAL
-// loop + store, history WAL / retention loops + store, masterValuesStore,
-// visibilityStore, descriptorDB). The caller defers teardown.
+// exporter and the descriptor stores each contribute a shutdown step; they
+// are all folded into the returned teardown func, which runs them in a
+// fixed order (mqtt.Shutdown, OTLP exporter, values-cache WAL loop + store,
+// masterValuesStore, visibilityStore, descriptorDB). The caller defers
+// teardown.
 //
 // channelFlags carries the per-channel operator overrides (G12). It is a
 // parameter rather than a post-construction setter because the MQTT bridge
@@ -129,26 +125,6 @@ func wireSharedInfrastructure(
 	// store is closed; it is called at the top of teardown so the
 	// checkpoint drains the WAL before Close releases the file handle.
 	stopValuesCacheWAL := sqlite.StartWALCheckpointLoop(si.valuesCacheStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
-
-	// Open the opt-in measurement-history DB (its own file + WAL). nil
-	// when the feature is off (the default). The append-heavy recorder
-	// makes a periodic WAL checkpoint worthwhile on busy ARM targets, so
-	// wire one when the store exists; the stop closer drains the WAL
-	// before Close at teardown.
-	si.historyStore = wireHistoryStore(cfg, logger) //nolint:contextcheck // wireHistoryStore creates its own bounded context internally
-	var stopHistoryWAL, stopHistoryRetention func()
-	if si.historyStore != nil {
-		stopHistoryWAL = sqlite.StartWALCheckpointLoop(si.historyStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
-		// Per-datapoint recording overrides live in the same history DB and
-		// steer the recorder's hot-path gate (SV10).
-		si.recordingStore, si.recordingOverrides = wireRecordingOverrides(si.historyStore, cfg, logger) //nolint:contextcheck // helper bounds its own context internally
-	} else {
-		// Recording is off, but an earlier run may have left a populated
-		// history.db behind. Keep evicting it so switching the feature off
-		// releases the disk it was taken for instead of freezing the file
-		// at its final size.
-		stopHistoryRetention = wireHistoryRetention(cfg, logger) //nolint:contextcheck // wireHistoryRetention bounds its own open context and runs the loop on a daemon-lifetime one
-	}
 
 	si.wsHub = ws.NewHub()
 	if n := cfg.North.REST.WS.ReplayCapacity; n > 0 {
@@ -241,13 +217,6 @@ func wireSharedInfrastructure(
 		// before closing the database so the checkpoint drains cleanly.
 		stopValuesCacheWAL()
 		_ = si.valuesCacheStore.Close()
-		if stopHistoryWAL != nil {
-			stopHistoryWAL()
-		}
-		if stopHistoryRetention != nil {
-			stopHistoryRetention()
-		}
-		_ = si.historyStore.Close()
 		_ = si.masterValuesStore.Close()
 		_ = si.visibilityStore.Close()
 		if si.descriptorDB != nil {

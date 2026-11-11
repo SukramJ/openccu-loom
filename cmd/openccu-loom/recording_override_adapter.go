@@ -6,21 +6,22 @@ package main
 import (
 	"context"
 
-	"github.com/SukramJ/openccu-loom/internal/history"
+	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
 // recordingOverrideAdapter bridges the in-memory recording overlay to the
 // REST handler interface.
 type recordingOverrideAdapter struct {
-	overlay *history.RecordingOverrides
+	overlay *measurements.RecordingOverrides
 }
 
 // newRecordingOverrideAdapter returns a handler service over the overlay,
-// or a genuine-nil interface when the overlay is nil (history feature
-// off) so the REST route is not mounted.
-func newRecordingOverrideAdapter(o *history.RecordingOverrides) handlers.RecordingOverrideService {
-	if o == nil {
+// or a genuine-nil interface while measurement forwarding is switched off,
+// so the REST route is not mounted. The overlay itself exists either way:
+// removals purge its rows whatever the switch says.
+func newRecordingOverrideAdapter(o *measurements.RecordingOverrides, enabled bool) handlers.RecordingOverrideService {
+	if o == nil || !enabled {
 		return nil
 	}
 	return &recordingOverrideAdapter{overlay: o}

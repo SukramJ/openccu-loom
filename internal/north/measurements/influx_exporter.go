@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-package history
+package measurements
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/httpx"
-	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // DefaultInfluxMeasurement is the line-protocol measurement name used
@@ -52,7 +51,7 @@ type InfluxExporter struct {
 	maxBuffer   int
 
 	mu  sync.Mutex
-	buf []sqlite.MeasurementSample
+	buf []Sample
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -108,7 +107,7 @@ func NewInfluxExporter(cfg InfluxConfig) *InfluxExporter {
 }
 
 // Export buffers a sample, dropping the oldest on overflow. Non-blocking.
-func (e *InfluxExporter) Export(s sqlite.MeasurementSample) {
+func (e *InfluxExporter) Export(s Sample) {
 	e.mu.Lock()
 	if len(e.buf) >= e.maxBuffer {
 		copy(e.buf, e.buf[1:])
@@ -168,14 +167,14 @@ func (e *InfluxExporter) loop(ctx context.Context, flush time.Duration) {
 	}
 }
 
-func (e *InfluxExporter) drain() []sqlite.MeasurementSample {
+func (e *InfluxExporter) drain() []Sample {
 	e.mu.Lock()
 	if len(e.buf) == 0 {
 		e.mu.Unlock()
 		return nil
 	}
 	out := e.buf
-	e.buf = make([]sqlite.MeasurementSample, 0, len(out))
+	e.buf = make([]Sample, 0, len(out))
 	e.mu.Unlock()
 	return out
 }
@@ -184,14 +183,13 @@ func (e *InfluxExporter) drain() []sqlite.MeasurementSample {
 // the flush was in flight, so a transient outage retries on the next tick
 // instead of losing everything buffered since the last successful write. The
 // combined buffer stays bounded by maxBuffer; on overflow the oldest samples
-// are dropped and counted — bounded, metered loss, never a silent one. Mirrors
-// [Recorder.requeue], which solves the same problem for the SQLite tier.
-func (e *InfluxExporter) requeue(batch []sqlite.MeasurementSample) {
+// are dropped and counted — bounded, metered loss, never a silent one.
+func (e *InfluxExporter) requeue(batch []Sample) {
 	if len(batch) == 0 {
 		return
 	}
 	e.mu.Lock()
-	combined := make([]sqlite.MeasurementSample, 0, len(batch)+len(e.buf))
+	combined := make([]Sample, 0, len(batch)+len(e.buf))
 	combined = append(combined, batch...)
 	combined = append(combined, e.buf...)
 	if over := len(combined) - e.maxBuffer; over > 0 {
@@ -219,7 +217,7 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.writeURL, strings.NewReader(body))
 	if err != nil {
 		e.failures.Add(1)
-		e.logger.Warn("history.export.request_err", slog.String("err", err.Error()))
+		e.logger.Warn("measurements.export.request_err", slog.String("err", err.Error()))
 		return
 	}
 	req.Header.Set("Authorization", "Token "+e.token)
@@ -228,7 +226,7 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 	if err != nil {
 		e.failures.Add(1)
 		e.requeue(batch)
-		e.logger.Warn("history.export.post_err",
+		e.logger.Warn("measurements.export.post_err",
 			slog.Int("samples", len(batch)), slog.String("err", err.Error()))
 		return
 	}
@@ -242,7 +240,7 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 			e.dropped.Add(int64(len(batch)))
 		}
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-		e.logger.Warn("history.export.bad_status",
+		e.logger.Warn("measurements.export.bad_status",
 			slog.Int("status", resp.StatusCode),
 			slog.Int("samples", len(batch)),
 			slog.Bool("requeued", retryable),
@@ -256,7 +254,7 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 
 // lineProtocol renders a batch as InfluxDB line protocol, one line per
 // sample: <measurement>,<tags> value=<v> <ts_ns>.
-func (e *InfluxExporter) lineProtocol(batch []sqlite.MeasurementSample) string {
+func (e *InfluxExporter) lineProtocol(batch []Sample) string {
 	var b strings.Builder
 	for i := range batch {
 		s := &batch[i]
@@ -289,4 +287,4 @@ func escapeTag(s string) string         { return tagEscaper.Replace(s) }
 func escapeMeasurement(s string) string { return measurementEscaper.Replace(s) }
 
 // compile-time assertion that InfluxExporter satisfies the seam.
-var _ MeasurementExporter = (*InfluxExporter)(nil)
+var _ Exporter = (*InfluxExporter)(nil)

@@ -110,6 +110,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		auditRead = auditReadService{Buffer: auditBuf, store: sqlitestore.NewAuditStore(auditDB)}
 	}
+	// Per-data-point recording overrides of the measurement forwarder, in
+	// the main app DB; nil without one.
+	recordingStore, recordingOverrides := wireRecordingOverrides(ctx, cfg, auditDB, logger)
 	// Per-channel operator overrides (G12): visibility + operation lock, in
 	// the main app DB. The overlay is a save-through read cache the ingest and
 	// control-write paths consult; hydrated once here at boot.
@@ -282,9 +285,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	visibilityAdapter := si.visibilityAdapter
 	masterValuesStore := si.masterValuesStore
 	valuesCacheStore := si.valuesCacheStore
-	historyStore := si.historyStore
-	recordingOverrides := si.recordingOverrides
-	recordingStore := si.recordingStore
 	wsHub := si.wsHub
 	// Teach the WebSocket hub which devices have finished onboarding, so a
 	// subscriber can ask to be spared the ones that have not
@@ -572,9 +572,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		descriptorStores:        si.descriptorStores,
 		pendingDeviceStores:     pendingDeviceStores,
 		sqCentrals:              sqCentrals,
-		historyStore:            historyStore,
 		recordingOverrides:      recordingOverrides,
-		recordingStore:          recordingStore,
 		channelFlagsOverlay:     channelFlagsOverlay,
 		channelFlagsStore:       channelFlagsStore,
 		healthTracker:           healthTracker,
@@ -628,7 +626,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// below then leaves the plain SQLite-backed service in place.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
-		valuesCacheStore, masterValuesStore, historyStore, recordingStore, recordingOverrides,
+		valuesCacheStore, masterValuesStore, recordingStore, recordingOverrides,
 		channelFlagsStore, channelFlagsOverlay)
 	// A runtime-adopted central must join the hub-discovery ready pipeline the
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
@@ -723,7 +721,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if sqUsers != nil {
 		selfPasswordSvc = sqUsers
 	}
-	prefSvc, diagramSvc, areaSvc := appDBServices(auditDB)
+	prefSvc, areaSvc := appDBServices(auditDB)
 	tokenAdminSvc := rw.tokenAdmin
 	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
 	// /admin/centrals also drive the live orchestrator built above — the
@@ -982,7 +980,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		userSvc:                userAdminSvc,
 		passwordSvc:            selfPasswordSvc,
 		prefSvc:                prefSvc,
-		diagramSvc:             diagramSvc,
 		areaSvc:                areaSvc,
 		tokenSvc:               tokenAdminSvc,
 		centSvc:                centralAdminSvc,
@@ -1005,7 +1002,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visibilityUnIgnoreStore: visibilityUnIgnoreStoreFrom(visibilityUnIgnoreStore),
 		visibilityAdapter:       visibilityAdapter,
 		valuesCacheStore:        valuesCacheStore,
-		historyStore:            historyStore,
 		recordingOverrides:      recordingOverrides,
 		channelFlagsStore:       channelFlagsStore,
 		channelFlagsOverlay:     channelFlagsOverlay,

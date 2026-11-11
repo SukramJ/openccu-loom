@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-package history
+package measurements
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -19,14 +20,14 @@ type overrideKey struct {
 	parameter string
 }
 
-// RecordingOverrides is the in-memory overlay the recorder consults on
+// RecordingOverrides is the in-memory overlay the forwarder consults on
 // the hot path. A present entry forces recording on/off for one data
 // point, overriding the parameter-name glob policy; an absent entry
 // falls back to that policy. It write-throughs mutations to the backing
 // store and keeps the map in sync so the hot path never touches disk.
 //
 // All methods are safe on a nil receiver (the feature-off case), so the
-// recorder can call [RecordingOverrides.Decide] unconditionally.
+// forwarder can call [RecordingOverrides.Decide] unconditionally.
 type RecordingOverrides struct {
 	store   *sqlite.RecordingOverrideStore
 	include []string
@@ -127,6 +128,33 @@ func (o *RecordingOverrides) Clear(
 	}
 	o.mu.Lock()
 	delete(o.m, overrideKey{central, iface, channel, parameter})
+	o.mu.Unlock()
+	return nil
+}
+
+// DeleteDevice removes every override of every channel of one device, from
+// the store and from the live overlay. A device removal has to reach both:
+// the overlay is loaded once, so rows deleted only on disk would keep
+// deciding for a device re-paired at the same address until the next
+// restart. Prefix-safe ("DEVICE" never matches "DEVICE2:0"). Safe on a nil
+// receiver.
+func (o *RecordingOverrides) DeleteDevice(ctx context.Context, central, iface, deviceAddress string) error {
+	if o == nil || o.store == nil {
+		return nil
+	}
+	if err := o.store.DeleteDevice(ctx, central, iface, deviceAddress); err != nil {
+		return err
+	}
+	channelPrefix := deviceAddress + ":"
+	o.mu.Lock()
+	for k := range o.m {
+		if k.central != central || k.iface != iface {
+			continue
+		}
+		if k.channel == deviceAddress || strings.HasPrefix(k.channel, channelPrefix) {
+			delete(o.m, k)
+		}
+	}
 	o.mu.Unlock()
 	return nil
 }

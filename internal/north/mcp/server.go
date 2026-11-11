@@ -212,16 +212,6 @@ type InterfaceLister interface {
 	Interfaces() []hmapi.InterfaceState
 }
 
-// HistoryReader is the read seam get_measurements calls through. It
-// mirrors [handlers.HistoryService] field-for-field without importing
-// it as an alias, since the handler's query/bucket types are reused
-// directly as the tool's input/output shapes.
-//
-// loom:reachable:reason="the declared type of Deps.History, filled at cmd/openccu-loom/daemon_rest_mount.go with the history handler adapter; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
-type HistoryReader interface {
-	Query(ctx context.Context, q handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error)
-}
-
 // VisibilityLister is the read half of the un-ignore visibility store —
 // list_hidden_parameters needs only the per-central pattern listing,
 // not the write/candidate machinery the REST facade also carries.
@@ -231,11 +221,6 @@ type HistoryReader interface {
 type VisibilityLister interface {
 	List(ctx context.Context, centralName string) ([]sqlite.UnIgnoreEntry, error)
 }
-
-// EnergyReader is an alias for the narrow facade GET /api/v1/energy
-// reads through (internal/north/rest/handlers). Already scoped to one
-// method, so get_energy reuses it directly.
-type EnergyReader = handlers.EnergyService
 
 // LinkLister is the read seam list_links calls through — the same
 // method the REST global links overview (GET /api/v1/links) uses.
@@ -353,18 +338,10 @@ type Deps struct {
 	// radio-quality state (read-only; reconnect is not projected). Nil
 	// leaves the tool unregistered.
 	Interfaces InterfaceLister
-	// History backs get_measurements: server-bucketed data-point
-	// history, the same aggregation GET /history serves. Nil leaves
-	// the tool unregistered.
-	History HistoryReader
 	// Visibility backs list_hidden_parameters: the persisted un-ignore
 	// patterns that promote otherwise-hidden parameters into the
 	// visible surface. Nil leaves the tool unregistered.
 	Visibility VisibilityLister
-	// Energy backs get_energy: per-device power/energy aggregation,
-	// the same read GET /energy serves. Nil leaves the tool
-	// unregistered.
-	Energy EnergyReader
 	// Links backs list_links: the global direct-link overview across
 	// every configured central. Nil leaves the tool unregistered.
 	Links LinkLister

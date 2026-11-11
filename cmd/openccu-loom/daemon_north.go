@@ -981,11 +981,10 @@ type runtimeCapabilityDetector struct {
 	mcp               bool
 	mcpWrite          bool
 	alarm             bool
-	history           bool
+	measurements      bool
 	addonSelfUpdate   bool
 	mqttRaw           bool
 	webhookInbound    bool
-	diagrams          bool
 	adminPersistence  bool
 	basicAuth         bool
 	bearerAuth        bool
@@ -1005,9 +1004,8 @@ func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp &&
 func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm }
 func (r runtimeCapabilityDetector) HasMQTTRaw() bool           { return r.mqttRaw }
 func (r runtimeCapabilityDetector) HasWebhookInbound() bool    { return r.webhookInbound }
-func (r runtimeCapabilityDetector) HasDiagrams() bool          { return r.diagrams }
 func (r runtimeCapabilityDetector) HasAdminPersistence() bool  { return r.adminPersistence }
-func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
+func (r runtimeCapabilityDetector) HasMeasurements() bool      { return r.measurements }
 func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
 func (r runtimeCapabilityDetector) HasBasicAuth() bool         { return r.basicAuth }
 func (r runtimeCapabilityDetector) HasBearerAuth() bool        { return r.bearerAuth }

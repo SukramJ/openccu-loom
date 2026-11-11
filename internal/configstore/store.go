@@ -576,6 +576,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return overlaySection(raw, &cfg.North.Discovery)
 	case SectionWebhook:
 		return overlaySection(raw, &cfg.North.Webhook)
+	case SectionMeasurements:
+		return overlaySection(raw, &cfg.North.Measurements)
 	case SectionREST:
 		return overlaySection(raw, &cfg.North.REST)
 	case SectionOIDC:
@@ -647,6 +649,8 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 	case SectionWebhook:
 		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027); see #20
 		raw, err = json.Marshal(cfg.North.Webhook)
+	case SectionMeasurements:
+		raw, err = json.Marshal(cfg.North.Measurements)
 	case SectionREST:
 		raw, err = json.Marshal(cfg.North.REST)
 	case SectionOIDC:

@@ -22,6 +22,10 @@ const (
 	// bridge toggle + endpoint. Restart-required: the bridge is wired once
 	// at boot.
 	SectionWebhook Section = "north.webhook"
+	// SectionMeasurements carries [config.NorthMeasurements] — the
+	// measurement forwarder with its target. Restart-required: the
+	// forwarder and its exporter are built once at boot.
+	SectionMeasurements Section = "north.measurements"
 	// SectionREST carries the CORS list + auth toggles +
 	// rate-limit block (everything inside [config.NorthREST] except
 	// the bind address, which lives in BootstrapConfig).
@@ -73,6 +77,7 @@ func AllSections() []Section {
 		SectionMCP,
 		SectionDiscovery,
 		SectionWebhook,
+		SectionMeasurements,
 		SectionREST,
 		SectionOIDC,
 		SectionCCUAuth,
