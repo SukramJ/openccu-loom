@@ -185,30 +185,31 @@ type Surface struct {
 }
 
 // visibility is a small constructor for the shipped default row. It
-// takes one argument per profile on purpose: a surface cannot be
-// registered without a value for every column.
-func visibility(standalone, embedded, lite bool) map[string]bool {
+// takes one argument per hosted profile on purpose: a surface cannot be
+// registered without a value for every column. The standalone profile
+// is the full console, so its column is always visible.
+func visibility(embedded, lite bool) map[string]bool {
 	return map[string]bool{
-		config.ProfileStandalone: standalone,
+		config.ProfileStandalone: true,
 		config.ProfileEmbedded:   embedded,
 		config.ProfileLite:       lite,
 	}
 }
 
 // everywhere marks a surface visible in every profile.
-func everywhere() map[string]bool { return visibility(true, true, true) }
+func everywhere() map[string]bool { return visibility(true, true) }
 
 // haOwned marks a surface Home Assistant provides and the openccu-lite
 // box does not: hidden in the embedded profile only.
-func haOwned() map[string]bool { return visibility(true, false, true) }
+func haOwned() map[string]bool { return visibility(false, true) }
 
 // boxOwned marks a surface the openccu-lite box provides and Home
 // Assistant does not: hidden in the lite profile only.
-func boxOwned() map[string]bool { return visibility(true, true, false) }
+func boxOwned() map[string]bool { return visibility(true, false) }
 
 // hostOwned marks a surface either host provides itself: visible only
 // standalone.
-func hostOwned() map[string]bool { return visibility(true, false, false) }
+func hostOwned() map[string]bool { return visibility(false, false) }
 
 // registry is the authoritative table. Order is the order the editor
 // renders, which mirrors the SPA navigation.

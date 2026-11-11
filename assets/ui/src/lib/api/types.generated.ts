@@ -9553,6 +9553,17 @@ export interface components {
              */
             box_owns?: boolean;
         };
+        /**
+         * @description The door a request came through, the per-request input of the
+         *     served surface profile. `lite_shell` is a request authenticated
+         *     by a session of the openccu-lite box shell that the box
+         *     confirmed; it is decided by that identity, not by the
+         *     `X-Occulite-Session` header alone, so it cannot be forged on
+         *     the directly-exposed port. A box API token and a daemon login
+         *     inside the shell frame read as `direct`.
+         * @enum {string}
+         */
+        UIOrigin: "direct" | "home_assistant" | "lite_shell";
         SurfacesResponse: {
             /** @description The master toggle — whether Home Assistant owns this daemon's config surface. */
             embedded: boolean;
@@ -9572,20 +9583,11 @@ export interface components {
              *     header (the remote proxy add-on forwards it). With the
              *     default scope it is what selects `profile`, so the same
              *     configuration answers differently on the other door.
-             *     Equal to `origin == "home_assistant"`.
+             *     Equal to `origin == "home_assistant"`. A daemon older than
+             *     16.1.0 sends no `origin`; read this field there.
              */
             inside_ha: boolean;
-            /**
-             * @description The door THIS request came through, the per-request input
-             *     of `profile`. `lite_shell` is a request authenticated by a
-             *     session of the openccu-lite box shell that the box
-             *     confirmed; it is decided by that identity, not by the
-             *     `X-Occulite-Session` header alone, so it cannot be forged on
-             *     the directly-exposed port. A box API token and a daemon
-             *     login inside the shell frame read as `direct`.
-             * @enum {string}
-             */
-            origin: "direct" | "home_assistant" | "lite_shell";
+            origin?: components["schemas"]["UIOrigin"];
             /**
              * @description The profile served to this request. `lite` is served to a
              *     `lite_shell` request and hides what the box's own shell

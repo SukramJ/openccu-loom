@@ -2568,7 +2568,7 @@
    "embedded:boolean",
    "embedded_scope:string",
    "inside_ha:boolean",
-   "origin:string",
+   "origin:$ref:UIOrigin",
    "profile:string",
    "profiles:object",
    "surfaces:array\u003c$ref:SurfaceInfo\u003e"
@@ -2806,6 +2806,7 @@
    "event:string",
    "properties:object"
   ],
+  "UIOrigin": [],
   "UISchema": [
    "channel:$ref:UISchemaChannel",
    "cross_validations:array\u003c$ref:UISchemaCrossValidation\u003e",

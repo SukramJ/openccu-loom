@@ -88,9 +88,10 @@ export type SurfacesResponse = {
   /**
    * The door THIS request came through. `lite_shell` is a session of the
    * openccu-lite box shell that the box confirmed; it selects the lite
-   * profile without any declaration.
+   * profile without any declaration. Absent from a daemon older than
+   * REST API 16.1.0; `inside_ha` carries the Home Assistant case there.
    */
-  origin: UIOrigin;
+  origin?: UIOrigin;
   /** The profile served to this request. */
   profile: ProfileName;
   /** Stored, sparse overrides per profile name. */

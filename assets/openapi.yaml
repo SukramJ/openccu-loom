@@ -13262,10 +13262,22 @@ components:
             The openccu-lite box provides this surface in its own shell —
             the reason it is hidden by default in the `lite` profile.
 
+    UIOrigin:
+      type: string
+      enum: [direct, home_assistant, lite_shell]
+      description: |
+        The door a request came through, the per-request input of the
+        served surface profile. `lite_shell` is a request authenticated
+        by a session of the openccu-lite box shell that the box
+        confirmed; it is decided by that identity, not by the
+        `X-Occulite-Session` header alone, so it cannot be forged on
+        the directly-exposed port. A box API token and a daemon login
+        inside the shell frame read as `direct`.
+
     SurfacesResponse:
       type: object
       required:
-        [embedded, embedded_scope, inside_ha, origin, profile, profiles, effective, centrals, surfaces]
+        [embedded, embedded_scope, inside_ha, profile, profiles, effective, centrals, surfaces]
       properties:
         embedded:
           type: boolean
@@ -13288,18 +13300,10 @@ components:
             header (the remote proxy add-on forwards it). With the
             default scope it is what selects `profile`, so the same
             configuration answers differently on the other door.
-            Equal to `origin == "home_assistant"`.
+            Equal to `origin == "home_assistant"`. A daemon older than
+            16.1.0 sends no `origin`; read this field there.
         origin:
-          type: string
-          enum: [direct, home_assistant, lite_shell]
-          description: |
-            The door THIS request came through, the per-request input
-            of `profile`. `lite_shell` is a request authenticated by a
-            session of the openccu-lite box shell that the box
-            confirmed; it is decided by that identity, not by the
-            `X-Occulite-Session` header alone, so it cannot be forged on
-            the directly-exposed port. A box API token and a daemon
-            login inside the shell frame read as `direct`.
+          $ref: "#/components/schemas/UIOrigin"
         profile:
           type: string
           enum: [standalone, embedded, lite]
