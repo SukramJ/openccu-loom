@@ -17,6 +17,7 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
+  import { PROFILE_NAMES } from "$lib/api/surface-types";
   import type { EmbeddedScope, ProfileName, SurfaceInfo } from "$lib/api/surface-types";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -174,7 +175,7 @@
    * UI is the only editor there is.
    */
   function multiCentralApplies(s: SurfaceInfo): boolean {
-    return editing === "embedded" && !!s.multi_central_visible && surfacesStore.centrals > 1;
+    return editing !== "standalone" && !!s.multi_central_visible && surfacesStore.centrals > 1;
   }
 
   /**
@@ -309,7 +310,7 @@
   }
 
   function profileLabel(p: ProfileName): string {
-    return p === "embedded" ? t("navviews.profile.embedded") : t("navviews.profile.standalone");
+    return t(`navviews.profile.${p}`);
   }
 </script>
 
@@ -390,7 +391,9 @@
           <!-- Without this the live profile reads as a contradiction on a
                direct visit: the toggle says embedded, the profile says
                standalone, and nothing on screen connects the two. -->
-          {#if surfacesStore.embedded && surfacesStore.embeddedScope === "inside_ha"}
+          {#if surfacesStore.profile === "lite"}
+            <span class="text-xs">({t("navviews.origin.lite_shell")})</span>
+          {:else if surfacesStore.embedded && surfacesStore.embeddedScope === "inside_ha"}
             <span class="text-xs">
               ({surfacesStore.insideHA
                 ? t("navviews.scope.here.inside")
@@ -416,7 +419,7 @@
         class="inline-flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900"
         role="tablist"
       >
-        {#each ["standalone", "embedded"] as const as p (p)}
+        {#each PROFILE_NAMES as p (p)}
           <button
             type="button"
             role="tab"
@@ -533,11 +536,19 @@
                       {t("navviews.row.ha_owns")}
                     </p>
                   {/if}
+                  {#if editing === "lite" && s.box_owns && !multiCentralApplies(s)}
+                    <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-500">
+                      {t("navviews.row.box_owns")}
+                    </p>
+                  {/if}
                   {#if multiCentralApplies(s)}
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      {t("navviews.row.multi_central", {
-                        count: String(surfacesStore.centrals),
-                      })}
+                      {t(
+                        editing === "lite"
+                          ? "navviews.row.multi_central_lite"
+                          : "navviews.row.multi_central",
+                        { count: String(surfacesStore.centrals) },
+                      )}
                     </p>
                   {/if}
                   {#if locked}

@@ -9483,10 +9483,12 @@ export interface components {
              */
             group: "overview" | "automation" | "diagnose" | "bridges" | "system" | "settings" | "device";
             /**
-             * @description Shipped visibility per profile name.
+             * @description Shipped visibility per profile name, one entry for every
+             *     profile (`standalone`, `embedded`, `lite`).
              * @example {
              *       "standalone": true,
-             *       "embedded": false
+             *       "embedded": false,
+             *       "lite": true
              *     }
              */
             defaults: {
@@ -9533,18 +9535,35 @@ export interface components {
             /** @description Only ever shown to admins, independent of the profile. */
             role_admin?: boolean;
             /**
-             * @description The embedded default of this surface flips back to visible
-             *     when the daemon serves more than one CCU. A Home Assistant
-             *     config entry addresses one CCU, so on a multi-CCU daemon HA
-             *     cannot own the administration of the CCUs it has no entry
-             *     for — hiding it would leave those CCUs without a place to
-             *     edit them. The `defaults` above already reflect the
+             * @description The hidden default of this surface (in the `embedded` and
+             *     the `lite` profile) flips back to visible when the daemon
+             *     serves more than one CCU. A Home Assistant config entry
+             *     addresses one CCU and an openccu-lite box knows only itself,
+             *     so on a multi-CCU daemon neither can own the administration
+             *     of the other CCUs — hiding it would leave those CCUs without
+             *     a place to edit them. The `defaults` above already reflect the
              *     current fleet; this flag only explains why.
              */
             multi_central_visible?: boolean;
             /** @description Home Assistant provides this surface itself. */
             ha_owns?: boolean;
+            /**
+             * @description The openccu-lite box provides this surface in its own shell —
+             *     the reason it is hidden by default in the `lite` profile.
+             */
+            box_owns?: boolean;
         };
+        /**
+         * @description The door a request came through, the per-request input of the
+         *     served surface profile. `lite_shell` is a request authenticated
+         *     by a session of the openccu-lite box shell that the box
+         *     confirmed; it is decided by that identity, not by the
+         *     `X-Occulite-Session` header alone, so it cannot be forged on
+         *     the directly-exposed port. A box API token and a daemon login
+         *     inside the shell frame read as `direct`.
+         * @enum {string}
+         */
+        UIOrigin: "direct" | "home_assistant" | "lite_shell";
         SurfacesResponse: {
             /** @description The master toggle — whether Home Assistant owns this daemon's config surface. */
             embedded: boolean;
@@ -9564,13 +9583,19 @@ export interface components {
              *     header (the remote proxy add-on forwards it). With the
              *     default scope it is what selects `profile`, so the same
              *     configuration answers differently on the other door.
+             *     Equal to `origin == "home_assistant"`. A daemon older than
+             *     16.1.0 sends no `origin`; read this field there.
              */
             inside_ha: boolean;
+            origin?: components["schemas"]["UIOrigin"];
             /**
-             * @description The profile served to this request.
+             * @description The profile served to this request. `lite` is served to a
+             *     `lite_shell` request and hides what the box's own shell
+             *     provides; it needs no declaration. `embedded` with scope
+             *     `always` outranks it.
              * @enum {string}
              */
-            profile: "standalone" | "embedded";
+            profile: "standalone" | "embedded" | "lite";
             /** @description Stored, sparse overrides per profile name. */
             profiles: {
                 [key: string]: {

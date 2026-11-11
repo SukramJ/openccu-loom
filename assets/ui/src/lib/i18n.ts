@@ -2065,6 +2065,9 @@ const EN: Catalog = {
   "navviews.profile.editing": "Editing profile",
   "navviews.profile.standalone": "Standalone",
   "navviews.profile.embedded": "Embedded",
+  "navviews.profile.lite": "openccu-lite",
+  "navviews.origin.lite_shell":
+    "you are signed in through the openccu-lite shell, which selects this profile by itself",
   "navviews.profile.live": "live",
   "navviews.profile.reset": "Reset profile to defaults",
   "navviews.search": "Find a view…",
@@ -2084,6 +2087,9 @@ const EN: Catalog = {
   "navviews.group.show_all": "Show all",
   "navviews.group.hide_all": "Hide all",
   "navviews.row.ha_owns": "Home Assistant provides this.",
+  "navviews.row.box_owns": "The openccu-lite system provides this in its own interface.",
+  "navviews.row.multi_central_lite":
+    "Visible by default because this daemon serves {count} CCUs: the openccu-lite system only knows itself, so for the others this is the only editor there is.",
   "navviews.row.multi_central":
     "Visible by default because this daemon serves {count} CCUs: Home Assistant addresses one CCU per config entry, so for the others this is the only editor there is.",
   "navviews.row.locked": "Cannot be hidden — {why}",
@@ -6162,6 +6168,9 @@ const DE: Catalog = {
   "navviews.profile.editing": "Bearbeitetes Profil",
   "navviews.profile.standalone": "Eigenständig",
   "navviews.profile.embedded": "Eingebettet",
+  "navviews.profile.lite": "openccu-lite",
+  "navviews.origin.lite_shell":
+    "Sie sind über die openccu-lite-Oberfläche angemeldet; sie wählt dieses Profil von selbst",
   "navviews.profile.live": "aktiv",
   "navviews.profile.reset": "Profil auf Standardwerte zurücksetzen",
   "navviews.search": "Ansicht suchen…",
@@ -6181,6 +6190,9 @@ const DE: Catalog = {
   "navviews.group.show_all": "Alle einblenden",
   "navviews.group.hide_all": "Alle ausblenden",
   "navviews.row.ha_owns": "Home Assistant stellt das bereit.",
+  "navviews.row.box_owns": "Das openccu-lite-System stellt das in seiner eigenen Oberfläche bereit.",
+  "navviews.row.multi_central_lite":
+    "Standardmäßig sichtbar, weil dieser Daemon {count} CCUs bedient: Das openccu-lite-System kennt nur sich selbst — für die übrigen ist dies der einzige Editor.",
   "navviews.row.multi_central":
     "Standardmäßig sichtbar, weil dieser Daemon {count} CCUs bedient: Home Assistant spricht pro Config-Eintrag genau eine CCU an — für die übrigen ist dies der einzige Editor.",
   "navviews.row.locked": "Kann nicht ausgeblendet werden — {why}",

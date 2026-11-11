@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/north/ui/surface"
@@ -83,8 +84,8 @@ func TestGetUISurfacesServesRegistryAndResolution(t *testing.T) {
 // setting: ONE config, two doors, two answers.
 //
 // It goes through the handler rather than the resolver because the
-// resolver takes `insideHA` as an argument — a test that passes it
-// itself proves only that the resolver honours what it is told, never
+// resolver takes the request's origin as an argument — a test that passes
+// it itself proves only that the resolver honours what it is told, never
 // that a request's own headers decide it. The header is the production
 // input, so the request has to carry it.
 func TestEmbeddedScopeDecidesPerRequest(t *testing.T) {
@@ -394,5 +395,90 @@ func TestPutUISurfacesSurvivesNilRecorder(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
+	}
+}
+
+// TestRequestOriginFollowsTheIdentity pins how a request is classified:
+// the box shell by the identity the box confirmed, never by the header a
+// client can send, and a box token or a daemon login as their other door.
+func TestRequestOriginFollowsTheIdentity(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		scheme      auth.Scheme
+		shellHeader bool
+		ingress     bool
+		wantOrigin  config.UIOrigin
+		wantProfile string
+	}{
+		{name: "confirmed box session", scheme: auth.SchemeOcculite, shellHeader: true, wantOrigin: config.UIOriginLiteShell, wantProfile: config.ProfileLite},
+		{name: "bare header, nobody confirmed it", shellHeader: true, wantOrigin: config.UIOriginDirect, wantProfile: config.ProfileStandalone},
+		{name: "box token", scheme: auth.SchemeOcculiteToken, shellHeader: true, wantOrigin: config.UIOriginDirect, wantProfile: config.ProfileStandalone},
+		{name: "daemon session inside the shell frame", scheme: auth.SchemeSession, shellHeader: true, wantOrigin: config.UIOriginDirect, wantProfile: config.ProfileStandalone},
+		{name: "Home Assistant", ingress: true, wantOrigin: config.UIOriginHomeAssistant, wantProfile: config.ProfileStandalone},
+		{name: "direct", wantOrigin: config.UIOriginDirect, wantProfile: config.ProfileStandalone},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/ui/surfaces", http.NoBody)
+			if tc.shellHeader {
+				req.Header.Set(auth.OcculiteSessionHeader, "0123456789abcdef0123456789abcdef")
+			}
+			if tc.ingress {
+				req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/tok")
+			}
+			if tc.scheme != "" {
+				req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "u", Scheme: tc.scheme}))
+			}
+			rr := httptest.NewRecorder()
+			GetUISurfaces(surfaceSvc(config.NorthUI{}), nil)(rr, req)
+
+			got := decodeSurfaces(t, rr.Body.Bytes())
+			if got.Origin != string(tc.wantOrigin) {
+				t.Errorf("origin = %q, want %q", got.Origin, tc.wantOrigin)
+			}
+			if got.Profile != tc.wantProfile {
+				t.Errorf("profile = %q, want %q", got.Profile, tc.wantProfile)
+			}
+			if got.InsideHA != tc.ingress {
+				t.Errorf("inside_ha = %v, want %v", got.InsideHA, tc.ingress)
+			}
+			if vary := rr.Header().Get("Vary"); !strings.Contains(vary, auth.OcculiteSessionHeader) {
+				t.Errorf("Vary = %q, want it to name %s", vary, auth.OcculiteSessionHeader)
+			}
+		})
+	}
+}
+
+// TestSurfacesPayloadCarriesEveryProfile pins that the editor gets a
+// shipped default for every profile and can store the lite one.
+func TestSurfacesPayloadCarriesEveryProfile(t *testing.T) {
+	t.Parallel()
+
+	svc := surfaceSvc(config.NorthUI{})
+	body := `{"profiles":{"lite":{"nav.firmware":"visible","settings.tokens":"visible"}}}`
+	rr := httptest.NewRecorder()
+	PutUISurfaces(svc, nil, nil)(rr, httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces", strings.NewReader(body)))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rr.Code, rr.Body.String())
+	}
+	got := decodeSurfaces(t, rr.Body.Bytes())
+	// The override that deviates is stored; the one equal to the shipped
+	// default is dropped.
+	if got.Profiles[config.ProfileLite]["nav.firmware"] != string(config.SurfaceVisible) {
+		t.Errorf("lite override not stored: %v", got.Profiles)
+	}
+	if _, redundant := got.Profiles[config.ProfileLite]["settings.tokens"]; redundant {
+		t.Error("an override equal to the lite default was stored")
+	}
+	for _, s := range got.Surfaces {
+		for _, profile := range config.SurfaceProfiles() {
+			if _, ok := s.Defaults[profile]; !ok {
+				t.Errorf("surface %s reports no default for %q", s.ID, profile)
+			}
+		}
 	}
 }

@@ -4,8 +4,21 @@
 /** Stored visibility of one surface. */
 export type SurfaceState = "visible" | "hidden";
 
-/** The two surface profiles. */
-export type ProfileName = "standalone" | "embedded";
+/**
+ * The surface profiles, one per host that can own part of the config
+ * surface: nobody, Home Assistant, or the openccu-lite box.
+ */
+export type ProfileName = "standalone" | "embedded" | "lite";
+
+/** Every profile, in the order the editor renders them. */
+export const PROFILE_NAMES: readonly ProfileName[] = [
+  "standalone",
+  "embedded",
+  "lite",
+];
+
+/** The door a request came through; the per-request input of the profile. */
+export type UIOrigin = "direct" | "home_assistant" | "lite_shell";
 
 /** Editor bucket, mirroring the navigation clusters. */
 export type SurfaceGroup =
@@ -46,13 +59,16 @@ export type SurfaceInfo = {
   opens?: string;
   role_admin?: boolean;
   /**
-   * The embedded default flips back to visible when the daemon serves
-   * more than one CCU: a Home Assistant config entry addresses one CCU,
-   * so HA cannot own the config surface of the ones it has no entry for.
+   * A hidden default (embedded or lite) flips back to visible when the
+   * daemon serves more than one CCU: a Home Assistant config entry
+   * addresses one CCU and an openccu-lite box knows only itself, so
+   * neither can own the config surface of the other CCUs.
    * `defaults` already reflects the current fleet; this only explains it.
    */
   multi_central_visible?: boolean;
   ha_owns?: boolean;
+  /** The openccu-lite box provides this surface in its own shell. */
+  box_owns?: boolean;
 };
 
 /** Where the embedded declaration applies. */
@@ -69,6 +85,13 @@ export type SurfacesResponse = {
    * configuration answers differently on the other door.
    */
   inside_ha: boolean;
+  /**
+   * The door THIS request came through. `lite_shell` is a session of the
+   * openccu-lite box shell that the box confirmed; it selects the lite
+   * profile without any declaration. Absent from a daemon older than
+   * REST API 16.1.0; `inside_ha` carries the Home Assistant case there.
+   */
+  origin?: UIOrigin;
   /** The profile served to this request. */
   profile: ProfileName;
   /** Stored, sparse overrides per profile name. */

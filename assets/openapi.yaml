@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.0.0
+  version: 16.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -13190,8 +13190,10 @@ components:
         defaults:
           type: object
           additionalProperties: { type: boolean }
-          description: Shipped visibility per profile name.
-          example: { standalone: true, embedded: false }
+          description: |
+            Shipped visibility per profile name, one entry for every
+            profile (`standalone`, `embedded`, `lite`).
+          example: { standalone: true, embedded: false, lite: true }
         floor:
           type: string
           description: |
@@ -13243,16 +13245,34 @@ components:
         multi_central_visible:
           type: boolean
           description: |
-            The embedded default of this surface flips back to visible
-            when the daemon serves more than one CCU. A Home Assistant
-            config entry addresses one CCU, so on a multi-CCU daemon HA
-            cannot own the administration of the CCUs it has no entry
-            for — hiding it would leave those CCUs without a place to
-            edit them. The `defaults` above already reflect the
+            The hidden default of this surface (in the `embedded` and
+            the `lite` profile) flips back to visible when the daemon
+            serves more than one CCU. A Home Assistant config entry
+            addresses one CCU and an openccu-lite box knows only itself,
+            so on a multi-CCU daemon neither can own the administration
+            of the other CCUs — hiding it would leave those CCUs without
+            a place to edit them. The `defaults` above already reflect the
             current fleet; this flag only explains why.
         ha_owns:
           type: boolean
           description: Home Assistant provides this surface itself.
+        box_owns:
+          type: boolean
+          description: |
+            The openccu-lite box provides this surface in its own shell —
+            the reason it is hidden by default in the `lite` profile.
+
+    UIOrigin:
+      type: string
+      enum: [direct, home_assistant, lite_shell]
+      description: |
+        The door a request came through, the per-request input of the
+        served surface profile. `lite_shell` is a request authenticated
+        by a session of the openccu-lite box shell that the box
+        confirmed; it is decided by that identity, not by the
+        `X-Occulite-Session` header alone, so it cannot be forged on
+        the directly-exposed port. A box API token and a daemon login
+        inside the shell frame read as `direct`.
 
     SurfacesResponse:
       type: object
@@ -13280,10 +13300,18 @@ components:
             header (the remote proxy add-on forwards it). With the
             default scope it is what selects `profile`, so the same
             configuration answers differently on the other door.
+            Equal to `origin == "home_assistant"`. A daemon older than
+            16.1.0 sends no `origin`; read this field there.
+        origin:
+          $ref: "#/components/schemas/UIOrigin"
         profile:
           type: string
-          enum: [standalone, embedded]
-          description: The profile served to this request.
+          enum: [standalone, embedded, lite]
+          description: |
+            The profile served to this request. `lite` is served to a
+            `lite_shell` request and hides what the box's own shell
+            provides; it needs no declaration. `embedded` with scope
+            `always` outranks it.
         profiles:
           type: object
           additionalProperties:

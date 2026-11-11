@@ -31,8 +31,7 @@ type Resolution struct {
 	Fleet Fleet
 }
 
-// Fleet describes how much of this daemon Home Assistant can possibly
-// own. It is the one runtime input a shipped default depends on.
+// Fleet describes how much of this daemon a host can possibly own. It is the one runtime input a shipped default depends on.
 //
 // loom:reachable:reason="a field of Resolution, filled by the composition root's central counter and read by the REST payload; a method-less struct the analyzer's type heuristic cannot see used"
 type Fleet struct {
@@ -49,13 +48,12 @@ func (f Fleet) MultiCentral() bool { return f.Centrals > 1 }
 // the fleet size that decides one shipped default — see
 // [Surface.MultiCentralVisible].
 //
-// insideHA reports whether the request reached the daemon through Home
-// Assistant. It is a parameter rather than a package-level fact because
-// one daemon answers both kinds of request, and by default the embedded
-// declaration only shapes the first kind — see
-// [config.NorthUI.EmbeddedScope].
-func ResolveFleet(ui config.NorthUI, insideHA bool, fleet Fleet) Resolution {
-	return resolveProfile(ui, ui.ActiveProfileFor(insideHA), fleet)
+// origin names the door the request came through. It is a parameter
+// rather than a package-level fact because one daemon answers every kind
+// of request, and each door selects its own profile — see
+// [config.NorthUI.ActiveProfileFor].
+func ResolveFleet(ui config.NorthUI, origin config.UIOrigin, fleet Fleet) Resolution {
+	return resolveProfile(ui, ui.ActiveProfileFor(origin), fleet)
 }
 
 // resolveProfile applies the named profile, which need not be the live

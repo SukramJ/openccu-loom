@@ -129,3 +129,53 @@ func TestOverlayUIEmbedded(t *testing.T) {
 		t.Error("absent env var must leave the pointer nil, not stamp a value")
 	}
 }
+
+// TestActiveProfileForEveryDoor pins profile selection per request
+// origin, for each declaration an operator can make.
+func TestActiveProfileForEveryDoor(t *testing.T) {
+	t.Parallel()
+
+	on := true
+	cases := []struct {
+		name   string
+		ui     NorthUI
+		origin UIOrigin
+		want   string
+	}{
+		{"undeclared, direct", NorthUI{}, UIOriginDirect, ProfileStandalone},
+		{"undeclared, Home Assistant", NorthUI{}, UIOriginHomeAssistant, ProfileStandalone},
+		{"undeclared, box shell", NorthUI{}, UIOriginLiteShell, ProfileLite},
+		{"embedded, direct", NorthUI{Embedded: &on}, UIOriginDirect, ProfileStandalone},
+		{"embedded, Home Assistant", NorthUI{Embedded: &on}, UIOriginHomeAssistant, ProfileEmbedded},
+		{"embedded, box shell", NorthUI{Embedded: &on}, UIOriginLiteShell, ProfileLite},
+		{"embedded always, direct", NorthUI{Embedded: &on, EmbeddedScope: EmbeddedScopeAlways}, UIOriginDirect, ProfileEmbedded},
+		{"embedded always, box shell", NorthUI{Embedded: &on, EmbeddedScope: EmbeddedScopeAlways}, UIOriginLiteShell, ProfileEmbedded},
+		{"scope always without the declaration, box shell", NorthUI{EmbeddedScope: EmbeddedScopeAlways}, UIOriginLiteShell, ProfileLite},
+		{"unknown origin", NorthUI{Embedded: &on}, UIOrigin("carrier-pigeon"), ProfileStandalone},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.ui.ActiveProfileFor(tc.origin); got != tc.want {
+				t.Errorf("ActiveProfileFor(%q) = %q, want %q", tc.origin, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidateAcceptsEverySurfaceProfile pins that validation and the
+// profile listing are one set: a stored lite profile must not stop a boot.
+func TestValidateAcceptsEverySurfaceProfile(t *testing.T) {
+	t.Parallel()
+
+	for _, profile := range SurfaceProfiles() {
+		ui := NorthUI{Profiles: map[string]map[string]SurfaceState{profile: {"nav.matter": SurfaceHidden}}}
+		if err := validateSurfaceProfiles(&ui); err != nil {
+			t.Errorf("profile %q rejected: %v", profile, err)
+		}
+	}
+	ui := NorthUI{Profiles: map[string]map[string]SurfaceState{"kiosk": {}}}
+	if err := validateSurfaceProfiles(&ui); err == nil {
+		t.Error("unknown profile accepted")
+	}
+}

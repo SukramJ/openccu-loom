@@ -2,6 +2,7 @@
   "embedded": false,
   "embedded_scope": "inside_ha",
   "inside_ha": false,
+  "origin": "direct",
   "profile": "standalone",
   "profiles": {},
   "effective": {
@@ -60,7 +61,8 @@
       "group": "overview",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "floor": "always"
     },
@@ -69,7 +71,8 @@
       "group": "overview",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "warn": "alarm_armed"
     },
@@ -78,7 +81,8 @@
       "group": "overview",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "warn": "security_faults"
     },
@@ -87,7 +91,8 @@
       "group": "overview",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -95,7 +100,8 @@
       "group": "overview",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -103,7 +109,8 @@
       "group": "automation",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "gate": "feature:hub.programs"
     },
@@ -112,7 +119,8 @@
       "group": "automation",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "gate": "feature:hub.sysvars"
     },
@@ -121,7 +129,8 @@
       "group": "automation",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "gate": "feature:heating_groups.read"
     },
@@ -130,7 +139,8 @@
       "group": "automation",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "opens": "device.configure.links"
     },
@@ -139,7 +149,8 @@
       "group": "automation",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "opens": "device.configure.schedule"
     },
@@ -148,7 +159,8 @@
       "group": "diagnose",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -156,7 +168,8 @@
       "group": "diagnose",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -164,7 +177,8 @@
       "group": "diagnose",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -172,7 +186,8 @@
       "group": "diagnose",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -180,7 +195,8 @@
       "group": "diagnose",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "role_admin": true
     },
@@ -189,7 +205,8 @@
       "group": "bridges",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "gate": "matter",
       "ha_owns": true
@@ -199,15 +216,18 @@
       "group": "system",
       "defaults": {
         "embedded": true,
-        "standalone": true
-      }
+        "standalone": true,
+        "lite": false
+      },
+      "box_owns": true
     },
     {
       "id": "nav.backups",
       "group": "system",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "role_admin": true,
       "gate": "feature:system.backup.create"
@@ -217,7 +237,8 @@
       "group": "system",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "floor": "always"
     },
@@ -226,7 +247,8 @@
       "group": "system",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "floor": "always"
     },
@@ -235,7 +257,8 @@
       "group": "system",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -243,7 +266,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -251,7 +275,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -259,7 +284,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "floor": "always"
     },
@@ -268,7 +294,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -276,7 +303,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -284,7 +312,8 @@
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "ha_owns": true
     },
@@ -293,7 +322,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -301,7 +331,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -309,7 +340,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -317,7 +349,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -325,19 +358,22 @@
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": false
       },
       "warn": "last_ccu_editor",
       "warn_profile": "standalone",
       "multi_central_visible": true,
-      "ha_owns": true
+      "ha_owns": true,
+      "box_owns": true
     },
     {
       "id": "settings.callback",
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -345,36 +381,43 @@
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": false
       },
-      "ha_owns": true
+      "ha_owns": true,
+      "box_owns": true
     },
     {
       "id": "settings.ccu_auth",
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": false
       },
-      "ha_owns": true
+      "ha_owns": true,
+      "box_owns": true
     },
     {
       "id": "settings.users",
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": false
       },
       "floor": "standalone",
       "role_admin": true,
-      "ha_owns": true
+      "ha_owns": true,
+      "box_owns": true
     },
     {
       "id": "settings.groups",
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "ha_owns": true
     },
@@ -383,7 +426,8 @@
       "group": "settings",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "floor": "standalone",
       "role_admin": true,
@@ -394,7 +438,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -402,7 +447,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -410,7 +456,8 @@
       "group": "settings",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -418,7 +465,8 @@
       "group": "device",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     },
     {
@@ -426,7 +474,8 @@
       "group": "device",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "multi_central_visible": true,
       "ha_owns": true
@@ -436,7 +485,8 @@
       "group": "device",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "parent": "device.configure",
       "multi_central_visible": true,
@@ -447,7 +497,8 @@
       "group": "device",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "parent": "device.configure",
       "multi_central_visible": true,
@@ -458,7 +509,8 @@
       "group": "device",
       "defaults": {
         "embedded": false,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       },
       "parent": "device.configure",
       "multi_central_visible": true,
@@ -469,7 +521,8 @@
       "group": "device",
       "defaults": {
         "embedded": true,
-        "standalone": true
+        "standalone": true,
+        "lite": true
       }
     }
   ]
