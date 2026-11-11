@@ -3354,8 +3354,10 @@ paths:
 
         Returns 202 once the CCU reported the download succeeded, and 502
         when it reported a failure — there is no image for that version and
-        serial, or the transfer failed. The whole body is optional for
-        single-CCU deployments.
+        serial, or the transfer failed. A system that runs one system
+        update at a time (openccu-lite) answers 409 while a download, an
+        upload or an install is already running; the problem's detail
+        names it. The whole body is optional for single-CCU deployments.
       tags: [system]
       security:
         - basicAuth: []
@@ -3372,6 +3374,7 @@ paths:
           description: Download triggered
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }

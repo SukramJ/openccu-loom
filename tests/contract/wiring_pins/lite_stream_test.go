@@ -228,3 +228,27 @@ func TestLiteStreamPassesTheUpdateDeviceHint(t *testing.T) {
 		return liteListDevicesCalls(fake) > before
 	})
 }
+
+// TestLiteStreamFirmwareMessageRefreshesDescriptions pins the consumer of
+// the box's firmware message: a device whose firmware update state moved
+// has its interface's device descriptions read again, where the firmware
+// fields live. A burst of messages is one refresh and at most one more,
+// not one per message.
+func TestLiteStreamFirmwareMessageRefreshesDescriptions(t *testing.T) {
+	fake := startFake(t, litefake.Options{})
+	unit := startLiteCentral(t, fake, litefake.DefaultToken)
+	waitLiteReady(t, unit)
+	before := liteListDevicesCalls(fake)
+
+	const burst = 20
+	for range burst {
+		fake.PublishFirmware("BidCos-RF", "VCU0000321", "DELIVER_FIRMWARE_IMAGE")
+	}
+	waitFor(t, 10*time.Second, "the device list re-read after a firmware message", func() bool {
+		return liteListDevicesCalls(fake) > before
+	})
+	time.Sleep(time.Second) // let a trailing refresh finish
+	if got := liteListDevicesCalls(fake) - before; got >= burst {
+		t.Errorf("listDevices calls for %d firmware messages = %d: the refreshes are not coalesced", burst, got)
+	}
+}

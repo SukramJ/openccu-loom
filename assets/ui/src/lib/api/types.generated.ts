@@ -2440,8 +2440,10 @@ export interface paths {
          *
          *     Returns 202 once the CCU reported the download succeeded, and 502
          *     when it reported a failure — there is no image for that version and
-         *     serial, or the transfer failed. The whole body is optional for
-         *     single-CCU deployments.
+         *     serial, or the transfer failed. A system that runs one system
+         *     update at a time (openccu-lite) answers 409 while a download, an
+         *     upload or an install is already running; the problem's detail
+         *     names it. The whole body is optional for single-CCU deployments.
          */
         post: operations["downloadSystemFirmware"];
         delete?: never;
@@ -15716,6 +15718,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];

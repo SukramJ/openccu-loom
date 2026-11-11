@@ -58,6 +58,24 @@ clients (API 16).
   database and are taken over once from `history.db`; removing a device
   now also clears its overrides in the running daemon, not only on disk.
   The Config UI gains a Measurements settings tab.
+### Added
+
+- **openccu-lite: a device's firmware state follows the box.** The box
+  reports on its event stream when a device's firmware update state
+  moves (occulited since 2026-10-14). The daemon now reads the message
+  and re-reads the interface's device descriptions, so the update entity
+  and the firmware overview change when the box says so instead of at
+  the next scheduled refresh. A transfer's burst of messages is one
+  refresh and at most one more.
+
+### Changed
+
+- **openccu-lite: a second system update is a conflict, not a failure.**
+  The box runs one download, upload or install of a system update at a
+  time and refuses another with `409 busy`. `POST
+  /system/firmware/download` now answers 409 with the phase and file of
+  the update in flight instead of 502, and the install path reports the
+  same reason. REST API 15.10.0.
 - **openccu-lite: signing in through the box follows the account's
   level.** The box-shell single sign-on read the box's role word, which
   is `user` for every account below an administrator, and made each of
@@ -121,6 +139,10 @@ clients (API 16).
   openccu-lite's) is refused up front with a message that names what the
   file is, where the box reports it, and the box's own `not_openccu_lite`
   refusal is answered as a validation error instead of a gateway error.
+- **openccu-lite: renaming to an empty name is refused with the reason.**
+  The box keeps a name for every object and refuses an empty one; the
+  daemon passed the rename on and answered the box's refusal as a gateway
+  error (502). It now refuses it itself as a validation error (422).
 - **openccu-lite: a link change no longer re-reads the device list.** The
   box passes on the hint of an interface's `updateDevice` (occulited since
   2026-10-02); the daemon dropped it and treated every such message as a

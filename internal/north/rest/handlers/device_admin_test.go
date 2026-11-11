@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -842,6 +843,22 @@ func TestPatchDevice_RenameError_Returns502(t *testing.T) {
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPatchDevice_RenameToAnUnstorableName_Returns422 pins that a name
+// the backend refuses to store is the caller's error, not a gateway
+// failure.
+func TestPatchDevice_RenameToAnUnstorableName_Returns422(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{renameErr: fmt.Errorf("%w: rename: an empty name cannot be stored", hmerr.ErrValidation)}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":" "}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001:0"}))
+	w := httptest.NewRecorder()
+	PatchDevice(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

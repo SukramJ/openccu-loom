@@ -308,10 +308,16 @@ func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms
 
 // writeRenameError maps a rename failure to its HTTP response: a backend
 // that cannot rename (no JSON-RPC — Homegear, CUxD) surfaces
-// [backends.ErrUnsupported] and becomes 422, every other failure (CCU
+// [backends.ErrUnsupported] and becomes 422, as does a name the backend
+// cannot store ([hmerr.ErrValidation]); every other failure (CCU
 // unreachable, ISE-ID not found) becomes 502.
 func writeRenameError(w http.ResponseWriter, r *http.Request, err error) {
 	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
+	if errors.Is(err, hmerr.ErrValidation) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Invalid name", err.Error()))
 		return
 	}
 	if errors.Is(err, backends.ErrUnsupported) {

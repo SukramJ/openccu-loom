@@ -276,7 +276,8 @@ type FirmwareDownloadRequest struct {
 // than rejected.
 //
 // Responses: 202 once the download was triggered, 400 on a malformed
-// body, 404 when the central is unknown, 422 when the backend is not a CCU
+// body, 404 when the central is unknown, 409 when the system is already
+// running a system update, 422 when the backend is not a CCU
 // (CUxD, Homegear), 502 when the CCU-side call failed — including the
 // CCU's own report that it could not fetch an image — and 503 when the
 // service is unwired.
@@ -304,6 +305,9 @@ func PostSystemFirmwareDownload(svc FirmwareDownloadPort, rec audit.Recorder) ht
 			case errors.Is(err, backends.ErrUnsupported):
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Firmware download not supported by this backend", ""))
+			case errors.Is(err, hmerr.ErrBusy):
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, r, "A system update is already running", err.Error()))
 			default:
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Firmware download failed", err)
 			}

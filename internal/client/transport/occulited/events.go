@@ -45,7 +45,10 @@ const (
 	KindUpdateDevice  Kind = "updateDevice"
 	KindReplaceDevice Kind = "replaceDevice"
 	KindReaddedDevice Kind = "readdedDevice"
-	KindResync        Kind = "resync"
+	// KindFirmware: a device's firmware update state changed, or its
+	// background transfer moved.
+	KindFirmware Kind = "firmware"
+	KindResync   Kind = "resync"
 	// KindUnknown: a message type this client does not know; Type and
 	// Data carry it for forward compatibility.
 	KindUnknown Kind = "unknown"
@@ -71,6 +74,7 @@ type Message struct {
 	State     *State
 	Interface *InterfaceChange
 	Devices   *DeviceChange
+	Firmware  *FirmwareChange
 	Resync    *Resync
 
 	// Err and RetryIn describe a KindClosed.
@@ -135,6 +139,16 @@ type InterfaceChange struct {
 	Interface string    `json:"interface"`
 	State     string    `json:"state"`
 	TS        time.Time `json:"ts"`
+}
+
+// FirmwareChange is a firmware message: the firmware update state of the
+// device at Address as its interface last reported it. The box sends at
+// most one per device every ten seconds, the newest state always.
+type FirmwareChange struct {
+	Interface   string    `json:"interface"`
+	Address     string    `json:"address"`
+	UpdateState string    `json:"update_state"`
+	TS          time.Time `json:"ts"`
 }
 
 // DeviceChange is a newDevices, deleteDevices, updateDevice,
@@ -474,6 +488,9 @@ func decodePayload(typ, data string, m *Message) error {
 	case KindNewDevices, KindDeleteDevices, KindUpdateDevice, KindReplaceDevice, KindReaddedDevice:
 		m.Kind = Kind(typ)
 		return decodeInto(data, &m.Devices, typ)
+	case KindFirmware:
+		m.Kind = KindFirmware
+		return decodeInto(data, &m.Firmware, typ)
 	default:
 		m.Kind = KindUnknown
 		return nil

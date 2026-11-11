@@ -2509,12 +2509,12 @@ it, "open" that nothing in Loom reads or sends it yet.
 | `POST /restore/apply` requires `confirm: true`; `400 confirm` without, before every other check | `6826b85` (2026-10-03) | adopted |
 | `POST /restore/check` answers `backup: null\|{kind: "openccu-lite"\|"ccu", system, version, …}`; `POST /restore/apply` refuses a file that is not an openccu-lite backup with `422 not_openccu_lite` | `8cf9060` (2026-11-10) | adopted |
 | Stream: `updateDevice` carries `hint` as the interface sent it (0 when the call had none); `replaceDevice` carries `old` and `new` beside `addresses` | `2fc25cb` (2026-10-02) | adopted |
-| Stream: new message type `firmware {interface, address, update_state, transfer?, ts}`, at most one per device per 10 s | `11bed1d` (2026-10-14) | open — decoded as an unknown type and dropped |
+| Stream: new message type `firmware {interface, address, update_state, transfer?, ts}`, at most one per device per 10 s | `11bed1d` (2026-10-14) | adopted — triggers a coalesced re-read of the interface's device descriptions |
 | `GET /api/rpc/v1/paramsets`, `POST /paramsets/{interface}`: the paramset description cache, one description per device model, firmware and channel type | `2d9c804` (2026-10-22) | open |
 | `GET /api/meta/v1/version` carries `commit`, and `interfaces` (the names lite-rpc offers, readable without a credential) | `50f7e39` (2026-10-04), `9ee3588` (2026-11-10) | open |
-| `GET /system-update` carries `busy`; download, upload and install answer `409 busy` while one runs | `7b69d5e` (2026-10-23) | open — surfaces as a plain API error |
+| `GET /system-update` carries `busy`; download, upload and install answer `409 busy` while one runs | `7b69d5e` (2026-10-23) | adopted for download and install (`hmerr.ErrBusy`, REST 409); the `busy` member of `GET /system-update` is not read |
 | Pairing request: optional `access.backup` and `addons`; the administrator's list carries `needs_confirmation`, `token_ips` | `e0f5227` (2026-10-01), `ccbaf56` (2026-10-31) | open — the code derivation is unchanged |
-| A metadata `PATCH` with an empty `name` is `422 invalid-name` | `2a78ed5` (2026-10-29) | open — Loom passes a rename's name on unchecked |
+| A metadata `PATCH` with an empty `name` is `422 invalid-name` | `2a78ed5` (2026-10-29) | adopted — refused before the box is asked |
 | Manifest: `changelog`, `runtime.bin`, `runtime.web_ingress`, `ui.fullscreen`; scope `power:halt` (included in `power`) | `f6c6e99` … `4c51107` | `changelog` adopted, the rest unused |
 | Addon notices (`/api/system/v1/addon-notices`, the add-on's control token) | `5783ccd` (2026-10-27) | open |
 

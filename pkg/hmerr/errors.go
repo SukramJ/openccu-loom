@@ -127,6 +127,13 @@ var (
 	// full error chain so any layer can wrap or test with errors.Is.
 	ErrValidation = errors.New("validation failed")
 
+	// ErrBusy signals that the system is already running an operation of
+	// which it runs one at a time — a system update being downloaded or
+	// installed. The caller did nothing wrong and may ask again later;
+	// north-bound adapters answer it as a conflict, not as a failure of
+	// the system.
+	ErrBusy = errors.New("operation already in progress")
+
 	// ErrUnknownCentral signals that an operation named a central that is not
 	// present in the registry. North-bound adapters map it to a 404 / Not
 	// Found status rather than a generic upstream failure.
