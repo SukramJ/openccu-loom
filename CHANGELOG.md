@@ -57,6 +57,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   before, which the box itself does not let it do. A box that answers no
   level is read by its role word as before
   ([ADR 0079](docs/adr/0079-lite-shell-session-sso.md), amended).
+- **godevccu v0.11.0 → v0.12.0.** The simulator's openccu-lite box
+  follows the box as it is today: a restore needs its confirmation and
+  takes an openccu-lite backup alone, the event stream carries the
+  `updateDevice` hint and the `firmware` message, and the box answers
+  add-on notices, the paramset description route and the interfaces in
+  its version document. The daemon's tests for all of the above run
+  against it.
 - **openccu-lite add-on: the Addons page links the release notes.** The
   add-on's manifest names this changelog, which the box shows as
   *Release notes* beside an offered update.
