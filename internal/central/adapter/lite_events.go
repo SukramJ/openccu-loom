@@ -308,15 +308,23 @@ func (s *liteStream) onDevices(ctx context.Context, kind occulited.Kind, d *occu
 	case occulited.KindDeleteDevices:
 		err = s.handlers.DeleteDevices(ctx, id, d.Addresses)
 	case occulited.KindUpdateDevice:
-		// The box drops the daemon's hint; hint 0 (a description refresh)
-		// is the only one with an effect, and a harmless one otherwise.
+		// The hint is the interface's own where the box passes it on. A
+		// box that drops it is read as hint 0, the description refresh:
+		// the one hint with an effect, and a harmless one otherwise.
+		hint := 0
+		if d.Hint != nil {
+			hint = *d.Hint
+		}
 		for _, addr := range d.Addresses {
-			if uerr := s.handlers.UpdateDevice(ctx, id, addr, 0); uerr != nil {
+			if uerr := s.handlers.UpdateDevice(ctx, id, addr, hint); uerr != nil {
 				err = uerr
 			}
 		}
 	case occulited.KindReplaceDevice:
-		if len(d.Addresses) == 2 {
+		switch {
+		case d.Old != "" && d.New != "":
+			err = s.handlers.ReplaceDevice(ctx, id, d.Old, d.New)
+		case len(d.Addresses) == 2:
 			err = s.handlers.ReplaceDevice(ctx, id, d.Addresses[0], d.Addresses[1])
 		}
 	case occulited.KindReaddedDevice:

@@ -139,15 +139,24 @@ type InterfaceChange struct {
 
 // DeviceChange is a newDevices, deleteDevices, updateDevice,
 // replaceDevice or readdedDevice message. The live form carries
-// Addresses only (updateDevice one address and no hint, replaceDevice
-// [old, new]); the ?devices=1 snapshot form of newDevices carries
-// Devices (the interface's listDevices answer, JSON-typed) or Error.
+// Addresses (updateDevice one address, replaceDevice [old, new]) and,
+// from a box that passes them on, what the interface's call carried
+// beside them: Hint for updateDevice, Old and New for replaceDevice. The
+// ?devices=1 snapshot form of newDevices carries Devices (the
+// interface's listDevices answer, JSON-typed) or Error.
 type DeviceChange struct {
-	Interface string          `json:"interface"`
-	Addresses []string        `json:"addresses"`
-	Devices   json.RawMessage `json:"devices"`
-	Error     string          `json:"error"`
-	TS        time.Time       `json:"ts"`
+	Interface string   `json:"interface"`
+	Addresses []string `json:"addresses"`
+	// Hint is updateDevice's hint as the interface sent it. Nil on a box
+	// that does not pass it on.
+	Hint *int `json:"hint"`
+	// Old and New name replaceDevice's two addresses. Empty on a box
+	// that does not name them; Addresses then holds them in that order.
+	Old     string          `json:"old"`
+	New     string          `json:"new"`
+	Devices json.RawMessage `json:"devices"`
+	Error   string          `json:"error"`
+	TS      time.Time       `json:"ts"`
 }
 
 // IsSnapshot reports the ?devices=1 form.

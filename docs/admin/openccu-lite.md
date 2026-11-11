@@ -31,6 +31,20 @@ Device pictures work too, even though the box has no WebUI to serve
 them: the daemon ships the CCU's device artwork in its embedded data
 snapshot and serves it from there.
 
+### Which occulited the daemon follows
+
+openccu-lite is developed quickly, and `occulited`'s API moves with it.
+The daemon's contract with the box was last compared with occulited at
+commit `04ee7b6` (2026-11-11). Two rules of the box that changed since
+the first release of this integration matter to an administrator:
+
+- Since 2026-10-03 the box asks for an explicit confirmation before it
+  applies a restore. The daemon sends it; a daemon release from before
+  this change cannot restore onto such a box.
+- A box from 2026-11-10 on restores only a backup of openccu-lite. A
+  CCU's backup is refused with a message that says what the file is;
+  import its devices on the box instead.
+
 ## What is absent, and why
 
 openccu-lite has no ReGaHss and no script interpreter, so a handful of

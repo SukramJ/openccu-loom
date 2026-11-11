@@ -58,6 +58,9 @@ clients (API 16).
   database and are taken over once from `history.db`; removing a device
   now also clears its overrides in the running daemon, not only on disk.
   The Config UI gains a Measurements settings tab.
+- **openccu-lite add-on: the Addons page links the release notes.** The
+  add-on's manifest names this changelog, which the box shows as
+  *Release notes* beside an offered update.
 - **Built with Go 1.27.4.** The release picks up the standard library's fix
   for a crash of the HTTP/1 server through a header race in
   `MaxBytesReader` (GO-2026-6859), which the REST server and the XML-RPC
@@ -109,6 +112,12 @@ clients (API 16).
   openccu-lite's) is refused up front with a message that names what the
   file is, where the box reports it, and the box's own `not_openccu_lite`
   refusal is answered as a validation error instead of a gateway error.
+- **openccu-lite: a link change no longer re-reads the device list.** The
+  box passes on the hint of an interface's `updateDevice` (occulited since
+  2026-10-02); the daemon dropped it and treated every such message as a
+  description change. It now handles the message by its hint, as it
+  handles a CCU's callback, and reads `replaceDevice`'s old and new
+  address by name where the box names them.
 - **Config UI: the embedded profile no longer hides the device editor.**
   With `north.ui.embedded` on, one CCU and the UI opened through Home
   Assistant, the Configure tab with its channel, link and schedule
