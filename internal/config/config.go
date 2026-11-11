@@ -2120,11 +2120,44 @@ func Parse(buf []byte) (*Config, error) {
 	if err := yaml.Unmarshal(buf, cfg); err != nil {
 		return nil, fmt.Errorf("config: parse: %w", err)
 	}
+	if err := rejectRemovedKeys(buf); err != nil {
+		return nil, err
+	}
 	cfg.applyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// ErrRemovedKey is returned by [Parse] for a config file that still sets a
+// block the daemon no longer reads.
+var ErrRemovedKey = errors.New("config: removed key")
+
+// rejectRemovedKeys refuses a file that sets persistence.history.
+//
+// The YAML decoder ignores keys the struct does not have, so without this
+// check a file written for a daemon that stored measurements would load
+// cleanly and forward nothing: the operator's export target would be dropped
+// without a word. A daemon that does not start names the problem; one that
+// starts with the feature silently off does not.
+func rejectRemovedKeys(buf []byte) error {
+	var probe struct {
+		Persistence struct {
+			History yaml.Node `yaml:"history"`
+		} `yaml:"persistence"`
+	}
+	if err := yaml.Unmarshal(buf, &probe); err != nil {
+		// The typed decode above accepted the document; a probe that
+		// cannot read it has nothing to report.
+		return nil //nolint:nilerr // the probe is advisory: only a present key is an error
+	}
+	if probe.Persistence.History.Kind == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w: persistence.history is no longer read, because the daemon stores no measurements; "+
+		"move enabled, the export target (kind, endpoint, org, bucket, token_env), flush_interval, include, "+
+		"exclude and disabled_centrals to north.measurements and delete the block", ErrRemovedKey)
 }
 
 // Default returns a Config populated with MVP-safe defaults.

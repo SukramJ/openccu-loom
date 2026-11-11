@@ -456,6 +456,35 @@ Fields: see [`north.mcp` in the configuration reference](../reference/configurat
 The MCP transport is mounted on the existing REST listener. See the
 [MCP client guide](../external-clients/mcp.md).
 
+### `north.measurements`
+
+Forwards numeric data-point values to an external time-series store.
+Disabled by default. The daemon keeps no measurement history itself and
+draws no charts: storing and charting belong to the store you forward
+to ([ADR 0088](../adr/0088-config-ui-is-the-bridges-console.md)). The
+shipped target is InfluxDB v2 (line protocol).
+
+Fields: see [`north.measurements` in the configuration reference](../reference/configuration.md#north-measurements). Defaults not shown in the reference: `north.measurements.enabled` `false`; `north.measurements.kind` `influxdb`; `north.measurements.flush_interval` `5s`; `north.measurements.include` all numeric.
+
+`include` / `exclude` are parameter-name globs (`exclude` wins). A single
+data point can be switched on or off on the device's History tab; that
+choice overrides the globs. The write token is never part of the
+configuration — the daemon reads it from the environment variable named
+by `token_env`. An enabled block without an `endpoint` is rejected when
+the configuration is validated; a missing token is logged at start and
+nothing is forwarded.
+
+Only genuine live values are forwarded: a value replayed from the cache
+at start, or the zero a data point holds before its first report, is not
+a measurement.
+
+A daemon upgraded from a version that stored measurements takes the
+settings saved through the Config UI over from `persistence.history`.
+A `config.yaml` that still sets `persistence.history` is refused at
+start, with an error naming the block: move the settings to
+`north.measurements` by hand. An existing `<data_dir>/history.db` is
+left untouched; it is no longer read or written and can be deleted.
+
 ### `north.webhook`
 
 A bidirectional HTTP bridge, both directions disabled by default.
@@ -577,13 +606,9 @@ Defaults not shown in the reference: `centrals.behavior.light_last_brightness` `
 
 Tuning for the SQLite-backed caches. The **VALUES cache**
 (`persistence.values_cache`, ADR 0019) persists wire-DP values so they
-survive a restart; it is **on by default**. The **measurement-history
-recorder** (`persistence.history`, ADR 0040) is **opt-in**: enabling it
-opens a dedicated `history.db`, records numeric VALUES samples, drives
-the SPA charts (`GET /history`), and can optionally push each sample to
-an external time-series store.
+survive a restart; it is **on by default**.
 
-Fields: see [`persistence` in the configuration reference](../reference/configuration.md#persistence). Defaults not shown in the reference: `persistence.history.enabled` `false`; `persistence.history.retention_hourly` `390 days` (≈13 months); `persistence.history.retention_daily` `0` (keep forever); `persistence.history.include` all numeric; `persistence.history.energy_price_per_kwh` `0` (no costs); `persistence.history.energy_currency` `€`; `persistence.history.export.enabled` `false`; `persistence.history.export.kind` `influxdb`.
+Fields: see [`persistence` in the configuration reference](../reference/configuration.md#persistence).
 
 ### Sysvar and program markers
 
@@ -610,18 +635,6 @@ so it never shows up in an entity name.
 `include_internal_sysvars` / `include_internal_programs` are the equivalent
 switch for operators who configure no markers at all; either they or the
 `INTERNAL` marker suffice.
-
-`history.retention` bounds raw samples (clamped up to a 1h floor);
-`retention_hourly` and `retention_daily` bound the two rollup tiers.
-`include`/`exclude` are parameter-name globs (`exclude` wins). The
-export token is never inline — the daemon reads it from the env var
-named by `export.token_env`.
-
-`energy_price_per_kwh` makes the energy view show costs next to
-consumption. Leave it at `0` to show no costs at all — a tariff of zero
-would render every amount as `0.00`, which reads as "free" rather than
-"not configured". `energy_currency` only labels those amounts; nothing
-is ever converted.
 
 ### `reliability`
 

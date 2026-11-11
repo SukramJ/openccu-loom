@@ -68,23 +68,30 @@ var errBackupTooLarge = errors.New("backup restore: decompressed size exceeds li
 const ccuBackupsDirName = "backups"
 
 // liveDatabases are the SQLite databases the daemon keeps open with a live
-// WAL. A byte-for-byte copy of any of them (main file plus the -wal/-shm
+// WAL. A byte-for-byte copy of one of them (main file plus the -wal/-shm
 // sidecars) reassembles a mismatched trio on restore — the sidecars were read
 // at a different instant than the main file — so SQLite can report
 // integrity_check ok while silently dropping every committed-but-uncheckpointed
-// row. Each is instead snapshotted with `VACUUM INTO` (a consistent single-file
-// copy) and its live sidecars are excluded from the archive walk. history.db
-// is a second live database beside openccu-loom.db; both need the identical
-// treatment.
-var liveDatabases = [...]string{"openccu-loom.db", "history.db"}
+// row. It is instead snapshotted with `VACUUM INTO` (a consistent single-file
+// copy) and its live sidecars are excluded from the archive walk.
+var liveDatabases = [...]string{"openccu-loom.db"}
 
-// isLiveDBArtefact reports whether base is one of the live SQLite databases or
-// one of its WAL/SHM sidecars, all of which the archive walk skips because they
-// are added as a consistent VACUUM INTO snapshot instead.
-func isLiveDBArtefact(base string) bool {
-	for _, db := range liveDatabases {
-		if base == db || base == db+"-wal" || base == db+"-shm" {
-			return true
+// unusedDatabases are SQLite files a previous version of the daemon wrote
+// and this one neither reads nor writes. They stay in the data directory
+// until the operator deletes them; a backup that carried them would grow by
+// data no restore can use.
+var unusedDatabases = [...]string{"history.db"}
+
+// isSkippedDBArtefact reports whether base is a database the archive walk
+// must not copy, or one of its WAL/SHM sidecars: a live database, which is
+// added as a consistent VACUUM INTO snapshot instead, or an unused one,
+// which is left out.
+func isSkippedDBArtefact(base string) bool {
+	for _, group := range [][]string{liveDatabases[:], unusedDatabases[:]} {
+		for _, db := range group {
+			if base == db || base == db+"-wal" || base == db+"-shm" {
+				return true
+			}
 		}
 	}
 	return false
@@ -220,7 +227,7 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 			// Skip every live DB, WAL, and SHM file — a consistent VACUUMed
 			// copy of each is added separately below.
 			base := filepath.Base(p)
-			if isLiveDBArtefact(base) {
+			if isSkippedDBArtefact(base) {
 				return nil
 			}
 			// Never archive the at-rest encryption key alongside the ciphertext
@@ -248,32 +255,6 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 		archivePath: "state/openccu-loom.db",
 		diskPath:    tmpDBPath,
 	})
-
-	// The measurement history lives in a second open database, history.db.
-	// Snapshot it the same way: a raw copy of the live file plus its WAL/SHM
-	// sidecars restores to a mismatched trio that loses every uncheckpointed
-	// row. VACUUM INTO produces a self-contained, WAL-checkpointed copy; the
-	// live sidecars are already excluded by the walk above, and commitRestore
-	// clears any stale sidecars beside the restored history.db (it moves the
-	// WAL/SHM of every restored `.db` aside), so the restored database is
-	// internally consistent. Absent when the recording feature never ran.
-	historyPath := filepath.Join(dataDir, "history.db")
-	if _, err := os.Stat(historyPath); err == nil {
-		tmpHist, err := os.CreateTemp("", "openccu-loom-history-backup-*.db")
-		if err != nil {
-			return fmt.Errorf("backup create: history temp file: %w", err)
-		}
-		tmpHistPath := tmpHist.Name()
-		_ = tmpHist.Close()
-		defer func() { _ = os.Remove(tmpHistPath) }()
-		if err := vacuumInto(historyPath, tmpHistPath); err != nil {
-			return fmt.Errorf("backup create: vacuum history: %w", err)
-		}
-		entries = append(entries, entry{
-			archivePath: "state/history.db",
-			diskPath:    tmpHistPath,
-		})
-	}
 
 	// Optionally include config.yaml.
 	if *configPath != "" {

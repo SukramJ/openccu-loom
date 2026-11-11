@@ -1,6 +1,6 @@
 # ADR 0040 — Embedded SQLite measurement history (default) with an opt-in push exporter
 
-- **Status**: accepted
+- **Status**: partly superseded by [ADR 0088](./0088-config-ui-is-the-bridges-console.md) — the embedded SQLite store, its REST read endpoints and the SPA charts (layer 1) are removed; the capture point, the provenance guard and the push exporter (layer 2) stand, as `north.measurements`
 - **Date**: 2026-06-17
 - **Related**:
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),

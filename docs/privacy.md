@@ -65,7 +65,7 @@ host you name:
 | Your CCU / openccu-lite systems | `centrals[]` | the daemon's whole purpose: device reads/writes, events, names — plus the callback address the CCU pushes events to |
 | Your MQTT broker | `north.mqtt` (default off) | device state, Home Assistant discovery, command topics |
 | Your webhook endpoint | `north.webhook` (default off) | datapoint / status / incident events as HMAC-signed JSON |
-| Your InfluxDB | `history.export` (default off) | recorded measurement samples, line protocol |
+| Your InfluxDB | `north.measurements` (default off) | numeric data-point values, line protocol |
 | Your OTLP collector | `north.rest.tracing.otlp_endpoint` (default off) | trace spans of the daemon's own request handling |
 
 What these payloads contain is device data from your CCUs — treat the
@@ -92,8 +92,8 @@ receiving systems accordingly.
 
 ## What never leaves the system
 
-Device data, datapoint values, names, rooms, credentials, backups and
-the measurement history are served to *your* clients (REST/WebSocket,
+Device data, datapoint values, names, rooms, credentials and backups
+are served to *your* clients (REST/WebSocket,
 MQTT, Matter, the web UI) and stored locally. The daemon fetches no
 fonts, scripts or other resources from the internet — the web UI is
 fully embedded in the binary — and it makes no NTP, geolocation or

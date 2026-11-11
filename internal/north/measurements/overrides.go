@@ -145,13 +145,17 @@ func (o *RecordingOverrides) DeleteDevice(ctx context.Context, central, iface, d
 	if err := o.store.DeleteDevice(ctx, central, iface, deviceAddress); err != nil {
 		return err
 	}
-	channelPrefix := deviceAddress + ":"
+	// The store matches the address with any trailing colon trimmed; the
+	// overlay has to draw the same line or the two disagree about which
+	// rows are gone.
+	device := strings.TrimRight(deviceAddress, ":")
+	channelPrefix := device + ":"
 	o.mu.Lock()
 	for k := range o.m {
 		if k.central != central || k.iface != iface {
 			continue
 		}
-		if k.channel == deviceAddress || strings.HasPrefix(k.channel, channelPrefix) {
+		if k.channel == deviceAddress || k.channel == device || strings.HasPrefix(k.channel, channelPrefix) {
 			delete(o.m, k)
 		}
 	}

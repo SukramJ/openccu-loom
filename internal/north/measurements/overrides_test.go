@@ -263,6 +263,33 @@ func TestOverrides_DeleteDeviceDropsStoreAndOverlay(t *testing.T) {
 	}
 }
 
+// TestOverrides_DeleteDeviceAgreesWithTheStoreOnATrailingColon pins that the
+// overlay and the store draw the same line for an address written with its
+// channel separator. The store trims it; an overlay that did not would keep
+// deciding from rows the store has already deleted.
+func TestOverrides_DeleteDeviceAgreesWithTheStoreOnATrailingColon(t *testing.T) {
+	t.Parallel()
+	o, store := newOverlay(t, nil, nil)
+	ctx := context.Background()
+
+	if err := o.Set(ctx, "ccu1", "HmIP-RF", "DEV:1", "POWER", false, "u"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := o.DeleteDevice(ctx, "ccu1", "HmIP-RF", "DEV:"); err != nil {
+		t.Fatalf("DeleteDevice: %v", err)
+	}
+	rows, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("store still holds %d row(s); the premise of this test is that the store deletes them", len(rows))
+	}
+	if _, src := o.Effective("ccu1", "HmIP-RF", "DEV:1", "POWER"); src != "policy" {
+		t.Error("overlay still holds the override the store has deleted")
+	}
+}
+
 // TestOverrides_DeleteDeviceNilSafe pins the nil-receiver contract.
 func TestOverrides_DeleteDeviceNilSafe(t *testing.T) {
 	t.Parallel()

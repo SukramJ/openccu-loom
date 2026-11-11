@@ -81,8 +81,9 @@ modern north-bound interfaces:
 
 Beyond bridging device state, the daemon **administers** the CCU
 (pairing, links, programs, system variables, groups, firmware, rooms /
-functions / areas) and hosts services the CCU itself does not provide:
-an opt-in measurement history (§4.6) and a local alarm system (§4.7).
+functions / areas), forwards measurements to an external time-series
+store (§4.6) and hosts a service the CCU itself does not provide: a
+local alarm system (§4.7).
 
 The project began as a Go port of the Python library `aiohomematic`
 and now develops independently. `aiohomematic` remains the
@@ -146,9 +147,9 @@ License — see ADR 0003.
    SPA is the console of the bridge and one client of that API; it
    does not aim to replace the CCU WebUI
    ([ADR 0088](./docs/adr/0088-config-ui-is-the-bridges-console.md)).
-6. **Daemon-level services the CCU does not provide**, each opt-in and
-   each usable without Home Assistant: measurement history (§4.6) and
-   the alarm system (§4.7).
+6. **A daemon-level service the CCU does not provide**, opt-in and
+   usable without Home Assistant: the alarm system (§4.7). Measurements
+   are forwarded to an external store (§4.6), not kept.
 7. **Single static binary** for primary platforms. **No CGo
    dependencies** in the default build. SQLite via
    `modernc.org/sqlite` (pure Go).
@@ -329,7 +330,6 @@ cross-domain communication inside the core.
 │  ┌──────────────────▼─────────────────┐              │           │
 │  │      DAEMON-LEVEL SERVICES         │              │           │
 │  │  • alarm (daemon-wide event bus)   │              │           │
-│  │  • measurement history recorder    │              │           │
 │  └──────────────────┬─────────────────┘              │           │
 │                     │         DOMAIN CORE            │           │
 │                     │  (no network / no storage I/O) │           │
@@ -356,8 +356,8 @@ cross-domain communication inside the core.
   behave the same for every bridge (ADR 0047).
 - **Daemon-level services**: sit between the adapters and the
   centrals. They consume central events and produce their own state,
-  but they are not adapters — the alarm system and the history
-  recorder are the two, and both are opt-in.
+  but they are not adapters — the alarm system is the one today, and
+  it is opt-in.
 - **Southbound adapter**: driven side. The `client` package
   implements ports defined by the domain to talk to the CCU. Each
   central selects a **south profile** by its system type (CCU,
@@ -446,39 +446,38 @@ in the same commit.
   typed `ErrAuditOverflow` error for backpressure — silent drops
   are not allowed (the SPEC says "append-only").
 
-### 4.6 Measurement history
+### 4.6 Measurement forwarding
 
-A user who runs OpenCCU-Loom **without** Home Assistant has no
-recorder to capture a time-series of sensor values. To serve that
-audience without forcing an external stack, the daemon ships an
-**opt-in, embedded measurement history** (default off). The driving
-use case is charts in the Svelte SPA over the short-to-medium term;
-long-term archival is served by an opt-in push exporter, not by the
-embedded store. See **[ADR 0040](./docs/adr/0040-measurement-history.md)**
-for the full design.
+The daemon keeps no measurement history. A value that should be charted
+or archived belongs in a time-series store, and the daemon's part is to
+feed one: an **opt-in measurement forwarder** (default off) hands numeric
+values to an external store. It is a north-bound plane like MQTT, not a
+store with a query surface, and the Config UI draws no charts
+(**[ADR 0088](./docs/adr/0088-config-ui-is-the-bridges-console.md)**).
+The capture point and the exporter seam come from
+**[ADR 0040](./docs/adr/0040-measurement-history.md)**, whose embedded
+store ADR 0088 supersedes.
 
-- **Capture point**: a recorder subscribes to
-  `DataPointValueChangedEvent` on each central's EventBus, filters to
-  numeric `VALUES` parameters, buffers, and batch-flushes — the same
-  non-blocking flusher shape as the VALUES cache (§4.5).
+- **Capture point**: the forwarder subscribes to
+  `DataPointValueChangedEvent` on each central's EventBus and filters to
+  numeric `VALUES` parameters. The handler never blocks: it hands the
+  sample to the exporter, which buffers and batch-flushes on its own
+  goroutine and drops its oldest sample on overflow.
 - **Provenance guard**: only genuine *live* wire observations are
-  recorded. Boot-time pseudo-values — a freshly created DP's zero
+  forwarded. Boot-time pseudo-values — a freshly created DP's zero
   default, a value replayed from the VALUES cache, or a source-only
   freshness flip — are rejected via the `hmenum.ValueSource`
   lifecycle (ADR 0019), **not** by filtering on the value, so a real
   `0` is kept. The sample timestamp is the wire-reception time, never
   the boot wall-clock.
-- **Storage**: a dedicated `history.db` (its own WAL + migration
-  series), separate from the config/session DB so an append-heavy
-  writer never contends with config writes. Retention runs on the
-  scheduler; rollup downsampling is a later additive step.
-- **Surface**: a REST history endpoint with server-side bucketing
-  feeds SPA charts; an opt-in `MeasurementExporter` seam (modelled on
-  the span exporter, ADR 0037) ships a lean InfluxDB line-protocol
-  implementation for users who already run Grafana/Influx.
-- **Configuration**: one DB-tier `persistence.history` section,
-  editable through the SPA like `persistence.values_cache` and
-  `north.mqtt`. Export credentials are secrets (ADR 0027).
+- **Selection**: parameter-name globs (`include` / `exclude`) set the
+  policy; a per-data-point recording override, stored in the main
+  database and set over REST, wins over it.
+- **Target**: an `Exporter` seam (modelled on the span exporter,
+  ADR 0037) with a lean InfluxDB line-protocol implementation.
+- **Configuration**: one DB-tier `north.measurements` section, editable
+  through the SPA like `north.mqtt`. The write token is read from an
+  environment variable, never stored in config (ADR 0027).
 
 ### 4.7 Alarm system
 

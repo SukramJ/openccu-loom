@@ -43,10 +43,10 @@ type sharedInfra struct {
 	visibilityStore   *sqlite.VisibilityUnIgnoreStore
 	visibilityAdapter *visibilityAdapter
 
-	masterValuesStore  *sqlite.MasterValuesStore
-	valuesCacheStore   *sqlite.ValuesCacheStore
-	descriptorStores   adapter.DescriptorStores
-	descriptorDB       *sql.DB
+	masterValuesStore *sqlite.MasterValuesStore
+	valuesCacheStore  *sqlite.ValuesCacheStore
+	descriptorStores  adapter.DescriptorStores
+	descriptorDB      *sql.DB
 
 	wsHub       *ws.Hub
 	wsHandler   http.Handler

@@ -23,12 +23,12 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
+	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
@@ -450,8 +450,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// Each of the four below mirrors the condition that mounts the
 			// surface it names, read from the same value the mount reads —
 			// not from a second source that could drift away from it.
-			mqttRaw:        cfg.North.MQTT.Enabled && cfg.North.MQTT.RawEnabled,
-			webhookInbound: cfg.North.Webhook.Inbound.Enabled,
+			mqttRaw:          cfg.North.MQTT.Enabled && cfg.North.MQTT.RawEnabled,
+			webhookInbound:   cfg.North.Webhook.Inbound.Enabled,
 			adminPersistence: d.sqUsers != nil,
 			// addonSelfUpdate mirrors wireAddonUpdate's capability gate
 			// (add-on build + firmware installer present) — d.addonUpdater
@@ -811,8 +811,8 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Areas:      d.areaSvc,
 		Interfaces: d.ifaceAdapter,
 		Visibility: d.visibilityUnIgnoreStore,
-		Links:     d.linksDomain,
-		Schedules: d.schedulesDomain,
+		Links:      d.linksDomain,
+		Schedules:  d.schedulesDomain,
 	}))
 	// Rebuild the same two request-volume guards rest.NewRouter mounts —
 	// see the doc comment above for why the MCP path needs its own copy.

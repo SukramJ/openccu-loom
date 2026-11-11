@@ -2589,14 +2589,14 @@ export class MeasurementsDisabledError extends Error {
   }
 }
 
-/** Effective per-datapoint recording state (SV10). */
+/** Effective per-datapoint recording state. */
 export type RecordingState = { record: boolean; source: "override" | "policy" };
 
 /**
- * Read whether a data point's live values are currently recorded to
- * history, and whether that decision is an explicit override or the glob
- * policy (GET /api/v1/measurements/recording). Throws MeasurementsDisabledError
- * when the history feature is off (404).
+ * Read whether a data point's live values are currently forwarded, and
+ * whether that decision is an explicit override or the glob policy
+ * (GET /api/v1/measurements/recording). Throws MeasurementsDisabledError
+ * while measurement forwarding is off (404).
  */
 export async function getRecordingOverride(params: {
   central: string;
@@ -2623,8 +2623,8 @@ export async function getRecordingOverride(params: {
 /**
  * Force recording on/off for a data point, or clear the override
  * (record: null → revert to the glob policy) via
- * PUT /api/v1/measurements/recording. Throws MeasurementsDisabledError when the
- * history feature is off (404).
+ * PUT /api/v1/measurements/recording. Throws MeasurementsDisabledError while
+ * measurement forwarding is off (404).
  */
 export async function setRecordingOverride(params: {
   central: string;

@@ -24,7 +24,8 @@ func writeHistoryFile(t *testing.T, path string, withTable bool) {
 
 	stmts := []string{`CREATE TABLE unrelated (id INTEGER PRIMARY KEY)`}
 	if withTable {
-		stmts = append(stmts,
+		stmts = append(
+			stmts,
 			`CREATE TABLE measurement_recording_overrides (
                 central_name    TEXT    NOT NULL,
                 interface_id    TEXT    NOT NULL,

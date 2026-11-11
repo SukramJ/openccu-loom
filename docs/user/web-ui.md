@@ -188,10 +188,10 @@ The device detail view has a **History** tab with the device's change
 log: who changed which configuration parameter, and when.
 
 The same tab lets you choose, per numeric data point, whether its values
-are recorded. Recording is **opt-in**: nothing is captured until you
-enable it (`persistence.history` in the configuration), and the choice
-appears only then. The Config UI draws no charts; send the measurements
-to a time-series store with the exporter and chart them there.
+are forwarded to your time-series store. Forwarding is **opt-in**:
+nothing is sent until you enable it (`north.measurements` in the
+configuration), and the choice appears only then. The Config UI draws
+no charts; chart the measurements in the store they are sent to.
 
 ## Health and diagnostics
 
