@@ -183,6 +183,28 @@ func liteListDevicesCalls(fake *litefake.Fake) int {
 	return n
 }
 
+// settledListDevicesCalls returns the listDevices count once it has stood
+// still for a second. A lite central is ready before its bring-up has
+// gone quiet: the reconciliation that covers the gap between the first
+// inventory and the stream's hello reads the device list once more, and a
+// test that counted from readiness would take that read for its own
+// cause's.
+func settledListDevicesCalls(t *testing.T, fake *litefake.Fake) int {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	last, since := liteListDevicesCalls(fake), time.Now()
+	for time.Since(since) < time.Second {
+		if time.Now().After(deadline) {
+			t.Fatalf("the listDevices calls never settled; last count %d", last)
+		}
+		time.Sleep(50 * time.Millisecond)
+		if n := liteListDevicesCalls(fake); n != last {
+			last, since = n, time.Now()
+		}
+	}
+	return last
+}
+
 // TestLiteStreamPassesTheUpdateDeviceHint pins that an updateDevice
 // message is handled by the hint the interface sent, as an XML-RPC
 // callback is: a link change (hint 1) reads nothing back, a description
@@ -204,7 +226,7 @@ func TestLiteStreamPassesTheUpdateDeviceHint(t *testing.T) {
 		t.Fatal("the fake's switch is not in the model")
 	}
 	rpc := fake.V().InterfaceRPC("BidCos-RF")
-	before := liteListDevicesCalls(fake)
+	before := settledListDevicesCalls(t, fake)
 
 	// The stream is ordered: once the value event that follows the hint-1
 	// message has arrived, that message has been handled.
@@ -238,7 +260,7 @@ func TestLiteStreamFirmwareMessageRefreshesDescriptions(t *testing.T) {
 	fake := startFake(t, litefake.Options{})
 	unit := startLiteCentral(t, fake, litefake.DefaultToken)
 	waitLiteReady(t, unit)
-	before := liteListDevicesCalls(fake)
+	before := settledListDevicesCalls(t, fake)
 
 	const burst = 20
 	for range burst {
