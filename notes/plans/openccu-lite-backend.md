@@ -2564,8 +2564,10 @@ API token):
   Failure` in the first minute, some after four seconds. occulited's documents name that case — a status request
   to a device that is away or asleep, the most expensive read there is — and advise skipping what `UNREACH` says
   is away. Fixed on this branch after the run: the seed leaves the value channels of a BidCos-RF device alone
-  that is reported unreachable or does not listen all the time (`docs/caching.md`). The fix has not run on the
-  box yet.
+  that is reported unreachable or does not listen all the time (`docs/caching.md`). Run on the box twelve
+  minutes later (`0.99.1-dev.3`): no `getParamset` fault and no warning or error line in the first 82 seconds,
+  the last seed finished one second after the first, where the earlier start was still failing reads 50 s in.
+  The same box and devices both times; the box still reported the one device unreachable afterwards.
 
 occulited publishes machine-readable documents since `835e0af` (2026-09-29): `docs/openapi.json`
 (served as `GET /api/openapi.json`, scope `system:read`), `docs/asyncapi.json` and
