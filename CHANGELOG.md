@@ -30,6 +30,30 @@ clients (API 16).
   surface's `defaults`, and `box_owns` on the surfaces the box provides;
   `north.ui.profiles` accepts a `lite` block. Hiding stays navigation only
   and changes no permission (ADR 0088, decision 6).
+- **openccu-lite: a device's firmware state follows the box.** The box
+  reports on its event stream when a device's firmware update state
+  moves (occulited since 2026-10-14). The daemon now reads the message
+  and re-reads the interface's device descriptions, so the update entity
+  and the firmware overview change when the box says so instead of at
+  the next scheduled refresh. A transfer's burst of messages is one
+  refresh and at most one more.
+- **openccu-lite: the daemon's warnings stand on the box's Status page.**
+  Running as the add-on, the daemon posts its warnings — an unhealthy
+  component, failed operations of the last day, a waiting pairing request,
+  the service messages of other centrals — as the add-on's notices on the
+  box, in German and English, and clears each when its cause is gone. The
+  box's LED follows them and its administrators silence them there. A
+  change reaches the box when it happens; a resynchronisation every five
+  minutes covers what no event announces. New setting
+  `north.ui.box_notices` (on in the openccu-lite add-on, without effect
+  elsewhere)
+  ([ADR 0089](docs/adr/0089-warnings-as-box-notices.md)).
+- **openccu-lite: adding a box proposes the interfaces it has.** The box
+  names its interfaces without a credential (occulited since 2026-11-10).
+  The probe of `POST /centrals/probe` and `POST /setup/probe` passes them
+  on as `lite.interfaces`, and the Config UI ticks exactly those when a
+  box is added, instead of its own default set. A box that does not name
+  them leaves the default in place. REST API 16.1.0.
 
 ### Changed
 

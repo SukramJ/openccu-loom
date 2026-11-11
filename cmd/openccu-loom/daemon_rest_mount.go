@@ -119,6 +119,10 @@ type restMountDeps struct {
 	// warningsSvc backs GET /warnings (+ per-user silences) and the MCP
 	// list_warnings tool; the concrete type serves both narrow views.
 	warningsSvc *warnings.Aggregator
+	// onPairingChange is told when a pairing request arrives or is
+	// decided, beside the WebSocket broadcast: a pending request is a
+	// warning, and whoever mirrors the warning list follows it from here.
+	onPairingChange func()
 	// alarm is the daemon-level alarm service backing the /alarm surface.
 	// It may be a nil *alarm.Service (subsystem disabled or failed to
 	// start); alarmPanelFrom converts that to a nil interface so the
@@ -295,7 +299,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// handlers — the password KDF sits inside the resolver, so a throttle
 	// that only reads the bucket afterwards never stops the work.
 	loginLimiter := middleware.NewLoginRateLimiter()
-	pairingSvc := buildPairingService(cfg, d.sqTokens, d.auditRec, tlsReloader, d.wsHub, d.warningsSvc, logger)
+	pairingSvc := buildPairingService(cfg, d.sqTokens, d.auditRec, tlsReloader, d.wsHub, d.warningsSvc, d.onPairingChange, logger)
 	if d.authMw != nil {
 		d.authMw.BasicThrottle = loginLimiter
 	}

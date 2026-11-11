@@ -1404,6 +1404,15 @@ type NorthUI struct {
 	// [NorthUI.EmbeddedScope].
 	Embedded *bool `yaml:"embedded,omitempty" json:"embedded,omitempty" cfg:"basic"`
 
+	// BoxNotices mirrors the daemon's operator warnings onto the Status
+	// page of the openccu-lite box the daemon runs on, as the add-on's
+	// notices (ADR 0089). Tri-state: nil defaults to whether the daemon
+	// runs as the openccu-lite add-on — ON there, OFF in any other build;
+	// an explicit true/false overrides. Resolved by the composition root,
+	// which knows the add-on stamp. Outside the add-on there is no box to
+	// post to and the switch has no effect.
+	BoxNotices *bool `yaml:"box_notices,omitempty" json:"box_notices,omitempty" cfg:"basic"`
+
 	// EmbeddedScope limits where the Embedded declaration takes effect.
 	//
 	// The two questions are genuinely different. Embedded says Home

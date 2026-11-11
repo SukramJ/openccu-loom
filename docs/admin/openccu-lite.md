@@ -263,6 +263,14 @@ from the box's Addons page. A few things differ from a CCU:
   minute unless the change is confirmed on the page.
 - **Updates come from the Addons page.** The add-on's own self-update is not
   offered on openccu-lite; the box's catalogue carries new versions.
+- **The daemon's warnings stand on the box's Status page.** An unhealthy
+  component (the MQTT broker went away), failed operations of the last
+  day and a pairing request that waits for a decision appear there as
+  notices of the add-on, in the page's language, within moments of the
+  change. The box's LED follows them, and an administrator silences one
+  there like any warning of the box. The box's own service messages are
+  not repeated. Switch it off with `north.ui.box_notices: false`
+  ([ADR 0089](../adr/0089-warnings-as-box-notices.md)).
 - **No session in the add-on's page URL.** The add-on ships an
   `openccu-lite.json` declaring that its settings page takes no session in
   the URL (`ui.session_header`); the page is a landing card and reads no

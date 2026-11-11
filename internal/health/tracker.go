@@ -116,6 +116,10 @@ type Tracker struct {
 	// filter for changes. Wired at boot by the central to drive
 	// EvaluateCentralState.
 	onChangeFn func(overall Status)
+	// statusListeners are called when a component's status moves; see
+	// [Tracker.OnStatusChange]. Keyed so a listener can be removed.
+	statusListeners  map[int]func()
+	nextListenerSlot int
 }
 
 // GaugeFunc is a producer that returns a current numeric reading on
@@ -185,6 +189,49 @@ func (t *Tracker) OnClientStateChange(fn func(overall Status)) {
 	t.onChangeMu.Unlock()
 }
 
+// OnStatusChange registers fn to be called whenever a component's status
+// moves: a first sample, a change between healthy, degraded and unhealthy,
+// or a component being unregistered. Unlike [Tracker.OnClientStateChange]
+// it fires on a change only, takes any number of listeners, and says
+// nothing about what moved — a listener reads [Tracker.Snapshot]. The
+// returned function removes the listener.
+//
+// A component going stale is not a recorded event: its status decays to
+// unknown when it is read, and no listener is told. A consumer that must
+// follow that reads the snapshot on its own schedule as well.
+//
+// fn is called outside the tracker's write lock, on the goroutine that
+// recorded the sample. It must return quickly and must not record.
+func (t *Tracker) OnStatusChange(fn func()) (remove func()) {
+	t.onChangeMu.Lock()
+	defer t.onChangeMu.Unlock()
+	if t.statusListeners == nil {
+		t.statusListeners = map[int]func(){}
+	}
+	slot := t.nextListenerSlot
+	t.nextListenerSlot++
+	t.statusListeners[slot] = fn
+	return func() {
+		t.onChangeMu.Lock()
+		delete(t.statusListeners, slot)
+		t.onChangeMu.Unlock()
+	}
+}
+
+// statusChanged tells the status listeners that a component's status
+// moved. The caller must not hold mu.
+func (t *Tracker) statusChanged() {
+	t.onChangeMu.RLock()
+	fns := make([]func(), 0, len(t.statusListeners))
+	for _, fn := range t.statusListeners {
+		fns = append(fns, fn)
+	}
+	t.onChangeMu.RUnlock()
+	for _, fn := range fns {
+		fn()
+	}
+}
+
 // clientLocked returns the [ClientHealth] for name, creating one on
 // first reference so callers never need to register clients
 // explicitly. Caller must hold mu.
@@ -240,6 +287,7 @@ func (t *Tracker) record(name string, sample Sample, damp bool) {
 		status = StatusDegraded
 	}
 	t.components[name] = Component{Name: name, Status: status, LastSample: sample}
+	moved := !known || prev.Status != status
 
 	hist := t.history[name]
 	hist = append(hist, sample)
@@ -249,6 +297,9 @@ func (t *Tracker) record(name string, sample Sample, damp bool) {
 	t.history[name] = hist
 	t.mu.Unlock()
 
+	if moved {
+		t.statusChanged()
+	}
 	// Notify the change hook outside the write lock so the callback may
 	// safely call read-only Tracker methods without deadlocking.
 	t.onChangeMu.RLock()
@@ -276,6 +327,8 @@ func statusFromSample(s Sample) Status {
 func (t *Tracker) RecordQuality(name, note string) {
 	sample := Sample{Healthy: false, Note: note, Timestamp: time.Now()}
 	t.mu.Lock()
+	prev, known := t.components[name]
+	moved := !known || prev.Status != StatusDegraded
 	t.components[name] = Component{Name: name, Status: StatusDegraded, LastSample: sample}
 	hist := t.history[name]
 	hist = append(hist, sample)
@@ -285,6 +338,9 @@ func (t *Tracker) RecordQuality(name, note string) {
 	t.history[name] = hist
 	t.mu.Unlock()
 
+	if moved {
+		t.statusChanged()
+	}
 	t.onChangeMu.RLock()
 	fn := t.onChangeFn
 	t.onChangeMu.RUnlock()
@@ -1055,10 +1111,14 @@ func (t *Tracker) ReconnectAttempts(name string) int {
 // component is unknown.
 func (t *Tracker) Unregister(name string) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
+	_, known := t.components[name]
 	delete(t.components, name)
 	delete(t.history, name)
 	delete(t.reconnectAttempts, name)
+	t.mu.Unlock()
+	if known {
+		t.statusChanged()
+	}
 }
 
 // OverallWindowedScore averages [WindowedScore] over every component.
