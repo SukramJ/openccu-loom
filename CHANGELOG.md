@@ -23,7 +23,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for a CCU served by this daemon, so such an installation was left with
   no editor. The tabs are now visible in both profiles; an operator can
   still hide them in the navigation editor
-  ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)).
+  ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)). REST API
+  15.9.1: the description of `multi_central_visible` follows; no route
+  or schema changed.
 
 ## [0.99.0] - 2026-11-10
 
