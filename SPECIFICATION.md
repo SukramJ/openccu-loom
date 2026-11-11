@@ -142,9 +142,10 @@ License — see ADR 0003.
 5. **The CCU is administrable from the daemon**, not just readable:
    pairing, device lifecycle, channel configuration, links, programs,
    system variables, groups, firmware, and room / function / area
-   assignment are first-class operations on REST, WebSocket, and in
-   the SPA — an operator should not need the CCU WebUI for routine
-   work.
+   assignment are first-class operations on REST and WebSocket. The
+   SPA is the console of the bridge and one client of that API; it
+   does not aim to replace the CCU WebUI
+   ([ADR 0088](./docs/adr/0088-config-ui-is-the-bridges-console.md)).
 6. **Daemon-level services the CCU does not provide**, each opt-in and
    each usable without Home Assistant: measurement history (§4.6) and
    the alarm system (§4.7).
