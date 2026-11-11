@@ -52,7 +52,7 @@ const (
 	FloorNone Floor = ""
 	// FloorAlways marks a surface no profile may hide.
 	FloorAlways Floor = "always"
-	// FloorStandalone marks a surface only the embedded profile may
+	// FloorStandalone marks a surface only a host-owned profile may
 	// hide — in standalone it is the operator's only way to reach
 	// something they cannot afford to lose.
 	FloorStandalone Floor = "standalone"
@@ -140,6 +140,10 @@ type Surface struct {
 	// informational: the editor renders it as the reason a surface is
 	// hidden by default in the embedded profile.
 	HAOwns bool
+	// BoxOwns marks surfaces the openccu-lite box provides in its own
+	// shell. Informational like HAOwns: the reason a surface is hidden by
+	// default in the lite profile.
+	BoxOwns bool
 	// Parent, when set, names the surface this one lives inside. A child
 	// is only ever as visible as its parent — hiding the Configure tab
 	// has to take its sub-tabs with it, or the resolved map would promise
@@ -160,8 +164,9 @@ type Surface struct {
 	// editor should not have to discover in the fleet list that something
 	// changed there too.
 	Opens ID
-	// MultiCentralVisible flips the embedded default back to visible on a
-	// daemon serving more than one CCU.
+	// MultiCentralVisible flips a hidden default back to visible on a
+	// daemon serving more than one CCU, in the embedded and in the lite
+	// profile.
 	//
 	// The embedded profile assumes Home Assistant owns CCU administration
 	// — but a Home Assistant config entry addresses ONE CCU (the loom
@@ -170,25 +175,40 @@ type Surface struct {
 	// CCU settings for the other two in the only UI that can edit them:
 	// HA has no entry for them.
 	//
+	// The lite profile has the same shape: the daemon onboards the box it
+	// runs on by itself, and a second CCU is one the box knows nothing
+	// about.
+	//
 	// So the default follows the fleet. An operator who genuinely wants
 	// it hidden still can — this moves the default, not the ceiling.
 	MultiCentralVisible bool
 }
 
-// visibility is a small constructor for the shipped default pair.
-func visibility(standalone, embedded bool) map[string]bool {
+// visibility is a small constructor for the shipped default row. It
+// takes one argument per profile on purpose: a surface cannot be
+// registered without a value for every column.
+func visibility(standalone, embedded, lite bool) map[string]bool {
 	return map[string]bool{
 		config.ProfileStandalone: standalone,
 		config.ProfileEmbedded:   embedded,
+		config.ProfileLite:       lite,
 	}
 }
 
-// both marks a surface visible in either profile.
-func both() map[string]bool { return visibility(true, true) }
+// everywhere marks a surface visible in every profile.
+func everywhere() map[string]bool { return visibility(true, true, true) }
 
-// haOwned marks a surface visible standalone and hidden when Home
-// Assistant owns the config surface.
-func haOwned() map[string]bool { return visibility(true, false) }
+// haOwned marks a surface Home Assistant provides and the openccu-lite
+// box does not: hidden in the embedded profile only.
+func haOwned() map[string]bool { return visibility(true, false, true) }
+
+// boxOwned marks a surface the openccu-lite box provides and Home
+// Assistant does not: hidden in the lite profile only.
+func boxOwned() map[string]bool { return visibility(true, true, false) }
+
+// hostOwned marks a surface either host provides itself: visible only
+// standalone.
+func hostOwned() map[string]bool { return visibility(true, false, false) }
 
 // registry is the authoritative table. Order is the order the editor
 // renders, which mirrors the SPA navigation.
@@ -200,85 +220,90 @@ func haOwned() map[string]bool { return visibility(true, false) }
 // embedded profile goes live.
 var registry = []Surface{
 	// --- navigation: overview -------------------------------------
-	{ID: "nav.devices", Group: GroupOverview, Defaults: both(), Floor: FloorAlways},
-	{ID: "nav.alarm", Group: GroupOverview, Defaults: both(), Warn: WarnAlarmArmed},
-	{ID: "nav.security", Group: GroupOverview, Defaults: both(), Warn: WarnSecurityFaults},
-	{ID: "nav.inbox", Group: GroupOverview, Defaults: both()},
-	{ID: "nav.fleet", Group: GroupOverview, Defaults: both()},
+	{ID: "nav.devices", Group: GroupOverview, Defaults: everywhere(), Floor: FloorAlways},
+	{ID: "nav.alarm", Group: GroupOverview, Defaults: everywhere(), Warn: WarnAlarmArmed},
+	{ID: "nav.security", Group: GroupOverview, Defaults: everywhere(), Warn: WarnSecurityFaults},
+	{ID: "nav.inbox", Group: GroupOverview, Defaults: everywhere()},
+	{ID: "nav.fleet", Group: GroupOverview, Defaults: everywhere()},
 
 	// --- navigation: automation -----------------------------------
-	{ID: "nav.programs", Group: GroupAutomation, Defaults: both(), Gate: GateFeaturePrograms},
-	{ID: "nav.sysvars", Group: GroupAutomation, Defaults: both(), Gate: GateFeatureSysvars},
-	{ID: "nav.groups", Group: GroupAutomation, Defaults: both(), Gate: GateFeatureGroups},
-	{ID: "nav.links", Group: GroupAutomation, Defaults: both(), Opens: "device.configure.links"},
-	{ID: "nav.schedules", Group: GroupAutomation, Defaults: both(), Opens: "device.configure.schedule"},
+	{ID: "nav.programs", Group: GroupAutomation, Defaults: everywhere(), Gate: GateFeaturePrograms},
+	{ID: "nav.sysvars", Group: GroupAutomation, Defaults: everywhere(), Gate: GateFeatureSysvars},
+	{ID: "nav.groups", Group: GroupAutomation, Defaults: everywhere(), Gate: GateFeatureGroups},
+	{ID: "nav.links", Group: GroupAutomation, Defaults: everywhere(), Opens: "device.configure.links"},
+	{ID: "nav.schedules", Group: GroupAutomation, Defaults: everywhere(), Opens: "device.configure.schedule"},
 
 	// --- navigation: diagnostics ----------------------------------
-	{ID: "nav.messages", Group: GroupDiagnose, Defaults: both()},
-	{ID: "nav.diagnostics", Group: GroupDiagnose, Defaults: both()},
-	{ID: "nav.signal", Group: GroupDiagnose, Defaults: both()},
-	{ID: "nav.audit", Group: GroupDiagnose, Defaults: both()},
-	{ID: "nav.logs", Group: GroupDiagnose, Defaults: both(), RoleAdmin: true},
+	{ID: "nav.messages", Group: GroupDiagnose, Defaults: everywhere()},
+	{ID: "nav.diagnostics", Group: GroupDiagnose, Defaults: everywhere()},
+	{ID: "nav.signal", Group: GroupDiagnose, Defaults: everywhere()},
+	{ID: "nav.audit", Group: GroupDiagnose, Defaults: everywhere()},
+	{ID: "nav.logs", Group: GroupDiagnose, Defaults: everywhere(), RoleAdmin: true},
 
 	// --- navigation: bridges --------------------------------------
 	{ID: "nav.matter", Group: GroupBridges, Defaults: haOwned(), Gate: GateMatter, HAOwns: true},
 
 	// --- navigation: system ---------------------------------------
-	{ID: "nav.firmware", Group: GroupSystem, Defaults: both()},
-	{ID: "nav.backups", Group: GroupSystem, Defaults: both(), RoleAdmin: true, Gate: GateFeatureBackupCreate},
-	{ID: "nav.settings", Group: GroupSystem, Defaults: both(), Floor: FloorAlways},
-	{ID: "nav.about", Group: GroupSystem, Defaults: both(), Floor: FloorAlways},
-	{ID: "nav.licenses", Group: GroupSystem, Defaults: both()},
+	// The box delivers and installs device firmware on its Updates page.
+	{ID: "nav.firmware", Group: GroupSystem, Defaults: boxOwned(), BoxOwns: true},
+	{ID: "nav.backups", Group: GroupSystem, Defaults: everywhere(), RoleAdmin: true, Gate: GateFeatureBackupCreate},
+	{ID: "nav.settings", Group: GroupSystem, Defaults: everywhere(), Floor: FloorAlways},
+	{ID: "nav.about", Group: GroupSystem, Defaults: everywhere(), Floor: FloorAlways},
+	{ID: "nav.licenses", Group: GroupSystem, Defaults: everywhere()},
 
 	// --- settings tabs --------------------------------------------
-	{ID: "settings.general", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.system", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.navviews", Group: GroupSettings, Defaults: both(), Floor: FloorAlways},
-	{ID: "settings.changes", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.mqtt", Group: GroupSettings, Defaults: both()},
+	{ID: "settings.general", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.system", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.navviews", Group: GroupSettings, Defaults: everywhere(), Floor: FloorAlways},
+	{ID: "settings.changes", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.mqtt", Group: GroupSettings, Defaults: everywhere()},
 	{ID: "settings.matter", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
-	{ID: "settings.mcp", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.measurements", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.rest", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.discovery", Group: GroupSettings, Defaults: both()},
+	{ID: "settings.mcp", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.measurements", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.rest", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.discovery", Group: GroupSettings, Defaults: everywhere()},
 	{
-		ID: "settings.ccus", Group: GroupSettings, Defaults: haOwned(),
+		// On the box the daemon creates the central for it by itself.
+		ID: "settings.ccus", Group: GroupSettings, Defaults: hostOwned(),
 		Warn: WarnLastCCUEditor, WarnProfile: config.ProfileStandalone,
-		HAOwns: true, MultiCentralVisible: true,
+		HAOwns: true, BoxOwns: true, MultiCentralVisible: true,
 	},
-	{ID: "settings.callback", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.oidc", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
-	{ID: "settings.ccu_auth", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
+	{ID: "settings.callback", Group: GroupSettings, Defaults: everywhere()},
+	// Accounts and sign-in are the box's in the lite profile: the request
+	// that selects it was authenticated by a box session, and the box
+	// keeps the users and the identity provider behind that session.
+	{ID: "settings.oidc", Group: GroupSettings, Defaults: hostOwned(), HAOwns: true, BoxOwns: true},
+	{ID: "settings.ccu_auth", Group: GroupSettings, Defaults: hostOwned(), HAOwns: true, BoxOwns: true},
 	{
-		ID: "settings.users", Group: GroupSettings, Defaults: haOwned(),
-		Floor: FloorStandalone, HAOwns: true, RoleAdmin: true,
+		ID: "settings.users", Group: GroupSettings, Defaults: hostOwned(),
+		Floor: FloorStandalone, HAOwns: true, BoxOwns: true, RoleAdmin: true,
 	},
 	{ID: "settings.groups", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
 	{
 		ID: "settings.tokens", Group: GroupSettings, Defaults: haOwned(),
 		Floor: FloorStandalone, HAOwns: true, RoleAdmin: true,
 	},
-	{ID: "settings.visibility", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.reliability", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.persistence", Group: GroupSettings, Defaults: both()},
+	{ID: "settings.visibility", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.reliability", Group: GroupSettings, Defaults: everywhere()},
+	{ID: "settings.persistence", Group: GroupSettings, Defaults: everywhere()},
 
 	// --- device-detail tabs ---------------------------------------
-	{ID: "device.overview", Group: GroupDevice, Defaults: both()},
+	{ID: "device.overview", Group: GroupDevice, Defaults: everywhere()},
 	// The device editor is visible in both profiles. Home Assistant does
 	// not provide it for a CCU this daemon serves: the integration
 	// registers no configuration panel of its own for such an entry, so
 	// this is the only place its users can edit a paramset, a link or a
 	// schedule.
-	{ID: "device.configure", Group: GroupDevice, Defaults: both()},
+	{ID: "device.configure", Group: GroupDevice, Defaults: everywhere()},
 	// The device and channel parameters on one page, as the CCU WebUI's
 	// "Geräte-/Kanalparameter". A stored override for the former
 	// device.configure.device-config sub-tab is reported as Ignored.
-	{ID: "device.configure.channels", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
-	{ID: "device.configure.links", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
-	{ID: "device.configure.schedule", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
+	{ID: "device.configure.channels", Group: GroupDevice, Defaults: everywhere(), Parent: "device.configure"},
+	{ID: "device.configure.links", Group: GroupDevice, Defaults: everywhere(), Parent: "device.configure"},
+	{ID: "device.configure.schedule", Group: GroupDevice, Defaults: everywhere(), Parent: "device.configure"},
 	// The change log of the device and the choice of which data points are
 	// captured. The log needs no capture, so the tab carries no gate.
-	{ID: "device.history", Group: GroupDevice, Defaults: both()},
+	{ID: "device.history", Group: GroupDevice, Defaults: everywhere()},
 }
 
 // Registry returns every registered surface in editor order.
@@ -313,7 +338,7 @@ func (s Surface) DefaultForFleet(profile string, fleet Fleet) bool {
 	if !ok {
 		return true
 	}
-	if !v && s.MultiCentralVisible && profile == config.ProfileEmbedded && fleet.MultiCentral() {
+	if !v && s.MultiCentralVisible && profile != config.ProfileStandalone && fleet.MultiCentral() {
 		return true
 	}
 	return v

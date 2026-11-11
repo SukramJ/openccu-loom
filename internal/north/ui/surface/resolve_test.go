@@ -247,7 +247,7 @@ func TestEmbeddedKeepsDeviceConfiguration(t *testing.T) {
 		"device.configure.schedule",
 	}
 	for _, centrals := range []int{0, 1, 3} {
-		res := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: centrals})
+		res := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), config.UIOriginHomeAssistant, Fleet{Centrals: centrals})
 		for _, id := range editor {
 			if !res.IsVisible(id) {
 				t.Errorf("%s hidden in the embedded profile with %d CCU(s) — it is the only editor Home Assistant users have", id, centrals)
@@ -271,8 +271,8 @@ func TestEmbeddedKeepsDeviceConfiguration(t *testing.T) {
 func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
 	t.Parallel()
 
-	single := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: 1})
-	fleet := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: 3})
+	single := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), config.UIOriginHomeAssistant, Fleet{Centrals: 1})
+	fleet := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), config.UIOriginHomeAssistant, Fleet{Centrals: 3})
 
 	widened := []ID{"settings.ccus"}
 	for _, id := range widened {
@@ -301,7 +301,7 @@ func TestMultiCentralLeavesStandaloneAlone(t *testing.T) {
 
 	res := ResolveFleet(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
 		"settings.ccus": config.SurfaceHidden,
-	}), true, Fleet{Centrals: 4})
+	}), config.UIOriginDirect, Fleet{Centrals: 4})
 	if res.IsVisible("settings.ccus") {
 		t.Error("the fleet rule overrode an explicit standalone hide")
 	}
@@ -315,7 +315,7 @@ func TestMultiCentralDefaultIsStillOverridable(t *testing.T) {
 
 	res := ResolveFleet(uiWith(true, config.ProfileEmbedded, map[string]config.SurfaceState{
 		"settings.ccus": config.SurfaceHidden,
-	}), true, Fleet{Centrals: 3})
+	}), config.UIOriginHomeAssistant, Fleet{Centrals: 3})
 	if res.IsVisible("settings.ccus") {
 		t.Error("an explicit hide was ignored on a multi-CCU daemon")
 	}
@@ -346,7 +346,7 @@ func TestNormalizeFollowsTheFleetDefault(t *testing.T) {
 // Production always knows its fleet size and calls ResolveFleet, so the
 // shorthand lives here rather than in the package's surface.
 func resolveSingle(ui config.NorthUI) Resolution {
-	return ResolveFleet(ui, true, Fleet{})
+	return ResolveFleet(ui, config.UIOriginHomeAssistant, Fleet{})
 }
 
 // TestNewDevicesViewIsOfferedOnEverySystem pins that the view listing
@@ -374,5 +374,87 @@ func TestNewDevicesViewIsOfferedOnEverySystem(t *testing.T) {
 	if gates["nav.programs"] != GateFeaturePrograms {
 		t.Errorf("nav.programs gate = %q, want %q (control: per-central gates still apply)",
 			gates["nav.programs"], GateFeaturePrograms)
+	}
+}
+
+// TestEverySurfaceCarriesEveryProfileColumn fails on a surface without a
+// shipped default for one of the profiles. A missing column is not an
+// error at run time — an unknown profile reads as visible — so without
+// this guard a new profile would silently show whatever nobody reviewed.
+func TestEverySurfaceCarriesEveryProfileColumn(t *testing.T) {
+	t.Parallel()
+
+	for _, s := range Registry() {
+		for _, profile := range config.SurfaceProfiles() {
+			if _, ok := s.Defaults[profile]; !ok {
+				t.Errorf("surface %s has no shipped default for profile %q", s.ID, profile)
+			}
+		}
+		if len(s.Defaults) != len(config.SurfaceProfiles()) {
+			t.Errorf("surface %s carries %d default columns, want %d", s.ID, len(s.Defaults), len(config.SurfaceProfiles()))
+		}
+	}
+}
+
+// TestLiteProfileHidesWhatTheBoxProvides pins the lite column: the
+// surfaces the openccu-lite shell provides are hidden, and the ones only
+// Home Assistant provides are not carried over from the embedded column.
+func TestLiteProfileHidesWhatTheBoxProvides(t *testing.T) {
+	t.Parallel()
+
+	res := ResolveFleet(config.NorthUI{}, config.UIOriginLiteShell, Fleet{Centrals: 1})
+	if res.Profile != config.ProfileLite {
+		t.Fatalf("profile = %q, want %q", res.Profile, config.ProfileLite)
+	}
+	for _, id := range []ID{"settings.users", "settings.oidc", "settings.ccu_auth", "settings.ccus", "nav.firmware"} {
+		if res.IsVisible(id) {
+			t.Errorf("%s is visible in the lite profile; the box provides it", id)
+		}
+		if !byID[id].BoxOwns {
+			t.Errorf("%s is hidden in the lite profile without the box-owns reason", id)
+		}
+	}
+	// Hidden for Home Assistant, which has its own; the box has none.
+	for _, id := range []ID{"nav.matter", "settings.matter", "settings.tokens", "settings.groups"} {
+		if !res.IsVisible(id) {
+			t.Errorf("%s is hidden in the lite profile; the box does not provide it", id)
+		}
+	}
+	// The device editor is the reason the UI exists on the box.
+	for _, id := range []ID{"device.configure", "device.configure.channels", "device.configure.links", "device.configure.schedule"} {
+		if !res.IsVisible(id) {
+			t.Errorf("%s is hidden in the lite profile", id)
+		}
+	}
+}
+
+// TestLiteProfileShowsCCUSettingsOnAFleet pins that the fleet rule
+// reaches the lite column: the daemon onboards its own box, and a second
+// CCU is one the box cannot administer.
+func TestLiteProfileShowsCCUSettingsOnAFleet(t *testing.T) {
+	t.Parallel()
+
+	single := ResolveFleet(config.NorthUI{}, config.UIOriginLiteShell, Fleet{Centrals: 1})
+	fleet := ResolveFleet(config.NorthUI{}, config.UIOriginLiteShell, Fleet{Centrals: 2})
+	if single.IsVisible("settings.ccus") {
+		t.Error("settings.ccus visible on a single-box daemon")
+	}
+	if !fleet.IsVisible("settings.ccus") {
+		t.Error("settings.ccus hidden although the daemon serves a second CCU")
+	}
+}
+
+// TestLiteProfileMayHideTheAccountTabs pins the floor: users and tokens
+// are the way back in only where the daemon's own accounts are the login.
+func TestLiteProfileMayHideTheAccountTabs(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range []ID{"settings.users", "settings.tokens"} {
+		if byID[id].IsFloor(config.ProfileLite) {
+			t.Errorf("%s is floor in the lite profile", id)
+		}
+		if !byID[id].IsFloor(config.ProfileStandalone) {
+			t.Errorf("%s lost its standalone floor", id)
+		}
 	}
 }

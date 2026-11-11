@@ -1427,7 +1427,7 @@ type NorthUI struct {
 	EmbeddedScope EmbeddedScope `yaml:"embedded_scope,omitempty" json:"embedded_scope,omitempty" cfg:"basic"`
 
 	// Profiles carries per-profile surface overrides, keyed by profile
-	// name (see [ProfileStandalone] / [ProfileEmbedded]) and then by
+	// name (see [SurfaceProfiles]) and then by
 	// surface id. It is SPARSE by construction: only deviations from the
 	// shipped default are stored, so a view added in a later release
 	// arrives with the default its own code assigns instead of being
@@ -1466,15 +1466,45 @@ const (
 	EmbeddedScopeAlways EmbeddedScope = "always"
 )
 
-// Surface profile names. Two, fixed: "who owns the config surface" has
-// exactly two answers, and every further profile would double the
-// review surface of the shipped default table.
+// Surface profile names. One per host that can own part of the config
+// surface: nobody, Home Assistant, or the openccu-lite box. The set is
+// closed — every further profile adds a column to the shipped default
+// table that has to be reviewed surface by surface against what that
+// host really provides — and [SurfaceProfiles] is its single listing.
 const (
-	// ProfileStandalone is live unless Embedded is set. It ships with
-	// every surface visible.
+	// ProfileStandalone is live when no host owns anything. It ships
+	// with every surface visible.
 	ProfileStandalone = "standalone"
-	// ProfileEmbedded is live when Embedded is true.
+	// ProfileEmbedded is live when Embedded is true and the request falls
+	// into the embedded scope.
 	ProfileEmbedded = "embedded"
+	// ProfileLite is live for a request the openccu-lite box vouches for
+	// with a shell session. It hides what the box's own shell provides.
+	ProfileLite = "lite"
+)
+
+// SurfaceProfiles lists every profile name in the order editors render
+// them. Validation, the REST payload and the registration guard all read
+// this one list, so a profile cannot exist in one of them only.
+func SurfaceProfiles() []string {
+	return []string{ProfileStandalone, ProfileEmbedded, ProfileLite}
+}
+
+// UIOrigin names the door a Config UI request came through. It is the
+// one per-request input of profile selection.
+//
+// loom:reachable:reason="passed by the /ui/surfaces handler into ActiveProfileFor on every request; a method-less string alias the analyzer's type heuristic cannot see used"
+type UIOrigin string
+
+const (
+	// UIOriginDirect is a request to the daemon's own address.
+	UIOriginDirect UIOrigin = "direct"
+	// UIOriginHomeAssistant is a request proxied by Home Assistant
+	// Ingress.
+	UIOriginHomeAssistant UIOrigin = "home_assistant"
+	// UIOriginLiteShell is a request authenticated by a session of the
+	// openccu-lite box shell.
+	UIOriginLiteShell UIOrigin = "lite_shell"
 )
 
 // IsEnabled reports whether the bootstrap UI should run. nil → true.
@@ -1508,19 +1538,33 @@ func (n NorthUI) ActiveProfile() string {
 	return ProfileStandalone
 }
 
-// ActiveProfileFor names the profile to serve one request, given
-// whether it arrived through Home Assistant.
+// ActiveProfileFor names the profile to serve one request, given the
+// door it came through.
 //
 // With the default scope an embedded daemon still serves the full UI to
 // someone who opened its own URL: they chose this UI over the Home
 // Assistant panel, and the duplicate-editor argument that motivates
 // hiding does not apply to them.
-func (n NorthUI) ActiveProfileFor(insideHA bool) string {
-	if !n.IsEmbedded() {
-		return ProfileStandalone
-	}
-	if n.EmbeddedScopeOrDefault() == EmbeddedScopeAlways || insideHA {
+//
+// The lite profile needs no declaration. That Home Assistant proxies a
+// request does not say it owns the config surface, so that ownership is
+// declared; a request the box's shell session authenticates is itself
+// the fact that the box owns the accounts and the login it came with.
+//
+// [EmbeddedScopeAlways] outranks the shell: it is the operator asking for
+// one reduced UI on every door.
+func (n NorthUI) ActiveProfileFor(origin UIOrigin) string {
+	if n.IsEmbedded() && n.EmbeddedScopeOrDefault() == EmbeddedScopeAlways {
 		return ProfileEmbedded
+	}
+	switch origin {
+	case UIOriginLiteShell:
+		return ProfileLite
+	case UIOriginHomeAssistant:
+		if n.IsEmbedded() {
+			return ProfileEmbedded
+		}
+	case UIOriginDirect:
 	}
 	return ProfileStandalone
 }
@@ -2740,9 +2784,9 @@ func validateSurfaceProfiles(ui *NorthUI) error {
 			EmbeddedScopeInsideHA, EmbeddedScopeAlways, ui.EmbeddedScope)
 	}
 	for profile, overrides := range ui.Profiles {
-		if profile != ProfileStandalone && profile != ProfileEmbedded {
-			return fmt.Errorf("config: north.ui.profiles: unknown profile %q (want %q or %q)",
-				profile, ProfileStandalone, ProfileEmbedded)
+		if !slices.Contains(SurfaceProfiles(), profile) {
+			return fmt.Errorf("config: north.ui.profiles: unknown profile %q (want one of %s)",
+				profile, strings.Join(SurfaceProfiles(), ", "))
 		}
 		for id, state := range overrides {
 			if state != SurfaceVisible && state != SurfaceHidden {

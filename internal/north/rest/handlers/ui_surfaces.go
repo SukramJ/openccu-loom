@@ -7,9 +7,11 @@ import (
 	"cmp"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -46,13 +48,15 @@ type SurfaceInfo struct {
 	Opens string `json:"opens,omitempty"`
 	// RoleAdmin marks surfaces only admins ever see.
 	RoleAdmin bool `json:"role_admin,omitempty"`
-	// MultiCentralVisible marks surfaces whose embedded default flips
+	// MultiCentralVisible marks surfaces whose hidden default flips
 	// back to visible when the daemon serves more than one CCU: Home
-	// Assistant addresses one CCU per config entry, so it cannot own the
-	// config surface of the CCUs it has no entry for.
+	// Assistant addresses one CCU per config entry and the box knows only
+	// itself, so neither can own the config surface of the other CCUs.
 	MultiCentralVisible bool `json:"multi_central_visible,omitempty"`
 	// HAOwns marks surfaces Home Assistant provides itself.
 	HAOwns bool `json:"ha_owns,omitempty"`
+	// BoxOwns marks surfaces the openccu-lite box provides in its shell.
+	BoxOwns bool `json:"box_owns,omitempty"`
 }
 
 // SurfacesResponse is `GET /api/v1/ui/surfaces`.
@@ -68,6 +72,10 @@ type SurfacesResponse struct {
 	// way it does — the same config answers differently on the other
 	// door.
 	InsideHA bool `json:"inside_ha"`
+	// Origin names the door THIS request came through: "direct",
+	// "home_assistant" or "lite_shell". It is the per-request input of
+	// Profile; InsideHA is its home_assistant case.
+	Origin string `json:"origin"`
 	// Profile names the profile served to this request.
 	Profile string `json:"profile"`
 	// Profiles carries the stored, sparse overrides per profile.
@@ -112,6 +120,26 @@ func insideHomeAssistant(r *http.Request) bool {
 	return r.Header.Get("X-Ingress-Path") != ""
 }
 
+// uiOrigin names the door a request came through.
+//
+// The box shell is recognised by the identity, not by its header: only a
+// session the box confirmed yields [auth.SchemeOcculite], and it does so
+// only while box single sign-on is active and no daemon credential
+// resolved first. That is exactly the case the lite profile describes —
+// the operator is signed in with a box account — and it cannot be forged
+// on the directly-exposed port. A box API token is a program, not the
+// shell, and someone who signed in to the daemon inside the shell frame
+// is using the daemon's accounts; both read as their other door.
+func uiOrigin(r *http.Request) config.UIOrigin {
+	if id, ok := auth.IdentityFrom(r.Context()); ok && id.Scheme == auth.SchemeOcculite {
+		return config.UIOriginLiteShell
+	}
+	if insideHomeAssistant(r) {
+		return config.UIOriginHomeAssistant
+	}
+	return config.UIOriginDirect
+}
+
 // CentralCounter reports how many CCUs the daemon serves. One shipped
 // default depends on it (see surface.Surface.MultiCentralVisible), and a
 // CCU can be adopted at runtime, so it is a live read rather than a
@@ -137,8 +165,8 @@ func GetUISurfaces(svc ConfigAdminService, centrals CentralCounter) http.Handler
 		// cache that served one door's copy to the other would hand an
 		// operator the wrong navigation.
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Vary", "X-Ingress-Path")
-		JSON(w, http.StatusOK, surfacesResponse(ui, centrals.count(), insideHomeAssistant(r)))
+		w.Header().Set("Vary", "X-Ingress-Path, "+auth.OcculiteSessionHeader)
+		JSON(w, http.StatusOK, surfacesResponse(ui, centrals.count(), uiOrigin(r)))
 	}
 }
 
@@ -202,7 +230,7 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, centrals CentralC
 				Note:      "section=" + string(configstore.SectionUI) + " surfaces profile=" + next.North.UI.ActiveProfile(),
 			})
 		}
-		JSON(w, http.StatusOK, surfacesResponse(next.North.UI, centrals.count(), insideHomeAssistant(r)))
+		JSON(w, http.StatusOK, surfacesResponse(next.North.UI, centrals.count(), uiOrigin(r)))
 	}
 }
 
@@ -226,7 +254,7 @@ func normalizeProfiles(
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if name != config.ProfileStandalone && name != config.ProfileEmbedded {
+		if !slices.Contains(config.SurfaceProfiles(), name) {
 			return nil, &surfaceError{msg: "unknown profile " + name}
 		}
 		typed := make(map[string]config.SurfaceState, len(in[name]))
@@ -260,20 +288,21 @@ type surfaceError struct{ msg string }
 func (e *surfaceError) Error() string { return e.msg }
 
 // surfacesResponse renders the payload from a resolved NorthUI.
-func surfacesResponse(ui config.NorthUI, centrals int, insideHA bool) SurfacesResponse {
+func surfacesResponse(ui config.NorthUI, centrals int, origin config.UIOrigin) SurfacesResponse {
 	fleet := surface.Fleet{Centrals: centrals}
-	res := surface.ResolveFleet(ui, insideHA, fleet)
+	res := surface.ResolveFleet(ui, origin, fleet)
 	out := SurfacesResponse{
 		Embedded:      ui.IsEmbedded(),
 		EmbeddedScope: string(ui.EmbeddedScopeOrDefault()),
-		InsideHA:      insideHA,
+		InsideHA:      origin == config.UIOriginHomeAssistant,
+		Origin:        string(origin),
 		Profile:       res.Profile,
 		Profiles:      map[string]map[string]string{},
 		Effective:     make(map[string]bool, len(res.Visible)),
 		Centrals:      centrals,
 		Surfaces:      make([]SurfaceInfo, 0, len(surface.Registry())),
 	}
-	for _, name := range []string{config.ProfileStandalone, config.ProfileEmbedded} {
+	for _, name := range config.SurfaceProfiles() {
 		stored := ui.SurfaceOverrides(name)
 		if len(stored) == 0 {
 			continue
@@ -293,9 +322,9 @@ func surfacesResponse(ui config.NorthUI, centrals int, insideHA bool) SurfacesRe
 		// The shipped defaults are reported AS RESOLVED for this fleet, not
 		// as the static table: the editor's "Changed · default: hidden"
 		// line would otherwise contradict what the daemon actually applies.
-		defaults := map[string]bool{
-			config.ProfileStandalone: s.DefaultForFleet(config.ProfileStandalone, fleet),
-			config.ProfileEmbedded:   s.DefaultForFleet(config.ProfileEmbedded, fleet),
+		defaults := make(map[string]bool, len(config.SurfaceProfiles()))
+		for _, name := range config.SurfaceProfiles() {
+			defaults[name] = s.DefaultForFleet(name, fleet)
 		}
 		out.Surfaces = append(out.Surfaces, SurfaceInfo{
 			ID:          string(s.ID),
@@ -309,6 +338,7 @@ func surfacesResponse(ui config.NorthUI, centrals int, insideHA bool) SurfacesRe
 			Opens:       string(s.Opens),
 			RoleAdmin:   s.RoleAdmin,
 			HAOwns:      s.HAOwns,
+			BoxOwns:     s.BoxOwns,
 
 			MultiCentralVisible: s.MultiCentralVisible,
 		})
