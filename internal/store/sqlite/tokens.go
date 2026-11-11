@@ -81,8 +81,8 @@ type CreateResult struct {
 //
 // The subject is canonicalised before it is written: it is free-form
 // operator input, while the identity it produces at authentication time is
-// compared verbatim by every per-subject store (preferences, private diagram
-// ownership) and has to line up with the users row it belongs to.
+// compared verbatim by every per-subject store (preferences) and has to
+// line up with the users row it belongs to.
 func (s *TokenStore) Create(ctx context.Context, in CreateInput) (CreateResult, error) {
 	subject := auth.CanonicalSubject(in.Subject)
 	if subject == "" {

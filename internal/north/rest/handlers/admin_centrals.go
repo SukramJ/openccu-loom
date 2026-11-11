@@ -47,8 +47,8 @@ type CentralAdminService interface {
 // credential in the clear.
 //
 // The rest of the row is role-scoped because the two read routes are
-// deliberately NOT admin-gated — the energy, backup and rooms/functions
-// views need the central list, and all three read only Name, Enabled and
+// deliberately NOT admin-gated — the backup and rooms/functions views
+// need the central list, and both read only Name, Enabled and
 // Interfaces. Everything else (host, ports, username, the TLS posture)
 // tells an authenticated viewer exactly where the CCU lives and how it is
 // reached, which is reconnaissance rather than anything those views use.

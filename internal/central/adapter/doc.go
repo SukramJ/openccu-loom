@@ -58,7 +58,7 @@
 //     descriptor_persistence.
 //   - Values cache & sources: values_cache_evict, values_cache_flush,
 //     values_source_lifecycle, master_values_evict, channel_flags_evict,
-//     measurement_evict, paramsets.
+//     recording_override_evict, paramsets.
 //   - Reliability & background jobs: reconnector, connectivity_probe,
 //     auto_refresh, unobserved_sweep, unobserved_sweep_job,
 //     throttle_pools, safego.

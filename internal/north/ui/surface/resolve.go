@@ -8,7 +8,7 @@ import "github.com/SukramJ/openccu-loom/internal/config"
 // Resolution is the outcome of applying a configuration to the
 // registry: which profile is live and what it resolves to.
 //
-// loom:reachable:reason="returned by Resolve and held by Policy, which the write middleware consults on every request; a data struct the analyzer's type heuristic cannot see used"
+// loom:reachable:reason="returned by ResolveFleet to the /ui/surfaces handler, which serialises it; a data struct the analyzer's type heuristic cannot see used"
 type Resolution struct {
 	// Profile names the live profile.
 	Profile string

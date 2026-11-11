@@ -78,10 +78,10 @@ type WeekProfile struct {
 // The wrapper subscribes to the underlying profile so external
 // callbacks fire whenever the profile is reloaded or saved.
 //
-// No production caller exists today: weekprofile.NewProfileDataPoint is
-// used directly by custom climate. This constructor is retained so the
-// combined package remains testable; see notes/parity/by_design.md
-// BD-A3-CombinedUnused.
+// No production caller exists today: the daemon builds its week profiles
+// with weekprofile.NewProfileDataPoint (internal/central/adapter). This
+// constructor is retained so the combined package remains testable; see
+// notes/parity/by_design.md BD-A3-CombinedSurfaces.
 func NewWeekProfile(
 	address string,
 	w Writer,
