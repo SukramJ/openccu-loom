@@ -3,10 +3,7 @@ import {
   api,
   friendlyError,
   setUnauthorizedHandler,
-  getHistory,
-  HistoryDisabledError,
 } from "./client";
-import type { HistoryBucket } from "./client";
 
 // The daemon mounts a double-submit CSRF guard on the whole REST router
 // (internal/auth/csrf.go). The SPA must echo the JS-readable csrf cookie
@@ -605,96 +602,6 @@ describe("api — determineParameter (MASTER editor 'Determine' button)", () => 
     await expect(
       api.determineParameter("00021BE9957782", 4, "MASTER", "TEMPERATURE"),
     ).rejects.toBeTruthy();
-  });
-});
-
-describe("getHistory", () => {
-  const BASE_PARAMS = {
-    central: "ccu1",
-    interfaceId: "ccu1-HmIP-RF",
-    channel: "ABC001:4",
-    parameter: "ACTUAL_TEMPERATURE",
-    from: "2026-06-01T00:00:00Z",
-    to: "2026-06-01T01:00:00Z",
-  };
-
-  const BUCKET: HistoryBucket = {
-    ts: "2026-06-01T00:00:00Z",
-    avg: 21.5,
-    min: 20.0,
-    max: 23.0,
-    count: 4,
-  };
-
-  it("builds the correct querystring with interface_id (not interfaceId)", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([BUCKET]));
-    await getHistory(BASE_PARAMS);
-    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const qs = new URL(url, "http://x").searchParams;
-    expect(qs.get("central")).toBe("ccu1");
-    expect(qs.get("interface_id")).toBe("ccu1-HmIP-RF");
-    expect(qs.get("channel")).toBe("ABC001:4");
-    expect(qs.get("parameter")).toBe("ACTUAL_TEMPERATURE");
-    expect(qs.get("from")).toBe("2026-06-01T00:00:00Z");
-    expect(qs.get("to")).toBe("2026-06-01T01:00:00Z");
-    // interfaceId must NOT appear in the URL as-is (camelCase)
-    expect(qs.has("interfaceId")).toBe(false);
-  });
-
-  it("includes optional buckets parameter when provided", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([BUCKET]));
-    await getHistory({ ...BASE_PARAMS, buckets: 50 });
-    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const qs = new URL(url, "http://x").searchParams;
-    expect(qs.get("buckets")).toBe("50");
-  });
-
-  it("omits buckets parameter when not provided", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([BUCKET]));
-    await getHistory(BASE_PARAMS);
-    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const qs = new URL(url, "http://x").searchParams;
-    expect(qs.has("buckets")).toBe(false);
-  });
-
-  it("parses the bucket array and returns typed HistoryBucket[]", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([BUCKET]));
-    const result = await getHistory(BASE_PARAMS);
-    expect(result).toHaveLength(1);
-    expect(result[0].avg).toBe(21.5);
-    expect(result[0].min).toBe(20.0);
-    expect(result[0].max).toBe(23.0);
-    expect(result[0].count).toBe(4);
-    expect(result[0].ts).toBe("2026-06-01T00:00:00Z");
-  });
-
-  it("returns an empty array when the server returns an empty array", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([]));
-    const result = await getHistory(BASE_PARAMS);
-    expect(result).toEqual([]);
-  });
-
-  it("throws HistoryDisabledError on 404 (feature off)", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ detail: "history feature disabled" }, 404),
-    );
-    await expect(getHistory(BASE_PARAMS)).rejects.toBeInstanceOf(HistoryDisabledError);
-  });
-
-  it("re-throws ApiError for non-404 errors (e.g. 400 bad request)", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ detail: "missing param" }, 400),
-    );
-    const err = await getHistory(BASE_PARAMS).catch((e: unknown) => e);
-    expect(err).not.toBeInstanceOf(HistoryDisabledError);
-    expect((err as Error).message).toMatch(/400/);
-  });
-
-  it("sends the request as GET without a CSRF header", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([BUCKET]));
-    await getHistory(BASE_PARAMS);
-    const headers = headersOf(fetchMock.mock.calls[0]);
-    expect(headers["X-CSRF-Token"]).toBeUndefined();
   });
 });
 

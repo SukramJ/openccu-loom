@@ -17,8 +17,6 @@
     "nav.backups": true,
     "nav.devices": true,
     "nav.diagnostics": true,
-    "nav.diagrams": true,
-    "nav.energy": true,
     "nav.firmware": true,
     "nav.fleet": true,
     "nav.groups": true,
@@ -159,26 +157,6 @@
         "embedded": true,
         "standalone": true
       }
-    },
-    {
-      "id": "nav.energy",
-      "group": "diagnose",
-      "defaults": {
-        "embedded": false,
-        "standalone": true
-      },
-      "gate": "history",
-      "ha_owns": true
-    },
-    {
-      "id": "nav.diagrams",
-      "group": "diagnose",
-      "defaults": {
-        "embedded": false,
-        "standalone": true
-      },
-      "gate": "history",
-      "ha_owns": true
     },
     {
       "id": "nav.signal",
@@ -483,8 +461,7 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      },
-      "gate": "history"
+      }
     }
   ]
 }

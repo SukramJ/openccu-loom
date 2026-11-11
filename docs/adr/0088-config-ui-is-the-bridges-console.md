@@ -90,16 +90,21 @@ and not an operating UI.
    A surface that answers none of them is not built. An existing one is removed, not
    hidden.
 
-2. **Five surfaces are removed from the SPA.**
+2. **Four surfaces and one chart are removed from the SPA.**
 
    | Surface | Reason |
    |---|---|
-   | `nav.diagrams`, `nav.energy`, `device.history` | Charting is the job of the store a measurement is exported to. |
+   | `nav.diagrams`, `nav.energy`, the chart in `device.history` | Charting is the job of the store a measurement is exported to. |
    | `nav.overview` | A page of control tiles grouped by room and function is an operating UI. |
    | `nav.favorites` | The same, extended to running programs and writing system variables. |
 
    The device list and the device detail keep showing current values and keep the
    controls they have; a value shown there is a diagnostic of the bridge.
+
+   Amended 2026-11-11: the `device.history` tab stays. Besides the chart it holds the
+   device's change log and the per-data-point recording switch, both of which this ADR
+   keeps (points 3 and 4). Only the chart goes, and the tab loses its capture gate
+   because the change log needs no capture.
 
 3. **Device configuration is the configuration surface of `homematicip_local` on this
    backend, and that sets its bar.** Paramsets, direct links, schedules and the change
@@ -168,7 +173,7 @@ A system without a WebUI of its own looks like an opening. It is not: the system
 service and homematic-manager already cover it, and the role would bind the SPA's
 roadmap to one system type while the daemon's own subject is the fleet.
 
-### Rejected: hiding the five surfaces by default
+### Rejected: hiding the removed surfaces by default
 
 A hidden view is still built, translated, tested and pinned by visual baselines. It
 keeps its cost and blurs the profile for every operator who switches it back on.
@@ -222,12 +227,11 @@ across several CCUs.
 
 ## Consequences
 
-- The routes `Diagrams`, `Energy`, `Overview` and `Favorites`, the history tab of the
-  device detail, their chart components, catalogue keys, registry entries and visual
+- The routes `Diagrams`, `Energy`, `Overview` and `Favorites`, the chart of the device
+  detail's history tab, their chart components, catalogue keys, registry entries and visual
   baselines are deleted. The start page becomes the device list or the fleet view,
   decided in the implementing change.
-- `nav.energy`, `nav.diagrams` and `device.history` leave the registry together with
-  `GateHistory`.
+- `nav.energy` and `nav.diagrams` leave the registry together with `GateHistory`.
 - The REST contract loses `/history`, `/energy` and `/diagrams`, and the MCP tool set
   loses `get_measurements` and `get_energy`: a new REST major version, followed by the clients that mirror
   the contract. The `favorites` user preference goes with its view.

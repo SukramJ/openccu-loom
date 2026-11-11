@@ -218,8 +218,6 @@ var registry = []Surface{
 	// --- navigation: diagnostics ----------------------------------
 	{ID: "nav.messages", Group: GroupDiagnose, Defaults: both()},
 	{ID: "nav.diagnostics", Group: GroupDiagnose, Defaults: both()},
-	{ID: "nav.energy", Group: GroupDiagnose, Defaults: haOwned(), Gate: GateHistory, HAOwns: true},
-	{ID: "nav.diagrams", Group: GroupDiagnose, Defaults: haOwned(), Gate: GateHistory, HAOwns: true},
 	{ID: "nav.signal", Group: GroupDiagnose, Defaults: both()},
 	{ID: "nav.audit", Group: GroupDiagnose, Defaults: both()},
 	{ID: "nav.logs", Group: GroupDiagnose, Defaults: both(), RoleAdmin: true},
@@ -279,7 +277,9 @@ var registry = []Surface{
 	{ID: "device.configure.channels", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
 	{ID: "device.configure.links", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
 	{ID: "device.configure.schedule", Group: GroupDevice, Defaults: both(), Parent: "device.configure"},
-	{ID: "device.history", Group: GroupDevice, Defaults: both(), Gate: GateHistory},
+	// The change log of the device and the choice of which data points are
+	// captured. The log needs no capture, so the tab carries no gate.
+	{ID: "device.history", Group: GroupDevice, Defaults: both()},
 }
 
 // Registry returns every registered surface in editor order.

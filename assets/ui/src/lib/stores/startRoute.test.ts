@@ -45,7 +45,7 @@ describe("startRouteStore.resolve — removed views", () => {
     expect(startRouteStore.resolve()).toBe("#/programs");
   });
 
-  it.each(["#/overview", "#/favorites"])(
+  it.each(["#/overview", "#/favorites", "#/energy", "#/diagrams"])(
     "falls back to the router default for the removed view %s",
     async (route) => {
       await loadStored(route);

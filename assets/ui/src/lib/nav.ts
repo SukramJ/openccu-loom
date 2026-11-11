@@ -21,11 +21,9 @@ export type RouteKind =
   | "groups"
   | "links"
   | "schedules"
-  | "diagrams"
   | "messages"
   | "audit"
   | "diagnostics"
-  | "energy"
   | "fleet"
   | "logs"
   | "settings"
@@ -55,13 +53,11 @@ export type NavCluster = {
 
 /**
  * Availability gates. Every one of them hides views that would otherwise
- * render an error or an empty shell: the Matter subtree is opt-in, the
- * history-backed views need the recording feature, and three admin views
- * are role-gated.
+ * render an error or an empty shell: the Matter subtree is opt-in and
+ * three admin views are role-gated.
  */
 export type NavGates = {
   matterEnabled: boolean;
-  historyEnabled: boolean;
   isAdmin: boolean;
   /**
    * Whether the operator's surface profile serves a given view, keyed by
@@ -182,24 +178,6 @@ export function navClusters(gates: NavGates): NavCluster[] {
           label: t("nav.diagnostics"),
           matches: ["diagnostics"],
         },
-        // Energy and Diagrams both chart measurement history — only surface
-        // them when the opt-in history-recording feature is enabled.
-        ...(gates.historyEnabled
-          ? [
-              {
-                href: "#/energy",
-                icon: "mdi:zap" as const,
-                label: t("nav.energy"),
-                matches: ["energy"] as RouteKind[],
-              },
-              {
-                href: "#/diagrams",
-                icon: "mdi:chart-line-variant" as const,
-                label: t("nav.diagrams"),
-                matches: ["diagrams"] as RouteKind[],
-              },
-            ]
-          : []),
         {
           href: "#/signal",
           icon: "mdi:signal",
@@ -373,7 +351,6 @@ export function isValidLandingRoute(route: string, gates: NavGates): boolean {
 export function isKnownLandingRoute(route: string): boolean {
   return isValidLandingRoute(route, {
     matterEnabled: true,
-    historyEnabled: true,
     isAdmin: true,
   });
 }
