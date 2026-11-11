@@ -105,8 +105,12 @@ type AuthState struct {
 	// Scopes is the credential's stored list, implications not expanded.
 	Scopes             []string `json:"scopes"`
 	MustChangePassword bool     `json:"must_change_password"`
-	// Role is the account role behind an interactive session ("admin",
-	// "user"); empty for an API token.
+	// Level is the account's level behind an interactive session
+	// ("read", "operate", "configure", "administer"); empty for an API
+	// token.
+	Level string `json:"level"`
+	// Role is the older word the box derives from Level ("administer"
+	// is "admin", every other level "user"); empty for an API token.
 	Role string `json:"role"`
 }
 

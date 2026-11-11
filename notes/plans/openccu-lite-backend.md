@@ -2519,7 +2519,8 @@ it, "open" that nothing in Loom reads or sends it yet.
 | Addon notices (`/api/system/v1/addon-notices`, the add-on's control token) | `5783ccd` (2026-10-27) | open |
 
 `role` in `GET /api/auth/v1/state` is unchanged but was already documented at the pin as derived from
-`level` and "answered for one release"; Loom's single sign-on still reads `role`.
+`level` and "answered for one release". Loom's single sign-on reads `level` and falls back to `role`
+only where a box answers no level (ADR 0079, amendment of 2026-11-11).
 
 occulited publishes machine-readable documents since `835e0af` (2026-09-29): `docs/openapi.json`
 (served as `GET /api/openapi.json`, scope `system:read`), `docs/asyncapi.json` and

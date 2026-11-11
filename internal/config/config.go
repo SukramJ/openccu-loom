@@ -1840,9 +1840,10 @@ type HAIngressConfig struct {
 // in the X-Occulite-Session header, and the daemon accepts it as an identity
 // once the onboarded local box confirms the session. The header alone
 // authenticates nothing — the daemon's own port is reachable without the
-// gate, so every value is verified against the box before use, and a box
-// "admin" maps to the admin role, a box "user" to operator; any other
-// outcome leaves the request to the normal login. The same switch covers a
+// gate, so every value is verified against the box before use, and the
+// box account's level decides the role ("administer" is admin, "operate"
+// and "configure" are operator, "read" is viewer); any other outcome
+// leaves the request to the normal login. The same switch covers a
 // box API token the gate accepted as `Authorization: Bearer` (ADR 0080): the
 // gate then hands the token on in the same header, and the daemon accepts it
 // after the box confirms it holds the add-on's own scope (operator) or Full

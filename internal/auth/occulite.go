@@ -35,8 +35,12 @@ type OcculiteSession struct {
 	Authenticated bool
 	// User is the account behind a session, or "token:<name>" for a token.
 	User string
-	// Role is the box's role word behind a session ("admin", "user"); the
-	// box answers none for a token.
+	// Level is the box account's level behind a session ("read",
+	// "operate", "configure", "administer"); the box answers none for a
+	// token.
+	Level string
+	// Role is the older word the box derives from Level ("admin",
+	// "user"); read only when the box answers no Level.
 	Role string
 	// Scopes is a token's stored scope list, implications not expanded.
 	Scopes []string
@@ -56,9 +60,10 @@ type OcculiteSession struct {
 // Neither an auth-off nor a public-principal answer vouches for anything:
 // both are not about the presented credential at all. Beyond that the answer
 // must be authenticated and match the kind of credential presented:
-//   - a session id needs a role the fixed mapping knows (box "admin" →
-//     admin, box "user" → operator) and a user of sane shape;
-//   - a token needs no role, a "token:<name>" user of sane name, and either
+//   - a session id needs a level the fixed mapping knows (see
+//     [occuliteSessionRole]) and a user of sane shape;
+//   - a token needs no level and no role, a "token:<name>" user of sane
+//     name, and either
 //     Full access (admin) or this add-on's own gate scope (operator). The
 //     add-on scope is checked here although the gate already did: the
 //     daemon's port is reachable without the gate, and a token that opens
@@ -69,14 +74,14 @@ func (s OcculiteSession) Grant(credential, addonScope string) (Identity, bool) {
 	}
 	switch {
 	case isOcculiteSessionID(credential):
-		role, mapped := occuliteRole(s.Role)
+		role, mapped := occuliteSessionRole(s.Level, s.Role)
 		if !mapped || !isOcculiteUser(s.User) {
 			return Identity{}, false
 		}
 		return Identity{Subject: occuliteSubjectPrefix + s.User, Scheme: SchemeOcculite, Role: role}, true
 	case isOcculiteToken(credential):
 		name, isToken := strings.CutPrefix(s.User, occuliteTokenUserPrefix)
-		if !isToken || s.Role != "" || !isOcculiteUser(name) {
+		if !isToken || s.Level != "" || s.Role != "" || !isOcculiteUser(name) {
 			return Identity{}, false
 		}
 		role, granted := occuliteTokenRole(s.Scopes, addonScope)
@@ -296,8 +301,34 @@ func (s *occuliteSSO) store(sid string, e occuliteEntry, ttl time.Duration) {
 	s.cache[sid] = e
 }
 
-// occuliteRole maps the box's role words onto daemon roles. Anything the
-// mapping does not know defers rather than guessing a privilege level.
+// occuliteSessionRole maps a box account onto a daemon role by its level:
+// "read" is a viewer, "operate" and "configure" are operators, and
+// "administer" is an admin. A box account that may not switch a device on
+// the box may therefore not switch one here.
+//
+// The level decides wherever the box answers one: an unknown level defers
+// even beside a known role, so a level added to the box later is never
+// read as the coarser word it happens to derive. Only a box that answers
+// no level at all is read by its role word, where "user" covers every
+// level below "administer" and maps to operator.
+func occuliteSessionRole(level, boxRole string) (Role, bool) {
+	switch level {
+	case "read":
+		return RoleViewer, true
+	case "operate", "configure":
+		return RoleOperator, true
+	case "administer":
+		return RoleAdmin, true
+	case "":
+		return occuliteRole(boxRole)
+	default:
+		return "", false
+	}
+}
+
+// occuliteRole maps the box's older role words onto daemon roles.
+// Anything the mapping does not know defers rather than guessing a
+// privilege level.
 func occuliteRole(boxRole string) (Role, bool) {
 	switch boxRole {
 	case "admin":

@@ -58,6 +58,15 @@ clients (API 16).
   database and are taken over once from `history.db`; removing a device
   now also clears its overrides in the running daemon, not only on disk.
   The Config UI gains a Measurements settings tab.
+- **openccu-lite: signing in through the box follows the account's
+  level.** The box-shell single sign-on read the box's role word, which
+  is `user` for every account below an administrator, and made each of
+  them an operator. It now reads the account's level: *administer* signs
+  in as admin, *operate* and *configure* as operator, and **a *read*
+  account as viewer** — it could switch devices through the daemon
+  before, which the box itself does not let it do. A box that answers no
+  level is read by its role word as before
+  ([ADR 0079](docs/adr/0079-lite-shell-session-sso.md), amended).
 - **openccu-lite add-on: the Addons page links the release notes.** The
   add-on's manifest names this changelog, which the box shows as
   *Release notes* beside an offered update.

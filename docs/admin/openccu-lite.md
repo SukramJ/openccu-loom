@@ -230,7 +230,9 @@ from the box's Addons page. A few things differ from a CCU:
   box whether it still holds (`north.rest.auth.occulite_sso`, on by
   default in the add-on):
   - your **box session** — a browser opens the UI without a second login,
-    box administrators as admin, box users as operator (ADR 0079);
+    with the role your box account's level maps to: *administer* as
+    admin, *operate* and *configure* as operator, *read* as viewer
+    (ADR 0079);
   - a **box API token** (openccu-lite 1.0.0-dev.36 or newer) sent as
     `Authorization: Bearer <token>` — the way a program such as the Home
     Assistant integration gets through the gate without storing a box
