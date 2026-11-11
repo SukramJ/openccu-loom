@@ -43,8 +43,19 @@ func TestMigrate_CrossProcessLockBlocksSecondOpener(t *testing.T) {
 
 	// A concurrent Migrate (idempotent, but still takes the lock) must block
 	// while the lock is held.
+	//
+	// The test holds openMu until that Migrate has returned: Migrate writes
+	// goose's package-level dialect, and the migration tests of this package
+	// read it under openMu while they drive goose directly. The goroutine
+	// must not take openMu itself, or it could be waiting on that mutex
+	// rather than on the lock this test is about.
+	openMu.Lock()
 	done := make(chan error, 1)
-	go func() { done <- Migrate(ctx, db) }()
+	go func() {
+		err := Migrate(ctx, db)
+		openMu.Unlock()
+		done <- err
+	}()
 
 	select {
 	case err := <-done:
