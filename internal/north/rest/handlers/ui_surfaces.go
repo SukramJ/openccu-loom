@@ -112,8 +112,8 @@ func insideHomeAssistant(r *http.Request) bool {
 	return r.Header.Get("X-Ingress-Path") != ""
 }
 
-// CentralCounter reports how many CCUs the daemon serves. Two shipped
-// defaults depend on it (see surface.Surface.MultiCentralVisible), and a
+// CentralCounter reports how many CCUs the daemon serves. One shipped
+// default depends on it (see surface.Surface.MultiCentralVisible), and a
 // CCU can be adopted at runtime, so it is a live read rather than a
 // boot-time number. A nil counter reads as the single-CCU case.
 type CentralCounter func() int

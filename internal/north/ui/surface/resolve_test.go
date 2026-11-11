@@ -44,8 +44,6 @@ func TestResolveDefaultsPerProfile(t *testing.T) {
 		"nav.overview", "nav.favorites", "nav.energy", "nav.diagrams", "nav.matter",
 		"settings.ccus", "settings.oidc", "settings.ccu_auth", "settings.users",
 		"settings.groups", "settings.tokens", "settings.matter",
-		"device.configure", "device.configure.channels",
-		"device.configure.links", "device.configure.schedule",
 	}
 	got := embedded.HiddenIDs()
 	if len(got) != len(wantHidden) {
@@ -73,10 +71,10 @@ func TestResolveHonoursOverrides(t *testing.T) {
 	// Show one the embedded default hides — the case that also hands the
 	// write back (see enforce_test.go).
 	shown := resolveSingle(uiWith(true, config.ProfileEmbedded, map[string]config.SurfaceState{
-		"device.configure": config.SurfaceVisible,
+		"settings.oidc": config.SurfaceVisible,
 	}))
-	if !shown.IsVisible("device.configure") {
-		t.Error("device.configure still hidden after an explicit show")
+	if !shown.IsVisible("settings.oidc") {
+		t.Error("settings.oidc still hidden after an explicit show")
 	}
 }
 
@@ -166,10 +164,10 @@ func TestResolveProfilePreviewsInactiveProfile(t *testing.T) {
 	if preview.Profile != config.ProfileEmbedded {
 		t.Fatalf("profile = %q, want embedded", preview.Profile)
 	}
-	if preview.IsVisible("device.configure") {
-		t.Error("embedded preview shows device.configure, want the embedded default")
+	if preview.IsVisible("settings.oidc") {
+		t.Error("embedded preview shows settings.oidc, want the embedded default")
 	}
-	if !resolveSingle(live).IsVisible("device.configure") {
+	if !resolveSingle(live).IsVisible("settings.oidc") {
 		t.Error("previewing embedded must not change the live standalone resolution")
 	}
 }
@@ -231,26 +229,52 @@ func TestRegistryIDsAreUniqueAndPrefixed(t *testing.T) {
 	}
 }
 
+// TestEmbeddedKeepsDeviceConfiguration pins that the embedded profile
+// serves the device editor on every fleet size.
+//
+// The embedded profile hides what Home Assistant provides itself. The
+// device editor is not among it: the Home Assistant integration registers
+// no configuration panel of its own for an entry served by this daemon
+// and leaves paramsets, links and schedules to this UI. Hiding the tabs
+// here would leave such an installation with no editor at all.
+func TestEmbeddedKeepsDeviceConfiguration(t *testing.T) {
+	t.Parallel()
+
+	editor := []ID{
+		"device.configure",
+		"device.configure.channels",
+		"device.configure.links",
+		"device.configure.schedule",
+	}
+	for _, centrals := range []int{0, 1, 3} {
+		res := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: centrals})
+		for _, id := range editor {
+			if !res.IsVisible(id) {
+				t.Errorf("%s hidden in the embedded profile with %d CCU(s) — it is the only editor Home Assistant users have", id, centrals)
+			}
+		}
+	}
+	for _, id := range editor {
+		if byID[id].HAOwns {
+			t.Errorf("%s is marked as provided by Home Assistant; the editor row would explain a default that no longer exists", id)
+		}
+	}
+}
+
 // TestMultiCentralWidensTheEmbeddedDefaults is the fleet rule.
 //
 // A Home Assistant config entry addresses ONE CCU — the loom backend
 // passes a serial — while the embedded switch is daemon-wide. Bind one
-// of three CCUs into HA and the single-CCU defaults would hide the
-// paramset editor for the other two in the only UI that offers one:
-// Home Assistant has no entry for them, so its panel shows nothing.
+// of three CCUs into HA and the single-CCU default would hide the CCU
+// settings for the other two in the only UI that can edit them: Home
+// Assistant has no entry for them.
 func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
 	t.Parallel()
 
 	single := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: 1})
 	fleet := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: 3})
 
-	widened := []ID{
-		"settings.ccus",
-		"device.configure",
-		"device.configure.channels",
-		"device.configure.links",
-		"device.configure.schedule",
-	}
+	widened := []ID{"settings.ccus"}
 	for _, id := range widened {
 		if single.IsVisible(id) {
 			t.Errorf("%s visible on a single-CCU daemon, want the shipped embedded default", id)

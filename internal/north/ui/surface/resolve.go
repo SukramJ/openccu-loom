@@ -46,7 +46,7 @@ type Fleet struct {
 func (f Fleet) MultiCentral() bool { return f.Centrals > 1 }
 
 // ResolveFleet applies the profile this request should be served, with
-// the fleet size that decides two shipped defaults — see
+// the fleet size that decides one shipped default — see
 // [Surface.MultiCentralVisible].
 //
 // insideHA reports whether the request reached the daemon through Home
