@@ -36,8 +36,6 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 
 | View | What you do there |
 |------|-------------------|
-| **Overview** | Landing dashboard: at-a-glance daemon and CCU status. |
-| **Favorites** | Quick access to the devices you pin as favorites. |
 | **Alarm system** | The built-in alarm system: arming, zones, sensors and sirens. See the [Alarm and Security & Safety guide](../alarm-user-guide.md). |
 | **Security & Safety** | Smoke, water, tamper and power reporting with its fault state — always on, whether or not the alarm system is configured. See [Security & Safety](../alarm-user-guide.md#12-security-safety). |
 | **Devices** | Browse all devices across your CCUs, drill into channels and parameters. **Add device** starts pairing: pick the interface, open the pairing window, and accept and name a device as it joins. |

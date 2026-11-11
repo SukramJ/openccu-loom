@@ -1009,7 +1009,7 @@ export const api = {
   sbomDownloadUrl(): string {
     return `${apiBase()}/sbom?download=1`;
   },
-  // --- Per-user preferences (favorites / dashboard) -----------
+  // --- Per-user preferences ----------------------------------
   // Values are opaque JSON owned by the SPA. getPreference resolves to
   // null when the key is unset: the daemon answers 200 with a null
   // value. The 404 branch below covers daemons older than API 5.15.0,

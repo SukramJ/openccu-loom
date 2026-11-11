@@ -53,7 +53,7 @@ test.describe('App — leaving an editor with unsaved changes', () => {
 
     // The surface editor's draft lives in a module-level store, so it
     // outlives the view that edits it.
-    await page.getByRole('switch', { name: 'Favorites' }).click();
+    await page.getByRole('switch', { name: 'Fleet', exact: true }).click();
     await expect(page.getByText(/unsaved changes/)).toBeVisible();
 
     await page.getByRole('link', { name: 'Devices', exact: true }).click();
@@ -95,7 +95,7 @@ test.describe('App — start page after an interactive login', () => {
     await page.route('**/api/v1/me/preferences/**', (route) => {
       if (route.request().method() !== 'GET') return route.fulfill({ status: 204, body: '' });
       return signedIn
-        ? route.fulfill({ json: { key: 'start_route', value: '#/overview' } })
+        ? route.fulfill({ json: { key: 'start_route', value: '#/fleet' } })
         : route.fulfill({ status: 401, json: { title: 'unauthorized' } });
     });
 
@@ -108,6 +108,6 @@ test.describe('App — start page after an interactive login', () => {
     await page.getByLabel('Password').fill('secret');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page).toHaveURL(/#\/overview$/, { timeout: 10000 });
+    await expect(page).toHaveURL(/#\/fleet$/, { timeout: 10000 });
   });
 });

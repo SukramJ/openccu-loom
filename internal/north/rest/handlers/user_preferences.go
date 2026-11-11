@@ -19,7 +19,7 @@ import (
 
 // UserPreferencesService is the per-user preference store surface the
 // SPA needs. *sqlite.UserPreferencesStore satisfies it. Values are
-// opaque JSON owned by the SPA (e.g. the "favorites" pinned-items list).
+// opaque JSON owned by the SPA (e.g. the "start_route" landing view).
 type UserPreferencesService interface {
 	Get(ctx context.Context, subject, key string) (string, error)
 	Set(ctx context.Context, subject, key, valueJSON string) error
@@ -53,8 +53,8 @@ func preferenceSubject(w http.ResponseWriter, r *http.Request) (string, bool) {
 // An unset key is not an error: the store is a key-value surface whose
 // keys the SPA invents, so "nothing stored yet" is the state every key
 // starts in. It answers 200 with a null value, which is what a fresh
-// session reads for every preference it asks about — favorites and
-// start_route on the very first page load. Reporting that as 404 put a
+// session reads for every preference it asks about — start_route on
+// the very first page load. Reporting that as 404 put a
 // warn-level line in the log for ordinary use.
 func GetPreference(svc UserPreferencesService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -19,7 +19,6 @@
     "nav.diagnostics": true,
     "nav.diagrams": true,
     "nav.energy": true,
-    "nav.favorites": true,
     "nav.firmware": true,
     "nav.fleet": true,
     "nav.groups": true,
@@ -28,7 +27,6 @@
     "nav.logs": true,
     "nav.matter": true,
     "nav.messages": true,
-    "nav.overview": true,
     "nav.programs": true,
     "nav.schedules": true,
     "nav.security": true,
@@ -59,15 +57,6 @@
   "centrals": 1,
   "surfaces": [
     {
-      "id": "nav.overview",
-      "group": "overview",
-      "defaults": {
-        "embedded": false,
-        "standalone": true
-      },
-      "ha_owns": true
-    },
-    {
       "id": "nav.devices",
       "group": "overview",
       "defaults": {
@@ -75,15 +64,6 @@
         "standalone": true
       },
       "floor": "always"
-    },
-    {
-      "id": "nav.favorites",
-      "group": "overview",
-      "defaults": {
-        "embedded": false,
-        "standalone": true
-      },
-      "ha_owns": true
     },
     {
       "id": "nav.alarm",

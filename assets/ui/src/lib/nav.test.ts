@@ -76,11 +76,11 @@ describe("nav — surface profile", () => {
   it("drops the views the operator's profile hides", () => {
     const hrefs = navClusters({
       ...ALL_GATES,
-      surfaceVisible: (id) => id !== "nav.alarm" && id !== "nav.favorites",
+      surfaceVisible: (id) => id !== "nav.alarm" && id !== "nav.security",
     }).flatMap((c) => c.items.map((i) => i.href));
 
     expect(hrefs).not.toContain("#/alarm");
-    expect(hrefs).not.toContain("#/favorites");
+    expect(hrefs).not.toContain("#/security");
     expect(hrefs).toContain("#/devices");
   });
 

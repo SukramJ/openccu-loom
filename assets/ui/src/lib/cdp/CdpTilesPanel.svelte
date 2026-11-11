@@ -332,11 +332,8 @@
        that ships at least one DP. Peer channels (HmIP-SMO230's four
        motion channels, HmIP-STE2-PCB's three temperature probes, …)
        all render as siblings in the same grid; the composer's
-       gridSpan hint widens readout-heavy tiles to 2 cells. Shared with
-       the fleet-wide Overview route via ChannelTiles. -->
-  <!-- Pinning is offered here, on the device's own channel list: this is
-       where an operator decides a channel is worth quick access. -->
-  <ChannelTiles {detail} {cdps} pinnable />
+       gridSpan hint widens readout-heavy tiles to 2 cells. -->
+  <ChannelTiles {detail} {cdps} />
 {/if}
 
 {#if !loading && !error && renderable.length === 0 && orphanChannels.length === 0}

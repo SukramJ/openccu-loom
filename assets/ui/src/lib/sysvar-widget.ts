@@ -2,9 +2,9 @@
 //
 // Widget selection for a system variable's inline value control.
 // Pure dispatch over the CCU wire value_type (+ value_list presence) so
-// both the sysvar list and the favorites view render the same control
-// for the same variable shape. Read/write path only — the edit dialog
-// (unit / bounds / labels) picks its own fields.
+// every variable of the same shape renders the same control. Read/write
+// path only — the edit dialog (unit / bounds / labels) picks its own
+// fields.
 //
 // The CCU exposes boolean sysvars under two wire types that both carry a
 // bool value: LOGIC (a plain logic value) and ALARM (an alarm flag). The

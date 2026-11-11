@@ -86,8 +86,7 @@ vi.mock("$lib/api/client", async () => {
       setDeviceFunctions: vi.fn(),
       listDataPoints: vi.fn().mockResolvedValue([]),
     },
-    // Module-load hook of the auth store, which the favorites store imports
-    // to scope pinned items to the signed-in operator.
+    // Module-load hook of the auth store, which the view imports directly.
     setUnauthorizedHandler: vi.fn(),
   };
 });

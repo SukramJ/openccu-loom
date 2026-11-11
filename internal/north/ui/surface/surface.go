@@ -202,9 +202,7 @@ func haOwned() map[string]bool { return visibility(true, false) }
 // embedded profile goes live.
 var registry = []Surface{
 	// --- navigation: overview -------------------------------------
-	{ID: "nav.overview", Group: GroupOverview, Defaults: haOwned(), HAOwns: true},
 	{ID: "nav.devices", Group: GroupOverview, Defaults: both(), Floor: FloorAlways},
-	{ID: "nav.favorites", Group: GroupOverview, Defaults: haOwned(), HAOwns: true},
 	{ID: "nav.alarm", Group: GroupOverview, Defaults: both(), Warn: WarnAlarmArmed},
 	{ID: "nav.security", Group: GroupOverview, Defaults: both(), Warn: WarnSecurityFaults},
 	{ID: "nav.inbox", Group: GroupOverview, Defaults: both()},

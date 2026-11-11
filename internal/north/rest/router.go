@@ -273,7 +273,7 @@ type Deps struct {
 	// teardown; wired to the *ws.Hub in production.
 	TokenSockets handlers.TokenSocketRevoker
 
-	// Preferences backs per-user UI state (favorites, dashboard) at
+	// Preferences backs per-user UI state (the start route) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
 	// Diagrams backs the named multi-series diagram CRUD at /diagrams.
@@ -888,7 +888,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.SelfPassword != nil {
 				pr.Patch("/auth/me/password", handlers.ChangeOwnPassword(d.SelfPassword, d.AuditRecorder, d.SessionRevoker))
 			}
-			// Per-user preferences (favorites / dashboard). Any
+			// Per-user preferences (the start route). Any
 			// authenticated role; scoped to the caller's subject.
 			if d.Preferences != nil {
 				pr.Get("/me/preferences/{key}", handlers.GetPreference(d.Preferences))

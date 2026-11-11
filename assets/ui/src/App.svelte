@@ -11,9 +11,7 @@
   } from "$lib/stores/preferences.svelte";
   import { isEmbedded, startHaBridge } from "$lib/theme/ha-bridge";
   import DeviceList from "./routes/DeviceList.svelte";
-  import Overview from "./routes/Overview.svelte";
   import DeviceDetail from "./routes/DeviceDetail.svelte";
-  import Favorites from "./routes/Favorites.svelte";
   import Login from "./routes/Login.svelte";
   import Setup from "./routes/Setup.svelte";
   import BackupList from "./routes/BackupList.svelte";
@@ -279,8 +277,6 @@
 
   type Route =
     | { kind: "list" }
-    | { kind: "overview" }
-    | { kind: "favorites" }
     | { kind: "detail"; address: string; channel?: number; sub?: string }
     | { kind: "backups" }
     | { kind: "sysvars" }
@@ -316,8 +312,6 @@
     const query = qIdx >= 0 ? path.slice(qIdx + 1) : "";
     const rawPath = qIdx >= 0 ? path.slice(0, qIdx) : path;
     if (!path || path === "/" || path === "/devices") return { kind: "list" };
-    if (path === "/overview") return { kind: "overview" };
-    if (path === "/favorites") return { kind: "favorites" };
     if (path === "/backups") return { kind: "backups" };
     if (path === "/sysvars") return { kind: "sysvars" };
     if (path === "/programs") return { kind: "programs" };
@@ -401,7 +395,6 @@
     route.kind === "diagrams" ? t("page.title.diagrams") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
-    route.kind === "overview" ? t("page.title.overview") :
     route.kind === "settings" ? t("page.title.settings") :
     route.kind === "signal" ? t("page.title.signal") :
     route.kind === "alarm" ? t("page.title.alarm") :
@@ -500,10 +493,6 @@
       <main id="main">
         {#if route.kind === "list"}
           <DeviceList />
-        {:else if route.kind === "overview"}
-          <Overview />
-        {:else if route.kind === "favorites"}
-          <Favorites />
         {:else if route.kind === "detail"}
           <DeviceDetail
             address={route.address}

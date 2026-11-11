@@ -19,7 +19,6 @@
   import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
-  import ChannelPinButton from "$lib/cdp/ChannelPinButton.svelte";
 
   import { composeTile, type ControlSpec } from "./composer";
   import { dpLabel } from "./classify";
@@ -41,16 +40,9 @@
   type Props = {
     address: string;
     channel: ChannelSummary;
-    /**
-     * Renders a pin toggle in the header. Opt-in so the control appears
-     * only where pinning is a sensible action - the device's own channel
-     * list - and not on the fleet overview or inside the favorites view
-     * that already lists the pinned channel.
-     */
-    pinnable?: boolean;
   };
 
-  let { address, channel, pinnable = false }: Props = $props();
+  let { address, channel }: Props = $props();
 
 
   let dataPoints = $state<DataPointSummary[]>([]);
@@ -190,9 +182,6 @@
       {/if}
     </div>
     <div class="flex items-center gap-1.5">
-      {#if pinnable}
-        <ChannelPinButton channelAddress={channel.address} label={channelLabel} />
-      {/if}
       <span class="text-[10px] uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
         CH {channelNo}
       </span>

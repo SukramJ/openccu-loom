@@ -17,9 +17,9 @@ var ErrPreferenceNotFound = errors.New("sqlite: preference not found")
 
 // UserPreferencesStore persists per-user UI state as opaque JSON blobs
 // addressed by (subject, key). The daemon never interprets the value;
-// the SPA owns its schema (e.g. key "favorites" holds a pinned-items
-// array). This backs cross-device persistence of preferences such as
-// favorites / dashboard layout.
+// the SPA owns its schema (e.g. key "start_route" holds the view an
+// operator lands on). This backs cross-device persistence of such
+// preferences.
 type UserPreferencesStore struct {
 	db *sql.DB
 }
