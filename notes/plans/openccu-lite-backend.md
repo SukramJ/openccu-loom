@@ -2522,6 +2522,27 @@ it, "open" that nothing in Loom reads or sends it yet.
 `level` and "answered for one release". Loom's single sign-on reads `level` and falls back to `role`
 only where a box answers no level (ADR 0079, amendment of 2026-11-11).
 
+**Read from a box on 2026-11-11** (the test box, occulited `04ee7b6`, openccu-lite 1.2.1; reads only, with an
+API token):
+
+- `GET /api/meta/v1/version` carries `commit` and `interfaces: ["BidCos-RF", "HmIP-RF", "VirtualDevices"]`.
+- `GET /system-update` carries `busy: null`; `GET /api/rpc/v1/state` entries carry `previous_for_s` and
+  `changed_at`.
+- The box's own `GET /api/openapi.json` (309 paths) lists every one of the 53 routes Loom's transport calls,
+  the notice and paramset routes included. The route list was written by hand from the transport package, not
+  extracted from it; an invented route was reported missing by the same check.
+- **The paramset description cache**, which Loom does not use yet: `GET /api/rpc/v1/paramsets` answered the
+  whole cache in one request — 92 descriptions (53 `MASTER`, 39 `VALUES`), 4078 parameters, 654 kB, 0.08 s — keyed
+  `<interface>/<device type>/<firmware>/<version>/<channel type>/<paramset>`. `POST /paramsets/HmIP-RF` with four
+  addresses answered `{keys, paramsets, errors}` in 0.03 s: a channel maps to its key, a device address without
+  `VALUES` is in `errors` with fault -3, an unknown address with fault -2.
+- **The cache does not carry XML-RPC's types.** A `FLOAT` parameter's whole-number bound arrives as a JSON
+  integer (the `MIN` of 739 `FLOAT` parameters on this box; `ON_TIME` has `MIN: 0` beside `MAX: 85825945.6`), and
+  the interface processes' own quirks pass through unchanged: VirtualDevices answers bounds as strings
+  (`"MIN": "5.0"`, 572 cases; a `BOOL` with `"DEFAULT": "false"`), HmIP-RF answers an `ENUM`'s bounds as value
+  names. A consumer has to coerce by `TYPE`; reading the cache as it stands would type a float parameter as an
+  integer.
+
 occulited publishes machine-readable documents since `835e0af` (2026-09-29): `docs/openapi.json`
 (served as `GET /api/openapi.json`, scope `system:read`), `docs/asyncapi.json` and
 `docs/lite-rpc-methods.json`. They are GPL-3.0-only and are not copied into this repository.
