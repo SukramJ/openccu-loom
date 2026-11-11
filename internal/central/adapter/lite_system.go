@@ -147,8 +147,17 @@ func (s *liteSystem) Restore(ctx context.Context, id string, payload io.Reader) 
 	if !check.Check.OK {
 		return "", fmt.Errorf("%w: restore: the box refused the archive: %s", hmerr.ErrValidation, check.Check.Output)
 	}
-	applied, err := s.client.ApplyRestore(ctx, occulited.RestoreApplyRequest{File: check.File})
+	if b := check.Backup; b != nil && b.Kind != occulited.BackupKindLite {
+		return "", fmt.Errorf("%w: restore: the archive is a backup of %s, not of openccu-lite; the box restores only its own backups", hmerr.ErrValidation, b.System)
+	}
+	// The caller asked for this restore; Confirm passes that on to the
+	// box, which applies nothing without it.
+	applied, err := s.client.ApplyRestore(ctx, occulited.RestoreApplyRequest{File: check.File, Confirm: true})
 	if err != nil {
+		var apiErr *occulited.APIError
+		if errors.As(err, &apiErr) && apiErr.Code == occulited.CodeNotOpenCCULite {
+			return "", fmt.Errorf("%w: restore: the box refused the archive: %s", hmerr.ErrValidation, apiErr.Message)
+		}
 		return "", fmt.Errorf("openccu-lite restore apply: %w", err)
 	}
 	if !applied.OK {

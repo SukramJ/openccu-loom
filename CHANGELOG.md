@@ -100,6 +100,15 @@ clients (API 16).
 
 ### Fixed
 
+- **openccu-lite: a restore is applied again.** The box requires
+  `confirm: true` on `POST /api/system/v1/restore/apply` (occulited since
+  2026-10-03) and answered the daemon's restore with `400 confirm`, so a
+  restore started from the Config UI or the REST API failed after the
+  archive had passed the box's check. The daemon now passes the
+  confirmation on. A backup of another system (a CCU's, not
+  openccu-lite's) is refused up front with a message that names what the
+  file is, where the box reports it, and the box's own `not_openccu_lite`
+  refusal is answered as a validation error instead of a gateway error.
 - **Config UI: the embedded profile no longer hides the device editor.**
   With `north.ui.embedded` on, one CCU and the UI opened through Home
   Assistant, the Configure tab with its channel, link and schedule

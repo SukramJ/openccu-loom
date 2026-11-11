@@ -122,7 +122,7 @@ func TestBackupAndRestore(t *testing.T) {
 	if err != nil || !check.Check.OK || check.File == "" || !check.Encryption.CreatedHere {
 		t.Fatalf("check %+v %v", check, err)
 	}
-	apply, err := c.ApplyRestore(ctx, occulited.RestoreApplyRequest{File: check.File})
+	apply, err := c.ApplyRestore(ctx, occulited.RestoreApplyRequest{File: check.File, Confirm: true})
 	if err != nil || !apply.OK || !apply.Rebooting {
 		t.Errorf("apply %+v %v", apply, err)
 	}

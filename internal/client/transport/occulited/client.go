@@ -446,6 +446,9 @@ const (
 	// CodeUnknownGroup answers a heating-group read or write of a group
 	// the box does not hold (404).
 	CodeUnknownGroup = "unknown-group"
+	// CodeNotOpenCCULite: POST /restore/apply refused a file that is
+	// not a backup of openccu-lite (422).
+	CodeNotOpenCCULite = "not_openccu_lite"
 )
 
 // ErrTooManyStreams matches the event stream's 429 too-many-streams
