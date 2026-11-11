@@ -289,7 +289,7 @@ var registry = []Surface{
 
 	// --- device-detail tabs ---------------------------------------
 	{ID: "device.overview", Group: GroupDevice, Defaults: everywhere()},
-	// The device editor is visible in both profiles. Home Assistant does
+	// The device editor is visible in every profile. Home Assistant does
 	// not provide it for a CCU this daemon serves: the integration
 	// registers no configuration panel of its own for such an entry, so
 	// this is the only place its users can edit a paramset, a link or a

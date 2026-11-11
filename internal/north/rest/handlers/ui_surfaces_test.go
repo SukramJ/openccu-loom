@@ -84,8 +84,8 @@ func TestGetUISurfacesServesRegistryAndResolution(t *testing.T) {
 // setting: ONE config, two doors, two answers.
 //
 // It goes through the handler rather than the resolver because the
-// resolver takes `insideHA` as an argument — a test that passes it
-// itself proves only that the resolver honours what it is told, never
+// resolver takes the request's origin as an argument — a test that passes
+// it itself proves only that the resolver honours what it is told, never
 // that a request's own headers decide it. The header is the production
 // input, so the request has to carry it.
 func TestEmbeddedScopeDecidesPerRequest(t *testing.T) {

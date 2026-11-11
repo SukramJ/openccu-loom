@@ -150,6 +150,33 @@ and not an operating UI.
    integration talks to the CCU directly; on this backend the integration hands it to
    the daemon. Two editors in the first case cost less than none in the second.
 
+   Amended 2026-11-11 with the implementing change. The third profile is `lite`. It is
+   **selected by the request, not declared**: a request whose identity is a box-shell
+   session the box confirmed ([ADR 0079](./0079-lite-shell-session-sso.md)) gets it.
+   Home Assistant proxying a request does not say that it owns the config surface, so
+   that ownership stays declared; a confirmed box session is itself the fact that the
+   box holds the account and the login. Selecting on the identity instead of on the
+   `X-Occulite-Session` header also means the profile cannot apply while single
+   sign-on is off — the case in which the daemon's own accounts are the login and
+   hiding their administration would be wrong. A box API token and a daemon login
+   inside the shell frame keep the standalone profile; `embedded_scope: always`
+   outranks the shell.
+
+   The column, checked against occulited at `04ee7b6` (`docs/system-api.md`,
+   `ui/src/App.svelte`):
+
+   | Surface | lite default | Source |
+   |---|---|---|
+   | `settings.users` | hidden | `GET/POST /users`, shell page `/system/users` |
+   | `settings.oidc`, `settings.ccu_auth` | hidden | the box's own login, passkeys and `/oidc` provider behind the session that selects the profile |
+   | `settings.ccus` | hidden, visible on a multi-CCU daemon | the daemon onboards the box it runs on by itself ([ADR 0077](./0077-lite-addon-token-onboarding.md)) |
+   | `nav.firmware` | hidden | `/firmware` routes, shell page `/system/updates` |
+   | `nav.matter`, `settings.matter` | visible | no Matter in the box; hidden only in the Home Assistant column |
+   | `settings.tokens` | visible | daemon tokens stay valid for clients on the direct port |
+   | `settings.groups` (rooms and functions) | visible | the box keeps rooms and functions in its metadata store, but an editor equal to this one was not verified |
+   | `nav.backups`, `nav.logs` | visible | the box has a backup and a log page; that its backup carries the daemon's data was not verified, and its log is the system journal, not this view |
+   | `device.configure` and its sub-tabs | visible | the box has no paramset, link or schedule editor |
+
 7. **The alarm system and the security view are the one named application.** They
    answer none of the three questions and stay nevertheless: they are a daemon-level
    service that has to work without Home Assistant (`SPECIFICATION.md` §2.1, goal 6),

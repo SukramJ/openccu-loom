@@ -20,9 +20,9 @@ func uiWith(embedded bool, profile string, overrides map[string]config.SurfaceSt
 	return ui
 }
 
-// TestResolveDefaultsPerProfile pins the two shipped default sets: the
-// standalone profile serves everything, the embedded profile hides what
-// Home Assistant owns.
+// TestResolveDefaultsPerProfile pins the standalone and the embedded
+// default set: the standalone profile serves everything, the embedded
+// profile hides what Home Assistant owns.
 func TestResolveDefaultsPerProfile(t *testing.T) {
 	t.Parallel()
 
@@ -294,7 +294,7 @@ func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
 }
 
 // TestMultiCentralLeavesStandaloneAlone pins that the rule is scoped to
-// the embedded profile. Standalone already shows everything; a fleet
+// the host-owned profiles. Standalone already shows everything; a fleet
 // rule there could only ever un-hide what an operator chose to hide.
 func TestMultiCentralLeavesStandaloneAlone(t *testing.T) {
 	t.Parallel()

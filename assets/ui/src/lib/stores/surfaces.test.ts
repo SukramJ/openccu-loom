@@ -19,6 +19,7 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
     embedded: false,
     embedded_scope: "inside_ha",
     inside_ha: false,
+    origin: "direct",
     profile: "standalone",
     profiles: {},
     centrals: 1,
@@ -33,27 +34,28 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
       {
         id: "nav.devices",
         group: "overview",
-        defaults: { standalone: true, embedded: true },
+        defaults: { standalone: true, embedded: true, lite: true },
         floor: "always",
       },
       {
         id: "nav.alarm",
         group: "overview",
-        defaults: { standalone: true, embedded: true },
+        defaults: { standalone: true, embedded: true, lite: true },
         warn: "alarm_armed",
       },
       {
         id: "nav.matter",
         group: "bridges",
-        defaults: { standalone: true, embedded: false },
+        defaults: { standalone: true, embedded: false, lite: true },
         gate: "matter",
         ha_owns: true,
       },
       {
         id: "settings.users",
         group: "settings",
-        defaults: { standalone: true, embedded: false },
+        defaults: { standalone: true, embedded: false, lite: false },
         floor: "standalone",
+        box_owns: true,
       },
       {
         id: "device.configure",
@@ -69,7 +71,7 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
       {
         id: "nav.links",
         group: "automation",
-        defaults: { standalone: true, embedded: true },
+        defaults: { standalone: true, embedded: true, lite: true },
         opens: "device.configure.links",
       },
     ],
@@ -153,7 +155,9 @@ describe("surfacesStore editing", () => {
   });
 
   it("reports the shipped default per profile", () => {
-    expect(surfacesStore.defaultOf("device.configure", "standalone")).toBe(true);
+    expect(surfacesStore.defaultOf("device.configure", "standalone")).toBe(
+      true,
+    );
     expect(surfacesStore.defaultOf("device.configure", "embedded")).toBe(false);
   });
 
@@ -197,12 +201,18 @@ describe("surfacesStore editing", () => {
     await surfacesStore.save();
     expect(surfacesStore.editing).toBe("embedded");
 
-    putUISurfaces.mockResolvedValue(response({ profile: "standalone", embedded: true }));
+    putUISurfaces.mockResolvedValue(
+      response({ profile: "standalone", embedded: true }),
+    );
     await surfacesStore.setEmbedded(true);
     expect(surfacesStore.editing).toBe("embedded");
 
     putUISurfaces.mockResolvedValue(
-      response({ profile: "standalone", embedded: true, embedded_scope: "always" }),
+      response({
+        profile: "standalone",
+        embedded: true,
+        embedded_scope: "always",
+      }),
     );
     await surfacesStore.setEmbeddedScope("always");
     expect(surfacesStore.editing).toBe("embedded");
@@ -225,7 +235,9 @@ describe("surfacesStore editing", () => {
   });
 
   it("saves the master toggle separately from the row edits", async () => {
-    putUISurfaces.mockResolvedValue(response({ embedded: true, profile: "embedded" }));
+    putUISurfaces.mockResolvedValue(
+      response({ embedded: true, profile: "embedded" }),
+    );
     await surfacesStore.setEmbedded(true);
     expect(putUISurfaces).toHaveBeenCalledWith({ embedded: true });
     expect(surfacesStore.embedded).toBe(true);
@@ -237,7 +249,9 @@ describe("surfacesStore editing", () => {
     // edits, so the daemon's response profiles are whatever is already
     // stored — adopting them wholesale into `draft` would wipe an
     // in-flight edit the operator has not saved yet.
-    putUISurfaces.mockResolvedValue(response({ embedded: true, profile: "embedded" }));
+    putUISurfaces.mockResolvedValue(
+      response({ embedded: true, profile: "embedded" }),
+    );
     surfacesStore.toggle("nav.alarm"); // visible → hidden, unsaved
     expect(surfacesStore.hasChanges()).toBe(true);
 
@@ -278,6 +292,40 @@ describe("surfacesStore editing", () => {
     expect(surfacesStore.embedded).toBe(true);
     expect(surfacesStore.insideHA).toBe(false);
     expect(surfacesStore.profile).toBe("standalone");
+  });
+});
+
+describe("surfacesStore lite profile", () => {
+  it("adopts the lite profile and the door the daemon reports", async () => {
+    getUISurfaces.mockResolvedValue(
+      response({ origin: "lite_shell", profile: "lite" }),
+    );
+    await surfacesStore.load();
+    expect(surfacesStore.profile).toBe("lite");
+    expect(surfacesStore.origin).toBe("lite_shell");
+  });
+
+  it("reports the lite column of the shipped defaults", () => {
+    // Home Assistant has its own Matter, the box does not; the box has
+    // its own accounts.
+    expect(surfacesStore.defaultOf("nav.matter", "lite")).toBe(true);
+    expect(surfacesStore.defaultOf("settings.users", "lite")).toBe(false);
+    expect(surfacesStore.isFloor("settings.users", "lite")).toBe(false);
+  });
+
+  it("counts and saves edits of the lite profile", async () => {
+    surfacesStore.setEditing("lite");
+    surfacesStore.set("settings.users", true);
+    expect(surfacesStore.hasChanges()).toBe(true);
+    putUISurfaces.mockResolvedValue(
+      response({ profiles: { lite: { "settings.users": "visible" } } }),
+    );
+    await surfacesStore.save();
+    const sent = putUISurfaces.mock.calls[0][0] as {
+      profiles: Record<string, unknown>;
+    };
+    expect(sent.profiles.lite).toEqual({ "settings.users": "visible" });
+    expect(surfacesStore.hasChanges()).toBe(false);
   });
 });
 

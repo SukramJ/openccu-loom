@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A surface profile for the openccu-lite shell (REST API 16.1.0).** The
+  navigation editor gains a third profile, `lite`, next to `standalone` and
+  `embedded`. It is served to anyone signed in through the interface of an
+  openccu-lite system — decided by the box session the daemon verified, so
+  it needs no switch and cannot be forged on the direct port — and hides
+  what that system provides itself: users, sign-in (OIDC, CCU login), the
+  box's own connection and device firmware. Matter stays visible there, and
+  the CCU connections come back on a daemon that serves a second system.
+  `GET /ui/surfaces` reports the door a request came through as `origin`
+  (`direct`, `home_assistant`, `lite_shell`), a `lite` entry in every
+  surface's `defaults`, and `box_owns` on the surfaces the box provides;
+  `north.ui.profiles` accepts a `lite` block. Hiding stays navigation only
+  and changes no permission (ADR 0088, decision 6).
+
 ### Changed
 
 - **Measurement forwarding is `north.measurements` (REST API 16.0.0).**

@@ -1,5 +1,5 @@
 {
- "api_version": "16.0.0",
+ "api_version": "16.1.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -2531,6 +2531,7 @@
    "number:integer"
   ],
   "SurfaceInfo": [
+   "box_owns:boolean",
    "defaults:object",
    "floor:string",
    "gate:string",
@@ -2567,6 +2568,7 @@
    "embedded:boolean",
    "embedded_scope:string",
    "inside_ha:boolean",
+   "origin:string",
    "profile:string",
    "profiles:object",
    "surfaces:array\u003c$ref:SurfaceInfo\u003e"

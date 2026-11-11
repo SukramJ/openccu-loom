@@ -7,12 +7,14 @@
 // as hidden" drift apart. See notes/concepts/ui-surface-profiles.md.
 
 import { api } from "$lib/api/client";
+import { PROFILE_NAMES } from "$lib/api/surface-types";
 import type {
   EmbeddedScope,
   ProfileName,
   SurfaceInfo,
   SurfaceState,
   SurfacesResponse,
+  UIOrigin,
 } from "$lib/api/surface-types";
 import { dirty } from "./dirty.svelte";
 
@@ -26,6 +28,7 @@ function cloneProfiles(
   return {
     standalone: { ...(src?.standalone ?? {}) },
     embedded: { ...(src?.embedded ?? {}) },
+    lite: { ...(src?.lite ?? {}) },
   };
 }
 
@@ -48,6 +51,9 @@ function createSurfacesStore() {
   // the default scope it is what decides the live profile, so the editor
   // cannot explain the profile without it.
   let insideHA = $state(false);
+  // The door this browser came through. The box shell selects the lite
+  // profile by itself, so the editor needs it to say why that is live.
+  let origin = $state<UIOrigin>("direct");
   let profile = $state<ProfileName>("standalone");
   let surfaces = $state<SurfaceInfo[]>([]);
   let effective = $state<Record<string, boolean>>({});
@@ -78,6 +84,7 @@ function createSurfacesStore() {
     embedded = resp.embedded;
     embeddedScope = resp.embedded_scope ?? "inside_ha";
     insideHA = resp.inside_ha ?? false;
+    origin = resp.origin ?? "direct";
     profile = resp.profile;
     surfaces = resp.surfaces ?? [];
     effective = resp.effective ?? {};
@@ -107,8 +114,11 @@ function createSurfacesStore() {
 
   function changeCount(): number {
     let n = 0;
-    for (const p of ["standalone", "embedded"] as ProfileName[]) {
-      const keys = new Set([...Object.keys(saved[p]), ...Object.keys(draft[p])]);
+    for (const p of PROFILE_NAMES) {
+      const keys = new Set([
+        ...Object.keys(saved[p]),
+        ...Object.keys(draft[p]),
+      ]);
       for (const k of keys) {
         if (saved[p][k] !== draft[p][k]) n++;
       }
@@ -186,10 +196,14 @@ function createSurfacesStore() {
   }
 
   /** The edited (unsaved) visibility of a surface. */
-  function draftVisible(id: string, forProfile: ProfileName = editing): boolean {
+  function draftVisible(
+    id: string,
+    forProfile: ProfileName = editing,
+  ): boolean {
     if (isFloor(id, forProfile)) return true;
     const own = draft[forProfile][id];
-    const self = own === undefined ? defaultOf(id, forProfile) : own === "visible";
+    const self =
+      own === undefined ? defaultOf(id, forProfile) : own === "visible";
     if (!self) return false;
     // A child is never more visible than its parent — the same rule the
     // daemon applies, so the preview cannot promise something the save
@@ -262,7 +276,9 @@ function createSurfacesStore() {
    * is already on screen.
    */
   async function setEmbeddedScope(next: EmbeddedScope): Promise<void> {
-    apply(await api.putUISurfaces({ embedded_scope: next }), { resetDraft: false });
+    apply(await api.putUISurfaces({ embedded_scope: next }), {
+      resetDraft: false,
+    });
   }
 
   function setEditing(next: ProfileName) {
@@ -297,6 +313,9 @@ function createSurfacesStore() {
     },
     get insideHA() {
       return insideHA;
+    },
+    get origin() {
+      return origin;
     },
     get centrals() {
       return centrals;

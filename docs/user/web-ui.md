@@ -67,6 +67,16 @@ Not every view appears on every system:
 
 An administrator can also hide views under **Settings → Navigation & views**. **Devices**, **Settings** and **About** can never be hidden.
 
+The editor there holds three profiles, one for each place the interface can be opened from:
+
+| Profile | Applies to | Hidden by default |
+|---|---|---|
+| **Standalone** | anyone who opens the daemon's own address | nothing |
+| **Embedded** | the Home Assistant panel, once *Embedded in Home Assistant* is switched on | what Home Assistant provides itself: Matter, CCU connections, sign-in, users, tokens, rooms and functions |
+| **openccu-lite** | anyone signed in through the interface of an openccu-lite system | what that system provides itself: users, sign-in (OIDC, CCU login), its own connection, device firmware |
+
+The openccu-lite profile needs no switch. It applies when the box confirmed the session you came with; a browser pointed at the daemon's own port, and a sign-in with a daemon account, keep the standalone profile. Matter stays visible there, because an openccu-lite system has no Matter bridge of its own, and **CCU connections** reappears as soon as the daemon serves a second system. Every default can be changed per profile; hiding a view changes the navigation and no permission.
+
 The sections below cover the tasks most users do.
 
 ## Browsing devices, channels, and parameters
