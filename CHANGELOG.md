@@ -6,6 +6,93 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **openccu-lite: a device's firmware state follows the box.** The box
+  reports on its event stream when a device's firmware update state
+  moves (occulited since 2026-10-14). The daemon now reads the message
+  and re-reads the interface's device descriptions, so the update entity
+  and the firmware overview change when the box says so instead of at
+  the next scheduled refresh. A transfer's burst of messages is one
+  refresh and at most one more.
+- **openccu-lite: the daemon's warnings stand on the box's Status page.**
+  Running as the add-on, the daemon posts its warnings — an unhealthy
+  component, failed operations of the last day, a waiting pairing request,
+  the service messages of other centrals — as the add-on's notices on the
+  box, in German and English, and clears each when its cause is gone. The
+  box's LED follows them and its administrators silence them there. A
+  change reaches the box when it happens; a resynchronisation every five
+  minutes covers what no event announces. New setting
+  `north.ui.box_notices` (on in the openccu-lite add-on, without effect
+  elsewhere)
+  ([ADR 0089](docs/adr/0089-warnings-as-box-notices.md)).
+- **openccu-lite: adding a box proposes the interfaces it has.** The box
+  names its interfaces without a credential (occulited since 2026-11-10).
+  The probe of `POST /centrals/probe` and `POST /setup/probe` passes them
+  on as `lite.interfaces`, and the Config UI ticks exactly those when a
+  box is added, instead of its own default set. A box that does not name
+  them leaves the default in place. REST API 16.2.0.
+
+### Changed
+
+- **openccu-lite: a central loads its paramset descriptions in one request
+  per paramset.** The box keeps every description once per device model
+  and answers many addresses at once (occulited since 2026-10-22). When
+  devices are loaded, the daemon now reads an interface's `VALUES` and
+  `MASTER` descriptions that way instead of one XML-RPC call per channel
+  and paramset. A box without the route is read one by one as before, and
+  so is whatever a batch did not answer.
+- **openccu-lite: a second system update is a conflict, not a failure.**
+  The box runs one download, upload or install of a system update at a
+  time and refuses another with `409 busy`. `POST
+  /system/firmware/download` now answers 409 with the phase and file of
+  the update in flight instead of 502, and the install path reports the
+  same reason. REST API 16.2.0.
+- **openccu-lite: signing in through the box follows the account's
+  level.** The box-shell single sign-on read the box's role word, which
+  is `user` for every account below an administrator, and made each of
+  them an operator. It now reads the account's level: *administer* signs
+  in as admin, *operate* and *configure* as operator, and **a *read*
+  account as viewer** — it could switch devices through the daemon
+  before, which the box itself does not let it do. A box that answers no
+  level is read by its role word as before
+  ([ADR 0079](docs/adr/0079-lite-shell-session-sso.md), amended).
+- **openccu-lite add-on: the Addons page links the release notes.** The
+  add-on's manifest names this changelog, which the box shows as
+  *Release notes* beside an offered update.
+
+### Fixed
+
+- **openccu-lite: a restore is applied again.** The box requires
+  `confirm: true` on `POST /api/system/v1/restore/apply` (occulited since
+  2026-10-03) and answered the daemon's restore with `400 confirm`, so a
+  restore started from the Config UI or the REST API failed after the
+  archive had passed the box's check. The daemon now passes the
+  confirmation on. A backup of another system (a CCU's, not
+  openccu-lite's) is refused up front with a message that names what the
+  file is, where the box reports it, and the box's own `not_openccu_lite`
+  refusal is answered as a validation error instead of a gateway error.
+- **openccu-lite: a start no longer asks BidCos-RF devices that cannot
+  answer.** Reading the current values of a BidCos-RF channel is a status
+  request on the air, and one to a device that is away or asleep fails
+  only after the interface's retries. The value seed asked every channel
+  with a missing value; on a box this showed as fifteen failed reads in
+  the first minute after a start, each taking one to four seconds. The
+  seed now leaves the value channels of a device alone that the box
+  reports unreachable or that does not listen all the time; their values
+  arrive with the device's next event. Channel 0 is still read, and so is
+  a device whose state is not known.
+- **openccu-lite: renaming to an empty name is refused with the reason.**
+  The box keeps a name for every object and refuses an empty one; the
+  daemon passed the rename on and answered the box's refusal as a gateway
+  error (502). It now refuses it itself as a validation error (422).
+- **openccu-lite: a link change no longer re-reads the device list.** The
+  box passes on the hint of an interface's `updateDevice` (occulited since
+  2026-10-02); the daemon dropped it and treated every such message as a
+  description change. It now handles the message by its hint, as it
+  handles a CCU's callback, and reads `replaceDevice`'s old and new
+  address by name where the box names them.
+
 ## [0.100.0] - 2026-11-11
 
 This release narrows the Config UI to what the daemon is: the console of a
@@ -30,30 +117,6 @@ clients (API 16).
   surface's `defaults`, and `box_owns` on the surfaces the box provides;
   `north.ui.profiles` accepts a `lite` block. Hiding stays navigation only
   and changes no permission (ADR 0088, decision 6).
-- **openccu-lite: a device's firmware state follows the box.** The box
-  reports on its event stream when a device's firmware update state
-  moves (occulited since 2026-10-14). The daemon now reads the message
-  and re-reads the interface's device descriptions, so the update entity
-  and the firmware overview change when the box says so instead of at
-  the next scheduled refresh. A transfer's burst of messages is one
-  refresh and at most one more.
-- **openccu-lite: the daemon's warnings stand on the box's Status page.**
-  Running as the add-on, the daemon posts its warnings — an unhealthy
-  component, failed operations of the last day, a waiting pairing request,
-  the service messages of other centrals — as the add-on's notices on the
-  box, in German and English, and clears each when its cause is gone. The
-  box's LED follows them and its administrators silence them there. A
-  change reaches the box when it happens; a resynchronisation every five
-  minutes covers what no event announces. New setting
-  `north.ui.box_notices` (on in the openccu-lite add-on, without effect
-  elsewhere)
-  ([ADR 0089](docs/adr/0089-warnings-as-box-notices.md)).
-- **openccu-lite: adding a box proposes the interfaces it has.** The box
-  names its interfaces without a credential (occulited since 2026-11-10).
-  The probe of `POST /centrals/probe` and `POST /setup/probe` passes them
-  on as `lite.interfaces`, and the Config UI ticks exactly those when a
-  box is added, instead of its own default set. A box that does not name
-  them leaves the default in place. REST API 16.1.0.
 
 ### Changed
 
@@ -82,50 +145,6 @@ clients (API 16).
   database and are taken over once from `history.db`; removing a device
   now also clears its overrides in the running daemon, not only on disk.
   The Config UI gains a Measurements settings tab.
-### Added
-
-- **openccu-lite: a device's firmware state follows the box.** The box
-  reports on its event stream when a device's firmware update state
-  moves (occulited since 2026-10-14). The daemon now reads the message
-  and re-reads the interface's device descriptions, so the update entity
-  and the firmware overview change when the box says so instead of at
-  the next scheduled refresh. A transfer's burst of messages is one
-  refresh and at most one more.
-
-- **openccu-lite: adding a box proposes the interfaces it has.** The box
-  names its interfaces without a credential (occulited since 2026-11-10).
-  The probe of `POST /centrals/probe` and `POST /setup/probe` passes them
-  on as `lite.interfaces`, and the Config UI ticks exactly those when a
-  box is added, instead of its own default set. A box that does not name
-  them leaves the default in place. REST API 15.10.0.
-
-### Changed
-
-- **openccu-lite: a central loads its paramset descriptions in one request
-  per paramset.** The box keeps every description once per device model
-  and answers many addresses at once (occulited since 2026-10-22). When
-  devices are loaded, the daemon now reads an interface's `VALUES` and
-  `MASTER` descriptions that way instead of one XML-RPC call per channel
-  and paramset. A box without the route is read one by one as before, and
-  so is whatever a batch did not answer.
-- **openccu-lite: a second system update is a conflict, not a failure.**
-  The box runs one download, upload or install of a system update at a
-  time and refuses another with `409 busy`. `POST
-  /system/firmware/download` now answers 409 with the phase and file of
-  the update in flight instead of 502, and the install path reports the
-  same reason. REST API 15.10.0.
-- **openccu-lite: signing in through the box follows the account's
-  level.** The box-shell single sign-on read the box's role word, which
-  is `user` for every account below an administrator, and made each of
-  them an operator. It now reads the account's level: *administer* signs
-  in as admin, *operate* and *configure* as operator, and **a *read*
-  account as viewer** — it could switch devices through the daemon
-  before, which the box itself does not let it do. A box that answers no
-  level is read by its role word as before
-  ([ADR 0079](docs/adr/0079-lite-shell-session-sso.md), amended).
-- **openccu-lite add-on: the Addons page links the release notes.** The
-  add-on's manifest names this changelog, which the box shows as
-  *Release notes* beside an offered update.
 - **Built with Go 1.27.4.** The release picks up the standard library's fix
   for a crash of the HTTP/1 server through a header race in
   `MaxBytesReader` (GO-2026-6859), which the REST server and the XML-RPC
@@ -168,35 +187,6 @@ clients (API 16).
 
 ### Fixed
 
-- **openccu-lite: a restore is applied again.** The box requires
-  `confirm: true` on `POST /api/system/v1/restore/apply` (occulited since
-  2026-10-03) and answered the daemon's restore with `400 confirm`, so a
-  restore started from the Config UI or the REST API failed after the
-  archive had passed the box's check. The daemon now passes the
-  confirmation on. A backup of another system (a CCU's, not
-  openccu-lite's) is refused up front with a message that names what the
-  file is, where the box reports it, and the box's own `not_openccu_lite`
-  refusal is answered as a validation error instead of a gateway error.
-- **openccu-lite: a start no longer asks BidCos-RF devices that cannot
-  answer.** Reading the current values of a BidCos-RF channel is a status
-  request on the air, and one to a device that is away or asleep fails
-  only after the interface's retries. The value seed asked every channel
-  with a missing value; on a box this showed as fifteen failed reads in
-  the first minute after a start, each taking one to four seconds. The
-  seed now leaves the value channels of a device alone that the box
-  reports unreachable or that does not listen all the time; their values
-  arrive with the device's next event. Channel 0 is still read, and so is
-  a device whose state is not known.
-- **openccu-lite: renaming to an empty name is refused with the reason.**
-  The box keeps a name for every object and refuses an empty one; the
-  daemon passed the rename on and answered the box's refusal as a gateway
-  error (502). It now refuses it itself as a validation error (422).
-- **openccu-lite: a link change no longer re-reads the device list.** The
-  box passes on the hint of an interface's `updateDevice` (occulited since
-  2026-10-02); the daemon dropped it and treated every such message as a
-  description change. It now handles the message by its hint, as it
-  handles a CCU's callback, and reads `replaceDevice`'s old and new
-  address by name where the box names them.
 - **Config UI: the embedded profile no longer hides the device editor.**
   With `north.ui.embedded` on, one CCU and the UI opened through Home
   Assistant, the Configure tab with its channel, link and schedule
