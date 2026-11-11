@@ -163,6 +163,25 @@ type Harness struct {
 	stopOnce sync.Once
 }
 
+// startSidecars boots the optional collaborators a test asked for: the
+// MQTT broker and the mock OpenID provider. Either may be unavailable on
+// the host, in which case its address stays empty.
+func (h *Harness) startSidecars(t *testing.T, opts Options) {
+	t.Helper()
+	if opts.EnableMQTT {
+		h.mqtt = startMQTTBroker(t)
+		if h.mqtt != nil {
+			h.mqttBroker = h.mqtt.URL()
+		}
+	}
+	if opts.AuthMode == AuthOIDC {
+		h.op = startMockOP(t)
+		if h.op != nil {
+			h.opIssuer = h.op.IssuerURL()
+		}
+	}
+}
+
 // Start brings up godevccu, the embedded MQTT broker (if enabled),
 // the mock OIDC OP (if AuthOIDC), and the openccu-loom daemon, all
 // on loopback ephemeral ports. It returns once /api/v1/health
@@ -200,18 +219,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		south.JSONRPC = jsonrpcPort(h.ccu)
 	}
 
-	if opts.EnableMQTT {
-		h.mqtt = startMQTTBroker(t)
-		if h.mqtt != nil {
-			h.mqttBroker = h.mqtt.URL()
-		}
-	}
-	if opts.AuthMode == AuthOIDC {
-		h.op = startMockOP(t)
-		if h.op != nil {
-			h.opIssuer = h.op.IssuerURL()
-		}
-	}
+	h.startSidecars(t, opts)
 
 	// Every daemon-side port is left to the OS: the daemon binds it and
 	// reports what it got, rather than being handed a number a probe

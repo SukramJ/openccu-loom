@@ -123,6 +123,7 @@ func parseLine(t *testing.T, l string) parsedLine {
 }
 
 func (f *fakeInflux) samples(t *testing.T) []parsedLine {
+	t.Helper()
 	lines, _ := f.snapshot()
 	out := make([]parsedLine, 0, len(lines))
 	for _, l := range lines {
@@ -214,6 +215,7 @@ func (r *forwardingRig) emitFor(t *testing.T, window time.Duration, params ...st
 // seen returns the parameters of the measuring channel that arrived with a
 // value >= from.
 func (r *forwardingRig) seen(t *testing.T, from float64) []string {
+	t.Helper()
 	var out []string
 	for _, s := range r.target.samples(t) {
 		if s.channel == r.channel && s.value >= from && !slices.Contains(out, s.parameter) {
