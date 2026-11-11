@@ -35,7 +35,6 @@ import type {
   CentralLinksStatus,
   ConfigSnapshot,
   EditSessionResponse,
-  EnergyResponse,
   FunctionEntry,
   GroupCentralEntry,
   GroupEntry,
@@ -80,8 +79,6 @@ import type {
   SuppressedServiceMessage,
   SysvarEntry,
   SysvarUsage,
-  DiagramConfig,
-  DiagramWriteRequest,
   SystemCCUEntry,
   UISchema,
   Warning,
@@ -2581,86 +2578,15 @@ export type CentralBehavior = {
 };
 
 /**
- * One aggregated measurement bucket returned by GET /api/v1/history.
- * The ts field is the UTC start of the bucket's time span (RFC3339).
- */
-export type HistoryBucket = {
-  ts: string;
-  avg: number;
-  min: number;
-  max: number;
-  count: number;
-};
-
-/**
- * Thrown by getHistory when the history feature is disabled on the
- * daemon (the /history route returns 404). Callers distinguish this
- * from a generic 404 so the UI can display a "history not enabled"
- * message instead of a generic error banner.
+ * Thrown by the recording calls when measurement capture is disabled on
+ * the daemon (the route returns 404). Callers distinguish this from a
+ * generic 404 so the recording switch can hide itself.
  */
 export class HistoryDisabledError extends Error {
   constructor() {
     super("history feature not enabled");
     this.name = "HistoryDisabledError";
   }
-}
-
-/**
- * Fetch bucketed measurement history for one numeric data point.
- * Returns an empty array when the daemon returns no buckets (valid
- * range with no recorded samples). Throws HistoryDisabledError when
- * the daemon returns 404 (feature off). Re-throws ApiError for 400/5xx.
- */
-export async function getHistory(params: {
-  central: string;
-  interfaceId: string;
-  channel: string;
-  parameter: string;
-  from: string;
-  to: string;
-  buckets?: number;
-}): Promise<HistoryBucket[]> {
-  const qs = new URLSearchParams({
-    central: params.central,
-    interface_id: params.interfaceId,
-    channel: params.channel,
-    parameter: params.parameter,
-    from: params.from,
-    to: params.to,
-  });
-  if (params.buckets !== undefined) {
-    qs.set("buckets", String(params.buckets));
-  }
-  try {
-    const result = await request<HistoryBucket[]>(`/history?${qs.toString()}`);
-    return result ?? [];
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      throw new HistoryDisabledError();
-    }
-    throw err;
-  }
-}
-
-// --- Named diagram definitions (SV03) ---
-export async function listDiagrams(): Promise<DiagramConfig[]> {
-  const r = await request<{ diagrams: DiagramConfig[] }>(`/diagrams`);
-  return r.diagrams;
-}
-export function getDiagram(id: string): Promise<DiagramConfig> {
-  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`);
-}
-export function createDiagram(body: DiagramWriteRequest): Promise<DiagramConfig> {
-  return request<DiagramConfig>(`/diagrams`, { method: "POST", body: JSON.stringify(body) });
-}
-export function updateDiagram(id: string, body: DiagramWriteRequest): Promise<DiagramConfig> {
-  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-}
-export function deleteDiagram(id: string): Promise<void> {
-  return request<void>(`/diagrams/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /** Effective per-datapoint recording state (SV10). */
@@ -2718,41 +2644,6 @@ export async function setRecordingOverride(params: {
         record: params.record,
       }),
     });
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      throw new HistoryDisabledError();
-    }
-    throw err;
-  }
-}
-
-/**
- * Fetch the per-device power/energy breakdown for a central over a
- * time range (GET /api/v1/energy). Wh on the wire; callers divide by
- * 1000 to render kWh. Throws HistoryDisabledError when the daemon
- * returns 404 (history feature off — the energy rollups share the
- * same gate). Re-throws ApiError for 400/5xx.
- */
-export async function getEnergy(params: {
-  central: string;
-  from: string;
-  to: string;
-  group?: "hour" | "day" | "month";
-  device?: string;
-}): Promise<EnergyResponse> {
-  const qs = new URLSearchParams({
-    central: params.central,
-    from: params.from,
-    to: params.to,
-  });
-  if (params.group !== undefined) {
-    qs.set("group", params.group);
-  }
-  if (params.device !== undefined) {
-    qs.set("device", params.device);
-  }
-  try {
-    return await request<EnergyResponse>(`/energy?${qs.toString()}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       throw new HistoryDisabledError();

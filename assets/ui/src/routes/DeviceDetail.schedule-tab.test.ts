@@ -52,7 +52,6 @@ vi.mock("$lib/components/links/CentralLinksPanel.svelte", () => ({ default: () =
 vi.mock("$lib/cdp/CdpTilesPanel.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/device/MaintenanceStatusGrid.svelte", () => ({ default: () => {} }));
 vi.mock("./AuditLog.svelte", () => ({ default: () => {} }));
-vi.mock("$lib/components/HistoryChart.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/RecordToggle.svelte", () => ({ default: () => {} }));
 
 // The schedule panel is the observable difference between "the tab is

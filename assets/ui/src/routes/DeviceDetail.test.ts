@@ -163,7 +163,6 @@ vi.mock("$lib/cdp/CdpTilesPanel.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/schedule/ScheduleTab.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/device/MaintenanceStatusGrid.svelte", () => ({ default: () => {} }));
 vi.mock("./AuditLog.svelte", () => ({ default: () => {} }));
-vi.mock("$lib/components/HistoryChart.svelte", () => ({ default: () => {} }));
 
 import DeviceDetail from "./DeviceDetail.svelte";
 import { confirmStore } from "$lib/stores/confirm.svelte";

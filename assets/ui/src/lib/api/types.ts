@@ -307,22 +307,6 @@ export type BackupStorageInfo = components["schemas"]["BackupStorageInfo"];
 // composite key as (sv.central ?? "") + "/" + sv.name.
 export type SysvarEntry = components["schemas"]["SysvarSummary"];
 export type SysvarUsage = components["schemas"]["SysvarUsage"];
-export type DiagramConfig = components["schemas"]["DiagramConfig"];
-export type DiagramWriteRequest = components["schemas"]["DiagramWriteRequest"];
-// SPA-owned shape of a diagram's config document (SV03).
-export type DiagramSeries = {
-  central: string;
-  interface_id?: string;
-  channel_address?: string;
-  parameter?: string;
-  label?: string;
-  color?: string;
-};
-export type DiagramDocument = {
-  series: DiagramSeries[];
-  default_range_hours?: number;
-};
-
 // ProgramEntry re-exported from the generated ProgramSummary. central is
 // optional (Go json:"central,omitempty"); ProgramList.svelte builds its
 // composite key as (p.central ?? "") + "/" + p.id. Generated adds extra
@@ -568,13 +552,6 @@ export type InstallModeInterfaceEntry =
 
 // LogRecord re-exported from generated schema.
 export type LogRecord = components["schemas"]["LogRecord"];
-
-// Energy aggregation types (GET /api/v1/energy), re-exported from the
-// generated schema. Values are Wh on the wire; the SPA divides by 1000
-// to render kWh.
-export type EnergyBucket = components["schemas"]["EnergyBucket"];
-export type EnergyDevice = components["schemas"]["EnergyDevice"];
-export type EnergyResponse = components["schemas"]["EnergyResponse"];
 
 // --- Alarm panel --------------------------------------------------
 // The native intrusion-alarm engine (notes/concepts/alarm-concept.md). Distinct

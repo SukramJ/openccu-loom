@@ -44,7 +44,6 @@
   import { authStore } from "$lib/stores/auth.svelte";
   import { foldedRouteTarget, landingTargets } from "$lib/nav";
   import { fabricUI } from "$lib/stores/fabric-node.svelte";
-  import { infoStore } from "$lib/stores/info.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import NavViewsAdmin from "$lib/components/settings/NavViewsAdmin.svelte";
@@ -145,12 +144,6 @@
   const startRouteOptions = $derived(
     landingTargets({
       matterEnabled: fabricUI.node.status?.enabled === true,
-      // Same pair the nav and the view itself require: a landing target the
-      // operator can pick and then cannot reach is worse than one absent
-      // from the list.
-      historyEnabled:
-        (infoStore.info?.capabilities?.includes("history.v1") ?? false) &&
-        (infoStore.info?.capabilities?.includes("diagrams.v1") ?? false),
       isAdmin: authStore.identity?.role === "admin",
       surfaceGate: (id) => surfacesStore.gate(id),
       featureAvailable: (key) => centralStore.featureAvailable(key),

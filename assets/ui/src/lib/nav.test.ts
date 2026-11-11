@@ -15,7 +15,7 @@ import {
 } from "./nav";
 import surfacesFixture from "../../tests/e2e/fixtures/ui-surfaces.json";
 
-const ALL_GATES = { matterEnabled: true, historyEnabled: true, isAdmin: true };
+const ALL_GATES = { matterEnabled: true, isAdmin: true };
 
 function allHrefs(): string[] {
   return navClusters(ALL_GATES).flatMap((cluster) => cluster.items.map((item) => item.href));
@@ -100,7 +100,6 @@ describe("nav — surface profile", () => {
     // Showing a surface cannot conjure a view whose feature is off.
     const hrefs = navClusters({
       matterEnabled: false,
-      historyEnabled: true,
       isAdmin: true,
       surfaceVisible: () => true,
     }).flatMap((c) => c.items.map((i) => i.href));

@@ -41,8 +41,6 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Devices** | Browse all devices across your CCUs, drill into channels and parameters. **Add device** starts pairing: pick the interface, open the pairing window, and accept and name a device as it joins. |
 | **Device detail** | Inspect one device, read and change its data points, and configure it. |
 | **Fleet** | Fleet-wide view across every configured CCU. |
-| **Energy** | Monitor power and energy readings from measuring devices. |
-| **Diagrams** | Recorded measurement curves for any data point (see [Charts and measurement history](#charts-and-measurement-history)). |
 | **Radio & battery** | Review per-device radio signal strength (RSSI), battery level and reachability. |
 | **Matter** | Enable exposure of devices to Apple Home / Google Home / Alexa and pair. |
 | **Diagnostics** | Check health and troubleshooting information. |
@@ -65,7 +63,6 @@ Not every view appears on every system:
 
 - **Log viewer** and **Backups** are shown to administrators only.
 - **Programs**, **System variables**, **Groups** and **Backups** appear only while at least one connected system offers the feature — an openccu-lite system, for example, has no programs or system variables.
-- **Energy** and **Diagrams** appear only when measurement history is enabled.
 - **Matter** appears only when the Matter bridge is enabled.
 
 An administrator can also hide views under **Settings → Navigation & views**. **Devices**, **Settings** and **About** can never be hidden.
@@ -185,16 +182,16 @@ If you previously enabled a parameter that no device in your installation carrie
 
 Once un-ignored, the parameter shows up in the device's data-point list and is published to MQTT, REST, and the other north-bound bridges like any other data point.
 
-## Charts and measurement history
+## Change log and measurement recording
 
-The device detail view has a **History** tab that charts a data point's
-recorded values over time — handy for seeing how a temperature,
-humidity, or power reading moved across a day or week.
+The device detail view has a **History** tab with the device's change
+log: who changed which configuration parameter, and when.
 
-Measurement history is **opt-in**: nothing is recorded until you enable
-it (`persistence.history` in the configuration). Once on, the daemon
-stores samples in a separate `history.db` and the History tab plots
-them; before that the tab has nothing to show.
+The same tab lets you choose, per numeric data point, whether its values
+are recorded. Recording is **opt-in**: nothing is captured until you
+enable it (`persistence.history` in the configuration), and the choice
+appears only then. The Config UI draws no charts; send the measurements
+to a time-series store with the exporter and chart them there.
 
 ## Health and diagnostics
 

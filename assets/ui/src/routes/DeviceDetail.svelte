@@ -18,9 +18,9 @@
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
   import ConfigRepairDialog from "$lib/components/device/ConfigRepairDialog.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
+  import { infoStore } from "$lib/stores/info.svelte";
   import DeviceImage from "$lib/components/device/DeviceImage.svelte";
   import AuditLog from "./AuditLog.svelte";
-  import HistoryChart from "$lib/components/HistoryChart.svelte";
   import RecordToggle from "$lib/components/RecordToggle.svelte";
   import RoomFunctionSelect from "$lib/components/RoomFunctionSelect.svelte";
   import TaxonomyPicker from "$lib/components/taxonomy/TaxonomyPicker.svelte";
@@ -88,6 +88,10 @@
   let historyParameter = $state<string | null>(null);
   let historyDPs = $state<import("$lib/api/types").DataPointSummary[]>([]);
   let historyDPsLoading = $state(false);
+  // The recording picker is pointless on a daemon that captures nothing:
+  // the switch it leads to hides itself there, which would leave two
+  // selects that decide nothing.
+  const recordingAvailable = $derived(infoStore.info?.capabilities?.includes("history.v1") ?? false);
 
   // Probes the schedule endpoint for one device. The caller passes the
   // load generation it belongs to: the probe outlives a device switch,
@@ -1344,8 +1348,9 @@
         {/if}
       {:else if topTab === "history"}
         <div class="space-y-6">
-          <!-- Measurement history chart for a user-selected numeric data point. -->
-          {#if userChannels.length > 0}
+          <!-- Which numeric data points are captured for the measurement
+               export. Offered only while the daemon captures at all. -->
+          {#if recordingAvailable && userChannels.length > 0}
             <div>
               <div class="mb-2 flex flex-wrap items-center gap-2">
                 <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">{t("history.label_channel")}</span>
@@ -1389,21 +1394,9 @@
                   />
                 {/if}
               </div>
-              {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
-                {@const selectedDP = historyDPs.find((dp) => dp.parameter === historyParameter)}
-                <HistoryChart
-                  central={detail.central ?? ""}
-                  interfaceId={detail.interface_id}
-                  channel={`${detail.address}:${historyChannelNo}`}
-                  parameter={historyParameter}
-                  parameterLabel={selectedDP?.parameter_label || selectedDP?.parameter}
-                  unit={selectedDP?.unit ?? ""}
-                  multiplier={selectedDP?.multiplier ?? 1}
-                />
-              {/if}
             </div>
           {/if}
-          <!-- Change audit log (existing). -->
+          <!-- The device's configuration change log. -->
           <AuditLog deviceFilter={detail.address} embedded />
         </div>
       {/if}

@@ -22,13 +22,11 @@
   import LinkEditor from "./routes/LinkEditor.svelte";
   import LinkWizard from "./routes/LinkWizard.svelte";
   import ScheduleList from "./routes/ScheduleList.svelte";
-  import Diagrams from "./routes/Diagrams.svelte";
   import MessageList from "./routes/MessageList.svelte";
   import Settings from "./routes/Settings.svelte";
   import Inbox from "./routes/Inbox.svelte";
   import FirmwareList from "./routes/FirmwareList.svelte";
   import SignalQualityList from "./routes/SignalQualityList.svelte";
-  import Energy from "./routes/Energy.svelte";
   import Fleet from "./routes/Fleet.svelte";
   // Imported statically (not code-split): DeviceDetail's history tab
   // already pulls AuditLog into the main chunk, so a dynamic import here
@@ -286,11 +284,9 @@
     | { kind: "linkEdit"; sender: string; receiver: string }
     | { kind: "linkNew"; query: string }
     | { kind: "schedules" }
-    | { kind: "diagrams" }
     | { kind: "messages" }
     | { kind: "audit" }
     | { kind: "diagnostics" }
-    | { kind: "energy" }
     | { kind: "fleet" }
     | { kind: "logs" }
     | { kind: "settings"; tab?: string }
@@ -329,11 +325,9 @@
       };
     }
     if (path === "/schedules") return { kind: "schedules" };
-    if (path === "/diagrams") return { kind: "diagrams" };
     if (path === "/messages") return { kind: "messages" };
     if (path === "/audit") return { kind: "audit" };
     if (path === "/diagnostics") return { kind: "diagnostics" };
-    if (path === "/energy") return { kind: "energy" };
     if (path === "/fleet") return { kind: "fleet" };
     if (path === "/logs") return { kind: "logs" };
     if (rawPath === "/settings") {
@@ -385,14 +379,12 @@
   {#if !isEmbedded()}
   <title>{
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
-    route.kind === "energy" ? t("page.title.energy") :
     route.kind === "fleet" ? t("page.title.fleet") :
     route.kind === "groups" ? t("page.title.groups") :
     route.kind === "links" ? t("page.title.links") :
     route.kind === "linkEdit" ? t("page.title.link_editor") :
     route.kind === "linkNew" ? t("page.title.link_wizard") :
     route.kind === "schedules" ? t("page.title.schedules") :
-    route.kind === "diagrams" ? t("page.title.diagrams") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
     route.kind === "settings" ? t("page.title.settings") :
@@ -516,8 +508,6 @@
           <LinkWizard query={route.query} {locale} />
         {:else if route.kind === "schedules"}
           <ScheduleList />
-        {:else if route.kind === "diagrams"}
-          <Diagrams />
         {:else if route.kind === "messages"}
           <MessageList />
         {:else if route.kind === "audit"}
@@ -530,8 +520,6 @@
           {:catch}
             {@render routeLoadFailed()}
           {/await}
-        {:else if route.kind === "energy"}
-          <Energy />
         {:else if route.kind === "fleet"}
           <Fleet />
         {:else if route.kind === "logs"}

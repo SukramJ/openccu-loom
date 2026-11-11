@@ -15,6 +15,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **Config UI: the Diagrams and Energy views and the chart on the device
+  detail.** The Config UI draws no charts any more
+  ([ADR 0088](docs/adr/0088-config-ui-is-the-bridges-console.md)); a
+  measurement belongs in a time-series store, which the InfluxDB exporter
+  feeds. The device detail's History tab stays: it keeps the device's
+  change log and the per-data-point recording switch, and it is now shown
+  whether or not recording is enabled. The daemon's `/history`, `/energy`
+  and `/diagrams` endpoints are unchanged in this release step.
 - **Config UI: the Overview and Favorites views.** The page of control
   tiles grouped by room, function and CCU (`#/overview`) and the pinned
   items (`#/favorites`) are gone, together with the pin buttons on the
