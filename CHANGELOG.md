@@ -101,6 +101,13 @@ clients (API 16).
 
 ### Changed
 
+- **openccu-lite: a central loads its paramset descriptions in one request
+  per paramset.** The box keeps every description once per device model
+  and answers many addresses at once (occulited since 2026-10-22). When
+  devices are loaded, the daemon now reads an interface's `VALUES` and
+  `MASTER` descriptions that way instead of one XML-RPC call per channel
+  and paramset. A box without the route is read one by one as before, and
+  so is whatever a batch did not answer.
 - **openccu-lite: a second system update is a conflict, not a failure.**
   The box runs one download, upload or install of a system update at a
   time and refuses another with `409 busy`. `POST

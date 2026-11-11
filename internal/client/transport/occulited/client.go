@@ -446,6 +446,9 @@ const (
 	// CodeUnknownGroup answers a heating-group read or write of a group
 	// the box does not hold (404).
 	CodeUnknownGroup = "unknown-group"
+	// CodeUnknownInterface answers a call that names an interface the box
+	// does not run (404).
+	CodeUnknownInterface = "unknown-interface"
 	// CodeBusy answers a system-update download or install while another
 	// one runs (409); the error's detail names its phase and file.
 	CodeBusy = "busy"

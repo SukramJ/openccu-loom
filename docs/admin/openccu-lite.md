@@ -35,9 +35,13 @@ snapshot and serves it from there.
 
 openccu-lite is developed quickly, and `occulited`'s API moves with it.
 The daemon's contract with the box was last compared with occulited at
-commit `04ee7b6` (2026-11-11). Two rules of the box that changed since
+commit `04ee7b6` (2026-11-11). Three rules of the box that changed since
 the first release of this integration matter to an administrator:
 
+- A box from 2026-10-22 on hands out the paramset descriptions of many
+  channels at once; the daemon uses that when it loads a central's
+  devices, which shortens the start on a box with many of them. An older
+  box is read channel by channel.
 - Since 2026-10-03 the box asks for an explicit confirmation before it
   applies a restore. The daemon sends it; a daemon release from before
   this change cannot restore onto such a box.

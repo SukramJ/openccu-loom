@@ -5,6 +5,7 @@ package backends
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -33,6 +34,62 @@ type LiteBackend struct {
 	xml       Caller // fault-mapping wrapper around the proxy caller; nil when unwired
 	ann       Announcer
 	ifaceType hmenum.Interface
+	// batch reads many paramset descriptions in one request; nil when the
+	// session has not wired it. See [LiteBackend.SetParamsetDescriptionBatch].
+	batch ParamsetDescriptionBatch
+}
+
+// ParamsetDescriptionBatch reads the descriptions of one paramset for
+// many addresses of the backend's interface from the box.
+type ParamsetDescriptionBatch func(ctx context.Context, addresses []string, key hmenum.ParamsetKey) (occulited.ParamsetDescriptions, error)
+
+// SetParamsetDescriptionBatch wires the box's paramset description route.
+// Without it the backend reads every description through the XML-RPC
+// proxy, one call per address.
+func (b *LiteBackend) SetParamsetDescriptionBatch(fn ParamsetDescriptionBatch) { b.batch = fn }
+
+// GetParamsetDescriptions implements [ParamsetDescriptionBatcher]: the
+// descriptions come from the box's own store of them, one request for
+// the whole list instead of one XML-RPC call per address. Every address
+// gets a description of its own to keep: the box holds one per device
+// model and channel type, and a caller that patches the description of
+// one channel must not reach another's.
+//
+// It answers [ErrUnsupported] when the route is not wired or the box does
+// not offer it; the caller then reads the descriptions one by one.
+func (b *LiteBackend) GetParamsetDescriptions(
+	ctx context.Context, addresses []string, key hmenum.ParamsetKey,
+) (BatchedParamsetDescriptions, error) {
+	if b.batch == nil {
+		return BatchedParamsetDescriptions{}, ErrUnsupported
+	}
+	got, err := b.batch(ctx, addresses, key)
+	if errors.Is(err, occulited.ErrNoParamsetRoute) {
+		return BatchedParamsetDescriptions{}, ErrUnsupported
+	}
+	if err != nil {
+		return BatchedParamsetDescriptions{}, occulited.ClassifyFault(err)
+	}
+	out := BatchedParamsetDescriptions{
+		Descriptions: make(map[string]map[string]hmproto.ParameterData, len(got.Keys)),
+		Refused:      got.Errors,
+	}
+	for address, descKey := range got.Keys {
+		raw, held := got.Paramsets[descKey]
+		if !held {
+			return BatchedParamsetDescriptions{}, fmt.Errorf("lite.GetParamsetDescriptions: %s names the description %q, which the answer does not hold", address, descKey)
+		}
+		desc := make(map[string]hmproto.ParameterData, len(raw))
+		for param, one := range raw {
+			var pd hmproto.ParameterData
+			if err := json.Unmarshal(one, &pd); err != nil {
+				return BatchedParamsetDescriptions{}, fmt.Errorf("lite.GetParamsetDescriptions[%s %s]: %w", address, param, err)
+			}
+			desc[param] = pd
+		}
+		out.Descriptions[address] = desc
+	}
+	return out, nil
 }
 
 // NewLiteBackend constructs a backend for the interface iface. xml is the
