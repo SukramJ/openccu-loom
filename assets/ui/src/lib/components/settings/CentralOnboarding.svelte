@@ -25,9 +25,17 @@
     value: OnboardingValue;
     /** Editing a central whose token is already stored. */
     tokenStored?: boolean;
+    /**
+     * Called once per probe whose answer names the interfaces the box
+     * offers (an empty list included). Not called when the answer does not
+     * name them, so the caller keeps its own selection. A callback rather
+     * than a bound value: the caller decides whether a probe may change its
+     * selection at all.
+     */
+    oninterfaces?: (names: string[]) => void;
   };
 
-  let { host, port = "", setup = false, value = $bindable(), tokenStored = false }: Props = $props();
+  let { host, port = "", setup = false, value = $bindable(), tokenStored = false, oninterfaces }: Props = $props();
 
   let probing = $state(false);
   let probeError = $state("");
@@ -97,6 +105,8 @@
         tlsFingerprint: res.tls_fingerprint ?? "",
         fingerprintConfirmed: false,
       };
+      const offered = res.lite?.interfaces;
+      if (offered !== undefined) oninterfaces?.(offered);
     } catch (err) {
       probe = null;
       probeError = apiErrorMessage(err);

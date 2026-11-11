@@ -88,6 +88,49 @@ describe("CentralOnboarding", () => {
     expect(probe.mock.calls[0][1]).toBe(true);
   });
 
+  it("hands the interfaces a box names to the caller", async () => {
+    const offered = vi.fn();
+    probe.mockResolvedValue({
+      system_type: "openccu-lite",
+      ready: true,
+      tls_fingerprint: FP,
+      lite: { pairing_available: true, interfaces: ["BidCos-RF", "HmIP-RF"] },
+    });
+    const { container, getByText } = render(CentralOnboarding, {
+      props: { host: "box.local", value: emptyOnboarding(), oninterfaces: offered },
+    });
+    await fireEvent.click(btn(container, "onboarding.probe")!);
+    await waitFor(() => expect(getByText(FP)).toBeTruthy());
+    expect(offered).toHaveBeenCalledOnce();
+    expect(offered).toHaveBeenCalledWith(["BidCos-RF", "HmIP-RF"]);
+  });
+
+  it("hands an empty list on, and stays silent when the box names none", async () => {
+    const offered = vi.fn();
+    probe.mockResolvedValue({
+      system_type: "openccu-lite",
+      ready: true,
+      tls_fingerprint: FP,
+      lite: { pairing_available: true, interfaces: [] },
+    });
+    const first = render(CentralOnboarding, {
+      props: { host: "box.local", value: emptyOnboarding(), oninterfaces: offered },
+    });
+    await fireEvent.click(btn(first.container, "onboarding.probe")!);
+    await waitFor(() => expect(first.getByText(FP)).toBeTruthy());
+    expect(offered).toHaveBeenCalledWith([]);
+    first.unmount();
+
+    offered.mockClear();
+    probe.mockResolvedValue({ system_type: "openccu-lite", ready: true, tls_fingerprint: FP, lite: { pairing_available: true } });
+    const second = render(CentralOnboarding, {
+      props: { host: "box.local", value: emptyOnboarding(), oninterfaces: offered },
+    });
+    await fireEvent.click(btn(second.container, "onboarding.probe")!);
+    await waitFor(() => expect(second.getByText(FP)).toBeTruthy());
+    expect(offered).not.toHaveBeenCalled();
+  });
+
   it("reports a CCU without offering pairing", async () => {
     probe.mockResolvedValue({ system_type: "ccu", ready: true });
     const { container, getByText, queryByText } = render(CentralOnboarding, {
