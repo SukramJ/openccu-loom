@@ -177,6 +177,16 @@ clients (API 16).
   openccu-lite's) is refused up front with a message that names what the
   file is, where the box reports it, and the box's own `not_openccu_lite`
   refusal is answered as a validation error instead of a gateway error.
+- **openccu-lite: a start no longer asks BidCos-RF devices that cannot
+  answer.** Reading the current values of a BidCos-RF channel is a status
+  request on the air, and one to a device that is away or asleep fails
+  only after the interface's retries. The value seed asked every channel
+  with a missing value; on a box this showed as fifteen failed reads in
+  the first minute after a start, each taking one to four seconds. The
+  seed now leaves the value channels of a device alone that the box
+  reports unreachable or that does not listen all the time; their values
+  arrive with the device's next event. Channel 0 is still read, and so is
+  a device whose state is not known.
 - **openccu-lite: renaming to an empty name is refused with the reason.**
   The box keeps a name for every object and refuses an empty one; the
   daemon passed the rename on and answered the box's refusal as a gateway

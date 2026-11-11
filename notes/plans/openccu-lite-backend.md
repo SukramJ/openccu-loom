@@ -2563,7 +2563,9 @@ API token):
 - Seen beside it, and older than this branch: the value seed of BidCos-RF logged 15 `getParamset` faults `-1
   Failure` in the first minute, some after four seconds. occulited's documents name that case — a status request
   to a device that is away or asleep, the most expensive read there is — and advise skipping what `UNREACH` says
-  is away.
+  is away. Fixed on this branch after the run: the seed leaves the value channels of a BidCos-RF device alone
+  that is reported unreachable or does not listen all the time (`docs/caching.md`). The fix has not run on the
+  box yet.
 
 occulited publishes machine-readable documents since `835e0af` (2026-09-29): `docs/openapi.json`
 (served as `GET /api/openapi.json`, scope `system:read`), `docs/asyncapi.json` and

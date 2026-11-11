@@ -114,8 +114,31 @@ sources instead, in this order:
    boot seed's dose) left the interface's reported `DUTY_CYCLE`
    unchanged — the interface process answers VALUES reads from its own
    device mirror, so a single boot seed stays well below one percent of
-   duty cycle. Measured 2026-09-30 on HmIP-RF; BidCos-RF was not
-   measured separately.
+   duty cycle. Measured 2026-09-30 on HmIP-RF.
+
+   **BidCos-RF is different, and the seeder treats it differently.** The
+   box's own API documentation
+   ([occulited `docs/system-api.md`](https://github.com/hobbyquaker/occulited/blob/master/docs/system-api.md),
+   "Seeding values, and what it costs on air") reports from a
+   measurement at debug level that the BidCos interface process asks an
+   always-listening device for its status on the air for *every*
+   `getParamset(VALUES)` of a value channel, whatever the age of its
+   last value (one frame pair, about 0.05 s of airtime), that channel 0
+   and `MASTER` cost no frame, and that a `-1 Failure` there is that
+   request going unanswered after the process's retries — a device that
+   is away, or a battery device it cannot ask. A start of this daemon on
+   a box on 2026-11-11 showed the unanswered case: fifteen such faults
+   in the first minute, each taking between one and four seconds. The
+   log does not name the channels they came from; of the four BidCos-RF
+   devices on that box, one was reported unreachable and two are battery
+   devices that do not listen all the time. The seeder therefore leaves the value channels of a
+   BidCos-RF device alone when the state store reports it unreachable
+   (`UNREACH` on channel 0) or when its receive mode is known and does
+   not include `ALWAYS`; their values arrive with the device's next
+   event. Channel 0 is read for every device, and a device whose
+   reachability and receive mode are not known is read as before. The
+   one status request per always-listening device at a start remains;
+   its airtime was not measured here.
 
 Live values afterwards arrive on the box's own push event stream (see
 [Connecting an openccu-lite system](admin/openccu-lite.md)), the same
