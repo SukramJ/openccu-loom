@@ -102,26 +102,16 @@ var closerSeams = []closerSeam{
 		testFiles:   []string{"internal/central/central_service_hooks_test.go"},
 	},
 	{
-		name:        "history.Recorder.Wire",
-		declFile:    "internal/history/recorder.go",
+		name:        "measurements.Forwarder.Wire",
+		declFile:    "internal/north/measurements/forwarder.go",
 		attachIdent: "Wire",
-		testFiles:   []string{"internal/history/recorder_test.go"},
+		testFiles:   []string{"internal/north/measurements/forwarder_test.go"},
 	},
 	{
-		name:        "history.Recorder.WireCentral",
-		declFile:    "internal/history/recorder.go",
+		name:        "measurements.Forwarder.WireCentral",
+		declFile:    "internal/north/measurements/forwarder.go",
 		attachIdent: "WireCentral",
-		testFiles:   []string{"internal/history/recorder_test.go"},
-	},
-	{
-		// The exported Recorder.StartRetention is only reachable through
-		// this composition-root wrapper, which is the seam a test can drive
-		// without a full daemon: the wrapper's own closer chains straight
-		// into StartRetention's.
-		name:        "history.Recorder.StartRetention",
-		declFile:    "cmd/openccu-loom/history_wiring.go",
-		attachIdent: "wireHistoryRetention",
-		testFiles:   []string{"cmd/openccu-loom/history_wiring_test.go"},
+		testFiles:   []string{"internal/north/measurements/forwarder_test.go"},
 	},
 	{
 		// Same shape: SubscribeCentral is the registry observer

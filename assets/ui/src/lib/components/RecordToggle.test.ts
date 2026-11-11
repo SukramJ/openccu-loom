@@ -6,7 +6,7 @@ const mockGet = vi.fn();
 const mockSet = vi.fn();
 
 vi.mock("$lib/api/client", () => {
-  class HistoryDisabledError extends Error {}
+  class MeasurementsDisabledError extends Error {}
   class ApiError extends Error {
     constructor(
       public readonly status: number,
@@ -19,7 +19,7 @@ vi.mock("$lib/api/client", () => {
   return {
     getRecordingOverride: (...args: unknown[]) => mockGet(...args),
     setRecordingOverride: (...args: unknown[]) => mockSet(...args),
-    HistoryDisabledError,
+    MeasurementsDisabledError,
     ApiError,
   };
 });
@@ -62,8 +62,8 @@ describe("RecordToggle", () => {
   });
 
   it("renders nothing when the history feature is disabled", async () => {
-    const { HistoryDisabledError } = await import("$lib/api/client");
-    mockGet.mockRejectedValue(new HistoryDisabledError());
+    const { MeasurementsDisabledError } = await import("$lib/api/client");
+    mockGet.mockRejectedValue(new MeasurementsDisabledError());
     const { container } = render(RecordToggle, { props: PROPS });
 
     await waitFor(() => {

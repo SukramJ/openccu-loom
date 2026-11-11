@@ -959,7 +959,7 @@ func TestCloneKeepsOperatorValuesWhenJSONCannotEncodeThem(t *testing.T) {
 	src.DataDir = "/var/lib/loom"
 	src.North.REST.Listen = ":9119"
 	src.Centrals = []CentralConfig{{Name: "ccu1", Host: "192.0.2.10"}}
-	src.Persistence.History.EnergyPricePerKWh = math.NaN()
+	src.North.REST.RateLimit.RequestsPerSecond = math.NaN()
 
 	got := Clone(src)
 	if got.DataDir != src.DataDir {
@@ -971,8 +971,8 @@ func TestCloneKeepsOperatorValuesWhenJSONCannotEncodeThem(t *testing.T) {
 	if len(got.Centrals) != 1 || got.Centrals[0].Name != "ccu1" {
 		t.Errorf("centrals: got %+v, want the operator's single ccu1", got.Centrals)
 	}
-	if !math.IsNaN(got.Persistence.History.EnergyPricePerKWh) {
-		t.Errorf("energy_price_per_kwh: got %v, want NaN preserved", got.Persistence.History.EnergyPricePerKWh)
+	if !math.IsNaN(got.North.REST.RateLimit.RequestsPerSecond) {
+		t.Errorf("north.rest.rate_limit.requests_per_second: got %v, want NaN preserved", got.North.REST.RateLimit.RequestsPerSecond)
 	}
 }
 

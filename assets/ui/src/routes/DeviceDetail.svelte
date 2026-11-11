@@ -88,10 +88,10 @@
   let historyParameter = $state<string | null>(null);
   let historyDPs = $state<import("$lib/api/types").DataPointSummary[]>([]);
   let historyDPsLoading = $state(false);
-  // The recording picker is pointless on a daemon that captures nothing:
+  // The recording picker is pointless on a daemon that forwards nothing:
   // the switch it leads to hides itself there, which would leave two
   // selects that decide nothing.
-  const recordingAvailable = $derived(infoStore.info?.capabilities?.includes("history.v1") ?? false);
+  const recordingAvailable = $derived(infoStore.info?.capabilities?.includes("measurements.v1") ?? false);
 
   // Probes the schedule endpoint for one device. The caller passes the
   // load generation it belongs to: the probe outlives a device switch,
@@ -1348,8 +1348,8 @@
         {/if}
       {:else if topTab === "history"}
         <div class="space-y-6">
-          <!-- Which numeric data points are captured for the measurement
-               export. Offered only while the daemon captures at all. -->
+          <!-- Which numeric data points are forwarded to the measurement
+               target. Offered only while the daemon forwards at all. -->
           {#if recordingAvailable && userChannels.length > 0}
             <div>
               <div class="mb-2 flex flex-wrap items-center gap-2">

@@ -38,7 +38,6 @@ func TestMigrationDownDropsHaveLossNotes(t *testing.T) {
 	}
 	dirs := []string{
 		filepath.Join(repoRoot, "internal", "store", "sqlite", "migrations"),
-		filepath.Join(repoRoot, "internal", "store", "sqlite", "migrations_history"),
 	}
 
 	dropRE := regexp.MustCompile(`(?i)\bDROP\s+(TABLE|COLUMN)\b`)

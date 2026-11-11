@@ -43,7 +43,7 @@ func TestGetRecordingOverride_HappyPath(t *testing.T) {
 	t.Parallel()
 	svc := &stubRecordingService{effRecord: true, effSource: "override"}
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/v1/history/recording?central=ccu1&interface_id=if&channel=DEV:1&parameter=TEMPERATURE", http.NoBody)
+		"/api/v1/measurements/recording?central=ccu1&interface_id=if&channel=DEV:1&parameter=TEMPERATURE", http.NoBody)
 	w := httptest.NewRecorder()
 	GetRecordingOverride(svc).ServeHTTP(w, req)
 
@@ -62,7 +62,7 @@ func TestGetRecordingOverride_HappyPath(t *testing.T) {
 func TestGetRecordingOverride_MissingParam_Returns400(t *testing.T) {
 	t.Parallel()
 	svc := &stubRecordingService{}
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/history/recording?central=ccu1", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/measurements/recording?central=ccu1", http.NoBody)
 	w := httptest.NewRecorder()
 	GetRecordingOverride(svc).ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -72,7 +72,7 @@ func TestGetRecordingOverride_MissingParam_Returns400(t *testing.T) {
 
 func TestGetRecordingOverride_NilService_Returns503(t *testing.T) {
 	t.Parallel()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/history/recording", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/measurements/recording", http.NoBody)
 	w := httptest.NewRecorder()
 	GetRecordingOverride(nil).ServeHTTP(w, req)
 	if w.Code != http.StatusServiceUnavailable {
@@ -85,7 +85,7 @@ func TestPutRecordingOverride_Set_RecordsAudit(t *testing.T) {
 	svc := &stubRecordingService{effRecord: true, effSource: "override"}
 	rec := &captureRecorder{}
 	body := `{"central":"ccu1","interface_id":"if","channel":"DEV:1","parameter":"TEMPERATURE","record":true}`
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/history/recording", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/measurements/recording", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	PutRecordingOverride(svc, rec).ServeHTTP(w, req)
 
@@ -105,7 +105,7 @@ func TestPutRecordingOverride_NullClears(t *testing.T) {
 	svc := &stubRecordingService{effRecord: true, effSource: "policy"}
 	rec := &captureRecorder{}
 	body := `{"central":"ccu1","interface_id":"if","channel":"DEV:1","parameter":"TEMPERATURE","record":null}`
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/history/recording", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/measurements/recording", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	PutRecordingOverride(svc, rec).ServeHTTP(w, req)
 
@@ -121,7 +121,7 @@ func TestPutRecordingOverride_MissingParam_Returns400(t *testing.T) {
 	t.Parallel()
 	svc := &stubRecordingService{}
 	body := `{"central":"ccu1","record":true}`
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/history/recording", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/measurements/recording", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	PutRecordingOverride(svc, nil).ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -131,7 +131,7 @@ func TestPutRecordingOverride_MissingParam_Returns400(t *testing.T) {
 
 func TestPutRecordingOverride_NilService_Returns503(t *testing.T) {
 	t.Parallel()
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/history/recording", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/measurements/recording", strings.NewReader(`{}`))
 	w := httptest.NewRecorder()
 	PutRecordingOverride(nil, nil).ServeHTTP(w, req)
 	if w.Code != http.StatusServiceUnavailable {

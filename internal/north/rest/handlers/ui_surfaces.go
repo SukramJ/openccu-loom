@@ -32,7 +32,7 @@ type SurfaceInfo struct {
 	// Floor is "", "always" or "standalone".
 	Floor string `json:"floor,omitempty"`
 	// Gate names a runtime capability the surface additionally needs
-	// ("matter", "history"), or "" when it has none.
+	// ("matter", a "feature:<key>"), or "" when it has none.
 	Gate string `json:"gate,omitempty"`
 	// Warn names the condition under which hiding asks first.
 	Warn string `json:"warn,omitempty"`

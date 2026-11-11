@@ -11,8 +11,7 @@ import (
 
 // The device address these stores build a LIKE prefix from is not validated
 // anywhere upstream: the cache-clear scope checks only that the field is
-// non-empty (internal/central/cachereset/cachereset.go Scope.Validate) and
-// the energy handler passes the raw `device` query parameter through. So a
+// non-empty (internal/central/cachereset/cachereset.go Scope.Validate). So a
 // caller-supplied `%` or `_` reaches the LIKE pattern, and every prefix bind
 // in this package must be escaped to match literally — the same rule the
 // audit device filter has always applied.
@@ -161,59 +160,6 @@ func TestRecordingOverrides_DeleteDevice_WildcardAddressMatchesLiterally(t *test
 	}
 }
 
-// TestMeasurement_DeleteDevice_WildcardAddressMatchesLiterally pins the
-// measurement purge, the destructive end of the cache-clear scope.
-func TestMeasurement_DeleteDevice_WildcardAddressMatchesLiterally(t *testing.T) {
-	t.Parallel()
-	s := freshMeasurementStore(t)
-	ctx := context.Background()
-
-	if err := s.SaveBatch(ctx, []MeasurementSample{{
-		CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "DEVB:1",
-		Parameter: "POWER", TS: msTime(time.Now()), Value: 12,
-	}}); err != nil {
-		t.Fatalf("SaveBatch: %v", err)
-	}
-	if err := s.DeleteDevice(ctx, "ccu1", "HmIP-RF", hmStoWildcardDevice); err != nil {
-		t.Fatalf("DeleteDevice: %v", err)
-	}
-	st, err := s.Stats(ctx)
-	if err != nil {
-		t.Fatalf("Stats: %v", err)
-	}
-	if st.Rows != 1 {
-		t.Errorf("DeleteDevice(%q) left %d measurement rows, want the unrelated DEVB:1 row to survive",
-			hmStoWildcardDevice, st.Rows)
-	}
-}
-
-// TestMeasurement_QueryEnergy_WildcardDeviceMatchesLiterally pins the energy
-// read path: a `%` in the `device` query parameter must not report every
-// device's channels under the one requested device.
-func TestMeasurement_QueryEnergy_WildcardDeviceMatchesLiterally(t *testing.T) {
-	t.Parallel()
-	s := freshMeasurementStore(t)
-	ctx := context.Background()
-
-	base := msTime(time.Now().Add(-2 * time.Hour))
-	if err := s.SaveBatch(ctx, []MeasurementSample{{
-		CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "DEVB:1",
-		Parameter: "POWER", TS: base, Value: 42,
-	}}); err != nil {
-		t.Fatalf("SaveBatch: %v", err)
-	}
-
-	rows, err := s.QueryEnergy(ctx, "ccu1", hmStoWildcardDevice,
-		base.Add(-time.Hour), time.Now().Add(time.Hour), "hour")
-	if err != nil {
-		t.Fatalf("QueryEnergy: %v", err)
-	}
-	if len(rows) != 0 {
-		t.Errorf("QueryEnergy(device=%q) returned %d rows, want 0 — the wildcard matched foreign channels",
-			hmStoWildcardDevice, len(rows))
-	}
-}
-
 // hmStoTrailingColonDevice is a device address as it can arrive from an
 // unvalidated caller — the cache-clear scope only checks the field is
 // non-empty. Before the prefix was single-sourced through channelLikePrefix,
@@ -330,51 +276,6 @@ func TestStores_TrailingColonDeviceAddressMatchesEveryChannel(t *testing.T) {
 		if len(list) != 0 {
 			t.Errorf("DeleteDevice(%q) left %d overrides, want the DEVB:1 override gone",
 				hmStoTrailingColonDevice, len(list))
-		}
-	})
-
-	t.Run("MeasurementStore.DeleteDevice", func(t *testing.T) {
-		t.Parallel()
-		s := freshMeasurementStore(t)
-		ctx := context.Background()
-		if err := s.SaveBatch(ctx, []MeasurementSample{{
-			CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "DEVB:1",
-			Parameter: "POWER", TS: msTime(time.Now()), Value: 12,
-		}}); err != nil {
-			t.Fatalf("SaveBatch: %v", err)
-		}
-		if err := s.DeleteDevice(ctx, "ccu1", "HmIP-RF", hmStoTrailingColonDevice); err != nil {
-			t.Fatalf("DeleteDevice: %v", err)
-		}
-		st, err := s.Stats(ctx)
-		if err != nil {
-			t.Fatalf("Stats: %v", err)
-		}
-		if st.Rows != 0 {
-			t.Errorf("DeleteDevice(%q) left %d measurement rows, want the DEVB:1 row gone",
-				hmStoTrailingColonDevice, st.Rows)
-		}
-	})
-
-	t.Run("MeasurementStore.QueryEnergy", func(t *testing.T) {
-		t.Parallel()
-		s := freshMeasurementStore(t)
-		ctx := context.Background()
-		base := msTime(time.Now().Add(-2 * time.Hour))
-		if err := s.SaveBatch(ctx, []MeasurementSample{{
-			CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "DEVB:1",
-			Parameter: "POWER", TS: base, Value: 42,
-		}}); err != nil {
-			t.Fatalf("SaveBatch: %v", err)
-		}
-		rows, err := s.QueryEnergy(ctx, "ccu1", hmStoTrailingColonDevice,
-			base.Add(-time.Hour), time.Now().Add(time.Hour), "hour")
-		if err != nil {
-			t.Fatalf("QueryEnergy: %v", err)
-		}
-		if len(rows) == 0 {
-			t.Errorf("QueryEnergy(device=%q) returned 0 rows, want the DEVB:1 samples",
-				hmStoTrailingColonDevice)
 		}
 	})
 }

@@ -15,7 +15,7 @@ import (
 
 func newOverlay(t *testing.T, include, exclude []string) (*RecordingOverrides, *sqlite.RecordingOverrideStore) {
 	t.Helper()
-	db := openStore(t).DB()
+	db := openMainDB(t)
 	os := sqlite.NewRecordingOverrideStore(db)
 	return NewRecordingOverrides(os, include, exclude), os
 }
@@ -129,10 +129,12 @@ func TestOverrides_DeleteCentralDropsOnlyThatCentralsOverrides(t *testing.T) {
 	}
 }
 
-// TestRecorder_OverrideForceOffDropsIncludedDP: a DP the glob policy would
-// record is dropped when an explicit force-off override is present.
-func TestRecorder_OverrideForceOffDropsIncludedDP(t *testing.T) {
-	store := openStore(t)
+// TestForwarder_OverrideForceOffDropsIncludedDP: a DP the glob policy would
+// forward is dropped when an explicit force-off override is present.
+func TestForwarder_OverrideForceOffDropsIncludedDP(t *testing.T) {
+	t.Parallel()
+	exp := &fakeExporter{}
+	db := openMainDB(t)
 	ctx := context.Background()
 	reg, u, _, ch := centralWithDevice(t, "ccu-01", "DEV001", "DEV001:1")
 
@@ -140,25 +142,26 @@ func TestRecorder_OverrideForceOffDropsIncludedDP(t *testing.T) {
 	ch.Put(dp)
 	dp.OnEvent(21.5)
 
-	overlay := NewRecordingOverrides(sqlite.NewRecordingOverrideStore(store.DB()), nil, nil)
+	overlay := NewRecordingOverrides(sqlite.NewRecordingOverrideStore(db), nil, nil)
 	if err := overlay.Set(ctx, "ccu-01", "HmIP-RF", "DEV001:1", "TEMPERATURE", false, "u"); err != nil {
 		t.Fatalf("Set override: %v", err)
 	}
-	r := New(store, Options{Overrides: overlay})
+	r := New(exp, Options{Overrides: overlay})
 	stop := r.Wire(reg)
 	publishValueEvent(u, "DEV001:1", "TEMPERATURE", hmenum.ParamsetKeyValues, hmtypes.FloatValue(21.5))
 	stop()
 
-	stats, _ := store.Stats(ctx)
-	if stats.Rows != 0 {
-		t.Errorf("Rows = %d, want 0 (force-off override must drop an otherwise-recorded DP)", stats.Rows)
+	if got := exp.got(); len(got) != 0 {
+		t.Errorf("samples = %d, want 0 (force-off override must drop an otherwise-forwarded DP)", len(got))
 	}
 }
 
-// TestRecorder_OverrideForceOnRecordsExcludedDP: a DP the glob policy would
-// drop (matched by Exclude) is recorded when force-on is set.
-func TestRecorder_OverrideForceOnRecordsExcludedDP(t *testing.T) {
-	store := openStore(t)
+// TestForwarder_OverrideForceOnRecordsExcludedDP: a DP the glob policy would
+// drop (matched by Exclude) is forwarded when force-on is set.
+func TestForwarder_OverrideForceOnRecordsExcludedDP(t *testing.T) {
+	t.Parallel()
+	exp := &fakeExporter{}
+	db := openMainDB(t)
 	ctx := context.Background()
 	reg, u, _, ch := centralWithDevice(t, "ccu-01", "DEV002", "DEV002:1")
 
@@ -167,26 +170,27 @@ func TestRecorder_OverrideForceOnRecordsExcludedDP(t *testing.T) {
 	dp.OnEvent(21.5)
 
 	// Exclude TEMPERATURE so the glob policy would deny it.
-	overlay := NewRecordingOverrides(sqlite.NewRecordingOverrideStore(store.DB()), nil, []string{"TEMPERATURE"})
+	overlay := NewRecordingOverrides(sqlite.NewRecordingOverrideStore(db), nil, []string{"TEMPERATURE"})
 	if err := overlay.Set(ctx, "ccu-01", "HmIP-RF", "DEV002:1", "TEMPERATURE", true, "u"); err != nil {
 		t.Fatalf("Set override: %v", err)
 	}
-	r := New(store, Options{Overrides: overlay, Exclude: []string{"TEMPERATURE"}})
+	r := New(exp, Options{Overrides: overlay, Exclude: []string{"TEMPERATURE"}})
 	stop := r.Wire(reg)
 	publishValueEvent(u, "DEV002:1", "TEMPERATURE", hmenum.ParamsetKeyValues, hmtypes.FloatValue(21.5))
 	stop()
 
-	stats, _ := store.Stats(ctx)
-	if stats.Rows != 1 {
-		t.Errorf("Rows = %d, want 1 (force-on override must record an otherwise-excluded DP)", stats.Rows)
+	if got := exp.got(); len(got) != 1 {
+		t.Errorf("samples = %d, want 1 (force-on override must forward an otherwise-excluded DP)", len(got))
 	}
 }
 
-// TestRecorder_OverrideCannotBeatProvenanceGuard: a force-on override does
+// TestForwarder_OverrideCannotBeatProvenanceGuard: a force-on override does
 // NOT override the numeric / live-provenance vetoes — a bool value is still
 // not a measurement.
-func TestRecorder_OverrideCannotBeatProvenanceGuard(t *testing.T) {
-	store := openStore(t)
+func TestForwarder_OverrideCannotBeatProvenanceGuard(t *testing.T) {
+	t.Parallel()
+	exp := &fakeExporter{}
+	db := openMainDB(t)
 	ctx := context.Background()
 	reg, u, _, ch := centralWithDevice(t, "ccu-01", "DEV003", "DEV003:1")
 
@@ -194,16 +198,76 @@ func TestRecorder_OverrideCannotBeatProvenanceGuard(t *testing.T) {
 	ch.Put(dp)
 	dp.OnEvent(1.0)
 
-	overlay := NewRecordingOverrides(sqlite.NewRecordingOverrideStore(store.DB()), nil, nil)
+	overlay := NewRecordingOverrides(sqlite.NewRecordingOverrideStore(db), nil, nil)
 	_ = overlay.Set(ctx, "ccu-01", "HmIP-RF", "DEV003:1", "STATE", true, "u")
-	r := New(store, Options{Overrides: overlay})
+	r := New(exp, Options{Overrides: overlay})
 	stop := r.Wire(reg)
 	// A boolean value is never a measurement, override notwithstanding.
 	publishValueEvent(u, "DEV003:1", "STATE", hmenum.ParamsetKeyValues, hmtypes.BoolValue(true))
 	stop()
 
-	stats, _ := store.Stats(ctx)
-	if stats.Rows != 0 {
-		t.Errorf("Rows = %d, want 0 (a force-on override must not defeat the numeric guard)", stats.Rows)
+	if got := exp.got(); len(got) != 0 {
+		t.Errorf("samples = %d, want 0 (a force-on override must not defeat the numeric guard)", len(got))
+	}
+}
+
+// TestOverrides_DeleteDeviceDropsStoreAndOverlay pins that a device removal
+// reaches both halves: the overlay is loaded once, so a key left in the map
+// would keep deciding for a device re-paired at the same address.
+func TestOverrides_DeleteDeviceDropsStoreAndOverlay(t *testing.T) {
+	t.Parallel()
+	o, store := newOverlay(t, nil, nil)
+	ctx := context.Background()
+
+	type key struct{ iface, channel string }
+	removed := []key{{"HmIP-RF", "DEV:1"}, {"HmIP-RF", "DEV:2"}}
+	kept := []key{{"HmIP-RF", "DEV2:1"}, {"BidCos-RF", "DEV:1"}}
+	for _, k := range append(append([]key(nil), removed...), kept...) {
+		if err := o.Set(ctx, "ccu1", k.iface, k.channel, "POWER", false, "u"); err != nil {
+			t.Fatalf("Set(%s %s): %v", k.iface, k.channel, err)
+		}
+	}
+
+	if err := o.DeleteDevice(ctx, "ccu1", "HmIP-RF", "DEV"); err != nil {
+		t.Fatalf("DeleteDevice: %v", err)
+	}
+
+	for _, k := range removed {
+		if _, src := o.Effective("ccu1", k.iface, k.channel, "POWER"); src != "policy" {
+			t.Errorf("overlay still holds an override for %s %s after DeleteDevice", k.iface, k.channel)
+		}
+	}
+	for _, k := range kept {
+		if rec, src := o.Effective("ccu1", k.iface, k.channel, "POWER"); src != "override" || rec {
+			t.Errorf("overlay lost the override for %s %s: (%v,%q), want (false,override)", k.iface, k.channel, rec, src)
+		}
+	}
+
+	rows, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	left := map[key]bool{}
+	for _, r := range rows {
+		left[key{r.InterfaceID, r.ChannelAddress}] = true
+	}
+	for _, k := range removed {
+		if left[k] {
+			t.Errorf("store still holds an override for %s %s after DeleteDevice", k.iface, k.channel)
+		}
+	}
+	for _, k := range kept {
+		if !left[k] {
+			t.Errorf("store lost the override for %s %s", k.iface, k.channel)
+		}
+	}
+}
+
+// TestOverrides_DeleteDeviceNilSafe pins the nil-receiver contract.
+func TestOverrides_DeleteDeviceNilSafe(t *testing.T) {
+	t.Parallel()
+	var o *RecordingOverrides
+	if err := o.DeleteDevice(context.Background(), "c", "i", "DEV"); err != nil {
+		t.Errorf("nil overlay DeleteDevice = %v, want nil", err)
 	}
 }

@@ -65,10 +65,10 @@ vi.mock("$lib/cdp/CdpTilesPanel.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/schedule/ScheduleTab.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/device/MaintenanceStatusGrid.svelte", () => ({ default: () => {} }));
 vi.mock("./AuditLog.svelte", () => ({ default: () => {} }));
-// The picker under test is offered only while the daemon captures
+// The picker under test is offered only while the daemon forwards
 // measurements.
 vi.mock("$lib/stores/info.svelte", () => ({
-  infoStore: { info: { capabilities: ["history.v1"] } },
+  infoStore: { info: { capabilities: ["measurements.v1"] } },
 }));
 vi.mock("$lib/components/RecordToggle.svelte", () => ({ default: () => {} }));
 

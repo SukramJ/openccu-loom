@@ -787,49 +787,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/diagrams": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List saved diagram definitions (own + shared)
-         * @description Returns the caller's own named multi-series diagram definitions
-         *     plus every diagram shared by other users (SV03). Diagrams are
-         *     Loom-native metadata; each references measurement-history data
-         *     points that the recorder samples.
-         */
-        get: operations["listDiagrams"];
-        put?: never;
-        /** Create a diagram definition */
-        post: operations["createDiagram"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/diagrams/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read a diagram definition */
-        get: operations["getDiagram"];
-        /** Update a diagram definition (owner or admin) */
-        put: operations["updateDiagram"];
-        post?: never;
-        /** Delete a diagram definition (owner or admin) */
-        delete: operations["deleteDiagram"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/schedules": {
         parameters: {
             query?: never;
@@ -3597,29 +3554,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Bucketed measurement history for one data point
-         * @description Server-side-bucketed view of one numeric data point's recorded measurement history, sized for charting. Requires the opt-in history feature (persistence.history.enabled); the route is absent and returns 404 when disabled. The half-open range [from,to) is aggregated into at most `buckets` evenly spaced buckets, each carrying avg/min/max/count; empty buckets are omitted.
-         *
-         *     The source resolution is chosen from the resulting bucket width: buckets at least a day wide are served from the daily rollup, at least an hour wide from the hourly rollup, anything finer from raw samples — each completed by the not-yet-rolled-up tail so the running hour and day are never missing. A range that reaches further back than the (short) raw retention is therefore answered from the rollups instead of coming back empty. The chosen tier is reported in the `X-History-Tier` response header.
-         */
-        get: operations["getHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/history/recording": {
+    "/measurements/recording": {
         parameters: {
             query?: never;
             header?: never;
@@ -3629,39 +3564,23 @@ export interface paths {
         /**
          * Effective per-datapoint recording state (read-only)
          * @description Reports whether one data point's live values are currently
-         *     persisted to measurement history, and whether that decision comes
-         *     from an explicit override or the parameter-name glob policy. Part
-         *     of the opt-in history feature; 503 when history is disabled.
+         *     forwarded to the measurement target, and whether that decision
+         *     comes from an explicit override or the parameter-name glob policy
+         *     (`north.measurements.include` / `exclude`). The route is mounted
+         *     only while `north.measurements.enabled` is true and is absent
+         *     (404) otherwise; the `measurements.v1` capability reports the
+         *     same condition.
          */
         get: operations["getRecordingOverride"];
         /**
          * Set or clear a per-datapoint recording override
-         * @description Forces recording on/off for one data point, or (record: null)
+         * @description Forces forwarding on/off for one data point, or (record: null)
          *     clears the override so it falls back to the glob policy. Toggling
-         *     affects only future samples; existing rows are untouched. Part of
-         *     the opt-in history feature; 503 when disabled.
+         *     affects only future samples; what the target already holds is
+         *     untouched. Mounted only while `north.measurements.enabled` is
+         *     true; absent (404) otherwise.
          */
         put: operations["putRecordingOverride"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/energy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Per-device power/energy breakdown over time
-         * @description Per-device power/energy breakdown for the energy view, read from the hourly/daily measurement-history rollup tiers (month re-aggregates the daily tier). Requires the opt-in history feature (persistence.history.enabled); the route is absent and returns 404 when disabled. POWER is averaged/peaked per bucket; ENERGY_COUNTER and ENERGY_COUNTER_FEED_IN are reported as the bucket's cumulative-counter delta (last-first) in Wh. A counter that went backwards within a bucket (meter reset on re-pair / firmware event) reports the delta as `last` (never negative) and sets `reset` on that bucket.
-         */
-        get: operations["getEnergy"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4930,7 +4849,7 @@ export interface paths {
          *     `opens`). Both come from this one payload so the two views
          *     cannot drift apart.
          *
-         *     Capability gates (Matter, measurement history) and role gates are
+         *     Capability gates (Matter, per-central features) and role gates are
          *     NOT folded into `effective` — the client applies those, and they
          *     answer a different question than the operator's configuration.
          */
@@ -6737,7 +6656,7 @@ export interface components {
              *     `auth.bearer.v1`, `auth.pairing.v1`, `auth.occulite_token.v1`,
              *     `auth.occulite_sso.v1`, `auth.ha_ingress.v1`,
              *     `webhook.inbound.v1`,
-             *     `diagrams.v1`, `admin.persistence.v1`, `history.v1`,
+             *     `admin.persistence.v1`, `measurements.v1`,
              *     `mcp.v1`, `mcp.write.v1`, `system.restart.supervised.v1`,
              *     `addon_self_update`, `alarm.v1` (the `/alarm` surface is
              *     mounted — absent, the alarm subsystem is off and every
@@ -8047,37 +7966,9 @@ export interface components {
         SysvarSetRequest: {
             value: unknown;
         };
-        /**
-         * @description One aggregated bucket of measurement history: the average, minimum, maximum and sample count over the bucket's time span.
-         *
-         *     `avg` is time-weighted, not a plain mean of the samples. CCU parameters arrive push-driven, so sample spacing is irregular by construction and an unweighted mean reports a mostly-idle series as several times its true average. `covered_ms` is the span that weighting divides by; combine two buckets by weighting each `avg` with its own `covered_ms`, never with `count`, because two samples an hour apart and two a second apart are both `count: 2`.
-         */
-        HistoryBucket: {
-            /**
-             * Format: date-time
-             * @description Start of the bucket's time span (UTC).
-             */
-            ts: string;
-            /** @description Mean of the raw samples in this bucket. */
-            avg: number;
-            /** @description Minimum raw sample in this bucket. */
-            min: number;
-            /** @description Maximum raw sample in this bucket. */
-            max: number;
-            /**
-             * Format: int64
-             * @description Number of raw samples aggregated into this bucket.
-             */
-            count: number;
-            /**
-             * Format: int64
-             * @description The millisecond span `avg` is weighted over. Omitted (or zero) when the span is unknown — a bucket built entirely from rows the daemon recorded before it stored the span — in which case `avg` is the plain mean over `count`.
-             */
-            covered_ms?: number;
-        };
         /** @description Effective measurement-recording state of one data point. */
         RecordingState: {
-            /** @description Whether this data point's live values are currently persisted to measurement history. */
+            /** @description Whether this data point's live values are currently forwarded to the measurement target. */
             record: boolean;
             /**
              * @description "override" when an explicit per-datapoint toggle decides, "policy" when the parameter-name glob policy decides.
@@ -8093,63 +7984,6 @@ export interface components {
             parameter: string;
             /** @description true/false forces recording on/off; null clears the override. */
             record?: boolean | null;
-        };
-        /** @description One bucketed point of a device's energy breakdown: the cumulative-counter delta over the bucket (Wh) plus the instantaneous POWER summary (W). */
-        EnergyBucket: {
-            /**
-             * Format: date-time
-             * @description Start of the bucket's time span, serialised as an RFC3339 instant. For `group=day` / `group=month` this instant is the local midnight respectively local first-of-month of the daemon's timezone, so rendering it with a local date format names the calendar day or month the bucket covers.
-             */
-            ts: string;
-            /** @description ENERGY_COUNTER delta over the bucket, in Wh. Never negative — see `reset`. */
-            consumed_wh: number;
-            /** @description ENERGY_COUNTER_FEED_IN delta over the bucket, in Wh. Never negative — see `reset`. */
-            feed_in_wh: number;
-            /** @description Mean POWER sample over the bucket, in W. */
-            avg_power_w: number;
-            /** @description Maximum POWER sample over the bucket, in W. */
-            peak_power_w: number;
-            /** @description True when a cumulative counter went backwards within this bucket (meter reset on re-pair / firmware event); the reported delta is the counter's value at the end of the bucket (energy accumulated since the reset), not a negative delta. */
-            reset: boolean;
-        };
-        /** @description One device's bucketed energy breakdown plus its range totals. */
-        EnergyDevice: {
-            /** @description Bare device address. */
-            address: string;
-            /** @description Device display name (falls back to the address when unknown). */
-            name: string;
-            buckets: components["schemas"]["EnergyBucket"][];
-            /** @description Sum of `consumed_wh` across every bucket, in Wh. */
-            total_consumed_wh: number;
-            /** @description Sum of `feed_in_wh` across every bucket, in Wh. */
-            total_feed_in_wh: number;
-        };
-        /** @description `GET /api/v1/energy` response body: one bucketed breakdown per device plus central totals, in Wh (the SPA divides by 1000 to render kWh). */
-        EnergyResponse: {
-            /**
-             * @description Bucket granularity actually used.
-             * @enum {string}
-             */
-            group: "hour" | "day" | "month";
-            /**
-             * Format: date-time
-             * @description Inclusive lower bound of the requested range (UTC).
-             */
-            from: string;
-            /**
-             * Format: date-time
-             * @description Exclusive upper bound of the requested range (UTC).
-             */
-            to: string;
-            devices: components["schemas"]["EnergyDevice"][];
-            /** @description Sum of every device's `total_consumed_wh`, in Wh. */
-            total_consumed_wh: number;
-            /** @description Sum of every device's `total_feed_in_wh`, in Wh. */
-            total_feed_in_wh: number;
-            /** @description Configured electricity tariff (`persistence.history.energy_price_per_kwh`), echoed so the client can derive costs. Absent or zero means no tariff is configured — a client must then show no cost at all rather than a misleading 0. The daemon does not compute the amounts: rounding and money formatting are locale decisions the client owns. */
-            price_per_kwh?: number;
-            /** @description Free-text label for amounts derived from `price_per_kwh` (symbol or ISO code; defaults to the euro sign). Never used for conversion. Only present together with a non-zero tariff. */
-            currency?: string;
         };
         /** @description One recorded user-initiated configuration change. */
         AuditEntry: {
@@ -9674,7 +9508,7 @@ export interface components {
              *     stays in the vocabulary for clients of older daemons.
              * @enum {string}
              */
-            gate?: "matter" | "history" | "feature:hub.programs" | "feature:hub.sysvars" | "feature:hub.inbox" | "feature:heating_groups.read" | "feature:system.backup.create";
+            gate?: "matter" | "feature:hub.programs" | "feature:hub.sysvars" | "feature:hub.inbox" | "feature:heating_groups.read" | "feature:system.backup.create";
             /**
              * @description Condition under which hiding asks for confirmation. The
              *     client evaluates the condition; the daemon only declares it.
@@ -10280,32 +10114,6 @@ export interface components {
             central_name?: string;
             /** @description Owning interface (wire interface id). Populated only by the global overview (`GET /links`); empty on the per-device listing. */
             interface_id?: string;
-        };
-        /** @description A named multi-series diagram definition (SV03). */
-        DiagramConfig: {
-            id: string;
-            name: string;
-            /** @enum {string} */
-            visibility: "private" | "shared";
-            /** @description Owner subject. */
-            owner: string;
-            /** @description SPA-owned diagram document (series list + default range). Opaque to the daemon except a non-empty central per series. */
-            config: Record<string, never>;
-            /** Format: int64 */
-            created_at_ms: number;
-            /** Format: int64 */
-            updated_at_ms: number;
-        };
-        /** @description Create or update a diagram definition. */
-        DiagramWriteRequest: {
-            name: string;
-            /**
-             * @description Defaults to private.
-             * @enum {string}
-             */
-            visibility?: "private" | "shared";
-            /** @description SPA-owned diagram document (series list + default range). */
-            config?: Record<string, never>;
         };
         /** @description Create a direct link between a sender and a receiver channel. */
         AddLinkRequest: {
@@ -11307,9 +11115,6 @@ export interface components {
         ListDeviceReplaceCandidatesResponse: {
             candidates: components["schemas"]["ReplaceCandidate"][];
         };
-        ListDiagramsResponse: {
-            diagrams: components["schemas"]["DiagramConfig"][];
-        };
         ListGroupTypesResponse: {
             types: components["schemas"]["GroupTypeEntry"][];
         };
@@ -11406,7 +11211,7 @@ export interface components {
             value_name_1?: string;
             /** @description Toggle the CCU WebUI-visibility flag. Omit to leave it unchanged. */
             is_visible?: boolean;
-            /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
+            /** @description Toggle the archive flag (CCU DPArchive) that makes the CCU record value changes in its own archive. Omit to leave it unchanged. */
             is_logged?: boolean;
             /** @description Reassign the CCU "Kanalzuordnung". Tri-state: omit to leave the assignment untouched, send an empty string to clear it, or a channel address ("ADDR:idx") to assign it. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
             channel_address?: string;
@@ -11570,12 +11375,12 @@ export interface components {
         WiringSeam: {
             /**
              * @description Stable identifier, `<subsystem>.<what>`.
-             * @example history.recorder
+             * @example measurements.forwarder
              */
             name: string;
             /**
              * @description The thing that was attached.
-             * @example *history.Recorder
+             * @example *measurements.Forwarder
              */
             collaborator: string;
             /**
@@ -13717,166 +13522,6 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    listDiagrams: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The caller's visible diagrams. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListDiagramsResponse"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    createDiagram: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                /**
-                 * @example {
-                 *       "name": "Living-room climate",
-                 *       "visibility": "private",
-                 *       "config": {
-                 *         "series": [
-                 *           {
-                 *             "central": "ccu1",
-                 *             "interface_id": "ccu1-HmIP-RF",
-                 *             "channel_address": "0001ABCD:1",
-                 *             "parameter": "ACTUAL_TEMPERATURE"
-                 *           }
-                 *         ]
-                 *       }
-                 *     }
-                 */
-                "application/json": components["schemas"]["DiagramWriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiagramConfig"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    getDiagram: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The diagram. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiagramConfig"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    updateDiagram: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                /**
-                 * @example {
-                 *       "name": "Living-room climate",
-                 *       "visibility": "shared",
-                 *       "config": {
-                 *         "series": [
-                 *           {
-                 *             "central": "ccu1",
-                 *             "parameter": "ACTUAL_TEMPERATURE"
-                 *           }
-                 *         ]
-                 *       }
-                 *     }
-                 */
-                "application/json": components["schemas"]["DiagramWriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Updated. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiagramConfig"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    deleteDiagram: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -18110,46 +17755,6 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    getHistory: {
-        parameters: {
-            query: {
-                /** @description Central (CCU) name that owns the data point. */
-                central: string;
-                /** @description Canonical interface id (&lt;central&gt;-&lt;interface&gt;). */
-                interface_id: string;
-                /** @description Channel address, e.g. ABC0000001:4. */
-                channel: string;
-                /** @description Parameter name, e.g. ACTUAL_TEMPERATURE. */
-                parameter: string;
-                /** @description Inclusive lower bound (RFC3339). */
-                from: string;
-                /** @description Exclusive upper bound (RFC3339). Must be after from. */
-                to: string;
-                /** @description Target bucket count. Capped to 2000; values &lt;= 0 or absent use the default (200). */
-                buckets?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Chronological list of non-empty buckets. */
-            200: {
-                headers: {
-                    /** @description Source resolution the answer was assembled from: `raw` (raw samples), `hour` (hourly rollup + un-rolled tail) or `day` (daily rollup + hourly and raw tails). */
-                    "X-History-Tier"?: "raw" | "hour" | "day";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HistoryBucket"][];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            500: components["responses"]["InternalError"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
     getRecordingOverride: {
         parameters: {
             query: {
@@ -18174,6 +17779,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -18209,40 +17815,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            503: components["responses"]["ServiceUnavailable"];
-        };
-    };
-    getEnergy: {
-        parameters: {
-            query: {
-                /** @description Central (CCU) name that owns the energy devices. */
-                central: string;
-                /** @description Inclusive lower bound (RFC3339). */
-                from: string;
-                /** @description Exclusive upper bound (RFC3339). Must be after from. */
-                to: string;
-                /** @description Bucket granularity. Absent uses the default (day). `day` and `month` buckets are local calendar buckets in the daemon's own timezone, so a bucket's `ts` is a local midnight respectively a local first-of-month and covers 23, 24 or 25 hours across a daylight-saving transition. `hour` buckets are aligned to the hour on the UTC axis. */
-                group?: "hour" | "day" | "month";
-                /** @description Bare device address to scope the breakdown to one device. Omitted returns every energy device on the central. */
-                device?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Per-device power/energy breakdown for the requested range. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyResponse"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            500: components["responses"]["InternalError"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

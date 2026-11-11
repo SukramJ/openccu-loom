@@ -12,8 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // newTestExporter builds an InfluxExporter pointed at the given endpoint
@@ -43,8 +41,8 @@ func newTestExporter(t *testing.T, endpoint string, extra ...func(*InfluxConfig)
 }
 
 // fixedSample returns a deterministic MeasurementSample for use in assertions.
-func fixedSample() sqlite.MeasurementSample {
-	return sqlite.MeasurementSample{
+func fixedSample() Sample {
+	return Sample{
 		CentralName:    "Home",
 		InterfaceID:    "Home-HmIP-RF",
 		ChannelAddress: "ABC:4",
@@ -116,7 +114,7 @@ func TestLineProtocol_PlainSample(t *testing.T) {
 	e := newTestExporter(t, "http://127.0.0.1:19999") // unreachable; not flushed
 	s := fixedSample()
 
-	got := e.lineProtocol([]sqlite.MeasurementSample{s})
+	got := e.lineProtocol([]Sample{s})
 
 	wantPrefix := "openccu_loom,central=Home,interface_id=Home-HmIP-RF,channel=ABC:4,parameter=ACTUAL_TEMPERATURE value=21.5 "
 	if !strings.HasPrefix(got, wantPrefix) {
@@ -143,7 +141,7 @@ func TestLineProtocol_ExactLine(t *testing.T) {
 	e := newTestExporter(t, "http://127.0.0.1:19999")
 	s := fixedSample()
 
-	got := e.lineProtocol([]sqlite.MeasurementSample{s})
+	got := e.lineProtocol([]Sample{s})
 
 	wantLine := "openccu_loom,central=Home,interface_id=Home-HmIP-RF,channel=ABC:4,parameter=ACTUAL_TEMPERATURE value=21.5 " +
 		strconv.FormatInt(s.TS.UnixNano(), 10) + "\n"
@@ -155,7 +153,7 @@ func TestLineProtocol_ExactLine(t *testing.T) {
 func TestLineProtocol_TagEscaping(t *testing.T) {
 	t.Parallel()
 	e := newTestExporter(t, "http://127.0.0.1:19999")
-	s := sqlite.MeasurementSample{
+	s := Sample{
 		CentralName:    "My CCU",  // space → escaped
 		InterfaceID:    "HmIP,RF", // comma → escaped
 		ChannelAddress: "DEV:1",
@@ -163,7 +161,7 @@ func TestLineProtocol_TagEscaping(t *testing.T) {
 		TS:             time.Now(),
 		Value:          0.0,
 	}
-	got := e.lineProtocol([]sqlite.MeasurementSample{s})
+	got := e.lineProtocol([]Sample{s})
 	if !strings.Contains(got, `central=My\ CCU`) {
 		t.Errorf("lineProtocol did not escape space in CentralName: %q", got)
 	}
@@ -462,7 +460,7 @@ func TestInfluxExporter_RequeueRespectsMaxBuffer(t *testing.T) {
 	old1.Value = 1.0
 	old2 := fixedSample()
 	old2.Value = 2.0
-	e.requeue([]sqlite.MeasurementSample{old1, old2})
+	e.requeue([]Sample{old1, old2})
 
 	if m := e.Metrics(); m.Dropped != 1 {
 		t.Errorf("Metrics.Dropped = %d, want 1 (oldest evicted at MaxBuffer)", m.Dropped)

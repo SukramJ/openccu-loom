@@ -3,13 +3,13 @@
   point's live values are persisted to measurement history and lets an
   operator force it on/off; "reset" clears the override back to the
   parameter-name glob policy. Self-hiding when the history feature is off
-  (the endpoint 404s → HistoryDisabledError).
+  (the endpoint 404s → MeasurementsDisabledError).
 -->
 <script lang="ts">
   import {
     getRecordingOverride,
     setRecordingOverride,
-    HistoryDisabledError,
+    MeasurementsDisabledError,
     ApiError,
     type RecordingState,
   } from "$lib/api/client";
@@ -47,7 +47,7 @@
       })
       .catch((err) => {
         if (cancelled) return;
-        if (err instanceof HistoryDisabledError) {
+        if (err instanceof MeasurementsDisabledError) {
           available = false;
         } else {
           recording = null;

@@ -665,15 +665,15 @@ func TestRestartRequiredFieldPaths_DerivedFromRules(t *testing.T) {
 	}
 }
 
-// TestRestartRequiredDiff_OptInGatesTurnedOn covers the three gates whose
+// TestRestartRequiredDiff_OptInGatesTurnedOn covers the gates whose
 // "unset" and "explicit false" mean the same thing. The mechanical guard in
 // tests/contract cannot express them: it mutates a nil pointer to its zero
 // value, which changes the encoding and not the state. The operator action
 // that matters is turning the feature ON, and each of these features is wired
-// exactly once — the history recorder and its push exporter when the
-// persistence stack is built, the TimeSynchronization cluster when the Matter
-// root endpoint is assembled — so switching one on has no effect until the
-// next boot.
+// exactly once — the measurement forwarder and its exporter during
+// south-bound wiring, the TimeSynchronization cluster when the Matter root
+// endpoint is assembled — so switching one on has no effect until the next
+// boot.
 func TestRestartRequiredDiff_OptInGatesTurnedOn(t *testing.T) {
 	t.Parallel()
 
@@ -683,14 +683,9 @@ func TestRestartRequiredDiff_OptInGatesTurnedOn(t *testing.T) {
 		on   func(c *Config)
 	}{
 		{
-			name: "history recorder",
-			rule: "persistence.history",
-			on:   func(c *Config) { on := true; c.Persistence.History.Enabled = &on },
-		},
-		{
-			name: "history push exporter",
-			rule: "persistence.history",
-			on:   func(c *Config) { on := true; c.Persistence.History.Export.Enabled = &on },
+			name: "measurement forwarder",
+			rule: "north.measurements",
+			on:   func(c *Config) { on := true; c.North.Measurements.Enabled = &on },
 		},
 		{
 			name: "matter time sync cluster",
@@ -720,11 +715,28 @@ func TestRestartRequiredDiff_UnsetOptInGateIsNotAPhantomRestart(t *testing.T) {
 	boot := baseConfig()
 	eff := clone(boot)
 	off := false
-	eff.Persistence.History.Enabled = &off
-	eff.Persistence.History.Export.Enabled = &off
+	eff.North.Measurements.Enabled = &off
 	eff.North.Matter.EnableTimeSync = &off
 
 	if got := RestartRequiredDiff(boot, eff); len(got) != 0 {
 		t.Errorf("writing an off gate explicitly reported %v — the banner would stay lit for a save that changed nothing", got)
+	}
+}
+
+// TestRestartRequiredDiff_MeasurementsTargetChange pins that a new target is
+// reported: the exporter is built once with its endpoint, so the running
+// forwarder keeps writing to the old one until the next boot.
+func TestRestartRequiredDiff_MeasurementsTargetChange(t *testing.T) {
+	t.Parallel()
+
+	boot := baseConfig()
+	on := true
+	boot.North.Measurements.Enabled = &on
+	boot.North.Measurements.Endpoint = "http://influx-a:8086"
+	eff := clone(boot)
+	eff.North.Measurements.Endpoint = "http://influx-b:8086"
+
+	if got := RestartRequiredDiff(boot, eff); !slices.Contains(got, "north.measurements") {
+		t.Errorf("changing north.measurements.endpoint: diff = %v, want it to contain %q", got, "north.measurements")
 	}
 }
