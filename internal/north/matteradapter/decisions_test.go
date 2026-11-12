@@ -78,7 +78,15 @@ func TestPublishedDecisionsAreTheDescribedEndpoints(t *testing.T) {
 func TestEveryDecisionIsComplete(t *testing.T) {
 	a := matteradapter.New(goldenConfig(t), slog.New(slog.DiscardHandler))
 	decisions, _ := decideFleet(t, a)
-	reasons := matteradapter.WithheldReasons()
+	// The closed set, stated here a second time on purpose: a reason added
+	// to the walk without a line here fails this test, which is the moment
+	// to add it to the contract's description and the catalogues.
+	reasons := []matteradapter.WithheldReason{
+		matteradapter.WithheldChannelHidden, matteradapter.WithheldSecondaryChannel,
+		matteradapter.WithheldUsageIgnored, matteradapter.WithheldConsumedByParent,
+		matteradapter.WithheldSecondaryMember, matteradapter.WithheldNoMapping,
+		matteradapter.WithheldNotOnAllowList, matteradapter.WithheldMeasurementsOff,
+	}
 	seen := map[matteradapter.SourceOutcome]int{}
 	for _, d := range decisions {
 		seen[d.Outcome]++

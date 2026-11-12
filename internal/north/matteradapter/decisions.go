@@ -56,16 +56,6 @@ const (
 	WithheldMeasurementsOff WithheldReason = "measurements_not_included"
 )
 
-// WithheldReasons is the closed set, for the guards that hold a
-// decision's reason to it.
-func WithheldReasons() []WithheldReason {
-	return []WithheldReason{
-		WithheldChannelHidden, WithheldSecondaryChannel, WithheldUsageIgnored,
-		WithheldConsumedByParent, WithheldSecondaryMember, WithheldNoMapping,
-		WithheldNotOnAllowList, WithheldMeasurementsOff,
-	}
-}
-
 // FoldedIntoPowerSource is [SourceDecision.Into] for a battery data
 // point: it becomes the PowerSource cluster on one of the device's
 // endpoints and has no endpoint of its own.
