@@ -75,8 +75,13 @@ func TestDeviceProjectionAnswersThroughTheDaemon(t *testing.T) {
 	if out.Address != addr || out.Central == "" {
 		t.Errorf("answer names %q on %q; want %q on its central", out.Address, out.Central, addr)
 	}
-	if len(out.Planes) != 3 || out.Planes[0].Plane != "matter" || out.Planes[1].Plane != "measurements" || out.Planes[2].Plane != "ha_discovery" {
-		t.Fatalf("planes = %+v; want matter, measurements, ha_discovery", out.Planes)
+	want := []string{"matter", "measurements", "ha_discovery", "mqtt_raw"}
+	got := make([]string, 0, len(out.Planes))
+	for _, p := range out.Planes {
+		got = append(got, p.Plane)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("planes = %v; want %v", got, want)
 	}
 	for _, p := range out.Planes {
 		if p.State != "inactive" || p.Reason != "plane_disabled" || len(p.Entries) != 0 {
@@ -342,4 +347,96 @@ func TestDiscoveryProjectionIsWhatTheBrokerHolds(t *testing.T) {
 	}
 	t.Logf("%d entities shown, %d config topics on the broker, %d withheld entries; node ids outside the projections: %v",
 		len(shown), len(onBroker), withheld, other)
+}
+
+// TestRawProjectionIsWhatTheBrokerHolds is the round trip of the raw MQTT
+// plane, in the shape of the discovery one: the status topics the broker
+// holds for each device are compared with what the device's projection
+// calls published, in both directions.
+func TestRawProjectionIsWhatTheBrokerHolds(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{EnableMQTT: true, StartCCUNotReady: true, AuthMode: harness.AuthSession})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	held := &discoveryTopicSet{topics: map[string]bool{}, last: time.Now()}
+	if err := h.MQTT().Subscribe("openccu-loom/status/"+harness.CentralName+"/#", func(topic string, payload []byte, _ bool) {
+		held.mu.Lock()
+		defer held.mu.Unlock()
+		if len(payload) == 0 {
+			delete(held.topics, topic)
+		} else {
+			held.topics[topic] = true
+		}
+		held.last = time.Now()
+	}); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	h.CCU().V().SetReady(true)
+	awaitCentralReady(t, h, harness.CentralName)
+	onBroker := held.settled(t, 5*time.Second, 90*time.Second)
+
+	shown := map[string]bool{}
+	devices := getJSONArray(t, h, "/api/v1/devices", "items")
+	addrs := make([]string, 0, len(devices))
+	withheld := 0
+	for _, raw := range devices {
+		dev, _ := raw.(map[string]any)
+		addr, _ := dev["address"].(string)
+		addrs = append(addrs, addr)
+		status, out := getProjection(t, h, "/api/v1/devices/"+addr+"/projection?plane=mqtt_raw")
+		if status != http.StatusOK || len(out.Planes) != 1 || out.Planes[0].State != "active" {
+			t.Fatalf("%s: status %d, planes %+v", addr, status, out.Planes)
+		}
+		for _, rawEntry := range out.Planes[0].Entries {
+			var e measurementEntry
+			if err := json.Unmarshal(rawEntry, &e); err != nil {
+				t.Fatalf("decode entry: %v", err)
+			}
+			switch e.Verdict {
+			case "published":
+				if e.Identity["topic"] == "" {
+					t.Fatalf("%s: published entry %d/%s without a topic", addr, e.Channel, e.Key)
+				}
+				shown[e.Identity["topic"]] = true
+			case "withheld":
+				withheld++
+				if e.Reason == "" {
+					t.Errorf("%s: entry %d/%s is withheld without a reason", addr, e.Channel, e.Key)
+				}
+			}
+		}
+	}
+	if len(shown) == 0 || withheld == 0 {
+		t.Fatalf("%d shown, %d withheld; the comparison needs both", len(shown), withheld)
+	}
+	ofADevice := func(topic string) bool {
+		for _, a := range addrs {
+			if strings.Contains(topic, "/"+a+"/") {
+				return true
+			}
+		}
+		return false
+	}
+	var missing, unexplained []string
+	for topic := range shown {
+		if !onBroker[topic] {
+			missing = append(missing, topic)
+		}
+	}
+	for topic := range onBroker {
+		if ofADevice(topic) && !shown[topic] {
+			unexplained = append(unexplained, topic)
+		}
+	}
+	slices.Sort(missing)
+	slices.Sort(unexplained)
+	if len(missing) > 0 {
+		t.Errorf("%d topics are called published and are not on the broker:\n  %s", len(missing), strings.Join(missing, "\n  "))
+	}
+	if len(unexplained) > 0 {
+		t.Errorf("%d status topics of the devices are on the broker and in no projection:\n  %s",
+			len(unexplained), strings.Join(unexplained, "\n  "))
+	}
+	t.Logf("%d topics shown, %d status topics on the broker, %d withheld entries", len(shown), len(onBroker), withheld)
 }
