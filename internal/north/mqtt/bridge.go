@@ -1678,6 +1678,9 @@ const (
 	// (ignored and hidden parameters, the MASTER whitelist) leave the
 	// parameter off the MQTT plane.
 	DiscoveryHiddenParameter DiscoveryReason = "hidden_parameter"
+	// DiscoveryNotVisible means: the model marks the data point as not
+	// visible, and no custom data point on its channel needs it.
+	DiscoveryNotVisible DiscoveryReason = "not_visible"
 	// DiscoveryChannelHidden means: the operator hid the channel.
 	DiscoveryChannelHidden DiscoveryReason = "channel_hidden"
 	// DiscoveryDisabled means: Home Assistant discovery is switched off.
@@ -1685,6 +1688,8 @@ const (
 	// DiscoveryNoCustomDataPoint means: the channel's own entity was
 	// asked for an event that carries no custom data point.
 	DiscoveryNoCustomDataPoint DiscoveryReason = "no_custom_data_point"
+	// DiscoveryNoEntity means: the builder has no entity for the subject.
+	DiscoveryNoEntity DiscoveryReason = "no_entity"
 	// DiscoveryBuilderDeclined means: a builder that states no reason
 	// announced nothing.
 	DiscoveryBuilderDeclined DiscoveryReason = "builder_declined"
@@ -1760,6 +1765,62 @@ func (b *Bridge) describeCustomDPDiscovery(ev Event) DiscoveryDescription {
 		return DiscoveryDescription{Verdict: withhold(DiscoveryNoCustomDataPoint)}
 	}
 	return DiscoveryDescription{Verdict: b.builderVerdict(ev), Companions: b.textDisplayNotifyCompanion(ev)}
+}
+
+// DiscoveryEnabled reports whether this bridge announces Home Assistant
+// entities at all.
+func (b *Bridge) DiscoveryEnabled() bool {
+	return b.cfg.HADiscoveryEnabled && b.cfg.DiscoveryBuilder != nil
+}
+
+// DiscoveryConfigTopic is the retained topic an entity's config is
+// published to, and false when this bridge publishes one document per
+// device instead: an entity is then a component of that document and has
+// no topic of its own.
+func (b *Bridge) DiscoveryConfigTopic(component, nodeID, objectID string) (string, bool) {
+	if b.bundles != nil {
+		return "", false
+	}
+	return b.topics.DiscoveryConfig(component, nodeID, objectID), true
+}
+
+// describeItem is the description for an entity only the default builder
+// knows how to build: discovery has to be on, the default builder has to
+// be the configured one, and it has to return an item.
+func (b *Bridge) describeItem(build func(*DefaultDiscoveryBuilder) DiscoveryItem) DiscoveryDescription {
+	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryDisabled)}
+	}
+	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
+	if !ok {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryBuilderDeclined)}
+	}
+	item := build(builder)
+	if !item.OK {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryNoEntity)}
+	}
+	return DiscoveryDescription{Verdict: DiscoveryVerdict{
+		Component: item.Component, NodeID: item.NodeID, ObjectID: item.ObjectID, Payload: item.Payload, OK: true,
+	}}
+}
+
+// DescribeDataPointDiscovery is the description [Bridge.PublishState] and
+// [Bridge.PublishDiscoveryOnly] announce from, for a reader that wants
+// the decision without the publish.
+func (b *Bridge) DescribeDataPointDiscovery(ev Event) DiscoveryDescription {
+	return b.describeDataPointDiscovery(ev)
+}
+
+// DescribeChannelEventDiscovery is the description
+// [Bridge.PublishChannelEventDiscovery] announces from.
+func (b *Bridge) DescribeChannelEventDiscovery(ev Event) DiscoveryDescription {
+	return b.describeChannelEventDiscovery(ev)
+}
+
+// DescribeCustomDPDiscovery is the description
+// [Bridge.PublishCustomDPDiscovery] announces from.
+func (b *Bridge) DescribeCustomDPDiscovery(ev Event) DiscoveryDescription {
+	return b.describeCustomDPDiscovery(ev)
 }
 
 // pressButtonCompanion is the press-button entity of a click-event

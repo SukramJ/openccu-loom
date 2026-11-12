@@ -405,7 +405,8 @@ export interface paths {
          *     is computed when asked; nothing is recorded.
          *
          *     Planes are added release by release. This version answers for
-         *     `matter` and `measurements`. Capability `projection.v1`.
+         *     `matter`, `measurements` and `ha_discovery`. Capability
+         *     `projection.v1`.
          */
         get: operations["getDeviceProjection"];
         put?: never;
@@ -7321,34 +7322,47 @@ export interface components {
         ProjectionPlane: {
             /**
              * @description The plane's name. An open set that grows with the daemon;
-             *     today `matter` and `measurements`.
+             *     today `matter`, `measurements` and `ha_discovery`.
              */
             plane: string;
             state: components["schemas"]["ProjectionPlaneState"];
             /**
              * @description Set when `state` is `inactive`: `plane_disabled`, or on
              *     `measurements` `central_excluded` when forwarding runs but
-             *     not for the device's central.
+             *     not for the device's central, or on `ha_discovery`
+             *     `central_not_ready` while the device's central is still
+             *     coming up.
              */
             reason?: string;
             entries: components["schemas"]["ProjectionEntry"][];
         };
         ProjectionEntry: {
-            /** @description The channel number the subject belongs to. */
+            /**
+             * @description The channel number the subject belongs to; `-1` for a
+             *     subject of the device itself (the firmware-update entity).
+             */
             channel: number;
             /**
              * @description The kind of subject in the plane's vocabulary. Absent for an
              *     entry about the whole channel. On `matter`: `custom`,
              *     `calculated`, `combined`, `generic`. Absent on
              *     `measurements`, whose subjects are the data points of the
-             *     VALUES paramset.
+             *     VALUES paramset. On `ha_discovery`: `data_point`,
+             *     `channel_entity` (the entity of the channel's custom data
+             *     point), `event`, `schedule`, `schedule_switch`, `combined`,
+             *     `update`, and `companion` (an entity announced alongside
+             *     another: the press button of a writable press, the notify
+             *     entity of a text display).
              */
             kind?: string;
             /**
              * @description The subject's key in the plane's vocabulary. On `matter` the
              *     parameter or data-point key, or the key of a consolidated
              *     endpoint (`BUTTON`, `ELECTRICAL`). On `measurements` the
-             *     parameter.
+             *     parameter. On `ha_discovery` the parameter of a data point
+             *     (`MASTER:<parameter>` for one of the MASTER paramset), the
+             *     key of a schedule switch, the kind of a combined entity, or
+             *     `<component>/<object_id>` of a companion.
              */
             key?: string;
             verdict: components["schemas"]["ProjectionVerdict"];
@@ -7361,14 +7375,22 @@ export interface components {
              *     `measurements`: `not_numeric`, `pattern_excludes`,
              *     `override_off`, and `no_live_value` (the daemon has observed
              *     no value on the wire since it started; it passes with the
-             *     next one). A later daemon may state a reason this list does
-             *     not have; show it as it is.
+             *     next one). On `ha_discovery`: `hidden_parameter`,
+             *     `not_visible`, `channel_hidden`, `part_of_channel_entity`,
+             *     `usage_no_create`, `usage_ignored`, `event_only_press`,
+             *     `event_suppressed_for_model`, `no_component`,
+             *     `no_scoped_identity`, `render_failed`, `no_entity`,
+             *     `no_custom_data_point`, `builder_declined`,
+             *     `device_not_released`. A later daemon may state a reason this
+             *     list does not have; show it as it is.
              */
             reason?: string;
             /**
              * @description Set when `verdict` is `folded`: the `key` of the entry that
              *     carries the subject. On `matter` also `POWER_SOURCE`, the
-             *     power source cluster on one of the device's endpoints.
+             *     power source cluster on one of the device's endpoints. On
+             *     `ha_discovery` `<component>/<object_id>` of the channel's
+             *     entity.
              */
             folded_into?: string;
             /**
@@ -7377,7 +7399,9 @@ export interface components {
              *     `device_type` once the bridge has assigned the endpoint. On
              *     `measurements` the measurement and the tags the samples are
              *     written under: `measurement`, `central`, `interface_id`,
-             *     `channel`, `parameter`.
+             *     `channel`, `parameter`. On `ha_discovery`: `component`,
+             *     `node_id`, `object_id`, and `discovery_topic` unless the
+             *     bridge publishes one document per device.
              */
             identity?: {
                 [key: string]: string;

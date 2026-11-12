@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/tests/e2e/harness"
 )
@@ -73,8 +75,8 @@ func TestDeviceProjectionAnswersThroughTheDaemon(t *testing.T) {
 	if out.Address != addr || out.Central == "" {
 		t.Errorf("answer names %q on %q; want %q on its central", out.Address, out.Central, addr)
 	}
-	if len(out.Planes) != 2 || out.Planes[0].Plane != "matter" || out.Planes[1].Plane != "measurements" {
-		t.Fatalf("planes = %+v; want matter, then measurements", out.Planes)
+	if len(out.Planes) != 3 || out.Planes[0].Plane != "matter" || out.Planes[1].Plane != "measurements" || out.Planes[2].Plane != "ha_discovery" {
+		t.Fatalf("planes = %+v; want matter, measurements, ha_discovery", out.Planes)
 	}
 	for _, p := range out.Planes {
 		if p.State != "inactive" || p.Reason != "plane_disabled" || len(p.Entries) != 0 {
@@ -183,4 +185,161 @@ func TestMeasurementProjectionOfADaemonThatForwardsNothingIsInactive(t *testing.
 	if state != "inactive" || reason != "plane_disabled" || len(entries) != 0 {
 		t.Fatalf("plane = %s / %q with %d entries; want inactive / plane_disabled / none", state, reason, len(entries))
 	}
+}
+
+// discoveryTopicSet collects the Home Assistant config topics the broker
+// holds, following retractions: an empty payload removes the topic.
+type discoveryTopicSet struct {
+	mu     sync.Mutex
+	topics map[string]bool
+	last   time.Time
+}
+
+func watchDiscoveryTopics(t *testing.T, h *harness.Harness) *discoveryTopicSet {
+	t.Helper()
+	s := &discoveryTopicSet{topics: map[string]bool{}, last: time.Now()}
+	if err := h.MQTT().Subscribe("homeassistant/+/+/+/config", func(topic string, payload []byte, _ bool) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if len(payload) == 0 {
+			delete(s.topics, topic)
+		} else {
+			s.topics[topic] = true
+		}
+		s.last = time.Now()
+	}); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	return s
+}
+
+// settled waits until no config topic has moved for quiet, and returns
+// the set held then.
+func (s *discoveryTopicSet) settled(t *testing.T, quiet, deadline time.Duration) map[string]bool {
+	t.Helper()
+	end := time.Now().Add(deadline)
+	for {
+		s.mu.Lock()
+		idle, n := time.Since(s.last), len(s.topics)
+		s.mu.Unlock()
+		if n > 0 && idle >= quiet {
+			break
+		}
+		if time.Now().After(end) {
+			t.Fatalf("the discovery plane did not settle within %s (%d topics, idle %s)", deadline, n, idle)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]bool, len(s.topics))
+	for k := range s.topics {
+		out[k] = true
+	}
+	return out
+}
+
+// nodeIDOf is the node id segment of a config topic
+// (homeassistant/<component>/<node_id>/<object_id>/config).
+func nodeIDOf(topic string) string {
+	parts := strings.Split(topic, "/")
+	if len(parts) != 5 {
+		return ""
+	}
+	return parts[2]
+}
+
+// TestDiscoveryProjectionIsWhatTheBrokerHolds is the round trip of the
+// Home Assistant discovery plane. The daemon boots with the CCU not
+// ready, the CCU is flipped, and once the broker's config topics have
+// settled the projections of all devices are compared with them:
+//
+//   - every entity a projection calls published is a config topic the
+//     broker holds, under the topic the projection names;
+//   - every config topic the broker holds under a device's node id is an
+//     entity some projection calls published.
+//
+// Topics under a node id no projection names (the hub, the bridge's own
+// entities) are not device entities and are left out of the second
+// comparison.
+func TestDiscoveryProjectionIsWhatTheBrokerHolds(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{EnableMQTT: true, StartCCUNotReady: true, AuthMode: harness.AuthSession})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	held := watchDiscoveryTopics(t, h)
+	h.CCU().V().SetReady(true)
+	awaitCentralReady(t, h, harness.CentralName)
+	onBroker := held.settled(t, 5*time.Second, 90*time.Second)
+
+	shown := map[string]bool{}
+	nodeIDs := map[string]bool{}
+	withheld := 0
+	for _, raw := range getJSONArray(t, h, "/api/v1/devices", "items") {
+		dev, _ := raw.(map[string]any)
+		addr, _ := dev["address"].(string)
+		status, out := getProjection(t, h, "/api/v1/devices/"+addr+"/projection?plane=ha_discovery")
+		if status != http.StatusOK || len(out.Planes) != 1 {
+			t.Fatalf("%s: status %d, planes %+v", addr, status, out.Planes)
+		}
+		if out.Planes[0].State != "active" {
+			t.Fatalf("%s: plane %s / %q; want active", addr, out.Planes[0].State, out.Planes[0].Reason)
+		}
+		for _, rawEntry := range out.Planes[0].Entries {
+			var e measurementEntry
+			if err := json.Unmarshal(rawEntry, &e); err != nil {
+				t.Fatalf("decode entry: %v", err)
+			}
+			switch e.Verdict {
+			case "published":
+				topic := e.Identity["discovery_topic"]
+				if topic == "" {
+					t.Fatalf("%s: published entry %d/%s without a discovery topic: %v", addr, e.Channel, e.Key, e.Identity)
+				}
+				shown[topic] = true
+				nodeIDs[nodeIDOf(topic)] = true
+			case "withheld":
+				withheld++
+				if e.Reason == "" {
+					t.Errorf("%s: entry %d/%s is withheld without a reason", addr, e.Channel, e.Key)
+				}
+			}
+		}
+	}
+	if len(shown) == 0 {
+		t.Fatal("no projection calls anything published; the comparison would hold vacuously")
+	}
+	if withheld == 0 {
+		t.Error("no projection withholds anything; the fleet does not exercise a single reason")
+	}
+
+	var missing, unexplained []string
+	for topic := range shown {
+		if !onBroker[topic] {
+			missing = append(missing, topic)
+		}
+	}
+	for topic := range onBroker {
+		if nodeIDs[nodeIDOf(topic)] && !shown[topic] {
+			unexplained = append(unexplained, topic)
+		}
+	}
+	slices.Sort(missing)
+	slices.Sort(unexplained)
+	if len(missing) > 0 {
+		t.Errorf("%d entities are called published and are not on the broker:\n  %s", len(missing), strings.Join(missing, "\n  "))
+	}
+	if len(unexplained) > 0 {
+		t.Errorf("%d config topics of projected devices are on the broker and in no projection:\n  %s",
+			len(unexplained), strings.Join(unexplained, "\n  "))
+	}
+	other := map[string]int{}
+	for topic := range onBroker {
+		if !nodeIDs[nodeIDOf(topic)] {
+			other[nodeIDOf(topic)]++
+		}
+	}
+	t.Logf("%d entities shown, %d config topics on the broker, %d withheld entries; node ids outside the projections: %v",
+		len(shown), len(onBroker), withheld, other)
 }

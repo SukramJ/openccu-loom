@@ -1790,7 +1790,7 @@ func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName
 //
 // Channel may be nil when the registry has not yet hydrated the
 // channel — the caller falls back to a minimal Event in that case.
-func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
+func (b *EventBridge) buildPublishEvent(
 	centralName, iface, deviceAddr, channelAddress string,
 	channelNo int,
 	model, deviceName string,
@@ -1798,6 +1798,21 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 	value any,
 	paramset hmenum.ParamsetKey,
 ) (ev mqtt.Event, ch *device.Channel, ok, discoveryEligible bool) {
+	ev, ch, ok, discoveryEligible, _ = b.buildPublishEventWhy(centralName, iface, deviceAddr, channelAddress, channelNo, model, deviceName, key, value, paramset)
+	return ev, ch, ok, discoveryEligible
+}
+
+// buildPublishEventWhy is [EventBridge.buildPublishEvent] with the reason
+// behind a refusal: why is set when ok is false, and when the data point
+// is no entity of its own (discoveryEligible false).
+func (b *EventBridge) buildPublishEventWhy( //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
+	centralName, iface, deviceAddr, channelAddress string,
+	channelNo int,
+	model, deviceName string,
+	key hmtypes.DataPointKey,
+	value any,
+	paramset hmenum.ParamsetKey,
+) (ev mqtt.Event, ch *device.Channel, ok, discoveryEligible bool, why mqtt.DiscoveryReason) {
 	ch = lookupChannel(b.registry, centralName, deviceAddr, channelNo)
 	channelType := ""
 	if ch != nil {
@@ -1815,7 +1830,7 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 		visParamset = hmenum.ParamsetKeyValues
 	}
 	if b.vis != nil && !b.vis.VisibleForChannel(model, channelType, channelNo, visParamset, hmenum.Parameter(key.Parameter)) {
-		return mqtt.Event{}, nil, false, false
+		return mqtt.Event{}, nil, false, false, mqtt.DiscoveryHiddenParameter
 	}
 	// Per-DP runtime Visible() — set by SuppressUndefinedGenericDataPoints
 	// and family-specific marks. The treatment depends on WHY the DP
@@ -1851,8 +1866,9 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 		if dp != nil {
 			if v, ok := dp.(interface{ Visible() bool }); ok && !v.Visible() {
 				discoveryEligible = false
+				why = mqtt.DiscoveryPartOfChannelEntity
 				if ch.CustomDataPoint() == nil {
-					return mqtt.Event{}, nil, false, false
+					return mqtt.Event{}, nil, false, false, mqtt.DiscoveryNotVisible
 				}
 			}
 		}
@@ -2016,7 +2032,7 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 			ev.Descriptor = desc
 		}
 	}
-	return ev, ch, true, discoveryEligible
+	return ev, ch, true, discoveryEligible, why
 }
 
 // publishSlotState publishes the per-DP status item for the given
