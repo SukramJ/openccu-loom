@@ -3214,20 +3214,11 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	if bridge == nil {
 		return
 	}
-	wp := ch.WeekProfile()
-	if wp == nil {
+	ev, wp, ok := scheduleEntityDiscoveryEvent(centralName, iface, d, ch)
+	if !ok {
 		return
 	}
-	_, channelNo := parseChannel(ch.Address)
-	ev := mqtt.ScheduleEntityEvent{
-		Central:       centralName,
-		Interface:     iface,
-		DeviceAddress: d.Address,
-		ChannelNo:     channelNo,
-		DeviceName:    d.Name(),
-		Model:         d.Model,
-		Device:        d,
-	}
+	channelNo := ev.ChannelNo
 	notePublish(ctx, bridge.PublishScheduleEntityDiscovery(ctx, centralName, ev))
 
 	// Per-channel switches (non-climate only).
@@ -3465,29 +3456,13 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 		return
 	}
 	enabled := wp.ScheduleEnabled()
-	for _, key := range orderedTargetKeys(targets) {
-		info := targets[key]
-		label := b.tr("discovery.schedule_channel", "ch", strconv.Itoa(info.ChannelNo))
-		if info.Name != "" && !info.NameSynthetic {
-			label = b.tr("discovery.schedule_named", "name", info.Name)
-		}
-		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, mqtt.ScheduleSwitchEvent{
-			Central:           centralName,
-			Interface:         iface,
-			DeviceAddress:     d.Address,
-			ScheduleChannelNo: scheduleChannelNo,
-			DeviceName:        d.Name(),
-			Model:             d.Model,
-			Device:            d,
-			Key:               key,
-			TargetChannelNo:   info.ChannelNo,
-			Label:             label,
-		}))
+	for _, ev := range b.scheduleSwitchDiscoveryEvents(centralName, iface, d, scheduleChannelNo, wp) {
+		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, ev))
 		st := true
 		if enabled != nil {
-			st = enabled[key]
+			st = enabled[ev.Key]
 		}
-		notePublish(ctx, bridge.PublishScheduleSwitchState(ctx, centralName, iface, d.Address, scheduleChannelNo, key, st))
+		notePublish(ctx, bridge.PublishScheduleSwitchState(ctx, centralName, iface, d.Address, scheduleChannelNo, ev.Key, st))
 	}
 	// Wire OnChange to re-publish every switch's state. The same
 	// callback fires for both wire-read sync and user-driven writes.
@@ -3711,29 +3686,12 @@ func (b *EventBridge) publishCombinedProjection(
 	channelNo int,
 	proj payload.CombinedProjection,
 ) {
-	kind := proj.CombinedKind()
-	topics := bridge.Topics()
-	if kind == "" || topics == nil {
+	ev, ok := b.combinedDiscoveryEvent(bridge.Topics(), centralName, iface, d, ch, channelNo, proj)
+	if !ok {
 		return
 	}
-	dctx := combinedDiscoveryContext{
-		stateTopic:   topics.CombinedState(centralName, iface, d.Address, channelNo, kind),
-		commandTopic: topics.CombinedCommand(centralName, iface, d.Address, channelNo, kind),
-		bridge:       b,
-		channelType:  ch.Type,
-	}
-	projected := proj.HACombinedDiscovery(dctx)
-	notePublish(ctx, bridge.PublishCombinedDiscovery(ctx, centralName, mqtt.CombinedEvent{
-		Central:       centralName,
-		Interface:     iface,
-		DeviceAddress: d.Address,
-		ChannelNo:     channelNo,
-		DeviceName:    d.Name(),
-		Model:         d.Model,
-		Device:        d,
-		Kind:          kind,
-		Component:     projected,
-	}))
+	kind := ev.Kind
+	notePublish(ctx, bridge.PublishCombinedDiscovery(ctx, centralName, ev))
 	if state, observed := proj.CombinedStatePayload(); observed {
 		notePublish(ctx, bridge.PublishCombinedState(ctx, centralName, iface, d.Address, channelNo, kind, state))
 	}
@@ -3830,4 +3788,99 @@ func (b *EventBridge) selectionLabelsFor(ch *device.Channel, src payload.Source)
 		out[sel.BodyKey] = labels
 	}
 	return out
+}
+
+// scheduleEntityDiscoveryEvent is the event that asks the MQTT bridge for
+// a channel's schedule sensor, with the week profile it belongs to, and
+// false for a channel without a week profile. It reads the model and
+// nothing else, so the snapshot and a description of the device ask with
+// the same event.
+func scheduleEntityDiscoveryEvent(centralName, iface string, d *device.Device, ch *device.Channel) (mqtt.ScheduleEntityEvent, *weekprofile.ProfileDataPoint, bool) {
+	wp := ch.WeekProfile()
+	if wp == nil {
+		return mqtt.ScheduleEntityEvent{}, nil, false
+	}
+	_, channelNo := parseChannel(ch.Address)
+	return mqtt.ScheduleEntityEvent{
+		Central:       centralName,
+		Interface:     iface,
+		DeviceAddress: d.Address,
+		ChannelNo:     channelNo,
+		DeviceName:    d.Name(),
+		Model:         d.Model,
+		Device:        d,
+	}, wp, true
+}
+
+// scheduleSwitchDiscoveryEvents are the events that ask the MQTT bridge
+// for the per-target-channel switches of a schedule, in the order of
+// their keys. None for a climate schedule, which has no such switches, or
+// for one without target channels. It reads the model and the catalogue
+// and nothing else.
+func (b *EventBridge) scheduleSwitchDiscoveryEvents(
+	centralName, iface string,
+	d *device.Device,
+	scheduleChannelNo int,
+	wp *weekprofile.ProfileDataPoint,
+) []mqtt.ScheduleSwitchEvent {
+	if wp == nil || d == nil || wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
+		return nil
+	}
+	targets := wp.AvailableTargetChannels()
+	out := make([]mqtt.ScheduleSwitchEvent, 0, len(targets))
+	for _, key := range orderedTargetKeys(targets) {
+		info := targets[key]
+		label := b.tr("discovery.schedule_channel", "ch", strconv.Itoa(info.ChannelNo))
+		if info.Name != "" && !info.NameSynthetic {
+			label = b.tr("discovery.schedule_named", "name", info.Name)
+		}
+		out = append(out, mqtt.ScheduleSwitchEvent{
+			Central:           centralName,
+			Interface:         iface,
+			DeviceAddress:     d.Address,
+			ScheduleChannelNo: scheduleChannelNo,
+			DeviceName:        d.Name(),
+			Model:             d.Model,
+			Device:            d,
+			Key:               key,
+			TargetChannelNo:   info.ChannelNo,
+			Label:             label,
+		})
+	}
+	return out
+}
+
+// combinedDiscoveryEvent is the event that asks the MQTT bridge for the
+// entity of one combined data point's projection, and false for a
+// projection without a kind or a bridge without topics. It reads the
+// model and the topic layout and nothing else.
+func (b *EventBridge) combinedDiscoveryEvent(
+	topics *mqtt.TopicBuilder,
+	centralName, iface string,
+	d *device.Device,
+	ch *device.Channel,
+	channelNo int,
+	proj payload.CombinedProjection,
+) (mqtt.CombinedEvent, bool) {
+	kind := proj.CombinedKind()
+	if kind == "" || topics == nil {
+		return mqtt.CombinedEvent{}, false
+	}
+	dctx := combinedDiscoveryContext{
+		stateTopic:   topics.CombinedState(centralName, iface, d.Address, channelNo, kind),
+		commandTopic: topics.CombinedCommand(centralName, iface, d.Address, channelNo, kind),
+		bridge:       b,
+		channelType:  ch.Type,
+	}
+	return mqtt.CombinedEvent{
+		Central:       centralName,
+		Interface:     iface,
+		DeviceAddress: d.Address,
+		ChannelNo:     channelNo,
+		DeviceName:    d.Name(),
+		Model:         d.Model,
+		Device:        d,
+		Kind:          kind,
+		Component:     proj.HACombinedDiscovery(dctx),
+	}, true
 }
