@@ -237,7 +237,7 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 			if ch == nil {
 				continue
 			}
-			specs, err := a.channelSpecs(ctx, snap.CentralName, names, dev, ch)
+			specs, err := a.channelSpecs(ctx, snap.CentralName, names, dev, ch, nil)
 			if err != nil {
 				return Described{}, err
 			}
@@ -319,8 +319,23 @@ func specChannelNo(spec endpoint.Spec) int {
 	return math.MaxInt
 }
 
-func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
+func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]endpoint.Spec, 0, 4)
+	note := func(kind matterendpoint.DPKind, key string, outcome SourceOutcome, reason WithheldReason, into string) {
+		if sink == nil {
+			return
+		}
+		sink(SourceDecision{
+			Key: matterendpoint.SourceKey{
+				CentralName: centralName, DeviceAddress: dev.Address, ChannelNo: ch.Number, DPKind: kind, DPKey: key,
+			},
+			Outcome: outcome, Reason: reason, Into: into,
+		})
+	}
+	withheld := func(kind matterendpoint.DPKind, key string, reason WithheldReason) {
+		note(kind, key, OutcomeWithheld, reason, "")
+	}
+	published := func(kind matterendpoint.DPKind, key string) { note(kind, key, OutcomePublished, "", "") }
 
 	// An operator-hidden channel projects no endpoint, mirroring the
 	// candidate enumeration that already drops it. Both gates are needed:
@@ -330,6 +345,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 	// could switch it off — the exposure would only be revocable by
 	// un-hiding the channel first.
 	if ch.IsHidden() {
+		withheld("", "", WithheldChannelHidden)
 		return out, nil
 	}
 
@@ -344,6 +360,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 	// Matter-only — every other north-bound surface still carries all
 	// channels.
 	if !a.cfg.ExposeSecondaryChannels && ch.IsCustomDPSecondaryChannel() {
+		withheld("", "", WithheldSecondaryChannel)
 		return out, nil
 	}
 
@@ -363,16 +380,25 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
+		key := dpKey(cdp)
 		if src, ok := projectionOf(cdp); ok {
-			ok, err := allow(matterendpoint.DPKindCustom, dpKey(cdp))
+			ok, err := allow(matterendpoint.DPKindCustom, key)
 			if err != nil {
 				return nil, err
 			}
-			if ok {
-				if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src); built {
+			switch {
+			case !ok:
+				withheld(matterendpoint.DPKindCustom, key, WithheldNotOnAllowList)
+			default:
+				if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCustom, key, src); built {
 					out = append(out, spec)
+					published(matterendpoint.DPKindCustom, key)
+				} else {
+					withheld(matterendpoint.DPKindCustom, key, WithheldNoMapping)
 				}
 			}
+		} else {
+			withheld(matterendpoint.DPKindCustom, key, WithheldNoMapping)
 		}
 	}
 
@@ -385,18 +411,24 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 				return nil, err
 			}
 			if !allowed {
+				withheld(matterendpoint.DPKindCalculated, key, WithheldNotOnAllowList)
 				continue
 			}
 			if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src); built {
 				out = append(out, spec)
+				published(matterendpoint.DPKindCalculated, key)
+			} else {
+				withheld(matterendpoint.DPKindCalculated, key, WithheldNoMapping)
 			}
-			continue
-		}
-		if !a.cfg.IncludeMeasurements {
 			continue
 		}
 		meas, ok := calc.(contract.MeasurementSource)
 		if !ok || meas.MatterMeasurementClass() == contract.MeasurementNone {
+			withheld(matterendpoint.DPKindCalculated, key, WithheldNoMapping)
+			continue
+		}
+		if !a.cfg.IncludeMeasurements {
+			withheld(matterendpoint.DPKindCalculated, key, WithheldMeasurementsOff)
 			continue
 		}
 		// The allowlist row is keyed by the kind the candidate
@@ -410,28 +442,38 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			return nil, err
 		}
 		if !allowed {
+			withheld(matterendpoint.DPKindCalculated, key, WithheldNotOnAllowList)
 			continue
 		}
 		if spec, ok := a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas); ok {
 			out = append(out, spec)
+			published(matterendpoint.DPKindCalculated, key)
+		} else {
+			withheld(matterendpoint.DPKindCalculated, key, WithheldNoMapping)
 		}
 	}
 
 	// Combined DPs.
 	for _, comb := range ch.CombinedDataPoints() {
+		key := dpKey(comb)
 		src, ok := projectionOf(comb)
 		if !ok {
+			withheld(matterendpoint.DPKindCombined, key, WithheldNoMapping)
 			continue
 		}
-		allowed, err := allow(matterendpoint.DPKindCombined, dpKey(comb))
+		allowed, err := allow(matterendpoint.DPKindCombined, key)
 		if err != nil {
 			return nil, err
 		}
 		if !allowed {
+			withheld(matterendpoint.DPKindCombined, key, WithheldNotOnAllowList)
 			continue
 		}
-		if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src); built {
+		if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCombined, key, src); built {
 			out = append(out, spec)
+			published(matterendpoint.DPKindCombined, key)
+		} else {
+			withheld(matterendpoint.DPKindCombined, key, WithheldNoMapping)
 		}
 	}
 
@@ -468,7 +510,8 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		// no_create constituents of an aggregating parent, and (unless the
 		// operator opted in) the ce_secondary / ce_state secondary channels.
 		// See [config.NorthMatter.ExposeSecondaryChannels].
-		if hideFromMatter(gdp, channelHasCustom, a.cfg.ExposeSecondaryChannels) {
+		if reason := usageGate(gdp, channelHasCustom, a.cfg.ExposeSecondaryChannels); reason != "" {
+			withheld(matterendpoint.DPKindGeneric, key, reason)
 			continue
 		}
 		// Path 1: Generic-DP actor. Only material when the channel has
@@ -487,10 +530,14 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 						return nil, err
 					}
 					if !allowed {
+						withheld(matterendpoint.DPKindGeneric, key, WithheldNotOnAllowList)
 						continue
 					}
 					if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
 						out = append(out, spec)
+						published(matterendpoint.DPKindGeneric, key)
+					} else {
+						withheld(matterendpoint.DPKindGeneric, key, WithheldNoMapping)
 					}
 					continue
 				}
@@ -499,6 +546,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		// Path 2: Generic-DP measurement source.
 		meas, ok := gdp.(contract.MeasurementSource)
 		if !ok || meas.MatterMeasurementClass() == contract.MeasurementNone {
+			withheld(matterendpoint.DPKindGeneric, key, WithheldNoMapping)
 			continue
 		}
 		allowed, err := allow(matterendpoint.DPKindGeneric, key)
@@ -506,6 +554,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			return nil, err
 		}
 		if !allowed {
+			withheld(matterendpoint.DPKindGeneric, key, WithheldNotOnAllowList)
 			continue
 		}
 		if meas.MatterMeasurementClass() == contract.MeasurementMomentarySwitch {
@@ -521,6 +570,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			// attachPowerSource, never as an endpoint of its own — it has no
 			// device type, and an endpoint without one advertises
 			// DeviceTypeList=[BridgedNode] alone.
+			note(matterendpoint.DPKindGeneric, key, OutcomeFolded, "", FoldedIntoPowerSource)
 			continue
 		}
 		switch meas.MatterMeasurementClass() {
@@ -534,19 +584,28 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		}
 		if spec, ok := a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas); ok {
 			out = append(out, spec)
+			published(matterendpoint.DPKindGeneric, key)
+		} else {
+			withheld(matterendpoint.DPKindGeneric, key, WithheldNoMapping)
 		}
 	}
 
 	if len(pressMembers) > 0 {
-		if spec, ok := a.makeButtonGroupSpec(centralName, names, dev, ch, pressMembers); ok {
+		spec, ok := a.makeButtonGroupSpec(centralName, names, dev, ch, pressMembers)
+		if ok {
 			out = append(out, spec)
+			published(matterendpoint.DPKindGeneric, ButtonGroupDPKey)
 		}
+		noteGroup(note, pressMembers, ok, ButtonGroupDPKey)
 	}
 
 	if len(electricalMembers) > 0 {
-		if spec, ok := a.makeElectricalGroupSpec(centralName, names, dev, ch, electricalMembers); ok {
+		spec, ok := a.makeElectricalGroupSpec(centralName, names, dev, ch, electricalMembers)
+		if ok {
 			out = append(out, spec)
+			published(matterendpoint.DPKindGeneric, ElectricalGroupDPKey)
 		}
+		noteGroup(note, electricalMembers, ok, ElectricalGroupDPKey)
 	}
 
 	return out, nil
@@ -687,20 +746,30 @@ func (a *Assembler) makeButtonGroupSpec(
 // disagree about what the projection hides — they were two copies of this
 // rule until the walk moved into this package.
 func hideFromMatter(source any, channelHasCustom, exposeSecondary bool) bool {
+	return usageGate(source, channelHasCustom, exposeSecondary) != ""
+}
+
+// usageGate is [hideFromMatter] with the rule it applied: the reason a
+// generic data point is withheld by its usage, or "" when it is not.
+func usageGate(source any, channelHasCustom, exposeSecondary bool) WithheldReason {
 	u, ok := source.(interface{ Usage() hmenum.DataPointUsage })
 	if !ok {
-		return false
+		return ""
 	}
 	switch u.Usage() {
 	case hmenum.DataPointUsageIgnored:
-		return true
+		return WithheldUsageIgnored
 	case hmenum.DataPointUsageNoCreate:
-		return channelHasCustom || !exposeSecondary
+		if channelHasCustom || !exposeSecondary {
+			return WithheldConsumedByParent
+		}
 	case hmenum.DataPointUsageCDPSecondary, hmenum.DataPointUsageCDPState:
-		return !exposeSecondary
+		if !exposeSecondary {
+			return WithheldSecondaryMember
+		}
 	default:
-		return false
 	}
+	return ""
 }
 
 // genericDPKeyForMeasurement returns the allowlist dp_key for a

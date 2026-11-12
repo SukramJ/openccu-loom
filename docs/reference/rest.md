@@ -215,6 +215,7 @@ Live config section read / write / delete + schema introspection
 | POST | `/devices/{addr}/firmware/update` | Trigger OTA firmware update for the device | operator |
 | GET | `/devices/{addr}/icon` | Device-type icon image (proxied from the CCU) | viewer |
 | POST | `/devices/{addr}/install-mode` | Open a targeted pairing window for one device | operator |
+| GET | `/devices/{addr}/projection` | How the device stands on the north-bound planes | viewer |
 | POST | `/devices/{addr}/release` | Finish onboarding and publish the device to the ecosystems | operator |
 | POST | `/devices/{addr}/reload` | Re-pull a single device's config from its CCU | operator |
 | POST | `/devices/{addr}/replace` | Replace a paired device with a new one (admin-only) | admin |

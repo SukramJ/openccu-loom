@@ -387,6 +387,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/projection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How the device stands on the north-bound planes
+         * @description Per plane: what is published for the device and under which
+         *     identifiers, what is carried inside another entry, and what is
+         *     left out with the named reason.
+         *
+         *     A plane answers from the decision its publisher acts on, so the
+         *     answer and the published set follow one set of rules. The answer
+         *     is computed when asked; nothing is recorded.
+         *
+         *     Planes are added release by release. This version answers for
+         *     `matter`. Capability `projection.v1`.
+         */
+        get: operations["getDeviceProjection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/channels": {
         parameters: {
             query?: never;
@@ -6644,6 +6673,8 @@ export interface components {
             /**
              * @description Runtime feature set. Always-on entries:
              *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`,
+             *     `projection.v1` (`GET /devices/{addr}/projection` answers how
+             *     a device stands on the north-bound planes),
              *     `central.features.v1` (each central reports what it offers in
              *     `features` on `GET /system/ccu`, and an operation a central
              *     does not offer answers the `feature_unavailable` problem),
@@ -7269,6 +7300,75 @@ export interface components {
             page: number;
             per_page: number;
             total: number;
+        };
+        DeviceProjection: {
+            address: string;
+            central: string;
+            planes: components["schemas"]["ProjectionPlane"][];
+        };
+        /**
+         * @description Whether the plane runs for the device's central.
+         * @enum {string}
+         */
+        ProjectionPlaneState: "active" | "inactive";
+        /**
+         * @description `published`: the subject is an entry of its own on the plane.
+         *     `folded`: another entry carries it (`folded_into`). `withheld`:
+         *     the plane leaves it out for `reason`.
+         * @enum {string}
+         */
+        ProjectionVerdict: "published" | "folded" | "withheld";
+        ProjectionPlane: {
+            /**
+             * @description The plane's name. An open set that grows with the daemon;
+             *     today `matter`.
+             */
+            plane: string;
+            state: components["schemas"]["ProjectionPlaneState"];
+            /** @description Set when `state` is `inactive`: `plane_disabled`. */
+            reason?: string;
+            entries: components["schemas"]["ProjectionEntry"][];
+        };
+        ProjectionEntry: {
+            /** @description The channel number the subject belongs to. */
+            channel: number;
+            /**
+             * @description The kind of subject in the plane's vocabulary. Absent for an
+             *     entry about the whole channel. On `matter`: `custom`,
+             *     `calculated`, `combined`, `generic`.
+             */
+            kind?: string;
+            /**
+             * @description The subject's key in the plane's vocabulary. On `matter` the
+             *     parameter or data-point key, or the key of a consolidated
+             *     endpoint (`BUTTON`, `ELECTRICAL`).
+             */
+            key?: string;
+            verdict: components["schemas"]["ProjectionVerdict"];
+            /**
+             * @description Set when `verdict` is `withheld`: one value of the plane's
+             *     closed set, named after the rule. On `matter`:
+             *     `channel_hidden`, `secondary_channel`, `usage_ignored`,
+             *     `consumed_by_parent`, `secondary_member`, `no_matter_mapping`,
+             *     `not_on_allow_list`, `measurements_not_included`. A later
+             *     daemon may state a reason this list does not have; show it as
+             *     it is.
+             */
+            reason?: string;
+            /**
+             * @description Set when `verdict` is `folded`: the `key` of the entry that
+             *     carries the subject. On `matter` also `POWER_SOURCE`, the
+             *     power source cluster on one of the device's endpoints.
+             */
+            folded_into?: string;
+            /**
+             * @description Set for a published entry: what the subject is called on the
+             *     plane. On `matter`: `source_key`, and `endpoint_id` and
+             *     `device_type` once the bridge has assigned the endpoint.
+             */
+            identity?: {
+                [key: string]: string;
+            };
         };
         /**
          * @description A device summary plus its channel list. `firmware` and `availability`
@@ -12977,6 +13077,32 @@ export interface operations {
                 };
                 content: {
                     "image/png": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getDeviceProjection: {
+        parameters: {
+            query?: {
+                /** @description Narrows the answer to one plane. A name this daemon does not answer for yields an empty `planes` list. */
+                plane?: string;
+            };
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceProjection"];
                 };
             };
             404: components["responses"]["NotFound"];

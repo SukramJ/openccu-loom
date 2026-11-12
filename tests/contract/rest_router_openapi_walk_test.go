@@ -33,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
+	"github.com/SukramJ/openccu-loom/internal/north/projection"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/pairing"
@@ -642,6 +643,14 @@ func mustAlarmPanel() handlers.AlarmPanel {
 	return svc
 }
 
+// fakeDeviceProjector answers every address as unknown; the walk needs
+// the route mounted, not an answer.
+type fakeDeviceProjector struct{}
+
+func (fakeDeviceProjector) ProjectDevice(context.Context, string, string) (projection.Device, bool, error) {
+	return projection.Device{}, false, nil
+}
+
 func fullyWiredRouterDeps() rest.Deps {
 	authDeps := &handlers.AuthDeps{
 		Users:    auth.NewMemoryUserStore(),
@@ -658,6 +667,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Preferences:             fakePreferencesService{},
 		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
+		Projection:              fakeDeviceProjector{},
 		Taxonomy:                fakeTaxonomySource{},
 		UISchema:                fakeUISchemaService{},
 		Links:                   fakeLinksService{},

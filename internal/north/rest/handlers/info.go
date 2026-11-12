@@ -18,7 +18,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "16.2.0"
+const APIVersion = "16.3.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -109,6 +109,9 @@ const (
 	// /measurements/recording. The SPA offers its per-data-point recording
 	// picker only then.
 	CapabilityMeasurements = "measurements.v1"
+	// CapabilityProjection: GET /devices/{addr}/projection answers how a
+	// device stands on the north-bound planes.
+	CapabilityProjection = "projection.v1"
 	// CapabilityAddonSelfUpdate is surfaced when the CCU add-on
 	// self-update platform capability check passed (ADR 0057: an
 	// add-on build AND an executable firmware installer). The SPA's
@@ -282,6 +285,7 @@ func capabilities(d CapabilityDetector) []string {
 		CapabilityCentralFeatures,
 		CapabilitySouthOpenCCULite,
 		CapabilityCDPBoundedOn,
+		CapabilityProjection,
 	}
 	if d == nil {
 		return out

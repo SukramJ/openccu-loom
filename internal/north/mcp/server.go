@@ -253,10 +253,13 @@ type BackupLister interface {
 // Audit may be nil (no change-log surface); when present it serves both
 // the read tool (List) and records MCP-origin writes (Record).
 type Deps struct {
-	Centrals  CentralLister
-	Devices   DeviceLister
-	Writer    ValueWriter
-	Paramsets ParamsetService
+	Centrals CentralLister
+	Devices  DeviceLister
+	// Projection backs get_device_projection: how one device stands on
+	// the north-bound planes. Nil leaves the tool unregistered.
+	Projection DeviceProjector
+	Writer     ValueWriter
+	Paramsets  ParamsetService
 	// ParamsetApply backs list_paramset_apply_targets and the gated
 	// apply_paramset_to_channels: applying one channel's MASTER values to
 	// the channels whose stored MASTER description is identical — the same

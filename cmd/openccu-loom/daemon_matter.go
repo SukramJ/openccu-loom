@@ -601,6 +601,10 @@ type matterWiring struct {
 	// (matteradapter.Reconciler.Retire); the live-remove orchestrator
 	// calls it after the central's rows are purged.
 	retire func(ctx context.Context, centralName string) error
+	// projection is the Matter side of a device's projection
+	// (GET /devices/{addr}/projection). Never nil: with the bridge
+	// switched off it answers that the plane is inactive.
+	projection *matteradapter.ProjectionPlane
 	// centralHook wires a runtime-adopted central into the running bridge
 	// (reassemble-on-ready, hot-plug lifecycle with the forget of a deleted
 	// device, reachable forward). Nil when the bridge is disabled; the
@@ -903,6 +907,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	teardown = func() {}
 	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger, schedules)
 	if bundle == nil {
+		wiring.projection = matteradapter.NewProjectionPlane(nil, nil)
 		return wiring, closers, teardown
 	}
 	// Defaulted view of the Matter config — the identical view
@@ -914,6 +919,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	mids := bundle.identity
 	teardown = bundle.stop
 	wiring.exposureStore = mids
+	wiring.projection = matteradapter.NewProjectionPlane(bundle.assembler, mids)
 	wiring.retire = bundle.retire
 
 	// Wire CCU device-availability → BridgedDeviceBasicInformation

@@ -8,7 +8,8 @@
   "errors.problem_details.v1",
   "central.features.v1",
   "south.openccu_lite.v1",
-  "cdp.bounded_on.v1"
+  "cdp.bounded_on.v1",
+  "projection.v1"
  ],
  "commit": "none",
  "config_ui_url": "",

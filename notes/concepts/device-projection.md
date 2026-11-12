@@ -1,6 +1,6 @@
 # Device projection — how one device appears on each plane, and why not
 
-- **Status**: Proposed (issue #1068, step 1). Steps 2 and 3 start after the owner accepts it.
+- **Status**: Accepted by the owner on 2026-11-12 (issue #1068, step 1). Slice 1 (Matter, REST route, MCP tool) is built.
 - **Date**: 2026-11-12
 - **Scope**: `openccu-loom` — `internal/north/{mqtt,matteradapter,measurements,rest,mcp}`,
   `internal/central/adapter`, `assets/ui/`
@@ -201,6 +201,17 @@ discovery goldens and the plane round-trip tests are what holds it.
 
 ## 9. Open points
 
+- **Slice 1 as built differs from section 7 in two points.** The Matter
+  verdict that "already exists" is the candidate walk of the exposure
+  list, which is not what the bridge is built from: the assembler
+  decides, with folding and the allow-list. The slice therefore
+  instruments the assembler (`Assembler.DecideDevice`) and leaves the
+  candidate walk alone. And the round-trip test of section 6 runs at
+  the assembler level (`TestPublishedDecisionsAreTheDescribedEndpoints`,
+  over the golden fleet): the hermetic e2e harness cannot run the Matter
+  bridge, so the e2e test covers the route and the wiring with the plane
+  inactive. A round trip against a running bridge needs the harness to
+  enable Matter, or a case in the chip-tool suite.
 - The reason vocabulary of go-fabric's eligibility package was not read; slice 1 reads
   it and maps it instead of renaming it.
 - Whether the usage marks gate the raw plane was not traced; slice 4 establishes it.

@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A device's projection, first for Matter (REST API 16.3.0).**
+  `GET /devices/{addr}/projection` answers how one device stands on a
+  north-bound plane: which of its channels and data points are published
+  and under which identifiers, which are carried by another entry, and
+  which are left out, each with a named reason (`not_on_allow_list`,
+  `channel_hidden`, `secondary_channel`, `consumed_by_parent`,
+  `no_matter_mapping`, …). The answer comes from the same pass that
+  describes the bridge's endpoints, so it cannot say something else than
+  a controller sees; with the bridge switched off the plane answers
+  `inactive`. For a published source it names the endpoint number and
+  the device type once the bridge has assigned them. This first step
+  answers for Matter; Home Assistant discovery, the raw MQTT topics,
+  measurement forwarding and REST follow. The MCP tool
+  `get_device_projection` gives an assistant the same answer, and
+  `/info` advertises `projection.v1`. There is no view in the Config UI
+  yet.
+
 ## [0.100.0] - 2026-11-11
 
 This release narrows the Config UI to what the daemon is: the console of a

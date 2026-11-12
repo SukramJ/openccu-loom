@@ -226,6 +226,9 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	registerListCentrals(s, d)
 	registerListDevices(s, d)
 	registerGetDevice(s, d)
+	if d.Projection != nil {
+		registerGetDeviceProjection(s, d)
+	}
 	if d.Audit != nil {
 		registerListAudit(s, d)
 	}
