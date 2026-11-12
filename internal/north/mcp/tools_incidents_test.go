@@ -36,12 +36,14 @@ func fixedIncidents() []hmapi.Incident {
 			Detail:    "detail-alpha-1",
 		},
 		{
-			ID:        "inc-alpha-if",
-			When:      base.Add(3 * time.Hour),
-			Component: "alpha/HmIP-RF",
-			Severity:  "error",
-			Summary:   "Alpha interface error",
-			Detail:    "detail-alpha-if",
+			ID:          "inc-alpha-if",
+			When:        base.Add(3 * time.Hour),
+			Component:   "alpha/HmIP-RF",
+			Severity:    "error",
+			Summary:     "Alpha interface error",
+			Detail:      "detail-alpha-if",
+			Type:        "rpc_error",
+			InterfaceID: "HmIP-RF",
 		},
 		{
 			ID:        "inc-beta-1",
@@ -127,6 +129,44 @@ func TestListIncidentsNewestFirst(t *testing.T) {
 	wantWhen := time.Date(2026, 1, 1, 4, 0, 0, 0, time.UTC).Format(time.RFC3339)
 	if first.When != wantWhen {
 		t.Errorf("when: want %q, got %q", wantWhen, first.When)
+	}
+}
+
+// TestListIncidentsCarriesTypeAndInterface verifies that list_incidents
+// mirrors the incident type and the interface id of an interface-scoped
+// incident, and omits the interface id of a central-level one.
+func TestListIncidentsCarriesTypeAndInterface(t *testing.T) {
+	reader := &fakeIncidentsReader{incidents: fixedIncidents()}
+	cs := connect(t, incidentsDeps(reader))
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_incidents", map[string]any{})
+	if res.IsError {
+		t.Fatalf("list_incidents returned error: %v", res.Content)
+	}
+
+	var out struct {
+		Incidents []struct {
+			ID          string  `json:"id"`
+			Type        string  `json:"type"`
+			InterfaceID *string `json:"interface_id"`
+		} `json:"incidents"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	byID := map[string]int{}
+	for i, inc := range out.Incidents {
+		byID[inc.ID] = i
+	}
+	iface := out.Incidents[byID["inc-alpha-if"]]
+	if iface.Type != "rpc_error" {
+		t.Errorf("type: want %q, got %q", "rpc_error", iface.Type)
+	}
+	if iface.InterfaceID == nil || *iface.InterfaceID != "HmIP-RF" {
+		t.Errorf("interface_id: want %q, got %v", "HmIP-RF", iface.InterfaceID)
+	}
+	if central := out.Incidents[byID["inc-alpha-1"]]; central.InterfaceID != nil {
+		t.Errorf("interface_id of a central-level incident: want absent, got %q", *central.InterfaceID)
 	}
 }
 

@@ -251,6 +251,12 @@ type Incident struct {
 	Severity  string    `json:"severity"`
 	Summary   string    `json:"summary"`
 	Detail    string    `json:"detail,omitempty"`
+	// Type is the incident type (pkg/hmenum IncidentType) the incident was
+	// recorded under.
+	Type string `json:"type,omitempty"`
+	// InterfaceID names the interface of an interface-scoped incident — the
+	// id `GET /interfaces` reports — and is empty for a central-level one.
+	InterfaceID string `json:"interface_id,omitempty"`
 }
 
 // --- Interfaces ---

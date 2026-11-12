@@ -97,12 +97,14 @@ type listIncidentsIn struct {
 }
 
 type incidentSummary struct {
-	ID        string `json:"id"`
-	When      string `json:"when"`
-	Component string `json:"component"`
-	Severity  string `json:"severity"`
-	Summary   string `json:"summary"`
-	Detail    string `json:"detail,omitempty"`
+	ID          string `json:"id"`
+	When        string `json:"when"`
+	Component   string `json:"component"`
+	Severity    string `json:"severity"`
+	Summary     string `json:"summary"`
+	Detail      string `json:"detail,omitempty"`
+	Type        string `json:"type,omitempty"`
+	InterfaceID string `json:"interface_id,omitempty"`
 }
 
 type listIncidentsOut struct {
@@ -454,9 +456,9 @@ func registerListIncidents(s *mcpsdk.Server, d Deps) {
 		// segment exactly.
 		if central := strings.TrimSpace(in.CentralName); central != "" {
 			filtered := incidents[:0:0]
-			for _, inc := range incidents {
-				if inc.Component == central || strings.HasPrefix(inc.Component, central+"/") {
-					filtered = append(filtered, inc)
+			for i := range incidents {
+				if c := incidents[i].Component; c == central || strings.HasPrefix(c, central+"/") {
+					filtered = append(filtered, incidents[i])
 				}
 			}
 			incidents = filtered
@@ -473,12 +475,14 @@ func registerListIncidents(s *mcpsdk.Server, d Deps) {
 		for i := range incidents {
 			inc := &incidents[i]
 			out.Incidents = append(out.Incidents, incidentSummary{
-				ID:        inc.ID,
-				When:      inc.When.UTC().Format(time.RFC3339),
-				Component: inc.Component,
-				Severity:  inc.Severity,
-				Summary:   inc.Summary,
-				Detail:    inc.Detail,
+				ID:          inc.ID,
+				When:        inc.When.UTC().Format(time.RFC3339),
+				Component:   inc.Component,
+				Severity:    inc.Severity,
+				Summary:     inc.Summary,
+				Detail:      inc.Detail,
+				Type:        inc.Type,
+				InterfaceID: inc.InterfaceID,
 			})
 		}
 		return nil, out, nil
