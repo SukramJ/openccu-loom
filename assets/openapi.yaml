@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.3.4
+  version: 16.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -14498,6 +14498,18 @@ components:
         severity: { type: string }
         summary: { type: string }
         detail: { type: string }
+        type:
+          type: string
+          description: |
+            Incident type the entry was recorded under (`rpc_fault`,
+            `pingpong_mismatch`, …). Vocabulary: the IncidentType enum in
+            `assets/schemas/enums.json`.
+        interface_id:
+          type: string
+          description: |
+            Interface of an interface-scoped incident, the same id
+            `GET /interfaces` reports as `id`. Absent for a central-level
+            incident.
 
     InboxDevice:
       type: object

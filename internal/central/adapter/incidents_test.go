@@ -416,6 +416,12 @@ func TestToAPIIncidentFieldMapping(t *testing.T) {
 		if got.Detail != "details here\njournal line" {
 			t.Errorf("Detail=%q want details here\\njournal line", got.Detail)
 		}
+		if got.Type != string(hmenum.IncidentTypeRPCError) {
+			t.Errorf("Type=%q want %q", got.Type, hmenum.IncidentTypeRPCError)
+		}
+		if got.InterfaceID != "BidCos-RF" {
+			t.Errorf("InterfaceID=%q want BidCos-RF", got.InterfaceID)
+		}
 	})
 
 	t.Run("journal excerpt with no details", func(t *testing.T) {
@@ -445,6 +451,12 @@ func TestToAPIIncidentFieldMapping(t *testing.T) {
 		}
 		if got.Summary != string(hmenum.IncidentTypePingPongMismatch) {
 			t.Errorf("Summary=%q want type fallback", got.Summary)
+		}
+		if got.Type != string(hmenum.IncidentTypePingPongMismatch) {
+			t.Errorf("Type=%q want %q", got.Type, hmenum.IncidentTypePingPongMismatch)
+		}
+		if got.InterfaceID != "" {
+			t.Errorf("InterfaceID=%q want empty for a central-level incident", got.InterfaceID)
 		}
 	})
 }

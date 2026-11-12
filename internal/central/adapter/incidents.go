@@ -141,7 +141,8 @@ func (r *IncidentsStoreReader) ClearIncidents(ctx context.Context) error {
 // toAPIIncident maps a stored incident to the REST contract shape. Component
 // names the source (central, plus interface when interface-scoped); Summary
 // falls back to the incident type when no message was recorded; Detail folds in
-// the journal excerpt.
+// the journal excerpt. Type and InterfaceID carry the stored values as they
+// are, so a consumer reads them without parsing Component or Summary.
 func toAPIIncident(s *sqlite.Incident) hmapi.Incident {
 	component := s.CentralName
 	if s.InterfaceID != "" {
@@ -159,11 +160,13 @@ func toAPIIncident(s *sqlite.Incident) hmapi.Incident {
 		detail += s.JournalExcerpt
 	}
 	return hmapi.Incident{
-		ID:        strconv.FormatInt(s.ID, 10),
-		When:      s.LastSeen,
-		Component: component,
-		Severity:  string(s.Severity),
-		Summary:   summary,
-		Detail:    detail,
+		ID:          strconv.FormatInt(s.ID, 10),
+		When:        s.LastSeen,
+		Component:   component,
+		Severity:    string(s.Severity),
+		Summary:     summary,
+		Detail:      detail,
+		Type:        string(s.Type),
+		InterfaceID: s.InterfaceID,
 	}
 }

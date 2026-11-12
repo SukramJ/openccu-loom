@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **An incident names its type and interface (REST API 16.4.0).**
+  `GET /incidents` and the MCP tool `list_incidents` carry `type`, the
+  incident type the entry was recorded under, and `interface_id` for an
+  interface-scoped incident, the id `GET /interfaces` reports. Both were
+  stored and only reachable by parsing `component` or, for the type, a
+  `summary` without a message. Home Assistant's incident list on the
+  openccu-loom backend reads them.
+
 ## [0.101.0] - 2026-11-12
 
 One question gets an answer in this release: how does a device appear on

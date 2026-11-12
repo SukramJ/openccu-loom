@@ -10459,6 +10459,18 @@ export interface components {
             severity: string;
             summary: string;
             detail?: string;
+            /**
+             * @description Incident type the entry was recorded under (`rpc_fault`,
+             *     `pingpong_mismatch`, …). Vocabulary: the IncidentType enum in
+             *     `assets/schemas/enums.json`.
+             */
+            type?: string;
+            /**
+             * @description Interface of an interface-scoped incident, the same id
+             *     `GET /interfaces` reports as `id`. Absent for a central-level
+             *     incident.
+             */
+            interface_id?: string;
         };
         /** @description One pending-pairing candidate in GET /api/v1/inbox. */
         InboxDevice: {
