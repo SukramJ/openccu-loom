@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Config UI: a Projection tab in the device detail.** It shows how the
+  device appears on Matter, in Home Assistant discovery and in
+  measurement forwarding: per plane whether it is active, each entity or
+  endpoint with the name it has there (endpoint number, config topic,
+  measurement and tags), what is carried by another entry, and for
+  everything left out the rule behind it as a sentence, in English and
+  German. The table can be filtered by result and searched. The tab is
+  registered as the navigation surface `device.projection`, visible in
+  every profile, and is offered by a daemon that advertises
+  `projection.v1`.
 - **A device's projection answers for Home Assistant discovery (REST API
   16.3.2).** `GET /devices/{addr}/projection` and the MCP tool
   `get_device_projection` gain the plane `ha_discovery`: every entity

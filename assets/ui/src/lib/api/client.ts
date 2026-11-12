@@ -52,6 +52,7 @@ import type {
   CustomDPSummary,
   DataPointSummary,
   DeviceDetail,
+  DeviceProjection,
   CommunicationTestResult,
   TeamCandidate,
   DeviceSummary,
@@ -1992,6 +1993,11 @@ export const api = {
     return request<void>(`/pairing-requests/${encodeURIComponent(id)}/reject`, {
       method: "POST",
     });
+  },
+  // How one device stands on the north-bound planes (capability
+  // projection.v1).
+  deviceProjection(address: string) {
+    return request<DeviceProjection>(`/devices/${encodeURIComponent(address)}/projection`);
   },
   // Centrals CRUD ------------------------------------------------
   listCentralsV2() {

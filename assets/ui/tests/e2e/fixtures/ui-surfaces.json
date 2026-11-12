@@ -11,6 +11,7 @@
     "device.configure.links": true,
     "device.configure.schedule": true,
     "device.history": true,
+    "device.projection": true,
     "device.overview": true,
     "nav.about": true,
     "nav.alarm": true,
@@ -518,6 +519,15 @@
     },
     {
       "id": "device.history",
+      "group": "device",
+      "defaults": {
+        "embedded": true,
+        "standalone": true,
+        "lite": true
+      }
+    },
+    {
+      "id": "device.projection",
       "group": "device",
       "defaults": {
         "embedded": true,

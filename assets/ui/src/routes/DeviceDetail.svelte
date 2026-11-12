@@ -9,6 +9,7 @@
   import { prefs } from "$lib/stores/preferences.svelte";
   import { formatAbsoluteTime, formatRelativeTime } from "$lib/relative-time";
   import DeviceParameters from "$lib/components/device/DeviceParameters.svelte";
+  import DeviceProjection from "$lib/components/device/DeviceProjection.svelte";
   import ChannelFlagsToggles from "$lib/components/channel/ChannelFlagsToggles.svelte";
   import TeamPicker from "$lib/components/device/TeamPicker.svelte";
   import DeviceLinks from "$lib/components/links/DeviceLinks.svelte";
@@ -66,7 +67,7 @@
   //   • overview  = Maintenance + CDP-Tiles + read-only sensor cards
   //   • configure = MASTER paramset + Links + Schedule (sub-tabbed)
   //   • history   = device-scoped audit log
-  type TopTab = "overview" | "configure" | "history";
+  type TopTab = "overview" | "configure" | "history" | "projection";
   let topTab = $state<TopTab>("overview");
 
   // Sub-tabs inside `configure`. "channels" is the CCU's
@@ -92,6 +93,7 @@
   // the switch it leads to hides itself there, which would leave two
   // selects that decide nothing.
   const recordingAvailable = $derived(infoStore.info?.capabilities?.includes("measurements.v1") ?? false);
+  const projectionAvailable = $derived(infoStore.info?.capabilities?.includes("projection.v1") ?? false);
 
   // Probes the schedule endpoint for one device. The caller passes the
   // load generation it belongs to: the probe outlives a device switch,
@@ -816,6 +818,17 @@
       { key: "overview" as const, label: t("device.toptab.overview"), icon: "mdi:home" as IconName },
       { key: "configure" as const, label: t("device.toptab.configure"), icon: "mdi:cog" as IconName },
       { key: "history" as const, label: t("device.toptab.history"), icon: "mdi:history" as IconName },
+      // How the device appears on the bridged planes. Offered by a daemon
+      // that answers the projection (capability projection.v1).
+      ...(projectionAvailable
+        ? [
+            {
+              key: "projection" as const,
+              label: t("device.toptab.projection"),
+              icon: "mdi:server-network" as IconName,
+            },
+          ]
+        : []),
     ].filter((tab) => surfacesStore.visible(`device.${tab.key}`)),
   );
 
@@ -1399,6 +1412,8 @@
           <!-- The device's configuration change log. -->
           <AuditLog deviceFilter={detail.address} embedded />
         </div>
+      {:else if topTab === "projection"}
+        <DeviceProjection address={detail.address} />
       {/if}
     {:else}
       <EmptyState message={t("device.no_channels")} />

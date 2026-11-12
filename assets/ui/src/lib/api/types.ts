@@ -42,6 +42,9 @@ export type UIHint = NonNullable<
 // device.FirmwareInfo; availability uses the capitalized keys the Go DTO
 // marshals from device.AvailabilityInfo (IsReachable/LastUpdated/...).
 export type DeviceDetail = components["schemas"]["DeviceDetail"];
+export type DeviceProjection = components["schemas"]["DeviceProjection"];
+export type ProjectionPlane = components["schemas"]["ProjectionPlane"];
+export type ProjectionEntry = components["schemas"]["ProjectionEntry"];
 export type CommunicationTestResult =
   components["schemas"]["CommunicationTestResult"];
 export type TeamCandidate = components["schemas"]["TeamCandidate"];

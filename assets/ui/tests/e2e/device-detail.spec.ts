@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './helpers/fixtures';
-import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
+import { mockAllApis, addStylesForStableScreenshots, fixture } from './helpers/mock-api';
 
 // A representative HmIP wall thermostat. Fixture shape mirrors
 // doc-screenshots.spec.ts's applyDeviceMocks() — a MASTER-paramset FLOAT
@@ -399,4 +399,102 @@ test.describe('Device detail — device picture', () => {
     await expect(picture.locator('img')).toHaveCount(0);
     await expect(picture.locator('svg[aria-label="Picture of HmIP-WTH-2"]')).toBeVisible();
   });
+});
+
+// The Projection tab: how the device stands on the bridged planes. The
+// daemon advertises the route with `projection.v1`; without the token the
+// tab is not offered.
+function projectionFixture() {
+  return {
+    address: DEVICE_ADDRESS,
+    central: 'ccu1',
+    planes: [
+      {
+        plane: 'matter',
+        state: 'active',
+        entries: [
+          {
+            channel: 1,
+            kind: 'custom',
+            key: 'CLIMATE',
+            verdict: 'published',
+            identity: {
+              source_key: `ccu1|${DEVICE_ADDRESS}|1|custom|CLIMATE`,
+              endpoint_id: '4',
+              device_type: 'Thermostat',
+            },
+          },
+          { channel: 1, kind: 'generic', key: 'HUMIDITY', verdict: 'withheld', reason: 'not_on_allow_list' },
+          { channel: 0, kind: 'generic', key: 'LOW_BAT', verdict: 'folded', folded_into: 'POWER_SOURCE' },
+          { channel: 0, kind: 'generic', key: 'RSSI_DEVICE', verdict: 'withheld', reason: 'usage_ignored' },
+        ],
+      },
+      { plane: 'measurements', state: 'inactive', reason: 'plane_disabled', entries: [] },
+      {
+        plane: 'ha_discovery',
+        state: 'active',
+        entries: [
+          {
+            channel: 1,
+            kind: 'channel_entity',
+            verdict: 'published',
+            identity: {
+              component: 'climate',
+              node_id: 'ccu1_0001d3c99b4e2f',
+              object_id: '1_climate',
+              discovery_topic: 'homeassistant/climate/ccu1_0001d3c99b4e2f/1_climate/config',
+            },
+          },
+          { channel: 1, kind: 'data_point', key: 'SET_POINT_TEMPERATURE', verdict: 'withheld', reason: 'part_of_channel_entity' },
+          { channel: 0, kind: 'data_point', key: 'CONFIG_PENDING', verdict: 'withheld', reason: 'hidden_parameter' },
+        ],
+      },
+    ],
+  };
+}
+
+async function withProjection(page: Page): Promise<void> {
+  const info = fixture('info.json') as { capabilities: string[] };
+  await page.route('**/api/v1/info', (route) =>
+    route.fulfill({ json: { ...info, capabilities: [...info.capabilities, 'projection.v1'] } }),
+  );
+  await page.route(`**/api/v1/devices/${DEVICE_ADDRESS}/projection*`, (route) =>
+    route.fulfill({ json: projectionFixture() }),
+  );
+}
+
+test.describe('Device detail — projection', () => {
+  test('is not offered by a daemon without the capability', async ({ page }) => {
+    await mockAllApis(page);
+    await applyDeviceMocks(page);
+    await seedPrefs(page, 'light');
+    await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+    await page.waitForSelector('#main');
+    await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Projection' })).toHaveCount(0);
+  });
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`shows the planes with identity and reason ${theme}`, async ({ page }) => {
+      await mockAllApis(page);
+      await applyDeviceMocks(page);
+      await withProjection(page);
+      await seedPrefs(page, theme);
+      await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+      await page.waitForSelector('#main');
+      await page.getByRole('tab', { name: 'Projection' }).click();
+
+      const matter = page.getByTestId('projection-plane-matter');
+      await expect(matter).toContainText('Endpoint: 4');
+      await expect(matter).toContainText('It could be exposed, but is not switched on in the Matter exposure list.');
+      await expect(page.getByTestId('projection-plane-measurements')).toContainText('This plane is switched off.');
+      await expect(page.getByTestId('projection-plane-ha_discovery')).toContainText(
+        'homeassistant/climate/ccu1_0001d3c99b4e2f/1_climate/config',
+      );
+
+      await page.waitForTimeout(500);
+      await addStylesForStableScreenshots(page);
+      await expect(page).toHaveScreenshot(`device-projection-${theme}.png`, { fullPage: true });
+    });
+  }
 });
