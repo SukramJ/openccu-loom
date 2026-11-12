@@ -1231,23 +1231,51 @@ func (b *EventBridge) publishDiscoveryForUnobservedDP(
 		Parameter:      parameter,
 	}
 	ev, _, ok, discoveryEligible := b.buildPublishEvent(centralName, ifaceID, d.Address, channel, channelNo, model, name, key, nil, paramsetKey)
-	if !ok || !discoveryEligible {
-		// NoCreate-suppressed DPs (per-DP `Visible() == false`) are
-		// referenced by Custom-DP discoveries but should not surface
-		// as their own HA entity. Skip the discovery-only publish
-		// for them — slot state is still published via the
-		// register-and-load path's onValueChanged route.
+	if !ok {
 		return
 	}
-	// When the channel hosts a custom DP, buildPublishEvent stamps
-	// ev.Source so the runtime path emits the aggregate channel discovery
-	// alongside the per-parameter one. The unobserved-DP boot path only
-	// wants the per-parameter discovery; clear Source so the discovery
-	// builder routes through the per-parameter classifier (otherwise the
-	// siren aggregate would be republished and the standalone select /
-	// number entity for whitelisted action DPs never lands).
-	ev.Source = nil
-	notePublish(ctx, bridge.PublishDiscoveryOnly(ctx, ev))
+	// An unobserved data point announces its own entity and nothing else
+	// ([announcedEvents]): a NoCreate-suppressed one, referenced by its
+	// channel's entity, announces nothing here, and its slot state is
+	// still published by the register-and-load path.
+	_, own := announcedEvents(ev, discoveryEligible, false)
+	if own == nil {
+		return
+	}
+	notePublish(ctx, bridge.PublishDiscoveryOnly(ctx, *own))
+}
+
+// announcedEvents is the one place that says which entities a data
+// point's event asks the MQTT bridge to announce. ev is the event
+// [EventBridge.buildPublishEvent] built for it, eligible its answer on
+// whether the data point is an entity of its own, observed whether the
+// event carries a value the model holds.
+//
+//   - channelEntity: the channel's own entity (climate / cover / lock /
+//     light / siren / valve …), asked for whenever the channel hosts a
+//     custom data point, whatever the triggering data point's own
+//     visibility. HmIP-PSM ch3 STATE is the canonical case: suppressed
+//     as an entity of its own by the custom-DP composition, and still
+//     the only event that announces the channel's switch. It is asked
+//     for with an observed value only; a channel whose data points are
+//     all unobserved is announced by the custom-DP snapshot instead.
+//   - own: the data point's own entity (sensor / binary_sensor / select /
+//     number …), asked for when it is eligible. On a channel with a
+//     custom data point the event's Source is cleared, so the builder
+//     takes the per-parameter path instead of announcing the channel's
+//     entity a second time (HmIP-BWTH HUMIDITY / ACTUAL_TEMPERATURE, the
+//     additional data points of a custom data point).
+func announcedEvents(ev mqtt.Event, eligible, observed bool) (channelEntity, own *mqtt.Event) {
+	if ev.Source != nil && observed {
+		c := ev
+		channelEntity = &c
+	}
+	if eligible {
+		o := ev
+		o.Source = nil
+		own = &o
+	}
+	return channelEntity, own
 }
 
 // registerAndLoadUnobservedCalculatedDP is the calculated-DP counterpart
@@ -1590,32 +1618,26 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	// publish; their slot state still emits below so the
 	// custom-DP HA-Discovery's `temperature_state_topic` etc.
 	// references resolve to live values.
-	if ev.Source != nil {
+	channelEntity, own := announcedEvents(ev, discoveryEligible, true)
+	if channelEntity != nil {
 		// Aggregate path (Source set → aggregateChannel → climate/cover/...).
-		b.publishEvent(ctx, ev)
+		b.publishEvent(ctx, *channelEntity)
 	}
-	if discoveryEligible {
+	if own != nil {
 		if ev.Source != nil {
-			// Custom-DP channel + visible sub-DP → also emit the
-			// per-DP discovery alongside the aggregate (HmIP-BWTH
-			// HUMIDITY / ACTUAL_TEMPERATURE / HEATING_COOLING
-			// WINDOW_STATE — the `additional_data_points` from
-			// PublishDiscoveryOnly
-			// with `Source = nil` falls through `aggregateChannel`
-			// and reaches `classifyComponent` → standalone sensor.
-			perDP := ev
-			perDP.Source = nil
-			// The bridge is nil while MQTT is disabled at runtime; the
-			// Wiring's own publish helpers treat that as a no-op and this
-			// reach-through has to do the same. It sits on the value-change
-			// path, so an unguarded dereference would crash the daemon on
-			// the first event after a config swap.
+			// Custom-DP channel + visible sub-DP → the per-DP entity
+			// alongside the channel's. The bridge is nil while MQTT is
+			// disabled at runtime; the Wiring's own publish helpers treat
+			// that as a no-op and this reach-through has to do the same.
+			// It sits on the value-change path, so an unguarded
+			// dereference would crash the daemon on the first event after
+			// a config swap.
 			if bridge := b.mqtt.Bridge(); bridge != nil {
-				notePublish(ctx, bridge.PublishDiscoveryOnly(ctx, perDP))
+				notePublish(ctx, bridge.PublishDiscoveryOnly(ctx, *own))
 			}
 		} else {
 			// No Custom-DP on the channel → straight per-DP path.
-			b.publishEvent(ctx, ev)
+			b.publishEvent(ctx, *own)
 		}
 	}
 
