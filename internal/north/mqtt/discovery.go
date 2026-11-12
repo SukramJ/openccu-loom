@@ -358,7 +358,75 @@ func (d *DefaultDiscoveryBuilder) WithLocale(locale string) *DefaultDiscoveryBui
 	return d
 }
 
-// Build translates ev into (component, objectID, payload).
+// DiscoveryReason names the rule by which the builder gives a data point
+// no entity of its own. The set is closed.
+type DiscoveryReason string
+
+const (
+	// DiscoveryEventSuppressedForModel means: a press parameter of a model
+	// whose key channel spawns no key-press event.
+	DiscoveryEventSuppressedForModel DiscoveryReason = "event_suppressed_for_model"
+	// DiscoveryUsageNoCreate means: the model marks the parameter as not
+	// to be created (hidden, or consumed by an aggregating data point).
+	DiscoveryUsageNoCreate DiscoveryReason = "usage_no_create"
+	// DiscoveryUsageIgnored means: the model ignores the parameter.
+	DiscoveryUsageIgnored DiscoveryReason = "usage_ignored"
+	// DiscoveryPartOfChannelEntity means: a constituent of the channel's
+	// custom data point, whose entity is its only surface.
+	DiscoveryPartOfChannelEntity DiscoveryReason = "part_of_channel_entity"
+	// DiscoveryEventOnlyPress means: a press that exists only as an event;
+	// its surface is the channel's key-press event entity.
+	DiscoveryEventOnlyPress DiscoveryReason = "event_only_press"
+	// DiscoveryNoComponent means: no Home Assistant component fits the
+	// parameter.
+	DiscoveryNoComponent DiscoveryReason = "no_component"
+	// DiscoveryNoScopedIdentity means: the entity's unique id cannot be
+	// scoped to its central yet.
+	DiscoveryNoScopedIdentity DiscoveryReason = "no_scoped_identity"
+	// DiscoveryRenderFailed means: the payload could not be rendered.
+	DiscoveryRenderFailed DiscoveryReason = "render_failed"
+)
+
+// DiscoveryVerdict is the builder's decision for one event: the entity to
+// announce, or the reason there is none.
+type DiscoveryVerdict struct {
+	Component, NodeID, ObjectID string
+	Payload                     []byte
+	// OK is true when there is an entity to announce.
+	OK bool
+	// ChannelEntity is true when the entity is the channel's own (its
+	// custom data point or an event group) rather than the data point's:
+	// the data point is carried by it.
+	ChannelEntity bool
+	// Reason is set when OK is false.
+	Reason DiscoveryReason
+}
+
+func withhold(r DiscoveryReason) DiscoveryVerdict { return DiscoveryVerdict{Reason: r} }
+
+// usageDiscoveryReason is the reason behind the usage gate.
+func usageDiscoveryReason(u hmenum.DataPointUsage) DiscoveryReason {
+	switch u { //nolint:exhaustive // only the usages the gate withholds reach here
+	case hmenum.DataPointUsageIgnored:
+		return DiscoveryUsageIgnored
+	case hmenum.DataPointUsageCDPPrimary, hmenum.DataPointUsageCDPSecondary:
+		return DiscoveryPartOfChannelEntity
+	default:
+		return DiscoveryUsageNoCreate
+	}
+}
+
+// Build implements [DiscoveryBuilder]: decide without its reason.
+func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
+	v := d.decide(ev)
+	if !v.OK {
+		return "", "", "", nil, false
+	}
+	return v.Component, v.NodeID, v.ObjectID, v.Payload, true
+}
+
+// decide translates ev into the entity to announce, or the reason there
+// is none.
 //
 // Four paths layered on top of each other, followed by a usage gate:
 // 1. Channel-aware aggregator (`aggregateChannel`): when the
@@ -380,10 +448,10 @@ func (d *DefaultDiscoveryBuilder) WithLocale(locale string) *DefaultDiscoveryBui
 // (model-driven). Drives sensor / binary_sensor / number entities
 // that are not part of an aggregate, plus VALUES paramsets on
 // channels we don't classify as a custom domain.
-func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
+func (d *DefaultDiscoveryBuilder) decide(ev Event) DiscoveryVerdict { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if ev.ChannelType != "" {
 		if comp, nid, oid, p, agg := d.aggregateChannel(ev); agg {
-			return comp, nid, oid, p, true
+			return DiscoveryVerdict{Component: comp, NodeID: nid, ObjectID: oid, Payload: p, OK: true, ChannelEntity: true}
 		}
 	}
 	// Press-event aggregation: collapse every press channel's PRESS_*
@@ -397,10 +465,10 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// openccu-loom event plane in parity (no `event` entity for these
 		// models).
 		if visibility.IsParameterIgnoredForDataPointEvent(ev.Model, hmenum.Parameter(ev.Parameter)) {
-			return "", "", "", nil, false
+			return withhold(DiscoveryEventSuppressedForModel)
 		}
 		if comp, nid, oid, p, agg := d.BuildChannelEvent(ev); agg {
-			return comp, nid, oid, p, true
+			return DiscoveryVerdict{Component: comp, NodeID: nid, ObjectID: oid, Payload: p, OK: true, ChannelEntity: true}
 		}
 		// No channel inspector (agg=false) — fall through to the per-parameter
 		// path below.
@@ -411,7 +479,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// entities rather than moving any.
 	if kind, known := event.Classify(hmenum.Parameter(ev.Parameter)); known && kind != event.KindKeypress {
 		if comp, nid, oid, p, agg := d.BuildChannelKindEvent(ev, kind); agg {
-			return comp, nid, oid, p, true
+			return DiscoveryVerdict{Component: comp, NodeID: nid, ObjectID: oid, Payload: p, OK: true, ChannelEntity: true}
 		}
 		// No channel inspector — fall through to the per-parameter path.
 	}
@@ -437,7 +505,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		hmenum.DataPointUsageIgnored,
 		hmenum.DataPointUsageCDPPrimary,
 		hmenum.DataPointUsageCDPSecondary:
-		return "", "", "", nil, false
+		return withhold(usageDiscoveryReason(ev.Usage))
 	}
 	// A click-event parameter the model typed as a button (category=button)
 	// only surfaces as a standalone button entity when its usage is
@@ -447,11 +515,11 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// is the keypress event group, and a writable press additionally gets the
 	// press-button companion via [Bridge.publishPressButton].
 	if ev.Category == hmenum.DataPointCategoryButton && ev.Usage == hmenum.DataPointUsageEvent {
-		return "", "", "", nil, false
+		return withhold(DiscoveryEventOnlyPress)
 	}
 	comp, classified := resolveComponent(ev)
 	if !classified {
-		return "", "", "", nil, false
+		return withhold(DiscoveryNoComponent)
 	}
 	// Writability override: a non-writable wire DP that classify mapped
 	// to `switch` (or `light` / `lock` / `select`) is actually a
@@ -497,8 +565,8 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		bucket,
 		ev.Parameter,
 	)
-	nodeID = pd.DiscoveryNodeID(central)
-	objectID = pd.DiscoveryObjectID(ev.Parameter)
+	nodeID := pd.DiscoveryNodeID(central)
+	objectID := pd.DiscoveryObjectID(ev.Parameter)
 	// The unique_id follows the same family split as the state bucket
 	// above: a calculated DP carries the `calculated` marker, so the MQTT
 	// key matches the REST and WS ones a consumer keys its registry on.
@@ -516,7 +584,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		uniqueID, scoped = d.scopedUniqueID(ev.Central, chAddr, ev.Parameter, routingkey.CalculatedFamilyPrefix)
 	}
 	if !scoped {
-		return "", "", "", nil, false
+		return withhold(DiscoveryNoScopedIdentity)
 	}
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
@@ -581,7 +649,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		modelEntity, *BuildOriginInfo(),
 	)
 	if renderErr != nil {
-		return "", "", "", nil, false
+		return withhold(DiscoveryRenderFailed)
 	}
 	// device_class — Quantity-based resolution walks the
 	// (deviceModel, parameter, unit) → Quantity → HA device_class chain.
@@ -772,18 +840,11 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// the event platform's class vocabulary is its own.
 		entity.DeviceClass = EventDeviceClassForModel(ev.Model)
 	}
-	return discoveryItemFor(entity, nodeID, objectID).unpack()
-}
-
-// unpack restores the tuple [DefaultDiscoveryBuilder.Build] returns. The
-// item form is what the shared helpers produce; the tuple is what this
-// plane's callers have always taken, and widening that signature is a
-// change to every call site for no gain here.
-func (i DiscoveryItem) unpack() (component, nodeID, objectID string, buf []byte, ok bool) {
-	if !i.OK {
-		return "", "", "", nil, false
+	item := discoveryItemFor(entity, nodeID, objectID)
+	if !item.OK {
+		return withhold(DiscoveryRenderFailed)
 	}
-	return i.Component, i.NodeID, i.ObjectID, i.Payload, true
+	return DiscoveryVerdict{Component: item.Component, NodeID: item.NodeID, ObjectID: item.ObjectID, Payload: item.Payload, OK: true}
 }
 
 // unitOrWireFallback returns the unit already established by the
