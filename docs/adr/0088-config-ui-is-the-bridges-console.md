@@ -284,4 +284,7 @@ across several CCUs.
   its WebSocket API. Authentication, the daemon that is not an add-on, and theming
   inside Home Assistant follow from that choice. It is investigated before the
   component is built, and decided together with `homematicip_local`.
+  Decided on 2026-11-12 in
+  [ADR 0089](./0089-editor-component-transport.md): the transport is injected and
+  the integration relays.
 - **The default column of the openccu-lite host**, as stated in point 6.

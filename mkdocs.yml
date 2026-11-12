@@ -193,6 +193,7 @@ nav:
           - ADR 0086 — The Matter pages from go-fabric-ui: adr/0086-matter-pages-from-go-fabric-ui.md
           - ADR 0087 — The catalogue declares the shape, the CCU confirms the channels: adr/0087-catalogue-declares-the-shape-the-ccu-the-channels.md
           - ADR 0088 — The Config UI is the bridge's console, not a CCU WebUI: adr/0088-config-ui-is-the-bridges-console.md
+          - ADR 0089 — The editor component reaches the daemon through the integration: adr/0089-editor-component-transport.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under
