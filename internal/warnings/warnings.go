@@ -147,7 +147,9 @@ func (a *Aggregator) Active() []Warning {
 			last  time.Time
 		}
 		byComponent := map[string]*agg{}
-		for _, inc := range a.incidents.Incidents() {
+		incidents := a.incidents.Incidents()
+		for i := range incidents {
+			inc := &incidents[i]
 			sev := hmenum.IncidentSeverity(inc.Severity)
 			if sev != hmenum.IncidentSeverityError && sev != hmenum.IncidentSeverityCritical {
 				continue
