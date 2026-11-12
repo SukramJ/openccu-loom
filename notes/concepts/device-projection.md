@@ -201,6 +201,13 @@ discovery goldens and the plane round-trip tests are what holds it.
 
 ## 9. Open points
 
+- **Slice 3 is built by separating describing from publishing** (owner
+  decision, 2026-11-12). The device snapshot of the event bridge
+  announces on about nine paths and interleaves announcing with
+  registering and loading state; the decision is spread over the
+  builder, the MQTT bridge and the event bridge. The snapshot is split
+  into a description without side effects and its publication, and the
+  plane reads the description. The steps are tracked in issue #1068.
 - **Slice 1 as built differs from section 7 in two points.** The Matter
   verdict that "already exists" is the candidate walk of the exposure
   list, which is not what the bridge is built from: the assembler
