@@ -1406,7 +1406,7 @@ type NorthUI struct {
 
 	// BoxNotices mirrors the daemon's operator warnings onto the Status
 	// page of the openccu-lite box the daemon runs on, as the add-on's
-	// notices (ADR 0089). Tri-state: nil defaults to whether the daemon
+	// notices (ADR 0090). Tri-state: nil defaults to whether the daemon
 	// runs as the openccu-lite add-on — ON there, OFF in any other build;
 	// an explicit true/false overrides. Resolved by the composition root,
 	// which knows the add-on stamp. Outside the add-on there is no box to

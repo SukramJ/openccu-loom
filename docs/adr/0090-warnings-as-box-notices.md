@@ -1,4 +1,4 @@
-# ADR 0089 — The daemon's warnings appear on the openccu-lite box as add-on notices
+# ADR 0090 — The daemon's warnings appear on the openccu-lite box as add-on notices
 
 - Status: accepted
 - Date: 2026-11-11

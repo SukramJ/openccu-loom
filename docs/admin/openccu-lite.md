@@ -274,7 +274,7 @@ from the box's Addons page. A few things differ from a CCU:
   change. The box's LED follows them, and an administrator silences one
   there like any warning of the box. The box's own service messages are
   not repeated. Switch it off with `north.ui.box_notices: false`
-  ([ADR 0089](../adr/0089-warnings-as-box-notices.md)).
+  ([ADR 0090](../adr/0090-warnings-as-box-notices.md)).
 - **No session in the add-on's page URL.** The add-on ships an
   `openccu-lite.json` declaring that its settings page takes no session in
   the URL (`ui.session_header`); the page is a landing card and reads no

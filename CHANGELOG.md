@@ -47,7 +47,7 @@ clients (API 16).
   minutes covers what no event announces. New setting
   `north.ui.box_notices` (on in the openccu-lite add-on, without effect
   elsewhere)
-  ([ADR 0089](docs/adr/0089-warnings-as-box-notices.md)).
+  ([ADR 0090](docs/adr/0090-warnings-as-box-notices.md)).
 - **openccu-lite: adding a box proposes the interfaces it has.** The box
   names its interfaces without a credential (occulited since 2026-11-10).
   The probe of `POST /centrals/probe` and `POST /setup/probe` passes them

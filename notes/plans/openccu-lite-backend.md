@@ -2516,7 +2516,7 @@ it, "open" that nothing in Loom reads or sends it yet.
 | Pairing request: optional `access.backup` and `addons`; the administrator's list carries `needs_confirmation`, `token_ips` | `e0f5227` (2026-10-01), `ccbaf56` (2026-10-31) | open — the code derivation is unchanged |
 | A metadata `PATCH` with an empty `name` is `422 invalid-name` | `2a78ed5` (2026-10-29) | adopted — refused before the box is asked |
 | Manifest: `changelog`, `runtime.bin`, `runtime.web_ingress`, `ui.fullscreen`; scope `power:halt` (included in `power`) | `f6c6e99` … `4c51107` | `changelog` adopted, the rest unused |
-| Addon notices (`/api/system/v1/addon-notices`, the add-on's control token) | `5783ccd` (2026-10-27) | adopted — the warning list is mirrored (ADR 0089); posted and cleared on a box on 2026-11-11 |
+| Addon notices (`/api/system/v1/addon-notices`, the add-on's control token) | `5783ccd` (2026-10-27) | adopted — the warning list is mirrored (ADR 0090); posted and cleared on a box on 2026-11-11 |
 
 `role` in `GET /api/auth/v1/state` is unchanged but was already documented at the pin as derived from
 `level` and "answered for one release". Loom's single sign-on reads `level` and falls back to `role`

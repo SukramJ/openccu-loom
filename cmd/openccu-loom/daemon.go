@@ -922,7 +922,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	warningsSvc := warnings.New(healthAdapter, incidentsReader, hubAdapter, silenceStore)
 
 	// On an openccu-lite box the same list stands on the box's Status page
-	// as the add-on's notices (ADR 0089). nil everywhere else.
+	// as the add-on's notices (ADR 0090). nil everywhere else.
 	boxNoticeMirror := startBoxNotices(ctx, cfg, boxNoticeDeps{
 		warnings: warningsSvc, catalogs: catalogs, health: healthTracker, reg: reg, admin: centralAdminSvc,
 	}, logger)

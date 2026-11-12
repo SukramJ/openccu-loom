@@ -95,7 +95,7 @@ func boxNoticesEnabled(cfg *config.Config, logger *slog.Logger) bool {
 }
 
 // startBoxNotices mirrors the daemon's warnings onto the local box's
-// Status page (ADR 0089) and returns the running mirror, or nil when the
+// Status page (ADR 0090) and returns the running mirror, or nil when the
 // daemon is not the openccu-lite add-on or the switch is off.
 //
 // The mirror reconciles when a warning source changes: a health component

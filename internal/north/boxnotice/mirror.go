@@ -3,7 +3,7 @@
 
 // Package boxnotice mirrors the daemon's operator warnings onto the
 // openccu-lite box the daemon runs on, as the add-on's notices on the
-// box's Status page (ADR 0089).
+// box's Status page (ADR 0090).
 //
 // The mirror owns the add-on's notice set on the box. It computes the
 // notices the active warnings call for, reads what the box holds, and
