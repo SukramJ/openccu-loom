@@ -903,32 +903,7 @@ func (b *Bridge) AnnounceOffline(ctx context.Context) error {
 // envelope; the custom-DP slot publish is
 // [EventBridge.publishCustomDPState].
 func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
-	// Visibility gate: skip the entire publish (raw + discovery) when the
-	// parameter is not allowed. Returns nil — a not-visible parameter is not
-	// an error. The query carries the event's real paramset key (MASTER
-	// visibility is a default-deny whitelist; asking with VALUES would
-	// report every MASTER parameter as visible).
-	if b.cfg.Visibility != nil {
-		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, ev.visibilityParamset(), hmenum.Parameter(ev.Parameter)) {
-			return nil
-		}
-	}
-	// Operator-hidden channel (G12): skip the whole publish (raw + discovery)
-	// so a hidden channel disappears from the MQTT plane too.
-	if b.cfg.ChannelHidden != nil && b.cfg.ChannelHidden(ev.Central, ev.ChannelAddress) {
-		return nil
-	}
-	if b.cfg.HADiscoveryEnabled && b.cfg.DiscoveryBuilder != nil {
-		component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
-		if ok {
-			if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, cfgPayload); err != nil {
-				b.incPublishErrors(ev.Central)
-				return err
-			}
-		}
-		b.publishPressButton(ctx, ev)
-	}
-	return nil
+	return b.announce(ctx, ev.Central, b.describeDataPointDiscovery(ev), true)
 }
 
 // PublishDiscoveryOnly publishes ONLY the HA-Discovery payload for the given
@@ -940,28 +915,7 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 // Visibility-gated identical to [Bridge.PublishState]. Returns nil silently
 // when discovery is disabled or the builder declines the event.
 func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
-	if b.cfg.Visibility != nil {
-		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, ev.visibilityParamset(), hmenum.Parameter(ev.Parameter)) {
-			return nil
-		}
-	}
-	// Operator-hidden channel (G12): skip the whole publish (raw + discovery)
-	// so a hidden channel disappears from the MQTT plane too.
-	if b.cfg.ChannelHidden != nil && b.cfg.ChannelHidden(ev.Central, ev.ChannelAddress) {
-		return nil
-	}
-	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
-	if ok {
-		if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, cfgPayload); err != nil {
-			b.incPublishErrors(ev.Central)
-			return err
-		}
-	}
-	b.publishPressButton(ctx, ev)
-	return nil
+	return b.announce(ctx, ev.Central, b.describeDataPointDiscovery(ev), true)
 }
 
 // --- ADR 0011 publish helpers (per-DP topology) -----------------------
@@ -1695,18 +1649,7 @@ func (b *Bridge) PublishAddonUpdateState(ctx context.Context, installedVersion, 
 // Idempotent — the publisher's dedup gate (`b.pub`) skips a config it
 // has already published unchanged.
 func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) error {
-	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	component, nodeID, objectID, payload, ok := b.cfg.DiscoveryBuilder.Build(ev)
-	if !ok {
-		return nil
-	}
-	if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, payload); err != nil {
-		return err
-	}
-	b.publishPressButton(ctx, ev)
-	return nil
+	return b.announce(ctx, ev.Central, b.describeChannelEventDiscovery(ev), false)
 }
 
 // PublishCustomDPDiscovery publishes the aggregate (channel-level)
@@ -1725,68 +1668,162 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 // entity (reference parity — TEXT_DISPLAY maps to notify alone; the
 // aggregate `text` entity is suppressed in aggregateChannel).
 func (b *Bridge) PublishCustomDPDiscovery(ctx context.Context, ev Event) error {
-	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	if ev.Source == nil {
-		return nil
+	return b.announce(ctx, ev.Central, b.describeCustomDPDiscovery(ev), false)
+}
+
+// Reasons the bridge itself gives a data point no entity, before the
+// builder is asked.
+const (
+	// DiscoveryHiddenParameter means: the parameter visibility rules
+	// (ignored and hidden parameters, the MASTER whitelist) leave the
+	// parameter off the MQTT plane.
+	DiscoveryHiddenParameter DiscoveryReason = "hidden_parameter"
+	// DiscoveryChannelHidden means: the operator hid the channel.
+	DiscoveryChannelHidden DiscoveryReason = "channel_hidden"
+	// DiscoveryDisabled means: Home Assistant discovery is switched off.
+	DiscoveryDisabled DiscoveryReason = "discovery_disabled"
+	// DiscoveryNoCustomDataPoint means: the channel's own entity was
+	// asked for an event that carries no custom data point.
+	DiscoveryNoCustomDataPoint DiscoveryReason = "no_custom_data_point"
+	// DiscoveryBuilderDeclined means: a builder that states no reason
+	// announced nothing.
+	DiscoveryBuilderDeclined DiscoveryReason = "builder_declined"
+)
+
+// DiscoveryDescription is everything the bridge announces for one event
+// on one of its announcing paths: the entity, or the reason there is
+// none, and the companion entities that go with it. Announcing publishes
+// exactly this; nothing else decides.
+type DiscoveryDescription struct {
+	Verdict DiscoveryVerdict
+	// Companions are announced after the entity: the press button of a
+	// writable press, the notify entity of a text display.
+	Companions []DiscoveryItem
+}
+
+// builderVerdict asks the configured builder. The default builder states
+// its reason; any other is asked through [DiscoveryBuilder.Build].
+func (b *Bridge) builderVerdict(ev Event) DiscoveryVerdict {
+	if dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder); ok {
+		return dd.decide(ev)
 	}
 	component, nodeID, objectID, payload, ok := b.cfg.DiscoveryBuilder.Build(ev)
-	if ok {
-		if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, payload); err != nil {
-			return err
-		}
+	if !ok {
+		return withhold(DiscoveryBuilderDeclined)
 	}
-	b.publishTextDisplayNotify(ctx, ev)
+	return DiscoveryVerdict{Component: component, NodeID: nodeID, ObjectID: objectID, Payload: payload, OK: true}
+}
+
+// describeDataPointDiscovery is the description for a data point's event:
+// the visibility gate (asked with the event's real paramset key — MASTER
+// visibility is a default-deny whitelist), the hidden-channel gate, then
+// the builder, and the press-button companion whether or not the builder
+// announced an entity.
+func (b *Bridge) describeDataPointDiscovery(ev Event) DiscoveryDescription {
+	if b.cfg.Visibility != nil &&
+		!b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, ev.visibilityParamset(), hmenum.Parameter(ev.Parameter)) {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryHiddenParameter)}
+	}
+	if b.cfg.ChannelHidden != nil && b.cfg.ChannelHidden(ev.Central, ev.ChannelAddress) {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryChannelHidden)}
+	}
+	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryDisabled)}
+	}
+	return DiscoveryDescription{Verdict: b.builderVerdict(ev), Companions: b.pressButtonCompanion(ev)}
+}
+
+// describeChannelEventDiscovery is the description for a channel's event
+// entity, asked without a value change. The press-button companion goes
+// only with an announced entity.
+func (b *Bridge) describeChannelEventDiscovery(ev Event) DiscoveryDescription {
+	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryDisabled)}
+	}
+	d := DiscoveryDescription{Verdict: b.builderVerdict(ev)}
+	if d.Verdict.OK {
+		d.Companions = b.pressButtonCompanion(ev)
+	}
+	return d
+}
+
+// describeCustomDPDiscovery is the description for a channel's custom
+// data point, asked directly: a write-only one has no readable parameter
+// whose event would announce it. The notify companion of a text display
+// goes with it whether or not the builder announced an entity — the
+// display's own entity is suppressed and notify is its only surface.
+func (b *Bridge) describeCustomDPDiscovery(ev Event) DiscoveryDescription {
+	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryDisabled)}
+	}
+	if ev.Source == nil {
+		return DiscoveryDescription{Verdict: withhold(DiscoveryNoCustomDataPoint)}
+	}
+	return DiscoveryDescription{Verdict: b.builderVerdict(ev), Companions: b.textDisplayNotifyCompanion(ev)}
+}
+
+// pressButtonCompanion is the press-button entity of a click-event
+// parameter the model marked as a button (category=button,
+// usage=data_point). Writable presses — virtual-remote actions, a plain
+// KEY channel's PRESS_SHORT/PRESS_LONG, and additional_data_points-promoted
+// dimmer-input presses — are each exposed as a clickable HA `button`
+// (disabled by default) IN ADDITION to the per-channel keypress `event`
+// entity that every press channel gets.
+//
+// None when the configured builder is not the [DefaultDiscoveryBuilder]
+// or the event is not a press-button parameter.
+func (b *Bridge) pressButtonCompanion(ev Event) []DiscoveryItem {
+	dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
+	if !ok {
+		return nil
+	}
+	if item := dd.BuildPressButton(ev); item.OK {
+		return []DiscoveryItem{item}
+	}
 	return nil
 }
 
-// publishPressButton publishes the press-button companion entity for a
-// click-event parameter the model marked as a button (category=button,
-// usage=data_point). Writable presses — virtual-remote actions, a plain KEY
-// channel's PRESS_SHORT/PRESS_LONG, and additional_data_points-promoted
-// dimmer-input presses — are each exposed as a clickable HA `button`
-// (disabled by default) IN ADDITION to the per-channel keypress `event`
-// entity that every press channel gets. Best-effort: errors are swallowed —
-// the primary discovery publish has already succeeded, and the button
-// re-publishes on the next press / snapshot pass.
+// textDisplayNotifyCompanion is the notify entity of a text-display
+// custom-DP (HmIP-WRCD). The reference stack maps a TEXT_DISPLAY
+// custom-DP onto a `notify` entity ONLY; the aggregate `text` entity is
+// suppressed in aggregateChannel, so this is the sole HA surface for the
+// display.
 //
-// No-op when the configured builder is not the [DefaultDiscoveryBuilder]
-// or the event is not a press-button parameter.
-func (b *Bridge) publishPressButton(ctx context.Context, ev Event) {
+// None when the configured builder is not the [DefaultDiscoveryBuilder]
+// or the event does not carry a text-display custom-DP.
+func (b *Bridge) textDisplayNotifyCompanion(ev Event) []DiscoveryItem {
 	dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
 	if !ok {
-		return
+		return nil
 	}
-	item := dd.BuildPressButton(ev)
-	if !item.OK {
-		return
+	if item := dd.BuildTextDisplayNotify(ev); item.OK {
+		return []DiscoveryItem{item}
 	}
-	if err := b.publishDiscovery(ctx, ev.Central, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
-		b.incPublishErrors(ev.Central)
-	}
+	return nil
 }
 
-// publishTextDisplayNotify publishes the notify entity for a
-// text-display custom-DP (HmIP-WRCD). The reference stack maps a
-// TEXT_DISPLAY custom-DP onto a `notify` entity ONLY; the aggregate
-// `text` entity is suppressed in aggregateChannel, so this is the sole
-// HA surface for the display. Best-effort: errors are swallowed.
-//
-// No-op when the configured builder is not the [DefaultDiscoveryBuilder]
-// or the event does not carry a text-display custom-DP.
-func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
-	dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
-	if !ok {
-		return
+// announce publishes a description: the entity first, then its
+// companions. A failing entity publish is returned and stops the
+// companions; countEntityError says whether it also counts as a publish
+// error of the central, which the data-point paths do and the direct
+// snapshot paths do not. A failing companion is counted and swallowed —
+// the entity is announced, and the companion is published again on the
+// next event or snapshot pass.
+func (b *Bridge) announce(ctx context.Context, central string, d DiscoveryDescription, countEntityError bool) error {
+	if v := d.Verdict; v.OK {
+		if err := b.publishDiscovery(ctx, central, v.Component, v.NodeID, v.ObjectID, v.Payload); err != nil {
+			if countEntityError {
+				b.incPublishErrors(central)
+			}
+			return err
+		}
 	}
-	item := dd.BuildTextDisplayNotify(ev)
-	if !item.OK {
-		return
+	for _, item := range d.Companions {
+		if err := b.publishDiscovery(ctx, central, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
+			b.incPublishErrors(central)
+		}
 	}
-	if err := b.publishDiscovery(ctx, ev.Central, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
-		b.incPublishErrors(ev.Central)
-	}
+	return nil
 }
 
 // RetractDiscoveryForDevice retracts every HA-Discovery config this bridge
