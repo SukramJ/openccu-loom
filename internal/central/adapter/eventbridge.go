@@ -2138,9 +2138,6 @@ func dpValid(dp device.ParameterDataPoint) bool {
 	return true
 }
 
-// slotBucket selects the paramset bucket a value-changed event belongs to.
-// It steers the MQTT topic segment and, through [dpAvailability], the
-// availability rule — so both planes classify one data point identically.
 // dataPointSlot is the slot a data point's state is published under: its
 // address, channel, bucket and parameter. The slot state publish and a
 // description of the device name the topic through it.
@@ -2153,6 +2150,9 @@ func dataPointSlot(ch *device.Channel, deviceAddr string, channelNo int, key hmt
 	}
 }
 
+// slotBucket selects the paramset bucket a value-changed event belongs to.
+// It steers the MQTT topic segment and, through [dpAvailability], the
+// availability rule — so both planes classify one data point identically.
 func slotBucket(ch *device.Channel, key hmtypes.DataPointKey) payload.Bucket {
 	switch {
 	case key.ParamsetKey == hmenum.ParamsetKeyMaster:

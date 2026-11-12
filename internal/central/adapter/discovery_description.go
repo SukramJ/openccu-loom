@@ -59,9 +59,9 @@ const (
 )
 
 // DiscoveryPlane is the Home Assistant discovery side of a device's
-// projection. It walks the device the way the snapshot does and asks with
-// the events the snapshot publishes with, so it describes what the
-// snapshot announces.
+// projection. It visits the paths of the device snapshot that announce an
+// entity, in the snapshot's order, and asks with the events the snapshot
+// publishes with, so it describes what the snapshot announces.
 type DiscoveryPlane struct {
 	bridge *EventBridge
 }
@@ -114,8 +114,11 @@ type discoveryWalk struct {
 	seen    map[string]bool
 }
 
-// device walks the device in the snapshot's order
-// ([EventBridge.publishDeviceSnapshot]).
+// device visits the announcing paths of
+// [EventBridge.publishDeviceSnapshot] in its order. The snapshot's week
+// profile step is not among them: it publishes a state and announces no
+// entity. A path the snapshot gains has to be added here; the round trip
+// against the broker shows a missing one only where the fleet has it.
 func (w *discoveryWalk) device() {
 	d, iface := w.dev, w.dev.InterfaceID
 	for _, ch := range d.Channels() {

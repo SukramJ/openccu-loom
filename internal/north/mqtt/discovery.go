@@ -440,7 +440,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 // entity with `event_types: [...]` (a single PRESS_SHORT channel gets
 // the same channel-level entity as a four-type remote). The writable
 // presses additionally get a button companion via
-// [Bridge.publishPressButton].
+// [Bridge.pressButtonCompanion].
 // 3. Impulse and device-error aggregation (`BuildChannelKindEvent`): the
 // same channel-level shape as the press aggregator, one event entity
 // per channel and kind.
@@ -513,7 +513,7 @@ func (d *DefaultDiscoveryBuilder) decide(ev Event) DiscoveryVerdict { //nolint:g
 	// not route (PRESS_LOCK / PRESS_UNLOCK / PRESS_CONT — they carry
 	// usage=event) must not fall through to a per-DP button here; its surface
 	// is the keypress event group, and a writable press additionally gets the
-	// press-button companion via [Bridge.publishPressButton].
+	// press-button companion via [Bridge.pressButtonCompanion].
 	if ev.Category == hmenum.DataPointCategoryButton && ev.Usage == hmenum.DataPointUsageEvent {
 		return withhold(DiscoveryEventOnlyPress)
 	}
