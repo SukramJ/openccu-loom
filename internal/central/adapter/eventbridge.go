@@ -3456,13 +3456,15 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 		return
 	}
 	enabled := wp.ScheduleEnabled()
-	for _, ev := range b.scheduleSwitchDiscoveryEvents(centralName, iface, d, scheduleChannelNo, wp) {
-		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, ev))
+	switches := b.scheduleSwitchDiscoveryEvents(centralName, iface, d, scheduleChannelNo, wp)
+	for i := range switches {
+		key := switches[i].Key
+		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, switches[i]))
 		st := true
 		if enabled != nil {
-			st = enabled[ev.Key]
+			st = enabled[key]
 		}
-		notePublish(ctx, bridge.PublishScheduleSwitchState(ctx, centralName, iface, d.Address, scheduleChannelNo, ev.Key, st))
+		notePublish(ctx, bridge.PublishScheduleSwitchState(ctx, centralName, iface, d.Address, scheduleChannelNo, key, st))
 	}
 	// Wire OnChange to re-publish every switch's state. The same
 	// callback fires for both wire-read sync and user-driven writes.
