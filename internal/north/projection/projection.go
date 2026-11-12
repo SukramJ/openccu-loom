@@ -21,6 +21,7 @@ import (
 const (
 	PlaneMatter       = "matter"
 	PlaneMeasurements = "measurements"
+	PlaneHADiscovery  = "ha_discovery"
 )
 
 // Plane states.

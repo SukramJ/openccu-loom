@@ -313,21 +313,13 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 // BuildUpdateDiscovery returns OK=false, or when no DefaultDiscoveryBuilder
 // is wired.
 func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, centralName string, ev UpdateEvent) error {
-	if !b.cfg.HADiscoveryEnabled {
-		return nil
-	}
-	if b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
-	if !ok {
-		return nil
-	}
-	item := builder.BuildUpdateDiscovery(centralName, ev)
-	if !item.OK {
-		return nil
-	}
-	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.announce(ctx, centralName, b.DescribeUpdateDiscovery(centralName, ev), false)
+}
+
+// DescribeUpdateDiscovery is the description for a device's firmware-update entity: the entity
+// [Bridge.PublishUpdateDiscovery] announces, or the reason there is none.
+func (b *Bridge) DescribeUpdateDiscovery(centralName string, ev UpdateEvent) DiscoveryDescription {
+	return b.describeItem(func(d *DefaultDiscoveryBuilder) DiscoveryItem { return d.BuildUpdateDiscovery(centralName, ev) })
 }
 
 // PublishUpdateState publishes the firmware-state JSON to the per-device

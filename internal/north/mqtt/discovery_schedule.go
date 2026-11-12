@@ -253,21 +253,13 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 //
 // No-ops when HA discovery is disabled.
 func (b *Bridge) PublishScheduleEntityDiscovery(ctx context.Context, centralName string, ev ScheduleEntityEvent) error {
-	if !b.cfg.HADiscoveryEnabled {
-		return nil
-	}
-	if b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
-	if !ok {
-		return nil
-	}
-	item := builder.BuildScheduleEntityDiscovery(centralName, ev)
-	if !item.OK {
-		return nil
-	}
-	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.announce(ctx, centralName, b.DescribeScheduleEntityDiscovery(centralName, ev), false)
+}
+
+// DescribeScheduleEntityDiscovery is the description for a channel's schedule sensor: the entity
+// [Bridge.PublishScheduleEntityDiscovery] announces, or the reason there is none.
+func (b *Bridge) DescribeScheduleEntityDiscovery(centralName string, ev ScheduleEntityEvent) DiscoveryDescription {
+	return b.describeItem(func(d *DefaultDiscoveryBuilder) DiscoveryItem { return d.BuildScheduleEntityDiscovery(centralName, ev) })
 }
 
 // PublishScheduleEntityState publishes the active-entry count to the
@@ -414,21 +406,13 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 // PublishScheduleSwitchDiscovery publishes the HA Discovery payload for
 // one ScheduleChannelSwitch entity. Retained + deduplicated.
 func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, centralName string, ev ScheduleSwitchEvent) error {
-	if !b.cfg.HADiscoveryEnabled {
-		return nil
-	}
-	if b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
-	if !ok {
-		return nil
-	}
-	item := builder.BuildScheduleSwitchDiscovery(centralName, ev)
-	if !item.OK {
-		return nil
-	}
-	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.announce(ctx, centralName, b.DescribeScheduleSwitchDiscovery(centralName, ev), false)
+}
+
+// DescribeScheduleSwitchDiscovery is the description for one schedule switch: the entity
+// [Bridge.PublishScheduleSwitchDiscovery] announces, or the reason there is none.
+func (b *Bridge) DescribeScheduleSwitchDiscovery(centralName string, ev ScheduleSwitchEvent) DiscoveryDescription {
+	return b.describeItem(func(d *DefaultDiscoveryBuilder) DiscoveryItem { return d.BuildScheduleSwitchDiscovery(centralName, ev) })
 }
 
 // scheduleSubDeviceDescriptor builds the HA `device` block for the

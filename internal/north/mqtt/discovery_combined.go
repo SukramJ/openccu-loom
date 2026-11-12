@@ -227,21 +227,13 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 //
 // No-ops when HA discovery is disabled or the builder declines the event.
 func (b *Bridge) PublishCombinedDiscovery(ctx context.Context, centralName string, ev CombinedEvent) error {
-	if !b.cfg.HADiscoveryEnabled {
-		return nil
-	}
-	if b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
-	if !ok {
-		return nil
-	}
-	item := builder.BuildCombinedDiscovery(centralName, ev)
-	if !item.OK {
-		return nil
-	}
-	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.announce(ctx, centralName, b.DescribeCombinedDiscovery(centralName, ev), false)
+}
+
+// DescribeCombinedDiscovery is the description for a combined data point's projection: the entity
+// [Bridge.PublishCombinedDiscovery] announces, or the reason there is none.
+func (b *Bridge) DescribeCombinedDiscovery(centralName string, ev CombinedEvent) DiscoveryDescription {
+	return b.describeItem(func(d *DefaultDiscoveryBuilder) DiscoveryItem { return d.BuildCombinedDiscovery(centralName, ev) })
 }
 
 // PublishCombinedState publishes a combined data point's rendered state

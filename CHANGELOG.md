@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A device's projection answers for Home Assistant discovery (REST API
+  16.3.2).** `GET /devices/{addr}/projection` and the MCP tool
+  `get_device_projection` gain the plane `ha_discovery`: every entity
+  the daemon announces for the device, with its component, node id,
+  object id and config topic, and for every parameter and channel that
+  gets no entity the named reason (`hidden_parameter`, `not_visible`,
+  `channel_hidden`, `part_of_channel_entity`, `usage_no_create`,
+  `no_component`, …). A parameter carried by its channel's entity is
+  shown as folded into it. The plane walks the device the way the
+  announcing snapshot does and asks with the same events, and an
+  end-to-end test compares it with the config topics a broker holds, in
+  both directions. With MQTT or discovery off the plane is `inactive`.
+  No route or schema changed.
 - **A device's projection answers for measurement forwarding (REST API
   16.3.1).** `GET /devices/{addr}/projection` and the MCP tool
   `get_device_projection` gain the plane `measurements`: for every data
