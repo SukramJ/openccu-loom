@@ -2568,12 +2568,26 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 	if bridge == nil {
 		return
 	}
-	pressParam := firstPressParameter(ch)
-	if pressParam == "" {
+	ev, ok := channelEventDiscoveryEvent(centralName, iface, d, ch)
+	if !ok {
 		return
 	}
+	// Best-effort per topic; the pass-level tracker still records the
+	// rejection so an incomplete snapshot does not arm the orphan sweeps.
+	notePublish(ctx, bridge.PublishChannelEventDiscovery(ctx, ev))
+}
+
+// channelEventDiscoveryEvent is the event that asks the MQTT bridge for a
+// channel's press event entity, and false for a channel without a press
+// parameter. It reads the model and nothing else, so the snapshot and a
+// description of the device ask with the same event.
+func channelEventDiscoveryEvent(centralName, iface string, d *device.Device, ch *device.Channel) (mqtt.Event, bool) {
+	pressParam := firstPressParameter(ch)
+	if pressParam == "" {
+		return mqtt.Event{}, false
+	}
 	_, channelNo := parseChannel(ch.Address)
-	ev := mqtt.Event{
+	return mqtt.Event{
 		Central:        centralName,
 		Interface:      iface,
 		DeviceAddress:  d.Address,
@@ -2585,10 +2599,7 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 		Parameter:      pressParam,
 		Channel:        ch,
 		Device:         d,
-	}
-	// Best-effort per topic; the pass-level tracker still records the
-	// rejection so an incomplete snapshot does not arm the orphan sweeps.
-	notePublish(ctx, bridge.PublishChannelEventDiscovery(ctx, ev))
+	}, true
 }
 
 // firstPressParameter returns the first click-event parameter the channel
@@ -2628,19 +2639,35 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 	if bridge == nil {
 		return
 	}
+	ev, ok := b.customDPDiscoveryEvent(centralName, iface, d, ch)
+	if !ok {
+		return
+	}
+	// Best-effort per topic; the pass-level tracker still records the
+	// rejection so an incomplete snapshot does not arm the orphan sweeps.
+	notePublish(ctx, bridge.PublishCustomDPDiscovery(ctx, ev))
+}
+
+// customDPDiscoveryEvent is the event that asks the MQTT bridge for the
+// entity of a channel's custom data point, and false for a channel that
+// has none to announce: no custom data point, one folded into its primary
+// channel by the device's operation mode, or one that is no payload
+// source. It reads the model and nothing else, so the snapshot and a
+// description of the device ask with the same event.
+func (b *EventBridge) customDPDiscoveryEvent(centralName, iface string, d *device.Device, ch *device.Channel) (mqtt.Event, bool) {
 	cdp := ch.CustomDataPoint()
 	if cdp == nil {
-		return
+		return mqtt.Event{}, false
 	}
 	// Skip operation-mode secondary channels (e.g. HmIP-RGBW secondary colour
 	// channels in the current mode): folded into the primary channel's
 	// aggregate, they must not surface as their own entity.
 	if h, ok := cdp.(interface{ HiddenByOperationMode() bool }); ok && h.HiddenByOperationMode() {
-		return
+		return mqtt.Event{}, false
 	}
 	src, ok := cdp.(payload.Source)
 	if !ok || src == nil {
-		return
+		return mqtt.Event{}, false
 	}
 	_, channelNo := parseChannel(ch.Address)
 	ev := mqtt.Event{
@@ -2657,9 +2684,7 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 		Source:         src,
 	}
 	ev.SelectionLabels = b.selectionLabelsFor(ch, src)
-	// Best-effort per topic; the pass-level tracker still records the
-	// rejection so an incomplete snapshot does not arm the orphan sweeps.
-	notePublish(ctx, bridge.PublishCustomDPDiscovery(ctx, ev))
+	return ev, true
 }
 
 func (b *EventBridge) onCentralState(centralName string, e hmevent.CentralStateChangedEvent) {
@@ -3080,6 +3105,26 @@ func (b *EventBridge) publishScheduleChangedWS(centralName, iface, deviceAddr st
 	})
 }
 
+// updateDiscoveryEvent is the event that asks the MQTT bridge for a
+// device's firmware-update entity, and false for a device without an
+// update surface. It reads the model and nothing else, so the snapshot
+// and a description of the device ask with the same event.
+func updateDiscoveryEvent(centralName, iface string, d *device.Device) (mqtt.UpdateEvent, bool) {
+	upd := d.Update()
+	if upd == nil {
+		return mqtt.UpdateEvent{}, false
+	}
+	return mqtt.UpdateEvent{
+		Central:       centralName,
+		Interface:     iface,
+		DeviceAddress: d.Address,
+		DeviceName:    d.Name(),
+		Model:         d.Model,
+		Device:        d,
+		Update:        upd,
+	}, true
+}
+
 // publishUpdateSnapshot publishes the HA-Discovery `update` entity and
 // the initial state for a device's firmware-update tracker. If the
 // device is not updatable (Update() is nil) this is a no-op.
@@ -3098,23 +3143,16 @@ func (b *EventBridge) publishUpdateSnapshot(
 	if b.mqtt == nil || d == nil {
 		return
 	}
-	upd := d.Update()
-	if upd == nil {
+	ev, ok := updateDiscoveryEvent(centralName, iface, d)
+	if !ok {
 		return
 	}
+	// ok says the device has an update surface, so this is non-nil; the
+	// event carries it as the narrower discovery interface.
+	upd := d.Update()
 	bridge := b.mqtt.Bridge()
 	if bridge == nil {
 		return
-	}
-
-	ev := mqtt.UpdateEvent{
-		Central:       centralName,
-		Interface:     iface,
-		DeviceAddress: d.Address,
-		DeviceName:    d.Name(),
-		Model:         d.Model,
-		Device:        d,
-		Update:        upd,
 	}
 
 	// Publish HA Discovery (deduplicated by the bridge's declared cache).
