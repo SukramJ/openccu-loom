@@ -15,12 +15,12 @@ import (
 type SourceOutcome string
 
 const (
-	// OutcomePublished: the subject is described as an endpoint of its own.
+	// OutcomePublished means: the subject is described as an endpoint of its own.
 	OutcomePublished SourceOutcome = "published"
-	// OutcomeFolded: the subject is carried by another endpoint, named
+	// OutcomeFolded means: the subject is carried by another endpoint, named
 	// in [SourceDecision.Into].
 	OutcomeFolded SourceOutcome = "folded"
-	// OutcomeWithheld: the subject projects nothing, for
+	// OutcomeWithheld means: the subject projects nothing, for
 	// [SourceDecision.Reason].
 	OutcomeWithheld SourceOutcome = "withheld"
 )
@@ -31,27 +31,27 @@ const (
 type WithheldReason string
 
 const (
-	// WithheldChannelHidden: the operator hid the channel.
+	// WithheldChannelHidden means: the operator hid the channel.
 	WithheldChannelHidden WithheldReason = "channel_hidden"
-	// WithheldSecondaryChannel: a secondary actor channel of a custom
+	// WithheldSecondaryChannel means: a secondary actor channel of a custom
 	// data point, collapsed onto the primary unless the operator opts in.
 	WithheldSecondaryChannel WithheldReason = "secondary_channel"
-	// WithheldUsageIgnored: a service, status or overflow parameter that
+	// WithheldUsageIgnored means: a service, status or overflow parameter that
 	// no surface carries.
 	WithheldUsageIgnored WithheldReason = "usage_ignored"
-	// WithheldConsumedByParent: a raw constituent the channel's
+	// WithheldConsumedByParent means: a raw constituent the channel's
 	// aggregating data point already carries.
 	WithheldConsumedByParent WithheldReason = "consumed_by_parent"
-	// WithheldSecondaryMember: a secondary member or the group-state
+	// WithheldSecondaryMember means: a secondary member or the group-state
 	// transmitter of a custom data point, hidden unless the operator
 	// opts in.
 	WithheldSecondaryMember WithheldReason = "secondary_member"
-	// WithheldNoMapping: the source projects no Matter device.
+	// WithheldNoMapping means: the source projects no Matter device.
 	WithheldNoMapping WithheldReason = "no_matter_mapping"
-	// WithheldNotOnAllowList: the source could be exposed and the
+	// WithheldNotOnAllowList means: the source could be exposed and the
 	// operator has not switched it on.
 	WithheldNotOnAllowList WithheldReason = "not_on_allow_list"
-	// WithheldMeasurementsOff: a measurement of a calculated data point,
+	// WithheldMeasurementsOff means: a measurement of a calculated data point,
 	// which the bridge carries only with measurements included.
 	WithheldMeasurementsOff WithheldReason = "measurements_not_included"
 )

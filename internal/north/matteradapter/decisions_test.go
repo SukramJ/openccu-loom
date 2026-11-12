@@ -24,11 +24,10 @@ func (d denyOne) IsExposed(_ context.Context, k matterendpoint.SourceKey) (bool,
 // decideFleet runs DecideDevice over the golden fleet and DescribeDevices
 // over the same fleet with the same assembler, and returns the decisions
 // and the keys of the described endpoints.
-func decideFleet(t *testing.T, a *matteradapter.Assembler) ([]matteradapter.SourceDecision, []string) {
+func decideFleet(t *testing.T, a *matteradapter.Assembler) (decisions []matteradapter.SourceDecision, describedKeys []string) {
 	t.Helper()
 	ctx := context.Background()
 	fleet := goldenFleet(t)
-	var decisions []matteradapter.SourceDecision
 	for _, dev := range fleet {
 		d, err := a.DecideDevice(ctx, goldenCentralName, fleet, dev)
 		if err != nil {
@@ -40,14 +39,13 @@ func decideFleet(t *testing.T, a *matteradapter.Assembler) ([]matteradapter.Sour
 	if err != nil {
 		t.Fatalf("DescribeDevices: %v", err)
 	}
-	var keys []string
 	for _, d := range described {
 		for i := range d.Endpoints {
-			keys = append(keys, d.Endpoints[i].StableKey.String())
+			describedKeys = append(describedKeys, d.Endpoints[i].StableKey.String())
 		}
 	}
-	sort.Strings(keys)
-	return decisions, keys
+	sort.Strings(describedKeys)
+	return decisions, describedKeys
 }
 
 func publishedKeys(decisions []matteradapter.SourceDecision) []string {
