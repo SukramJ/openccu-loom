@@ -130,6 +130,7 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_centrals` | — | The configured CCU names. These are the scoping dimension for every other tool. |
 | `list_devices` | `central_name?` | Device summaries (address, model, name, interface, central). Omit `central_name` to list all. |
 | `get_device` | `address` | A single device summary + its owning central. |
+| `get_device_projection` | `address`, `plane?` | How the device stands on the north-bound planes: per plane, what is published and under which identifiers, what another entry carries, and what is left out with the named reason. Answers for `matter` today; the tool for "why is this device missing in my controller". |
 | `list_channels` | `address` (device-level) | The device's channels (address, number, type, name, room, data-point count). Use it to discover channel addresses (`<device>:<n>`) before `read_paramset`. |
 | `get_device_schedule` | `address` (device-level) | The device's weekly schedule (week profile) per channel: schedule type (`climate`/`default`), active/available profiles, entry counts, schedule-enabled state. |
 | `read_paramset` | `address` (channel, e.g. `ABC:1`), `key` (`MASTER` or `VALUES`) | The parameter→value map. `MASTER` = configuration, `VALUES` = current state. |
