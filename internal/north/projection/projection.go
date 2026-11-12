@@ -23,6 +23,7 @@ const (
 	PlaneMeasurements = "measurements"
 	PlaneHADiscovery  = "ha_discovery"
 	PlaneMQTTRaw      = "mqtt_raw"
+	PlaneREST         = "rest"
 )
 
 // Plane states.

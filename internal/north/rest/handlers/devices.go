@@ -861,23 +861,11 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 			return
 		}
 		includeAll := r.URL.Query().Get("include") == "all"
-		// An operator-hidden channel (G12) is excluded from the operation
-		// data-point list; ?include=all still returns it for management.
-		if !includeAll && ch.IsHidden() {
-			JSON(w, http.StatusOK, []DataPointSummary{})
-			return
-		}
 		dps := ch.DataPoints()
-		model := ""
-		if d := ch.Device(); d != nil {
-			model = d.Model
-		}
 		serial := serialSuffixForChannel(idx, ch)
 		out := make([]DataPointSummary, 0, len(dps))
 		for _, dp := range dps {
-			// ch.Number is available — use VisibleForChannel for precise
-			// MASTER channel-whitelist filtering.
-			if !includeAll && vis != nil && !vis.VisibleForChannel(model, ch.Type, ch.Number, ch.ParamsetIn, dp.Parameter()) {
+			if !includeAll && dataPointListing(ch, vis, dp.Parameter()) != "" {
 				continue
 			}
 			out = append(out, toDataPointSummary(dp, labels, ch, serial))

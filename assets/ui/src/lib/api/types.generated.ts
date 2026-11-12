@@ -405,7 +405,7 @@ export interface paths {
          *     is computed when asked; nothing is recorded.
          *
          *     Planes are added release by release. This version answers for
-         *     `matter`, `measurements`, `ha_discovery` and `mqtt_raw`.
+         *     `matter`, `measurements`, `ha_discovery`, `mqtt_raw` and `rest`.
          *     Capability `projection.v1`.
          */
         get: operations["getDeviceProjection"];
@@ -7322,8 +7322,8 @@ export interface components {
         ProjectionPlane: {
             /**
              * @description The plane's name. An open set that grows with the daemon;
-             *     today `matter`, `measurements`, `ha_discovery` and
-             *     `mqtt_raw`.
+             *     today `matter`, `measurements`, `ha_discovery`, `mqtt_raw`
+             *     and `rest`.
              */
             plane: string;
             state: components["schemas"]["ProjectionPlaneState"];
@@ -7356,7 +7356,8 @@ export interface components {
              *     entity of a text display). On `mqtt_raw`: `device`,
              *     `data_point`, `channel_state` (the aggregate state of the
              *     channel's custom data point), `week_profile`, `schedule`,
-             *     `schedule_switch`, `combined`.
+             *     `schedule_switch`, `combined`. Absent on `rest`, whose
+             *     subjects are the data points of the VALUES paramset.
              */
             kind?: string;
             /**
@@ -7371,7 +7372,8 @@ export interface components {
              *     MASTER paramset), `online`, `info`, `diagnostics` or
              *     `update` for a topic of the device, `active_entries` or
              *     `attributes` of a schedule, the key of a schedule switch, the
-             *     kind of a channel state or a combined data point.
+             *     kind of a channel state or a combined data point. On `rest`
+             *     the parameter.
              */
             key?: string;
             verdict: components["schemas"]["ProjectionVerdict"];
@@ -7395,8 +7397,11 @@ export interface components {
              *     now and pass by themselves: `not_observed_yet` (the topic is
              *     written with a value of the channel, and none has arrived
              *     since the daemon started) and `empty_value` (there is no
-             *     value to write). A later daemon may state a reason this list
-             *     does not have; show it as it is.
+             *     value to write). On `rest`: `channel_hidden` and
+             *     `hidden_parameter`, the two rules of the default data-point
+             *     list; `?include=all` on that list bypasses them. A later
+             *     daemon may state a reason this list does not have; show it
+             *     as it is.
              */
             reason?: string;
             /**
@@ -7416,7 +7421,8 @@ export interface components {
              *     `channel`, `parameter`. On `ha_discovery`: `component`,
              *     `node_id`, `object_id`, and `discovery_topic` unless the
              *     bridge publishes one document per device. On `mqtt_raw`:
-             *     `topic`, the retained topic the state is written to.
+             *     `topic`, the retained topic the state is written to. On
+             *     `rest`: `path`, the data point's REST path.
              */
             identity?: {
                 [key: string]: string;

@@ -8,6 +8,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A device's projection answers for REST (REST API 16.3.4).**
+  `GET /devices/{addr}/projection`, the MCP tool `get_device_projection`
+  and the Projection tab gain the plane `rest`: which data points the
+  data-point list of each channel carries, with their path, and for the
+  others the rule that leaves them out (`channel_hidden`,
+  `hidden_parameter`). The list handler and the plane ask one function.
+  With this the projection answers for all five planes of the concept.
+  No route or schema changed.
 - **A device's projection answers for the raw MQTT topics (REST API
   16.3.3).** `GET /devices/{addr}/projection`, the MCP tool
   `get_device_projection` and the Projection tab gain the plane
