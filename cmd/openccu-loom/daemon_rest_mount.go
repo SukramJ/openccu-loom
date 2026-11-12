@@ -773,6 +773,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 	mcpInner := d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:      d.reg,
 		Devices:       d.devicesAdapter,
+		Projection:    newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection),
 		Writer:        d.dpWriterAdapter,
 		Paramsets:     d.paramsetsDomain,
 		ParamsetApply: paramsetApplyServiceOrNil(d.paramsetApplyDomain),

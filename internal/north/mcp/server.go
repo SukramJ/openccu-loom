@@ -255,6 +255,9 @@ type BackupLister interface {
 type Deps struct {
 	Centrals  CentralLister
 	Devices   DeviceLister
+	// Projection backs get_device_projection: how one device stands on
+	// the north-bound planes. Nil leaves the tool unregistered.
+	Projection DeviceProjector
 	Writer    ValueWriter
 	Paramsets ParamsetService
 	// ParamsetApply backs list_paramset_apply_targets and the gated
