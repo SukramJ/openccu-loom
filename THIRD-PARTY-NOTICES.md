@@ -189,7 +189,7 @@ direct dependencies declared in [`go.mod`](./go.mod) include:
 | Module | License (family) |
 | --- | --- |
 | `filippo.io/nistec` | BSD-3-Clause |
-| `github.com/SukramJ/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.21.0) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
+| `github.com/SukramJ/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.22.2) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
 | `github.com/SukramJ/go-fabric-ui` | Apache-2.0 — the node page family's HTTP handlers (`fabricui`), mounted under `/api/v1/node`; the module also carries its built standalone bundle, which this daemon does not serve |
 | `github.com/SukramJ/go-hamqtt` | MIT |
 | `github.com/SukramJ/go-ha-catalog` | MIT |

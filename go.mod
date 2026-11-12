@@ -34,8 +34,8 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.21.0
-	github.com/SukramJ/go-fabric-ui v0.9.0
+	github.com/SukramJ/go-fabric v0.22.2
+	github.com/SukramJ/go-fabric-ui v0.9.2
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.39.0
 	github.com/SukramJ/go-mqtt v1.7.0

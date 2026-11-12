@@ -1,10 +1,10 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SukramJ/go-fabric v0.21.0 h1:CmiTzczClfnGwQ0Q5Bd74hZMA1m/Zaemj65vQLhvVaY=
-github.com/SukramJ/go-fabric v0.21.0/go.mod h1:mD3lhrm2QpWXZBagyFtIJ0FlBUapbKVhlYyU6CP0iOA=
-github.com/SukramJ/go-fabric-ui v0.9.0 h1:gBCkY8zi2jpA+pr2TAS7UeIlWhHeXyEQepa/qhLLAjM=
-github.com/SukramJ/go-fabric-ui v0.9.0/go.mod h1:1JoTQUQ170JRdVDWbt5x9nRpJLdxYw6DKCb+Z22nMJ4=
+github.com/SukramJ/go-fabric v0.22.2 h1:HnyaeM+hhrfiD+IYHcH1oPj0NvOpYgimzU+2jc4CNrc=
+github.com/SukramJ/go-fabric v0.22.2/go.mod h1:ZENqwL+a1p3zfhSO7vjwhx6PqVxsCY8UhgNAY/FBD+c=
+github.com/SukramJ/go-fabric-ui v0.9.2 h1:MtGG0xQxc280nkudtNMFQVUY0V0aWVxNWuc3dSGB7tQ=
+github.com/SukramJ/go-fabric-ui v0.9.2/go.mod h1:k59vwTzambcTxHxYdYDSLzHwfgINrp825GoLRBouosg=
 github.com/SukramJ/go-ha-catalog v0.3.1 h1:wo8CN+r4QHFCIBftSJMCHzYzmnkbs2FjEbnfjjQRT0c=
 github.com/SukramJ/go-ha-catalog v0.3.1/go.mod h1:GWdkU683HaEB23e2RWabRZinYPIbWq6wyRQ+iBbMP5s=
 github.com/SukramJ/go-hamqtt v0.39.0 h1:0Ec78wVnCfiae3hrpzWE2k50e1BkDQre/Am+jEAZ924=

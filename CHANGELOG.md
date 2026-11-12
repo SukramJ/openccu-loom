@@ -16,6 +16,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `summary` without a message. Home Assistant's incident list on the
   openccu-loom backend reads them.
 
+### Changed
+
+- **go-fabric v0.21.0 → v0.22.2.** What reaches the bridge: its mDNS
+  responder keeps its sockets when no network interface is up at start and
+  joins each interface as it comes up; a failed first commissioning no
+  longer reopens the commissioning window once the node is idle. BLE and
+  Wi-Fi commissioning (v0.22.0) are not wired here, the controller-side
+  reconnect fixes of v0.22.1 (issue 507) apply to a bound peer only, and
+  v0.22.2 fixes only the nested `ble/esphome` module, which this daemon
+  does not import. The matter.js schema pin is unchanged.
+- **go-fabric-ui v0.9.0 → v0.9.2** (the Go module and `@sukramj/fabric-ui`):
+  dependency-only releases on go-fabric v0.22.2; the pages and the contract
+  (0.9.0) are unchanged, so the REST API does not move.
+
 ## [0.101.0] - 2026-11-12
 
 One question gets an answer in this release: how does a device appear on
