@@ -945,6 +945,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		matter:                 matter,
 		measurementsProjection: sb.measurementsProjection,
 		discoveryProjection:    adapter.NewDiscoveryPlane(bridge),
+		rawProjection:          adapter.NewRawPlane(bridge),
 		reload:                 deps,
 		healthAdapter:          healthAdapter,
 		configAdapter:          configAdapter,

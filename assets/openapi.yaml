@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.3.2
+  version: 16.3.3
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -599,8 +599,8 @@ paths:
         is computed when asked; nothing is recorded.
 
         Planes are added release by release. This version answers for
-        `matter`, `measurements` and `ha_discovery`. Capability
-        `projection.v1`.
+        `matter`, `measurements`, `ha_discovery` and `mqtt_raw`.
+        Capability `projection.v1`.
       parameters:
         - $ref: "#/components/parameters/Address"
         - name: plane
@@ -10495,16 +10495,17 @@ components:
           type: string
           description: |
             The plane's name. An open set that grows with the daemon;
-            today `matter`, `measurements` and `ha_discovery`.
+            today `matter`, `measurements`, `ha_discovery` and
+            `mqtt_raw`.
         state: { $ref: "#/components/schemas/ProjectionPlaneState" }
         reason:
           type: string
           description: |
             Set when `state` is `inactive`: `plane_disabled`, or on
             `measurements` `central_excluded` when forwarding runs but
-            not for the device's central, or on `ha_discovery`
-            `central_not_ready` while the device's central is still
-            coming up.
+            not for the device's central, or on `ha_discovery` and
+            `mqtt_raw` `central_not_ready` while the device's central is
+            still coming up.
         entries:
           type: array
           items: { $ref: "#/components/schemas/ProjectionEntry" }
@@ -10530,7 +10531,10 @@ components:
             point), `event`, `schedule`, `schedule_switch`, `combined`,
             `update`, and `companion` (an entity announced alongside
             another: the press button of a writable press, the notify
-            entity of a text display).
+            entity of a text display). On `mqtt_raw`: `device`,
+            `data_point`, `channel_state` (the aggregate state of the
+            channel's custom data point), `week_profile`, `schedule`,
+            `schedule_switch`, `combined`.
         key:
           type: string
           description: |
@@ -10540,7 +10544,12 @@ components:
             parameter. On `ha_discovery` the parameter of a data point
             (`MASTER:<parameter>` for one of the MASTER paramset), the
             key of a schedule switch, the kind of a combined entity, or
-            `<component>/<object_id>` of a companion.
+            `<component>/<object_id>` of a companion. On `mqtt_raw` the
+            parameter of a data point (`MASTER:<parameter>` for the
+            MASTER paramset), `online`, `info`, `diagnostics` or
+            `update` for a topic of the device, `active_entries` or
+            `attributes` of a schedule, the key of a schedule switch, the
+            kind of a channel state or a combined data point.
         verdict: { $ref: "#/components/schemas/ProjectionVerdict" }
         reason:
           type: string
@@ -10559,8 +10568,13 @@ components:
             `event_suppressed_for_model`, `no_component`,
             `no_scoped_identity`, `render_failed`, `no_entity`,
             `no_custom_data_point`, `builder_declined`,
-            `device_not_released`. A later daemon may state a reason this
-            list does not have; show it as it is.
+            `device_not_released`. On `mqtt_raw`: `hidden_parameter`,
+            `not_visible`, `device_not_released`, and two that describe
+            now and pass by themselves: `not_observed_yet` (the topic is
+            written with a value of the channel, and none has arrived
+            since the daemon started) and `empty_value` (there is no
+            value to write). A later daemon may state a reason this list
+            does not have; show it as it is.
         folded_into:
           type: string
           description: |
@@ -10580,7 +10594,8 @@ components:
             written under: `measurement`, `central`, `interface_id`,
             `channel`, `parameter`. On `ha_discovery`: `component`,
             `node_id`, `object_id`, and `discovery_topic` unless the
-            bridge publishes one document per device.
+            bridge publishes one document per device. On `mqtt_raw`:
+            `topic`, the retained topic the state is written to.
 
     DeviceDetail:
       description: |

@@ -57,7 +57,10 @@ type restMountDeps struct {
 	// discoveryProjection is the Home Assistant discovery side of a
 	// device's projection, over the event bridge that announces.
 	discoveryProjection *adapter.DiscoveryPlane
-	reload              *reloadDeps
+	// rawProjection is the raw MQTT side of a device's projection, over
+	// the same event bridge.
+	rawProjection *adapter.RawPlane
+	reload        *reloadDeps
 
 	// bootstrap is the server-rendered, no-JS diagnostic surface (/health,
 	// /about), folded onto the REST listener (ADR 0044/0045). noUsers is the
@@ -329,7 +332,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Health:                  d.healthAdapter,
 		Config:                  d.configAdapter,
 		Devices:                 d.devicesAdapter,
-		Projection:              newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection, d.measurementsProjection, d.discoveryProjection),
+		Projection:              newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection, d.measurementsProjection, d.discoveryProjection, d.rawProjection),
 		DeviceAdmin:             d.deviceAdminDomain,
 		DeviceReplacer:          d.deviceAdminDomain,
 		FirmwareRefresher:       firmwareRefresherFrom(d.firmwareRefresher),
@@ -779,7 +782,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 	mcpInner := d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:      d.reg,
 		Devices:       d.devicesAdapter,
-		Projection:    newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection, d.measurementsProjection, d.discoveryProjection),
+		Projection:    newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection, d.measurementsProjection, d.discoveryProjection, d.rawProjection),
 		Writer:        d.dpWriterAdapter,
 		Paramsets:     d.paramsetsDomain,
 		ParamsetApply: paramsetApplyServiceOrNil(d.paramsetApplyDomain),

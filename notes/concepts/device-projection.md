@@ -1,6 +1,6 @@
 # Device projection — how one device appears on each plane, and why not
 
-- **Status**: Accepted by the owner on 2026-11-12 (issue #1068, step 1). Slices 1 (Matter, REST route, MCP tool), 2 (measurement forwarding) and 3 (Home Assistant discovery) are built. The view (slice 6) is built for these three planes, ahead of slices 4 and 5 by the owner's choice of 2026-11-12.
+- **Status**: Accepted by the owner on 2026-11-12 (issue #1068, step 1). Slices 1 (Matter, REST route, MCP tool), 2 (measurement forwarding), 3 (Home Assistant discovery) and 4 (raw MQTT topics) are built. The view (slice 6) is built for these three planes, ahead of slices 4 and 5 by the owner's choice of 2026-11-12.
 - **Date**: 2026-11-12
 - **Scope**: `openccu-loom` — `internal/north/{mqtt,matteradapter,measurements,rest,mcp}`,
   `internal/central/adapter`, `assets/ui/`

@@ -1767,6 +1767,21 @@ func (b *Bridge) describeCustomDPDiscovery(ev Event) DiscoveryDescription {
 	return DiscoveryDescription{Verdict: b.builderVerdict(ev), Companions: b.textDisplayNotifyCompanion(ev)}
 }
 
+// HoldsRawTopic reports whether this bridge has written the retained raw
+// topic since it started and not retracted it. It answers for the topics
+// that are written as a consequence of a value arriving rather than by a
+// rule that can be asked: the aggregate state of a custom data point is
+// one.
+func (b *Bridge) HoldsRawTopic(topic string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.rawTopics[topic]
+	return ok
+}
+
+// RawEnabled reports whether this bridge writes the raw topic plane.
+func (b *Bridge) RawEnabled() bool { return b.cfg.RawEnabled }
+
 // DiscoveryEnabled reports whether this bridge announces Home Assistant
 // entities at all.
 func (b *Bridge) DiscoveryEnabled() bool {

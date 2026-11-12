@@ -2062,13 +2062,8 @@ func (b *EventBridge) publishSlotState(
 		return
 	}
 
-	bucket := slotBucket(ch, e.Key)
-	slot := payload.TopicSlot{
-		Address:   deviceAddr,
-		Channel:   channelNo,
-		Bucket:    bucket,
-		Parameter: e.Key.Parameter,
-	}
+	slot := dataPointSlot(ch, deviceAddr, channelNo, e.Key)
+	bucket := slot.Bucket
 
 	value := e.NewValue.Unwrap()
 	state := payload.PerDPState{
@@ -2146,6 +2141,18 @@ func dpValid(dp device.ParameterDataPoint) bool {
 // slotBucket selects the paramset bucket a value-changed event belongs to.
 // It steers the MQTT topic segment and, through [dpAvailability], the
 // availability rule — so both planes classify one data point identically.
+// dataPointSlot is the slot a data point's state is published under: its
+// address, channel, bucket and parameter. The slot state publish and a
+// description of the device name the topic through it.
+func dataPointSlot(ch *device.Channel, deviceAddr string, channelNo int, key hmtypes.DataPointKey) payload.TopicSlot {
+	return payload.TopicSlot{
+		Address:   deviceAddr,
+		Channel:   channelNo,
+		Bucket:    slotBucket(ch, key),
+		Parameter: key.Parameter,
+	}
+}
+
 func slotBucket(ch *device.Channel, key hmtypes.DataPointKey) payload.Bucket {
 	switch {
 	case key.ParamsetKey == hmenum.ParamsetKeyMaster:
@@ -2382,13 +2389,28 @@ func (b *EventBridge) publishCustomDPState(
 	if bridge == nil {
 		return
 	}
-	slotted, ok := cdp.(payload.Slotted)
+	slot, src, ok := customDPStateSlot(ch, deviceAddr, channelNo)
 	if !ok {
 		return
 	}
+	notePublish(ctx, bridge.PublishCustomDPState(ctx, centralName, iface, slot, src.State()))
+}
+
+// customDPStateSlot is the slot the aggregate state of a channel's custom
+// data point is published under, with the source of that state, and false
+// for a channel without one that is slotted and a payload source.
+func customDPStateSlot(ch *device.Channel, deviceAddr string, channelNo int) (payload.TopicSlot, payload.Source, bool) {
+	cdp := ch.CustomDataPoint()
+	if cdp == nil {
+		return payload.TopicSlot{}, nil, false
+	}
+	slotted, ok := cdp.(payload.Slotted)
+	if !ok {
+		return payload.TopicSlot{}, nil, false
+	}
 	src, ok := cdp.(payload.Source)
 	if !ok {
-		return
+		return payload.TopicSlot{}, nil, false
 	}
 	slot := slotted.TopicSlot()
 	// Trust the source-declared address+channel (model knows the
@@ -2401,7 +2423,7 @@ func (b *EventBridge) publishCustomDPState(
 	if slot.Address == "" {
 		slot.Address = deviceAddr
 	}
-	notePublish(ctx, bridge.PublishCustomDPState(ctx, centralName, iface, slot, src.State()))
+	return slot, src, true
 }
 
 // publishCustomDPConfig publishes the custom-DP's ConfigPayload

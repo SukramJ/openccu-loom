@@ -214,6 +214,8 @@ device, how it appears on each plane the daemon bridges it to:
   their config topic.
 - **Measurement forwarding** — which values are sent to your time-series
   store, with the measurement and tags they are written under.
+- **MQTT (raw topics)** — which retained status topics exist for the
+  device, with the topic of each.
 
 Each plane says whether it is active. Every entry is either *published*,
 *carried* by another entry (a battery reported through its device's

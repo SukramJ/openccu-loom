@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A device's projection answers for the raw MQTT topics (REST API
+  16.3.3).** `GET /devices/{addr}/projection`, the MCP tool
+  `get_device_projection` and the Projection tab gain the plane
+  `mqtt_raw`: the retained status topics the daemon writes for the
+  device (availability, info, diagnostics, firmware update, the state of
+  every parameter, the aggregate state of a channel's custom data point,
+  week profile, schedule sensor and switches, combined data points),
+  each with its topic, and for a parameter without one the rule that
+  refuses it. Two reasons describe the moment and pass by themselves:
+  `not_observed_yet` for a state written with the channel's first value,
+  `empty_value` where there is nothing to write. An end-to-end test
+  compares the plane with the status topics a broker holds, in both
+  directions. The non-retained event pulses and the `meta` config
+  companions are not part of the plane. No route or schema changed.
 - **Config UI: a Projection tab in the device detail.** It shows how the
   device appears on Matter, in Home Assistant discovery and in
   measurement forwarding: per plane whether it is active, each entity or
