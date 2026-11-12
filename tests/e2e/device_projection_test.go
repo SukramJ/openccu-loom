@@ -76,7 +76,7 @@ func TestDeviceProjectionAnswersThroughTheDaemon(t *testing.T) {
 		t.Errorf("answer names %q on %q; want %q on its central", out.Address, out.Central, addr)
 	}
 	want := []string{"matter", "measurements", "ha_discovery", "mqtt_raw"}
-	var got []string
+	got := make([]string, 0, len(out.Planes))
 	for _, p := range out.Planes {
 		got = append(got, p.Plane)
 	}
@@ -377,9 +377,10 @@ func TestRawProjectionIsWhatTheBrokerHolds(t *testing.T) {
 	onBroker := held.settled(t, 5*time.Second, 90*time.Second)
 
 	shown := map[string]bool{}
-	var addrs []string
+	devices := getJSONArray(t, h, "/api/v1/devices", "items")
+	addrs := make([]string, 0, len(devices))
 	withheld := 0
-	for _, raw := range getJSONArray(t, h, "/api/v1/devices", "items") {
+	for _, raw := range devices {
 		dev, _ := raw.(map[string]any)
 		addr, _ := dev["address"].(string)
 		addrs = append(addrs, addr)
