@@ -618,7 +618,7 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	// Text-display custom-DPs (HmIP-WRCD) surface ONLY as a `notify` entity in
 	// the reference stack — the TEXT_DISPLAY category maps to the notify
 	// platform alone, not to a `text` entity. The notify companion is
-	// published separately via [Bridge.publishTextDisplayNotify]; suppressing
+	// published separately via [Bridge.textDisplayNotifyCompanion]; suppressing
 	// the aggregate here keeps the loom plane from emitting a surplus `text`
 	// entity (which HA would otherwise collide with the notify under a `_2`
 	// suffix).

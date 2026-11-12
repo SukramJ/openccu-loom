@@ -1640,10 +1640,10 @@ func (b *Bridge) PublishAddonUpdateState(ctx context.Context, installedVersion, 
 // somebody actually pressed the button — and many physical buttons
 // have no observed value persisted on the CCU between presses.
 //
-// Routes through the same decision as the runtime [Build] flow: a
+// Routes through the same decision as the runtime [DefaultDiscoveryBuilder.Build] flow: a
 // channel that exposes any PRESS_* parameter, one type or several,
-// emits one HA `event` entity per channel via [BuildChannelEvent]. The
-// per-parameter [Build] heuristic only applies when the event carries
+// emits one HA `event` entity per channel via [DefaultDiscoveryBuilder.BuildChannelEvent]. The
+// per-parameter [DefaultDiscoveryBuilder.Build] heuristic only applies when the event carries
 // no channel inspector to aggregate over.
 //
 // Idempotent — the publisher's dedup gate (`b.pub`) skips a config it

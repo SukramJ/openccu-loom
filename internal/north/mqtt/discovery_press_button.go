@@ -35,7 +35,7 @@ const pressButtonPayload = "PRESS"
 // central/long-press parameters) resolves to event and gets no button.
 //
 // The companion button is published IN ADDITION to the per-channel keypress
-// `event` entity (which the regular [Build] press path emits): pressing the
+// `event` entity (which the regular [DefaultDiscoveryBuilder.Build] press path emits): pressing the
 // button from HA writes the action to the CCU, exactly as the keypress event
 // observes a physical press.
 func isPressButtonEvent(ev Event) bool {
@@ -194,9 +194,9 @@ func describePressButtonFromRegistry(
 // click-event parameter the model marked as a button (category=button,
 // usage=data_point). The reference stack renders every such press as a
 // clickable button (disabled by default) NEXT TO the per-channel keypress
-// `event` entity; the regular [Build] press path only produces the event
+// `event` entity; the regular [DefaultDiscoveryBuilder.Build] press path only produces the event
 // entity, so the bridge publishes this companion through
-// [Bridge.publishPressButton].
+// [Bridge.pressButtonCompanion].
 //
 // The button's command topic is the press parameter's per-DP command
 // topic; HA publishes `payload_press` ("PRESS") which the command
