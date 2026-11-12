@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/auth/occulitebox"
 )
 
 // A box API token the gate accepted for this add-on (ADR 0080), pinned end
@@ -50,7 +51,7 @@ func TestOcculiteTokenAgainstLiteFake(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mw := auth.OcculiteSSOPassthrough(auth.OcculiteSSOTrust{
-		Enabled: true, Verifier: ssoVerifier{c: box}, AddonScope: boxAddonScope,
+		Enabled: true, Verifier: occulitebox.Verifier{Client: box}, AddonScope: boxAddonScope,
 	}, nil)(probe)
 
 	for _, tc := range []struct {

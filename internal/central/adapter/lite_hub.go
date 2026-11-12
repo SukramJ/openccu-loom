@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
@@ -341,6 +342,15 @@ func (s *liteValueSeeder) fromStateStore(ctx context.Context, iface hmenum.Inter
 // fillFromParamsets reads the VALUES paramset of every channel of iface
 // that has a readable parameter the state store did not deliver. A failed
 // read is logged and skipped: seeding is best effort.
+//
+// On BidCos-RF such a read is not free. The interface process asks the
+// device for its status on the air for every VALUES read of a value
+// channel, however fresh its last value is, and a request that goes
+// unanswered — after its retries — is the most expensive read there is
+// (docs/caching.md, the openccu-lite section, names the source). The seed
+// therefore leaves the value channels of a device alone that
+// cannot answer; see [sparesValueChannels]. Channel 0
+// costs no frame and is read for every device.
 func (s *liteValueSeeder) fillFromParamsets(ctx context.Context, iface hmenum.Interface, out map[string]map[string]any) {
 	b := s.backends.get(iface)
 	if b == nil {
@@ -351,7 +361,11 @@ func (s *liteValueSeeder) fillFromParamsets(ctx context.Context, iface hmenum.In
 		if dev == nil || dev.InterfaceID != wireID {
 			continue
 		}
+		spare := iface == hmenum.InterfaceBidCosRF && sparesValueChannels(dev, out)
 		for _, ch := range dev.Channels() {
+			if spare && ch.Address != dev.Address+":0" {
+				continue
+			}
 			if !s.missingReadable(wireID, ch.Address, out[ch.Address]) {
 				continue
 			}
@@ -373,6 +387,26 @@ func (s *liteValueSeeder) fillFromParamsets(ctx context.Context, iface hmenum.In
 			}
 		}
 	}
+}
+
+// sparesValueChannels reports whether a BidCos-RF device's value channels
+// are left out of a seed, because a status request to it would go
+// unanswered:
+//
+//   - the box reports the device unreachable (UNREACH on channel 0, as the
+//     state store delivered it); or
+//   - the device does not listen all the time (its receive mode is known
+//     and lacks ALWAYS) — a battery device the interface process cannot
+//     ask on demand.
+//
+// A device whose reachability or receive mode is not known is read: the
+// rule spares a request that is known to fail, it does not guess. What is
+// left out arrives with the device's next event.
+func sparesValueChannels(dev *device.Device, state map[string]map[string]any) bool {
+	if unreach, ok := state[dev.Address+":0"][string(hmenum.ParameterUnreach)].(bool); ok && unreach {
+		return true
+	}
+	return dev.RxMode != hmenum.RxModeUndefined && dev.RxMode&hmenum.RxModeAlways == 0
 }
 
 // missingReadable reports whether the channel's VALUES description has a

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -20,6 +21,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // concurrentEditor sits in front of the fake and edits the store right
@@ -101,6 +103,46 @@ func TestLiteIfMatchConflictRetriesOnce(t *testing.T) {
 			t.Errorf("store enums = %v: a conflicting write landed", got)
 		}
 	})
+}
+
+// TestLiteRenameRefusesAnEmptyName pins that a rename to nothing is a
+// validation error raised before the box is asked: the box's store keeps
+// a name for every object and would answer 422 to it.
+func TestLiteRenameRefusesAnEmptyName(t *testing.T) {
+	t.Parallel()
+	w, f, _ := startEditedWriter(t, 0)
+	const ref = "BidCos-RF.VCU0000321:1"
+	before := f.Meta().Snapshot().Objects[ref].Name
+	writes := func() int {
+		n := 0
+		calls := f.Calls()
+		for i := range calls {
+			if calls[i].Method != http.MethodGet && strings.HasPrefix(calls[i].Path, "/api/meta/v1/") {
+				n++
+			}
+		}
+		return n
+	}
+	sent := writes()
+	for name, do := range map[string]func() error{
+		"single": func() error { return w.rename(context.Background(), "VCU0000321:1", "  ") },
+		"batch": func() error {
+			return w.renameBatch(context.Background(), central.DeviceRename{
+				Device:   central.Rename{Address: "VCU0000321", Name: "Lamp"},
+				Channels: []central.Rename{{Address: "VCU0000321:1", Name: ""}},
+			})
+		},
+	} {
+		if err := do(); !errors.Is(err, hmerr.ErrValidation) {
+			t.Errorf("%s rename err = %v, want ErrValidation", name, err)
+		}
+	}
+	if got := writes(); got != sent {
+		t.Errorf("metadata writes sent = %d, want %d: a refused rename reached the box", got, sent)
+	}
+	if got := f.Meta().Snapshot().Objects[ref].Name; got != before {
+		t.Errorf("name = %q, want it unchanged at %q", got, before)
+	}
 }
 
 // TestLiteAssignCreatesAMissingObject pins the path for a channel the

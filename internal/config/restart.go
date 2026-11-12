@@ -441,6 +441,14 @@ func restSurfaceRestartRules() []RestartRule {
 				return b.North.UI.IsEnabled() != e.North.UI.IsEnabled()
 			},
 		},
+		// The notice mirror for the openccu-lite box is started, or not,
+		// once at boot.
+		{
+			Path: "north.ui.box_notices",
+			Differs: func(b, e *Config) bool {
+				return !reflect.DeepEqual(b.North.UI.BoxNotices, e.North.UI.BoxNotices)
+			},
+		},
 		// Whether the REST + WebSocket surface is mounted at all is decided
 		// once, when the listener is assembled.
 		{

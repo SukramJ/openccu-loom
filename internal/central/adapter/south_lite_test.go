@@ -389,3 +389,62 @@ func TestLiteBringUpLoadsMetadataBeforeReturning(t *testing.T) {
 		t.Errorf("channel rooms when BringUpHub returned = %v, want [Wohnzimmer]", got)
 	}
 }
+
+// TestLiteValueSeederSparesTheBidCosRadio pins what a full seed may ask a
+// BidCos-RF device for. A VALUES read of a value channel there is a
+// status request on the air, and one that goes unanswered — the device is
+// away, or sleeps and cannot be asked — is the most expensive read there
+// is. So the seed reads the value channels of an always-listening device
+// that is reachable, and of a device whose receive mode it does not know;
+// it leaves a device the box reports unreachable and a device that only
+// wakes up alone, and their values arrive with the device's next event.
+// Channel 0 costs no frame and is read for all of them. On HmIP-RF the
+// interface process answers from its own store, and every channel is
+// read.
+func TestLiteValueSeederSparesTheBidCosRadio(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		iface hmenum.Interface
+		want  []string
+	}{
+		{hmenum.InterfaceBidCosRF, []string{"AWAY:0", "LISTENS:0", "LISTENS:1", "SLEEPS:0", "UNKNOWN:0", "UNKNOWN:1"}},
+		{hmenum.InterfaceHmIPRF, []string{"AWAY:0", "AWAY:1", "LISTENS:0", "LISTENS:1", "SLEEPS:0", "SLEEPS:1", "UNKNOWN:0", "UNKNOWN:1"}},
+	} {
+		t.Run(string(tc.iface), func(t *testing.T) {
+			t.Parallel()
+			_, unit := registryWithUnit(t, "box")
+			wireID := WireInterfaceID("box", tc.iface)
+			reg := hmtypes.ParseWireInterfaceID(wireID)
+			rw := hmenum.OperationsRead | hmenum.OperationsEvent
+			for addr, rx := range map[string]hmenum.RxMode{
+				"LISTENS": hmenum.RxModeAlways,
+				"AWAY":    hmenum.RxModeAlways,
+				"SLEEPS":  hmenum.RxModeConfig | hmenum.RxModeWakeup,
+				"UNKNOWN": hmenum.RxModeUndefined,
+			} {
+				dev := device.New(device.Config{InterfaceID: wireID, Interface: tc.iface, Address: addr, Model: "X", RxMode: rx})
+				for no, suffix := range []string{":0", ":1"} {
+					dev.AddChannel(addr+suffix, no, "X", hmenum.ParamsetKeyValues)
+					unit.ParamsetReg.Add(reg, addr+suffix, hmenum.ParamsetKeyValues,
+						hmproto.Paramset{"LEVEL": {Type: hmenum.ParameterTypeFloat, Operations: rw}}, "X")
+				}
+				unit.ModelRegistry.Put(dev)
+			}
+			ops := &paramsetOps{values: map[string]map[string]any{}}
+			set := &liteBackendSet{}
+			set.put(tc.iface, ops)
+			s := &liteValueSeeder{unit: unit, centralName: "box", backends: set, logger: slog.New(slog.DiscardHandler)}
+			// What the state store delivered: who is unreachable, nothing else.
+			out := map[string]map[string]any{
+				"AWAY:0":    {"UNREACH": true},
+				"LISTENS:0": {"UNREACH": false},
+				"SLEEPS:0":  {"UNREACH": false},
+			}
+			s.fillFromParamsets(context.Background(), tc.iface, out)
+			slices.Sort(ops.reads)
+			if !slices.Equal(ops.reads, tc.want) {
+				t.Errorf("VALUES reads on %s = %v,\nwant %v", tc.iface, ops.reads, tc.want)
+			}
+		})
+	}
+}

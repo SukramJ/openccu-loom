@@ -2497,6 +2497,82 @@ trees).
 14. "A client that does not read gets `resync overflow` and is disconnected" — detected only at the next
     15 s heartbeat tick after the 1024-slot queue overflowed.
 
+### A.12 What moved after the pin (compared at occulited `04ee7b6`, 2026-11-11)
+
+The sections above describe occulited `24127692918f`. A comparison of occulited's API documents and
+handlers at `04ee7b6` (169 commits later) found the changes below on the surfaces Loom uses. Each row
+names the occulited commit that introduced it; "adopted" means Loom and godevccu's `litefake` follow
+it, "open" that nothing in Loom reads or sends it yet.
+
+| Change | Since | State |
+| --- | --- | --- |
+| `POST /restore/apply` requires `confirm: true`; `400 confirm` without, before every other check | `6826b85` (2026-10-03) | adopted |
+| `POST /restore/check` answers `backup: null\|{kind: "openccu-lite"\|"ccu", system, version, …}`; `POST /restore/apply` refuses a file that is not an openccu-lite backup with `422 not_openccu_lite` | `8cf9060` (2026-11-10) | adopted |
+| Stream: `updateDevice` carries `hint` as the interface sent it (0 when the call had none); `replaceDevice` carries `old` and `new` beside `addresses` | `2fc25cb` (2026-10-02) | adopted |
+| Stream: new message type `firmware {interface, address, update_state, transfer?, ts}`, at most one per device per 10 s | `11bed1d` (2026-10-14) | adopted — triggers a coalesced re-read of the interface's device descriptions |
+| `GET /api/rpc/v1/paramsets`, `POST /paramsets/{interface}`: the paramset description cache, one description per device model, firmware and channel type | `2d9c804` (2026-10-22) | adopted — a hydration reads an interface's `VALUES` and `MASTER` descriptions through `POST /paramsets/{interface}`, one request per paramset; a box without the route is read one by one as before |
+| `GET /api/meta/v1/version` carries `commit`, and `interfaces` (the names lite-rpc offers, readable without a credential) | `50f7e39` (2026-10-04), `9ee3588` (2026-11-10) | `interfaces` adopted — the onboarding probe passes them on; `commit` is not read (the implementation string already carries it) |
+| `GET /system-update` carries `busy`; download, upload and install answer `409 busy` while one runs | `7b69d5e` (2026-10-23) | adopted for download and install (`hmerr.ErrBusy`, REST 409); the `busy` member of `GET /system-update` is not read |
+| Pairing request: optional `access.backup` and `addons`; the administrator's list carries `needs_confirmation`, `token_ips` | `e0f5227` (2026-10-01), `ccbaf56` (2026-10-31) | open — the code derivation is unchanged |
+| A metadata `PATCH` with an empty `name` is `422 invalid-name` | `2a78ed5` (2026-10-29) | adopted — refused before the box is asked |
+| Manifest: `changelog`, `runtime.bin`, `runtime.web_ingress`, `ui.fullscreen`; scope `power:halt` (included in `power`) | `f6c6e99` … `4c51107` | `changelog` adopted, the rest unused |
+| Addon notices (`/api/system/v1/addon-notices`, the add-on's control token) | `5783ccd` (2026-10-27) | adopted — the warning list is mirrored (ADR 0090); posted and cleared on a box on 2026-11-11 |
+
+`role` in `GET /api/auth/v1/state` is unchanged but was already documented at the pin as derived from
+`level` and "answered for one release". Loom's single sign-on reads `level` and falls back to `role`
+only where a box answers no level (ADR 0079, amendment of 2026-11-11).
+
+**Read from a box on 2026-11-11** (the test box, occulited `04ee7b6`, openccu-lite 1.2.1; reads only, with an
+API token):
+
+- `GET /api/meta/v1/version` carries `commit` and `interfaces: ["BidCos-RF", "HmIP-RF", "VirtualDevices"]`.
+- `GET /system-update` carries `busy: null`; `GET /api/rpc/v1/state` entries carry `previous_for_s` and
+  `changed_at`.
+- The box's own `GET /api/openapi.json` (309 paths) lists every one of the 53 routes Loom's transport calls,
+  the notice and paramset routes included. The route list was written by hand from the transport package, not
+  extracted from it; an invented route was reported missing by the same check.
+- **The paramset description cache**: `GET /api/rpc/v1/paramsets` answered the
+  whole cache in one request — 92 descriptions (53 `MASTER`, 39 `VALUES`), 4078 parameters, 654 kB, 0.08 s — keyed
+  `<interface>/<device type>/<firmware>/<version>/<channel type>/<paramset>`. `POST /paramsets/HmIP-RF` with four
+  addresses answered `{keys, paramsets, errors}` in 0.03 s: a channel maps to its key, a device address without
+  `VALUES` is in `errors` with fault -3, an unknown address with fault -2.
+- **The cache carries JSON's types, and that is what Loom reads anyway.** A `FLOAT` parameter's whole-number
+  bound arrives as a JSON integer (the `MIN` of 739 `FLOAT` parameters on this box; `ON_TIME` has `MIN: 0` beside
+  `MAX: 85825945.6`), and the interface processes' own quirks pass through unchanged: VirtualDevices answers
+  bounds as strings (`"MIN": "5.0"`, 572 cases; a `BOOL` with `"DEFAULT": "false"`), HmIP-RF answers an `ENUM`'s
+  bounds as value names. None of this is a difference to the XML-RPC path as Loom reads it: the backend turns the
+  decoded XML answer into JSON before it becomes a parameter description
+  (`internal/client/backends/convert.go`, `toParameterData`), keeps `MIN`/`MAX`/`DEFAULT` as that JSON text and
+  types a parameter by `TYPE`. Measured on the box: for the 22 addresses its state store names, on all three
+  interfaces, the `VALUES` and `MASTER` descriptions read through the XML-RPC proxy and from the cache route were
+  the same by value — 44 descriptions, 1764 parameters, no difference; the same comparison against the wrong
+  paramset reported all 44 as different. Only the wire values were compared there, in a script; Loom's own decoder
+  was not run against the box.
+
+**Run on that box the same day**, with the build of this branch installed as the add-on (`0.99.1-dev.2`, through
+`POST /api/system/v1/addons/install`; exit 0, the manifest applied):
+
+- The daemon came up as `lite-addon` with REST API 16.1.0, 13 devices on three interfaces, every health component
+  healthy, events arriving.
+- A box API token through the gate resolved to `occulite-token:<name>`, role admin.
+- **Add-on notices work on a box.** Its journal: `addon notice: posted … addon=openccu-loom
+  notice=health.kearney.startup.kearney severity=warning` at 21:14:04 and `addon notice: cleared …` at 21:14:06.
+- Not shown by this run: whether the start read its paramset descriptions through the batch route or one by one
+  (the daemon logs neither, the box logs no requests, and the box's cache was complete before); the pairing
+  path of the notices; a restore; the `hint` and `firmware` stream messages, which need a device to change.
+- Seen beside it, and older than this branch: the value seed of BidCos-RF logged 15 `getParamset` faults `-1
+  Failure` in the first minute, some after four seconds. occulited's documents name that case — a status request
+  to a device that is away or asleep, the most expensive read there is — and advise skipping what `UNREACH` says
+  is away. Fixed on this branch after the run: the seed leaves the value channels of a BidCos-RF device alone
+  that is reported unreachable or does not listen all the time (`docs/caching.md`). Run on the box twelve
+  minutes later (`0.99.1-dev.3`): no `getParamset` fault and no warning or error line in the first 82 seconds,
+  the last seed finished one second after the first, where the earlier start was still failing reads 50 s in.
+  The same box and devices both times; the box still reported the one device unreachable afterwards.
+
+occulited publishes machine-readable documents since `835e0af` (2026-09-29): `docs/openapi.json`
+(served as `GET /api/openapi.json`, scope `system:read`), `docs/asyncapi.json` and
+`docs/lite-rpc-methods.json`. They are GPL-3.0-only and are not copied into this repository.
+
 ---
 
 ## Appendix B — report claims found wrong during verification

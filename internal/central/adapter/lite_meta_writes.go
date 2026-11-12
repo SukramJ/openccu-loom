@@ -61,11 +61,20 @@ func (w *liteMetaWriter) require(k hmenum.Feature) error {
 	return w.unit.Features().Require(w.unit.Name(), k, nil)
 }
 
+// errLiteEmptyName refuses a rename to nothing. The box's metadata store
+// keeps a name for every object and answers 422 invalid-name to an empty
+// or blank one; refusing it here names the reason as a validation error
+// instead of a failed upstream call.
+var errLiteEmptyName = fmt.Errorf("%w: rename: an openccu-lite object always has a name; an empty one cannot be stored", hmerr.ErrValidation)
+
 // rename sets one object's name; a PATCH with a name creates an object
 // the store does not hold yet.
 func (w *liteMetaWriter) rename(ctx context.Context, address, name string) error {
 	if err := w.require(hmenum.FeatureDeviceRename); err != nil {
 		return err
+	}
+	if strings.TrimSpace(name) == "" {
+		return errLiteEmptyName
 	}
 	ref, err := w.objectRef(address)
 	if err != nil {
@@ -84,6 +93,9 @@ func (w *liteMetaWriter) renameBatch(ctx context.Context, rename central.DeviceR
 	}
 	set := make(map[string]occulited.ObjectPatch, len(rename.Channels)+1)
 	for _, r := range append([]central.Rename{rename.Device}, rename.Channels...) {
+		if strings.TrimSpace(r.Name) == "" {
+			return errLiteEmptyName
+		}
 		ref, err := w.objectRef(r.Address)
 		if err != nil {
 			return err

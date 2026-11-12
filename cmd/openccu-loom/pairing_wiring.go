@@ -47,7 +47,8 @@ func (m pairedTokenMinter) MintPairedToken(ctx context.Context, subject string, 
 // the surface answers pairing_off. The manager binds its code to the
 // certificate the daemon serves (nil behind a TLS-terminating proxy or
 // over plain HTTP), announces list changes on the WS hub, and feeds the
-// operator warnings so a waiting request surfaces on Diagnostics.
+// operator warnings so a waiting request surfaces on Diagnostics. onChange,
+// when set, is told of every list change as well.
 func buildPairingService(
 	cfg *config.Config,
 	tokens *sqlitestore.TokenStore,
@@ -55,6 +56,7 @@ func buildPairingService(
 	tlsReloader *rest.CertReloader,
 	hub *ws.Hub,
 	warningsSvc *warnings.Aggregator,
+	onChange func(),
 	logger *slog.Logger,
 ) handlers.PairingService {
 	if tokens == nil {
@@ -71,8 +73,13 @@ func buildPairingService(
 		Fingerprint: fingerprint,
 		Log:         logger,
 	}
-	if hub != nil {
-		mgr.OnChange = func() { hub.PublishPairingRequestsChanged(mgr.PendingCount(), time.Now()) }
+	mgr.OnChange = func() {
+		if hub != nil {
+			hub.PublishPairingRequestsChanged(mgr.PendingCount(), time.Now())
+		}
+		if onChange != nil {
+			onChange()
+		}
 	}
 	if warningsSvc != nil {
 		warningsSvc.WithPairing(mgr)

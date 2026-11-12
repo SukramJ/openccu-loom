@@ -5,10 +5,12 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -31,6 +33,41 @@ func fakeHostPort(t *testing.T, f *litefake.Fake) (host string, port int) {
 	host, p, _ := net.SplitHostPort(u.Host)
 	port, _ = strconv.Atoi(p)
 	return host, port
+}
+
+// TestLiteProbeNamesTheBoxInterfaces pins that the probe passes on the
+// interface names the box gives without a credential, and that a box
+// which names none is told apart from one that offers none: absent, not
+// an empty list.
+func TestLiteProbeNamesTheBoxInterfaces(t *testing.T) {
+	t.Parallel()
+	f := startTestFake(t, litefake.Options{})
+	host, port := fakeHostPort(t, f)
+	o := NewLiteOnboarding("loom-test", nil, "en", slog.New(slog.DiscardHandler))
+
+	res, err := o.Probe(context.Background(), hmapi.CentralProbeRequest{Host: host, Port: port})
+	if err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	if res.Lite == nil || !slices.Equal(res.Lite.Interfaces, []string{"BidCos-RF", "HmIP-RF", "VirtualDevices"}) {
+		t.Fatalf("probe = %+v, want the box's three interfaces sorted", res.Lite)
+	}
+
+	f.Deviate(litefake.DeviateVersionNoInterfaces, true)
+	res, err = o.Probe(context.Background(), hmapi.CentralProbeRequest{Host: host, Port: port})
+	if err != nil {
+		t.Fatalf("Probe of a box that names no interfaces: %v", err)
+	}
+	if res.Lite == nil || res.Lite.Interfaces != nil {
+		t.Fatalf("probe = %+v, want no interfaces member", res.Lite)
+	}
+	raw, err := json.Marshal(res.Lite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "interfaces") {
+		t.Errorf("wire form %s carries an interfaces member for a box that named none", raw)
+	}
 }
 
 // TestLiteProbeIdentifiesABoxBehindAnUnknownCertificate pins the first

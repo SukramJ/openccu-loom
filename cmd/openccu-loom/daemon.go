@@ -921,6 +921,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 	warningsSvc := warnings.New(healthAdapter, incidentsReader, hubAdapter, silenceStore)
 
+	// On an openccu-lite box the same list stands on the box's Status page
+	// as the add-on's notices (ADR 0090). nil everywhere else.
+	boxNoticeMirror := startBoxNotices(ctx, cfg, boxNoticeDeps{
+		warnings: warningsSvc, catalogs: catalogs, health: healthTracker, reg: reg, admin: centralAdminSvc,
+	}, logger)
+	defer boxNoticeMirror.Stop()
+
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
 	// stop defer.
@@ -959,6 +966,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		ifaceAdapter:           ifaceAdapter,
 		incidents:              incidentsReader,
 		warningsSvc:            warningsSvc,
+		onPairingChange:        boxNoticeMirror.Nudge,
 		alarm:                  alarmSvc,
 		security:               securitySvc,
 		sysStatusBuf:           sysStatusBuf,

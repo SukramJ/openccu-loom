@@ -6,9 +6,11 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -99,7 +101,32 @@ func (s *liteSystem) DownloadSystemFirmware(ctx context.Context) error {
 		return err
 	}
 	_, err := s.client.DownloadSystemUpdate(ctx)
-	return err
+	return liteUpdateBusy(err)
+}
+
+// liteUpdateBusy turns the box's refusal of a second system update into
+// [hmerr.ErrBusy], naming the update in flight. The box runs one download,
+// upload or install at a time and answers 409 busy to another. Any other
+// error passes through unchanged.
+func liteUpdateBusy(err error) error {
+	var apiErr *occulited.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusConflict || apiErr.Code != occulited.CodeBusy {
+		return err
+	}
+	var running struct {
+		Phase string `json:"phase"`
+		File  string `json:"file"`
+	}
+	// The detail is optional context: without it the box's own message
+	// still says what runs.
+	_ = json.Unmarshal(apiErr.Detail, &running)
+	if running.Phase == "" {
+		return fmt.Errorf("%w: openccu-lite system update: %s", hmerr.ErrBusy, apiErr.Message)
+	}
+	if running.File == "" {
+		return fmt.Errorf("%w: openccu-lite system update: the box is already running one (%s)", hmerr.ErrBusy, running.Phase)
+	}
+	return fmt.Errorf("%w: openccu-lite system update: the box is already running one (%s of %s)", hmerr.ErrBusy, running.Phase, running.File)
 }
 
 // createBackup downloads a backup the box creates on request. The archive
@@ -147,8 +174,17 @@ func (s *liteSystem) Restore(ctx context.Context, id string, payload io.Reader) 
 	if !check.Check.OK {
 		return "", fmt.Errorf("%w: restore: the box refused the archive: %s", hmerr.ErrValidation, check.Check.Output)
 	}
-	applied, err := s.client.ApplyRestore(ctx, occulited.RestoreApplyRequest{File: check.File})
+	if b := check.Backup; b != nil && b.Kind != occulited.BackupKindLite {
+		return "", fmt.Errorf("%w: restore: the archive is a backup of %s, not of openccu-lite; the box restores only its own backups", hmerr.ErrValidation, b.System)
+	}
+	// The caller asked for this restore; Confirm passes that on to the
+	// box, which applies nothing without it.
+	applied, err := s.client.ApplyRestore(ctx, occulited.RestoreApplyRequest{File: check.File, Confirm: true})
 	if err != nil {
+		var apiErr *occulited.APIError
+		if errors.As(err, &apiErr) && apiErr.Code == occulited.CodeNotOpenCCULite {
+			return "", fmt.Errorf("%w: restore: the box refused the archive: %s", hmerr.ErrValidation, apiErr.Message)
+		}
 		return "", fmt.Errorf("openccu-lite restore apply: %w", err)
 	}
 	if !applied.OK {
@@ -248,11 +284,11 @@ func (s *liteSystem) TriggerFirmwareUpdate(ctx context.Context) error {
 		_, err := s.client.DownloadSystemUpdate(dctx)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("openccu-lite system update download: %w", err)
+			return fmt.Errorf("openccu-lite system update download: %w", liteUpdateBusy(err))
 		}
 	}
 	_, err = s.client.InstallSystemUpdate(ctx)
-	return err
+	return liteUpdateBusy(err)
 }
 
 // updateInfo reads the box's update state as the hub model keeps it: the

@@ -118,6 +118,7 @@
   "north.rest.tls_key_file": "string",
   "north.rest.tracing.otlp_endpoint": "string",
   "north.rest.ws.replay_capacity": "int",
+  "north.ui.box_notices": "*bool,omitempty",
   "north.ui.embedded": "*bool,omitempty",
   "north.ui.embedded_scope": "config.EmbeddedScope,omitempty",
   "north.ui.enabled": "*bool,omitempty",

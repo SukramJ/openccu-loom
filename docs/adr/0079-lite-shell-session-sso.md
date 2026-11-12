@@ -137,3 +137,43 @@ a **claim**, never as proof.
 - The daemon keeps working unchanged wherever the gate does not exist:
   on a CCU, on a bare install, or with the switch off, the resolver
   defers on every request and the login form stays.
+
+## Amendment (2026-11-11) — the box account's level decides the role
+
+The decision mapped the box's role word: `admin` to the daemon's admin
+role, `user` to operator. The box derives that word from the account's
+**level** — `read`, `operate`, `configure`, `administer` — and answers
+`user` for all three below `administer`; its own documentation calls the
+word an alias kept for older clients. Reading the word therefore made a
+box account that may only read an operator here: it could switch a
+device through the daemon that the box itself would not let it switch.
+
+The mapping now reads `level` from `GET /api/auth/v1/state`:
+
+| Box level | Daemon role |
+| --- | --- |
+| `read` | viewer |
+| `operate` | operator |
+| `configure` | operator |
+| `administer` | admin |
+
+It stays fixed and fail-closed. A level the mapping does not know defers
+even when a known role word stands beside it, so a level the box adds
+later is never read as the coarser word it derives. Only a box that
+answers no level at all is read by its role word, as before. A box API
+token answers neither and is mapped by its scopes, unchanged (ADR 0080).
+
+`configure` maps to operator because the daemon has no role between
+operator and admin, and raising it to admin would grant what the box
+withholds from that level.
+
+**Better than the comparison targets, than before, and the right cut.**
+The box's own shell and its other add-ons hold an account to its level;
+the daemon was the one place a `read` account gained a right. It is
+better than before for the same reason, and it no longer depends on a
+field the box has announced as transitional. The cut is unchanged: the
+box owns accounts and levels, the daemon owns the translation into its
+three roles, in one function (`occuliteSessionRole`), and the adapter
+that carries the box's answer to it lives in one package
+(`internal/auth/occulitebox`) that the composition root and the contract
+test share.

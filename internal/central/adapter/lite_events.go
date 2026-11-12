@@ -31,7 +31,7 @@ var liteStreamTypes = []string{
 	string(occulited.KindEvent), string(occulited.KindInterface),
 	string(occulited.KindNewDevices), string(occulited.KindDeleteDevices),
 	string(occulited.KindUpdateDevice), string(occulited.KindReplaceDevice),
-	string(occulited.KindReaddedDevice),
+	string(occulited.KindReaddedDevice), string(occulited.KindFirmware),
 }
 
 // liteAnnounceTimeout bounds how long an interface's announcement waits for
@@ -140,6 +140,12 @@ type liteStream struct {
 
 	reconcileMu sync.Mutex
 	wg          sync.WaitGroup
+
+	// firmwareRunning and firmwarePending coalesce the firmware-data
+	// refreshes per interface: one runs at a time, and any number of
+	// messages that arrive meanwhile ask for exactly one more.
+	firmwareRunning map[hmenum.Interface]bool
+	firmwarePending map[hmenum.Interface]bool
 }
 
 func newLiteStream(ctx context.Context, p *liteProfile, cc config.CentralConfig, unit *central.Unit, writer *client.ValueWriter, h *CallbackHandlers, logger *slog.Logger) *liteStream {
@@ -148,6 +154,7 @@ func newLiteStream(ctx context.Context, p *liteProfile, cc config.CentralConfig,
 		initIDs: map[hmenum.Interface]string{}, wireIDs: map[hmenum.Interface]string{},
 		up: map[hmenum.Interface]bool{}, changed: make(chan struct{}),
 		opts: p.eventsOptions, ctx: ctx, attachCovered: map[hmenum.Interface]bool{},
+		firmwareRunning: map[hmenum.Interface]bool{}, firmwarePending: map[hmenum.Interface]bool{},
 	}
 	names := make([]string, 0, len(cc.Interfaces))
 	for _, spec := range cc.Interfaces {
@@ -190,6 +197,8 @@ func (s *liteStream) handle(ctx context.Context, m occulited.Message) {
 	case occulited.KindNewDevices, occulited.KindDeleteDevices, occulited.KindUpdateDevice,
 		occulited.KindReplaceDevice, occulited.KindReaddedDevice:
 		s.onDevices(ctx, m.Kind, m.Devices)
+	case occulited.KindFirmware:
+		s.onFirmware(m.Firmware) //nolint:contextcheck // the refresh outlives this dispatch and runs on the stream's own context
 	case occulited.KindResync:
 		s.logger.Info("lite.stream.resync", slog.String("central", s.cc.Name), slog.String("reason", m.Resync.Reason))
 		s.reconcileAll(ctx)
@@ -308,15 +317,23 @@ func (s *liteStream) onDevices(ctx context.Context, kind occulited.Kind, d *occu
 	case occulited.KindDeleteDevices:
 		err = s.handlers.DeleteDevices(ctx, id, d.Addresses)
 	case occulited.KindUpdateDevice:
-		// The box drops the daemon's hint; hint 0 (a description refresh)
-		// is the only one with an effect, and a harmless one otherwise.
+		// The hint is the interface's own where the box passes it on. A
+		// box that drops it is read as hint 0, the description refresh:
+		// the one hint with an effect, and a harmless one otherwise.
+		hint := 0
+		if d.Hint != nil {
+			hint = *d.Hint
+		}
 		for _, addr := range d.Addresses {
-			if uerr := s.handlers.UpdateDevice(ctx, id, addr, 0); uerr != nil {
+			if uerr := s.handlers.UpdateDevice(ctx, id, addr, hint); uerr != nil {
 				err = uerr
 			}
 		}
 	case occulited.KindReplaceDevice:
-		if len(d.Addresses) == 2 {
+		switch {
+		case d.Old != "" && d.New != "":
+			err = s.handlers.ReplaceDevice(ctx, id, d.Old, d.New)
+		case len(d.Addresses) == 2:
 			err = s.handlers.ReplaceDevice(ctx, id, d.Addresses[0], d.Addresses[1])
 		}
 	case occulited.KindReaddedDevice:
@@ -431,6 +448,63 @@ func (s *liteStream) announced(iface hmenum.Interface) {
 	}
 	s.attachCovered[iface] = true
 	s.reconcile(s.ctx, iface)
+}
+
+// onFirmware re-reads the device descriptions of the message's interface
+// and applies their firmware fields to the live devices, so a device's
+// firmware state follows the box instead of the next scheduled refresh.
+// The message says that a state moved, not what every field now is, and a
+// transfer sends one for many devices in a row; the refreshes are
+// therefore coalesced: at most one runs per interface, and whatever
+// arrives while it runs asks for one more after it.
+func (s *liteStream) onFirmware(f *occulited.FirmwareChange) {
+	if f == nil || s.writer == nil || s.unit == nil || s.unit.Devices == nil {
+		return
+	}
+	iface := hmenum.Interface(f.Interface)
+	wireID, ok := s.wireIDs[iface]
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	if s.firmwareRunning[iface] {
+		s.firmwarePending[iface] = true
+		s.mu.Unlock()
+		return
+	}
+	s.firmwareRunning[iface] = true
+	s.mu.Unlock()
+
+	s.wg.Add(1)
+	SafeGo("lite_stream.firmware."+s.cc.Name, func() {
+		defer s.wg.Done()
+		fetcher := &writerDescFetcher{writer: s.writer, central: s.unit.Name()}
+		wire := hmtypes.ParseWireInterfaceID(wireID)
+		for {
+			ctx, cancel := context.WithTimeout(s.ctx, deviceRefreshTimeout)
+			err := s.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, wire)
+			cancel()
+			if err != nil {
+				s.logger.Warn("lite.stream.firmware_refresh_failed", slog.String("central", s.cc.Name),
+					slog.String("interface", f.Interface), slog.String("err", err.Error()))
+			} else {
+				applyFirmwareFromDescriptions(s.unit)
+			}
+			s.mu.Lock()
+			again := s.firmwarePending[iface] && !s.closed && s.ctx.Err() == nil
+			s.firmwarePending[iface] = false
+			if !again {
+				s.firmwareRunning[iface] = false
+				s.mu.Unlock()
+				return
+			}
+			s.mu.Unlock()
+		}
+	})
 }
 
 // close stops new reconciliations from starting; detach calls it before it

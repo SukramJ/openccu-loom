@@ -75,6 +75,7 @@ vi.mock("$lib/i18n", () => ({
 
 import CentralsAdmin from "./CentralsAdmin.svelte";
 import { prefs } from "$lib/stores/preferences.svelte";
+import { api } from "$lib/api/client";
 
 const liteRow = {
   name: "box",
@@ -329,5 +330,72 @@ describe("CentralsAdmin — sysvar and program behaviour controls", () => {
     expect(container.textContent).not.toContain("centrals.behavior.enable_program_scan");
     expect(container.textContent).not.toContain("centrals.behavior.include_internal_programs");
     expect(container.textContent).not.toContain("centrals.behavior.program_markers");
+  });
+});
+
+// The checkbox of one interface row in the central dialog.
+function interfaceBox(container: HTMLElement, name: string): HTMLInputElement | undefined {
+  return Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).find(
+    (box) => box.closest("label")?.textContent?.includes(name) ?? false,
+  );
+}
+
+function liteProbe(interfaces?: string[]) {
+  vi.mocked(api.probeCentral).mockResolvedValue({
+    system_type: "openccu-lite",
+    ready: true,
+    lite: { implementation: "occulited-probe", pairing_available: true, interfaces },
+  } as Awaited<ReturnType<typeof api.probeCentral>>);
+}
+
+describe("CentralsAdmin — interfaces an openccu-lite box offers", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fleet = [];
+    mockUpdateCentral.mockResolvedValue(undefined);
+    mockListCentrals.mockResolvedValue([{ ...liteRow }]);
+  });
+
+  it("ticks exactly the offered interfaces when a box is added", async () => {
+    liteProbe(["BidCos-RF", "VirtualDevices", "Unheard-Of"]);
+    const { container, getByText, unmount } = render(CentralsAdmin);
+    try {
+      await waitFor(() => {
+        if (!button(container, "centrals.add")) throw new Error("no add button");
+      });
+      await fireEvent.click(button(container, "centrals.add")!);
+      const host = Array.from(container.querySelectorAll("label"))
+        .find((l) => l.querySelector("span")?.textContent?.trim() === "centrals.field.host *")!
+        .querySelector("input")!;
+      await fireEvent.input(host, { target: { value: "box.local" } });
+      // Before the probe the form proposes its own default.
+      expect(interfaceBox(container, "HmIP-RF")!.checked).toBe(true);
+
+      await fireEvent.click(button(container, "onboarding.probe")!);
+      await waitFor(() => expect(getByText("occulited-probe")).toBeTruthy());
+
+      expect(interfaceBox(container, "HmIP-RF")!.checked).toBe(false);
+      expect(interfaceBox(container, "BidCos-RF")!.checked).toBe(true);
+      expect(interfaceBox(container, "BidCos-Wired")!.checked).toBe(false);
+      expect(interfaceBox(container, "VirtualDevices")!.checked).toBe(true);
+    } finally {
+      unmount();
+    }
+  });
+
+  it("leaves a stored central's selection alone whatever the probe offers", async () => {
+    liteProbe(["BidCos-RF"]);
+    const { container, getByText } = render(CentralsAdmin);
+    await openEdit(container);
+    await fireEvent.click(button(container, "onboarding.probe")!);
+    await waitFor(() => expect(getByText("occulited-probe")).toBeTruthy());
+    expect(api.probeCentral).toHaveBeenCalled();
+
+    expect(interfaceBox(container, "HmIP-RF")!.checked).toBe(true);
+    expect(interfaceBox(container, "BidCos-RF")!.checked).toBe(false);
+
+    await fireEvent.click(button(container, "common.save")!);
+    await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());
+    expect(mockUpdateCentral.mock.calls[0][1].interfaces.map((i: { name: string }) => i.name)).toEqual(["HmIP-RF"]);
   });
 });

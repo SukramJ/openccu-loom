@@ -167,3 +167,110 @@ func TestLiteHotplugFetchesDescriptionsForUnknownAddresses(t *testing.T) {
 		t.Errorf("model grew from %d to %d devices", before, after)
 	}
 }
+
+// liteListDevicesCalls counts the listDevices calls the daemon has sent
+// through the box's XML-RPC proxy.
+func liteListDevicesCalls(fake *litefake.Fake) int {
+	n := 0
+	calls := fake.Calls()
+	for i := range calls {
+		for _, m := range calls[i].RPCMethods {
+			if m == "listDevices" {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// settledListDevicesCalls returns the listDevices count once it has stood
+// still for a second. A lite central is ready before its bring-up has
+// gone quiet: the reconciliation that covers the gap between the first
+// inventory and the stream's hello reads the device list once more, and a
+// test that counted from readiness would take that read for its own
+// cause's.
+func settledListDevicesCalls(t *testing.T, fake *litefake.Fake) int {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	last, since := liteListDevicesCalls(fake), time.Now()
+	for time.Since(since) < time.Second {
+		if time.Now().After(deadline) {
+			t.Fatalf("the listDevices calls never settled; last count %d", last)
+		}
+		time.Sleep(50 * time.Millisecond)
+		if n := liteListDevicesCalls(fake); n != last {
+			last, since = n, time.Now()
+		}
+	}
+	return last
+}
+
+// TestLiteStreamPassesTheUpdateDeviceHint pins that an updateDevice
+// message is handled by the hint the interface sent, as an XML-RPC
+// callback is: a link change (hint 1) reads nothing back, a description
+// change (hint 0) re-reads the interface's device list.
+func TestLiteStreamPassesTheUpdateDeviceHint(t *testing.T) {
+	fake := startFake(t, litefake.Options{})
+	unit := startLiteCentral(t, fake, litefake.DefaultToken)
+	waitLiteReady(t, unit)
+
+	published := make(chan struct{}, 16)
+	unsub := unit.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
+		if e.Key.ChannelAddress == liteSwitchChannel && e.Key.Parameter == string(hmenum.ParameterState) {
+			published <- struct{}{}
+		}
+	})
+	t.Cleanup(unsub)
+	dev, ok := unit.ModelRegistry.Get("VCU0000321")
+	if !ok {
+		t.Fatal("the fake's switch is not in the model")
+	}
+	rpc := fake.V().InterfaceRPC("BidCos-RF")
+	before := settledListDevicesCalls(t, fake)
+
+	// The stream is ordered: once the value event that follows the hint-1
+	// message has arrived, that message has been handled.
+	rpc.UpdateDevice(t.Context(), "VCU0000321", 1)
+	state, _ := dev.Channel(liteSwitchChannel).Parameter(hmenum.ParameterState).RawValue()
+	if err := rpc.SimulateDeviceEvent(liteSwitchChannel, "STATE", state != true); err != nil {
+		t.Fatalf("SimulateDeviceEvent: %v", err)
+	}
+	select {
+	case <-published:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the device event never reached the central's bus")
+	}
+	time.Sleep(300 * time.Millisecond) // a refresh would run in the background
+	if got := liteListDevicesCalls(fake); got != before {
+		t.Fatalf("listDevices calls after a link-change hint = %d, want %d: the hint was not passed on", got, before)
+	}
+
+	rpc.UpdateDevice(t.Context(), "VCU0000321", 0)
+	waitFor(t, 10*time.Second, "the device list re-read after a description-change hint", func() bool {
+		return liteListDevicesCalls(fake) > before
+	})
+}
+
+// TestLiteStreamFirmwareMessageRefreshesDescriptions pins the consumer of
+// the box's firmware message: a device whose firmware update state moved
+// has its interface's device descriptions read again, where the firmware
+// fields live. A burst of messages is one refresh and at most one more,
+// not one per message.
+func TestLiteStreamFirmwareMessageRefreshesDescriptions(t *testing.T) {
+	fake := startFake(t, litefake.Options{})
+	unit := startLiteCentral(t, fake, litefake.DefaultToken)
+	waitLiteReady(t, unit)
+	before := settledListDevicesCalls(t, fake)
+
+	const burst = 20
+	for range burst {
+		fake.PublishFirmware("BidCos-RF", "VCU0000321", "DELIVER_FIRMWARE_IMAGE")
+	}
+	waitFor(t, 10*time.Second, "the device list re-read after a firmware message", func() bool {
+		return liteListDevicesCalls(fake) > before
+	})
+	time.Sleep(time.Second) // let a trailing refresh finish
+	if got := liteListDevicesCalls(fake) - before; got >= burst {
+		t.Errorf("listDevices calls for %d firmware messages = %d: the refreshes are not coalesced", burst, got)
+	}
+}

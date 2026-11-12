@@ -273,6 +273,19 @@
     INTERFACE_CATALOGUE.filter((_, i) => fInterfaces[i]?.checked).map((s) => s.name),
   );
 
+  // A box being added proposes the interfaces it offers: exactly those
+  // catalogue rows are ticked, a name the catalogue does not know is
+  // skipped. A stored central keeps its selection whatever a probe says.
+  function applyOfferedInterfaces(names: string[]) {
+    if (isEdit) return;
+    const offered = new Set(names);
+    fInterfaces = INTERFACE_CATALOGUE.map((slot, i) => ({
+      checked: offered.has(slot.name),
+      portOverride: fInterfaces[i]?.portOverride ?? "",
+    }));
+    if (fPrimaryInterface !== "" && !offered.has(fPrimaryInterface)) fPrimaryInterface = "";
+  }
+
   async function load() {
     loading = true;
     loadError = null;
@@ -834,7 +847,7 @@
           {/if}
         </div>
 
-        <CentralOnboarding host={fHost} port={fJsonRpcPort} bind:value={fOnboarding} tokenStored={fTokenStored} />
+        <CentralOnboarding host={fHost} port={fJsonRpcPort} bind:value={fOnboarding} tokenStored={fTokenStored} oninterfaces={applyOfferedInterfaces} />
         {#if editOriginal?.api_token_file}
           <p class="text-xs text-[var(--secondary-text-color)]">
             {t("centrals.lite.token_from_file")}

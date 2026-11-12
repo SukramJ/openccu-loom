@@ -1404,6 +1404,15 @@ type NorthUI struct {
 	// [NorthUI.EmbeddedScope].
 	Embedded *bool `yaml:"embedded,omitempty" json:"embedded,omitempty" cfg:"basic"`
 
+	// BoxNotices mirrors the daemon's operator warnings onto the Status
+	// page of the openccu-lite box the daemon runs on, as the add-on's
+	// notices (ADR 0090). Tri-state: nil defaults to whether the daemon
+	// runs as the openccu-lite add-on — ON there, OFF in any other build;
+	// an explicit true/false overrides. Resolved by the composition root,
+	// which knows the add-on stamp. Outside the add-on there is no box to
+	// post to and the switch has no effect.
+	BoxNotices *bool `yaml:"box_notices,omitempty" json:"box_notices,omitempty" cfg:"basic"`
+
 	// EmbeddedScope limits where the Embedded declaration takes effect.
 	//
 	// The two questions are genuinely different. Embedded says Home
@@ -1840,9 +1849,10 @@ type HAIngressConfig struct {
 // in the X-Occulite-Session header, and the daemon accepts it as an identity
 // once the onboarded local box confirms the session. The header alone
 // authenticates nothing — the daemon's own port is reachable without the
-// gate, so every value is verified against the box before use, and a box
-// "admin" maps to the admin role, a box "user" to operator; any other
-// outcome leaves the request to the normal login. The same switch covers a
+// gate, so every value is verified against the box before use, and the
+// box account's level decides the role ("administer" is admin, "operate"
+// and "configure" are operator, "read" is viewer); any other outcome
+// leaves the request to the normal login. The same switch covers a
 // box API token the gate accepted as `Authorization: Bearer` (ADR 0080): the
 // gate then hands the token on in the same header, and the daemon accepts it
 // after the box confirms it holds the add-on's own scope (operator) or Full

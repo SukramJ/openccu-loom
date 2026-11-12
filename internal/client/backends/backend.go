@@ -496,3 +496,22 @@ type Operations interface {
 	LinkOps
 	SystemOps
 }
+
+// ParamsetDescriptionBatcher is implemented by a backend whose system
+// answers the paramset descriptions of many addresses in one request. It
+// is an optional capability beside [Operations]: a caller that hydrates a
+// whole interface asks for it and falls back to
+// [ParamsetOps.GetParamsetDescription] per address when the backend does
+// not implement it or answers [ErrUnsupported].
+type ParamsetDescriptionBatcher interface {
+	GetParamsetDescriptions(ctx context.Context, addresses []string, key hmenum.ParamsetKey) (BatchedParamsetDescriptions, error)
+}
+
+// BatchedParamsetDescriptions is the answer of a
+// [ParamsetDescriptionBatcher]: the description of every address the
+// system answered, each a value of its own, and the fault text of every
+// address it refused. An address asked for is in one of the two.
+type BatchedParamsetDescriptions struct {
+	Descriptions map[string]map[string]hmproto.ParameterData
+	Refused      map[string]string
+}

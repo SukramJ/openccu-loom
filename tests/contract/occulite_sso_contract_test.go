@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/auth/occulitebox"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 )
 
@@ -26,33 +27,15 @@ import (
 const (
 	ssoAdminUser = "sso-admin"
 	ssoPlainUser = "sso-user"
-	ssoPassword  = "sso-password"
+	// ssoReadUser and ssoConfigureUser stand on the lowest level and on
+	// the one below the administrator's.
+	ssoReadUser      = "sso-read"
+	ssoConfigureUser = "sso-configure"
+	ssoPassword      = "sso-password"
 	// ssoUnissuedSID has the exact shape of a box session id but was never
 	// handed out by the fake.
 	ssoUnissuedSID = "AAAAAAAAAAAAAAAAAAAAAAAAAA"
 )
-
-// ssoVerifier mirrors the composition root's adapter from the occulited
-// client to the auth port (cmd/openccu-loom/occulite_sso_wiring.go); cmd
-// is a main package and cannot be imported.
-type ssoVerifier struct {
-	c *occulited.Client
-}
-
-func (v ssoVerifier) VerifySession(ctx context.Context, sessionID string) (auth.OcculiteSession, error) {
-	st, err := v.c.AuthStateOf(ctx, sessionID)
-	if err != nil {
-		return auth.OcculiteSession{}, err
-	}
-	return auth.OcculiteSession{
-		Authenticated: st.Authenticated,
-		User:          st.User,
-		Role:          st.Role,
-		Scopes:        st.Scopes,
-		AuthOff:       st.AuthOff,
-		Public:        st.Public,
-	}, nil
-}
 
 // ssoLogin opens a box session for user through the box's login route.
 func ssoLogin(t *testing.T, c *occulited.Client, user string) string {
@@ -104,6 +87,8 @@ func TestOcculiteSSOAgainstLiteFake(t *testing.T) {
 		Accounts: []litefake.Account{
 			{Username: ssoAdminUser, Password: ssoPassword, Role: "admin", Level: "administer", AccountID: "acc-admin", Scopes: []string{"*"}},
 			{Username: ssoPlainUser, Password: ssoPassword, Role: "user", Level: "operate", AccountID: "acc-user", Scopes: []string{"rpc:read"}},
+			{Username: ssoReadUser, Password: ssoPassword, Role: "user", Level: "read", AccountID: "acc-read", Scopes: []string{"rpc:read"}},
+			{Username: ssoConfigureUser, Password: ssoPassword, Role: "user", Level: "configure", AccountID: "acc-configure", Scopes: []string{"rpc:read"}},
 		},
 	})
 	box := liteClient(t, f, "")
@@ -115,7 +100,7 @@ func TestOcculiteSSOAgainstLiteFake(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mw := auth.OcculiteSSOPassthrough(auth.OcculiteSSOTrust{Enabled: true, Verifier: ssoVerifier{c: box}}, nil)(probe)
+	mw := auth.OcculiteSSOPassthrough(auth.OcculiteSSOTrust{Enabled: true, Verifier: occulitebox.Verifier{Client: box}}, nil)(probe)
 
 	t.Run("admin session resolves to admin", func(t *testing.T) {
 		id, ok := ssoProbe(t, mw, &seen, ssoLogin(t, box, ssoAdminUser))
@@ -139,6 +124,20 @@ func TestOcculiteSSOAgainstLiteFake(t *testing.T) {
 			t.Fatalf("identity = %+v, want scheme occulite, role operator, subject occulite:%s", id, ssoPlainUser)
 		}
 	})
+
+	// The box answers the same role word, "user", for the three levels
+	// below "administer"; only the level tells them apart.
+	for user, want := range map[string]auth.Role{ssoReadUser: auth.RoleViewer, ssoConfigureUser: auth.RoleOperator} {
+		t.Run(user+" session resolves by its level", func(t *testing.T) {
+			id, ok := ssoProbe(t, mw, &seen, ssoLogin(t, box, user))
+			if !ok {
+				t.Fatalf("no identity for a live %s session", user)
+			}
+			if id.Role != want {
+				t.Fatalf("identity = %+v, want role %s", id, want)
+			}
+		})
+	}
 
 	t.Run("never-issued session id resolves nothing", func(t *testing.T) {
 		if id, ok := ssoProbe(t, mw, &seen, ssoUnissuedSID); ok {

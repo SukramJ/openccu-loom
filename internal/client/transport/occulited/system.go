@@ -282,6 +282,22 @@ type RestoreCheck struct {
 	File       string            `json:"file"`
 	Check      RestoreCheckState `json:"check"`
 	Encryption RestoreEncryption `json:"encryption"`
+	// Backup says what the file is a backup of. Nil for a file the box
+	// could not read as an archive, and on a box that does not report it.
+	Backup *RestoreBackup `json:"backup"`
+}
+
+// BackupKindLite is [RestoreBackup.Kind] for a backup of openccu-lite;
+// the box restores no other kind.
+const BackupKindLite = "openccu-lite"
+
+// RestoreBackup is the box's report on an uploaded archive: Kind is
+// "openccu-lite" or "ccu", System names the firmware the backup was
+// made on.
+type RestoreBackup struct {
+	Kind    string `json:"kind"`
+	System  string `json:"system"`
+	Version string `json:"version"`
 }
 
 // RestoreCheckState is the archive check.
@@ -335,6 +351,10 @@ type RestoreApplyRequest struct {
 	File  string `json:"file"`
 	Key   string `json:"key,omitempty"`
 	Force bool   `json:"force,omitempty"`
+	// Confirm acknowledges that the restore replaces the box's
+	// configuration, its radio identity files with it. The box answers
+	// 400 confirm without it.
+	Confirm bool `json:"confirm"`
 }
 
 // RestoreApply is POST /restore/apply's answer; Rebooting false with a

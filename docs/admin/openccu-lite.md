@@ -31,6 +31,24 @@ Device pictures work too, even though the box has no WebUI to serve
 them: the daemon ships the CCU's device artwork in its embedded data
 snapshot and serves it from there.
 
+### Which occulited the daemon follows
+
+openccu-lite is developed quickly, and `occulited`'s API moves with it.
+The daemon's contract with the box was last compared with occulited at
+commit `04ee7b6` (2026-11-11). Three rules of the box that changed since
+the first release of this integration matter to an administrator:
+
+- A box from 2026-10-22 on hands out the paramset descriptions of many
+  channels at once; the daemon uses that when it loads a central's
+  devices, which shortens the start on a box with many of them. An older
+  box is read channel by channel.
+- Since 2026-10-03 the box asks for an explicit confirmation before it
+  applies a restore. The daemon sends it; a daemon release from before
+  this change cannot restore onto such a box.
+- A box from 2026-11-10 on restores only a backup of openccu-lite. A
+  CCU's backup is refused with a message that says what the file is;
+  import its devices on the box instead.
+
 ## What is absent, and why
 
 openccu-lite has no ReGaHss and no script interpreter, so a handful of
@@ -216,7 +234,9 @@ from the box's Addons page. A few things differ from a CCU:
   box whether it still holds (`north.rest.auth.occulite_sso`, on by
   default in the add-on):
   - your **box session** — a browser opens the UI without a second login,
-    box administrators as admin, box users as operator (ADR 0079);
+    with the role your box account's level maps to: *administer* as
+    admin, *operate* and *configure* as operator, *read* as viewer
+    (ADR 0079);
   - a **box API token** (openccu-lite 1.0.0-dev.36 or newer) sent as
     `Authorization: Bearer <token>` — the way a program such as the Home
     Assistant integration gets through the gate without storing a box
@@ -247,6 +267,14 @@ from the box's Addons page. A few things differ from a CCU:
   minute unless the change is confirmed on the page.
 - **Updates come from the Addons page.** The add-on's own self-update is not
   offered on openccu-lite; the box's catalogue carries new versions.
+- **The daemon's warnings stand on the box's Status page.** An unhealthy
+  component (the MQTT broker went away), failed operations of the last
+  day and a pairing request that waits for a decision appear there as
+  notices of the add-on, in the page's language, within moments of the
+  change. The box's LED follows them, and an administrator silences one
+  there like any warning of the box. The box's own service messages are
+  not repeated. Switch it off with `north.ui.box_notices: false`
+  ([ADR 0090](../adr/0090-warnings-as-box-notices.md)).
 - **No session in the add-on's page URL.** The add-on ships an
   `openccu-lite.json` declaring that its settings page takes no session in
   the URL (`ui.session_header`); the page is a landing card and reads no

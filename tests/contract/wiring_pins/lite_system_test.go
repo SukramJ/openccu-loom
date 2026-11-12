@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -275,5 +276,34 @@ func TestLiteLoginDelegationThroughAuthDomain(t *testing.T) {
 	}
 	if _, err := d.Verify(context.Background(), "box", "anna", "wrong"); !errors.Is(err, hmerr.ErrAuthFailure) {
 		t.Errorf("wrong password: err = %v, want ErrAuthFailure", err)
+	}
+}
+
+// TestLiteSystemUpdateBusyIsNamed pins that the box's refusal of a second
+// system update reaches the central's firmware service as ErrBusy naming
+// the update in flight, and that the same call succeeds once it ended.
+func TestLiteSystemUpdateBusyIsNamed(t *testing.T) {
+	fake := startFake(t, litefake.Options{})
+	fake.SetUpdateAvailable(&litefake.AvailableUpdate{Version: "1.1.0", Newer: true})
+	c := startLiteSystemCentral(t, fake, litefake.DefaultToken)
+	fw := c.unit.SystemServices().Firmware
+	if fw == nil {
+		t.Fatal("the lite central offers no firmware service")
+	}
+
+	fake.SetUpdateBusy(&litefake.UpdateBusy{Phase: "upload", File: "openccu-lite-1.1.0.tar"})
+	err := fw.DownloadSystemFirmware(context.Background())
+	if !errors.Is(err, hmerr.ErrBusy) {
+		t.Fatalf("download while an upload runs: err = %v, want ErrBusy", err)
+	}
+	for _, want := range []string{"upload", "openccu-lite-1.1.0.tar"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %q, want it to name %q", err, want)
+		}
+	}
+
+	fake.SetUpdateBusy(nil)
+	if err := fw.DownloadSystemFirmware(context.Background()); err != nil {
+		t.Errorf("download after the upload ended: %v", err)
 	}
 }

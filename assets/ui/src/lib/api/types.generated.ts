@@ -2440,8 +2440,10 @@ export interface paths {
          *
          *     Returns 202 once the CCU reported the download succeeded, and 502
          *     when it reported a failure — there is no image for that version and
-         *     serial, or the transfer failed. The whole body is optional for
-         *     single-CCU deployments.
+         *     serial, or the transfer failed. A system that runs one system
+         *     update at a time (openccu-lite) answers 409 while a download, an
+         *     upload or an install is already running; the problem's detail
+         *     names it. The whole body is optional for single-CCU deployments.
          */
         post: operations["downloadSystemFirmware"];
         delete?: never;
@@ -9795,6 +9797,14 @@ export interface components {
                 [key: string]: number;
             };
             pairing_available: boolean;
+            /**
+             * @description The interfaces the box offers (`BidCos-RF`, `HmIP-RF`, …),
+             *     sorted, as it names them without a credential. A client
+             *     proposes exactly these when the box is added. Absent on a box
+             *     that does not name them — the client then keeps its own
+             *     default; an empty list says the box offers none.
+             */
+            interfaces?: string[];
             hmip_key_mode?: components["schemas"]["HMIPKeyMode"];
         };
         /** @description The key-mode summary of a box's HomeMatic IP radio; it never carries a key. */
@@ -15716,6 +15726,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];

@@ -82,6 +82,7 @@ func TestOcculiteTokenRefusesEveryAnswerThatDoesNotVouch(t *testing.T) {
 		{"public", OcculiteSession{Authenticated: true, User: "token:ha", Scopes: []string{loomScope}, Public: true}},
 		// A token's answer carries no role; one that does is not about a token.
 		{"answer with a role", OcculiteSession{Authenticated: true, User: "token:ha", Role: "admin", Scopes: []string{"*"}}},
+		{"answer with a level", OcculiteSession{Authenticated: true, User: "token:ha", Level: "administer", Scopes: []string{"*"}}},
 		{"session-shaped answer", OcculiteSession{Authenticated: true, User: "alice", Role: "admin"}},
 		{"user without token prefix", OcculiteSession{Authenticated: true, User: "ha", Scopes: []string{"*"}}},
 		{"empty token name", tokenAnswer("", "*")},

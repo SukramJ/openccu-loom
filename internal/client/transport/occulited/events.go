@@ -45,7 +45,10 @@ const (
 	KindUpdateDevice  Kind = "updateDevice"
 	KindReplaceDevice Kind = "replaceDevice"
 	KindReaddedDevice Kind = "readdedDevice"
-	KindResync        Kind = "resync"
+	// KindFirmware: a device's firmware update state changed, or its
+	// background transfer moved.
+	KindFirmware Kind = "firmware"
+	KindResync   Kind = "resync"
 	// KindUnknown: a message type this client does not know; Type and
 	// Data carry it for forward compatibility.
 	KindUnknown Kind = "unknown"
@@ -71,6 +74,7 @@ type Message struct {
 	State     *State
 	Interface *InterfaceChange
 	Devices   *DeviceChange
+	Firmware  *FirmwareChange
 	Resync    *Resync
 
 	// Err and RetryIn describe a KindClosed.
@@ -137,17 +141,36 @@ type InterfaceChange struct {
 	TS        time.Time `json:"ts"`
 }
 
+// FirmwareChange is a firmware message: the firmware update state of the
+// device at Address as its interface last reported it. The box sends at
+// most one per device every ten seconds, the newest state always.
+type FirmwareChange struct {
+	Interface   string    `json:"interface"`
+	Address     string    `json:"address"`
+	UpdateState string    `json:"update_state"`
+	TS          time.Time `json:"ts"`
+}
+
 // DeviceChange is a newDevices, deleteDevices, updateDevice,
 // replaceDevice or readdedDevice message. The live form carries
-// Addresses only (updateDevice one address and no hint, replaceDevice
-// [old, new]); the ?devices=1 snapshot form of newDevices carries
-// Devices (the interface's listDevices answer, JSON-typed) or Error.
+// Addresses (updateDevice one address, replaceDevice [old, new]) and,
+// from a box that passes them on, what the interface's call carried
+// beside them: Hint for updateDevice, Old and New for replaceDevice. The
+// ?devices=1 snapshot form of newDevices carries Devices (the
+// interface's listDevices answer, JSON-typed) or Error.
 type DeviceChange struct {
-	Interface string          `json:"interface"`
-	Addresses []string        `json:"addresses"`
-	Devices   json.RawMessage `json:"devices"`
-	Error     string          `json:"error"`
-	TS        time.Time       `json:"ts"`
+	Interface string   `json:"interface"`
+	Addresses []string `json:"addresses"`
+	// Hint is updateDevice's hint as the interface sent it. Nil on a box
+	// that does not pass it on.
+	Hint *int `json:"hint"`
+	// Old and New name replaceDevice's two addresses. Empty on a box
+	// that does not name them; Addresses then holds them in that order.
+	Old     string          `json:"old"`
+	New     string          `json:"new"`
+	Devices json.RawMessage `json:"devices"`
+	Error   string          `json:"error"`
+	TS      time.Time       `json:"ts"`
 }
 
 // IsSnapshot reports the ?devices=1 form.
@@ -465,6 +488,9 @@ func decodePayload(typ, data string, m *Message) error {
 	case KindNewDevices, KindDeleteDevices, KindUpdateDevice, KindReplaceDevice, KindReaddedDevice:
 		m.Kind = Kind(typ)
 		return decodeInto(data, &m.Devices, typ)
+	case KindFirmware:
+		m.Kind = KindFirmware
+		return decodeInto(data, &m.Firmware, typ)
 	default:
 		m.Kind = KindUnknown
 		return nil

@@ -1,5 +1,5 @@
 {
- "api_version": "16.1.0",
+ "api_version": "16.2.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1708,6 +1708,7 @@
    "api_majors:object",
    "hmip_key_mode:$ref:HMIPKeyMode",
    "implementation:string",
+   "interfaces:array\u003cstring\u003e",
    "pairing_available:boolean"
   ],
   "LogRecord": [

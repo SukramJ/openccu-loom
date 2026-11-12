@@ -172,6 +172,7 @@ func TestOcculiteSSOPassthroughDefersOnEveryNonConfirmingAnswer(t *testing.T) {
 		{"verify error", &fakeOcculiteVerifier{err: errors.New("box unreachable")}},
 		{"unauthenticated", &fakeOcculiteVerifier{sess: OcculiteSession{User: "alice", Role: "admin"}}},
 		{"role viewer", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice", Role: "viewer"}}},
+		{"unknown level beside role admin", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice", Level: "owner", Role: "admin"}}},
 		{"role empty", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice"}}},
 		// An auth-off box confirms any bearer as admin; a public-mode box
 		// substitutes its kiosk principal. Neither answer is about the id.
@@ -202,21 +203,30 @@ func TestOcculiteSSOPassthroughDefersOnEveryNonConfirmingAnswer(t *testing.T) {
 	}
 }
 
-// TestOcculiteSSOPassthroughMapsTheBoxRole: a confirmed session yields a
+// TestOcculiteSSOPassthroughMapsTheBoxLevel: a confirmed session yields a
 // SchemeOcculite identity with the origin-prefixed subject, no expiry, and
-// the fixed role mapping; a second request is served from the cache.
-func TestOcculiteSSOPassthroughMapsTheBoxRole(t *testing.T) {
+// the role its level maps to; a second request is served from the cache.
+// The box answers the role word "user" for every level below "administer",
+// so the level alone tells a viewer from an operator. A box that answers
+// no level is read by its role word.
+func TestOcculiteSSOPassthroughMapsTheBoxLevel(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		boxRole string
-		want    Role
+		name     string
+		boxLevel string
+		boxRole  string
+		want     Role
 	}{
-		{"admin", RoleAdmin},
-		{"user", RoleOperator},
+		{"administer", "administer", "admin", RoleAdmin},
+		{"configure", "configure", "user", RoleOperator},
+		{"operate", "operate", "user", RoleOperator},
+		{"read", "read", "user", RoleViewer},
+		{"no level, role admin", "", "admin", RoleAdmin},
+		{"no level, role user", "", "user", RoleOperator},
 	} {
-		t.Run(tc.boxRole, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			v := &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice", Role: tc.boxRole}}
+			v := &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice", Level: tc.boxLevel, Role: tc.boxRole}}
 			rec := &occuliteRecorder{}
 			h := OcculiteSSOPassthrough(OcculiteSSOTrust{Enabled: true, Verifier: v}, nil)(rec)
 			for range 2 {

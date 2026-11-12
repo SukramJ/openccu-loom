@@ -1922,17 +1922,87 @@ func (p *DevicePipeline) hydrateDataPoints(
 		return nil
 	}
 	bw := newBoundWriter(p.unit.Name(), interfaceID, writer)
-	for _, d := range p.devicesFor(interfaceID) {
+	devices := p.devicesFor(interfaceID)
+	descs := prefetchParamsetDescriptions(ctx, b, devices, logger)
+	for _, d := range devices {
 		// Hydrate the device-root MASTER paramset first. Classic HM thermostats
 		// (HM-CC-RT-DN family) carry their week-profile schedule on the device
 		// address itself (no `:N` suffix); without this pass those schedules would
 		// never reach the model.
-		p.hydrateDeviceRoot(ctx, interfaceID, d, b, bw, logger)
+		p.hydrateDeviceRoot(ctx, interfaceID, d, b, descs, bw, logger)
 		for _, ch := range d.Channels() {
-			p.hydrateChannel(ctx, interfaceID, d, ch, b, bw, logger)
+			p.hydrateChannel(ctx, interfaceID, d, ch, b, descs, bw, logger)
 		}
 	}
 	return nil
+}
+
+// prefetchedDescriptions is the [paramsetDescriber] of one hydration: it
+// answers a description from what one request per
+// paramset read ahead for a whole interface, and asks the backend for
+// anything that request did not cover. It lives for one hydration: the
+// descriptions are the box's at that moment, not a cache.
+type prefetchedDescriptions struct {
+	next  paramsetDescriber
+	byKey map[hmenum.ParamsetKey]backends.BatchedParamsetDescriptions
+}
+
+// GetParamsetDescription implements [paramsetDescriber]. An address the
+// system refused in the batch is refused here with the same fault and not
+// asked again: the refusal is the interface process's own answer.
+func (d *prefetchedDescriptions) GetParamsetDescription(
+	ctx context.Context, address string, key hmenum.ParamsetKey,
+) (map[string]hmproto.ParameterData, error) {
+	got := d.byKey[key]
+	if desc, ok := got.Descriptions[address]; ok {
+		return desc, nil
+	}
+	if fault, ok := got.Refused[address]; ok {
+		return nil, fmt.Errorf("paramset description of %s %s: %s", address, key, fault)
+	}
+	return d.next.GetParamsetDescription(ctx, address, key)
+}
+
+// prefetchParamsetDescriptions reads the VALUES and MASTER descriptions
+// of every device and channel in one request each, where the backend can
+// ([backends.ParamsetDescriptionBatcher]), and returns where the
+// hydration reads its descriptions from. A backend that cannot, or a
+// batch that fails, leaves the per-address reads in place: the batch is
+// a faster way to the same answers, never the only one.
+func prefetchParamsetDescriptions(
+	ctx context.Context, b backends.Operations, devices []*device.Device, logger *slog.Logger,
+) paramsetDescriber {
+	batcher, ok := b.(backends.ParamsetDescriptionBatcher)
+	if !ok || len(devices) == 0 {
+		return b
+	}
+	var channels, all []string
+	for _, d := range devices {
+		all = append(all, d.Address)
+		for _, ch := range d.Channels() {
+			channels = append(channels, ch.Address)
+		}
+	}
+	all = append(all, channels...)
+	pre := &prefetchedDescriptions{next: b, byKey: map[hmenum.ParamsetKey]backends.BatchedParamsetDescriptions{}}
+	for key, addresses := range map[hmenum.ParamsetKey][]string{
+		hmenum.ParamsetKeyValues: channels,
+		hmenum.ParamsetKeyMaster: all,
+	} {
+		if len(addresses) == 0 {
+			continue
+		}
+		got, err := batcher.GetParamsetDescriptions(ctx, addresses, key)
+		if err != nil {
+			if logger != nil && !errors.Is(err, backends.ErrUnsupported) {
+				logger.Warn("pipeline.paramset.batch_failed — reading descriptions one by one",
+					slog.String("paramset", string(key)), slog.String("err", err.Error()))
+			}
+			continue
+		}
+		pre.byKey[key] = got
+	}
+	return pre
 }
 
 // hydrateDeviceRoot loads the device-level MASTER paramset (no
@@ -1946,6 +2016,7 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 	interfaceID string,
 	d *device.Device,
 	b backends.Operations,
+	descs paramsetDescriber,
 	bw generic.Writer,
 	logger *slog.Logger,
 ) {
@@ -1956,7 +2027,7 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 	// no device-level MASTER paramset (the common case) this
 	// returns an error and we skip the rest cheaply without
 	// allocating a root channel that will never carry a DP.
-	desc, err := b.GetParamsetDescription(ctx, d.Address, hmenum.ParamsetKeyMaster)
+	desc, err := descs.GetParamsetDescription(ctx, d.Address, hmenum.ParamsetKeyMaster)
 	if err != nil || len(desc) == 0 {
 		if logger != nil && err != nil {
 			logger.Debug("pipeline.device_root.skip",
@@ -1975,7 +2046,7 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 		root.SetWriter(&channelWriterAdapter{bw: bw, backend: b})
 		root.SetRefresher(b)
 	}
-	p.hydrateParamset(ctx, interfaceID, root, b, dataPointWriter(root, bw), hmenum.ParamsetKeyMaster, logger)
+	p.hydrateParamset(ctx, interfaceID, root, b, descs, dataPointWriter(root, bw), hmenum.ParamsetKeyMaster, logger)
 	// Always assign: a re-ingest of an interface that lost its poller must
 	// clear the stale hook rather than keep the previous generation's.
 	root.SetMasterRefreshHook(p.masterRefreshHooks.get(interfaceID))
@@ -1987,6 +2058,7 @@ func (p *DevicePipeline) hydrateChannel(
 	d *device.Device,
 	ch *device.Channel,
 	b backends.Operations,
+	descs paramsetDescriber,
 	bw generic.Writer,
 	logger *slog.Logger,
 ) {
@@ -2012,8 +2084,8 @@ func (p *DevicePipeline) hydrateChannel(
 		ch.SetRefresher(b)
 	}
 	dpWriter := dataPointWriter(ch, bw)
-	p.hydrateParamset(ctx, interfaceID, ch, b, dpWriter, hmenum.ParamsetKeyValues, logger)
-	p.hydrateParamset(ctx, interfaceID, ch, b, dpWriter, hmenum.ParamsetKeyMaster, logger)
+	p.hydrateParamset(ctx, interfaceID, ch, b, descs, dpWriter, hmenum.ParamsetKeyValues, logger)
+	p.hydrateParamset(ctx, interfaceID, ch, b, descs, dpWriter, hmenum.ParamsetKeyMaster, logger)
 	// Wire the post-MASTER-write hook of the interface this channel belongs
 	// to. It is nil for HmIP channels (CONFIG_PENDING covers their refresh
 	// path); assigning unconditionally also clears a hook left over from an
@@ -2036,11 +2108,12 @@ func (p *DevicePipeline) hydrateParamset(
 	interfaceID string,
 	ch *device.Channel,
 	b backends.Operations,
+	descs paramsetDescriber,
 	bw generic.Writer,
 	key hmenum.ParamsetKey,
 	logger *slog.Logger,
 ) {
-	paramset, err := b.GetParamsetDescription(ctx, ch.Address, key)
+	paramset, err := descs.GetParamsetDescription(ctx, ch.Address, key)
 	if err != nil {
 		if logger != nil {
 			logger.Debug("pipeline.paramset.skip",

@@ -202,9 +202,19 @@ func (t *liteTransports) ReconnectGate() func(context.Context) bool {
 }
 
 // ConfigureBackend implements [InterfaceTransports]: it records the
-// backend for the value seeder's per-channel reads.
+// backend for the value seeder's per-channel reads, and gives it the
+// box's paramset description route, so hydrating an interface reads its
+// descriptions in one request per paramset instead of one XML-RPC call
+// per channel. The route is a plain API call of the box: it does not pass
+// the interface client's throttle or circuit breaker, like the state and
+// metadata reads beside it.
 func (t *liteTransports) ConfigureBackend(_ *central.Unit, iface hmenum.Interface, b backends.Operations) {
 	t.backends.put(iface, b)
+	if lb, ok := b.(*backends.LiteBackend); ok && t.client != nil {
+		lb.SetParamsetDescriptionBatch(func(ctx context.Context, addresses []string, key hmenum.ParamsetKey) (occulited.ParamsetDescriptions, error) {
+			return t.client.ParamsetDescriptions(ctx, string(iface), addresses, string(key))
+		})
+	}
 }
 
 // WrapCaller implements [InterfaceTransports]: the proxy's refusals arrive

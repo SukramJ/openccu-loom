@@ -1419,6 +1419,7 @@ const EN: Catalog = {
     "Refill rate (req/s)",
   "config.field.north.rest.rate_limit.burst": "Burst capacity",
   "config.field.north.ui.enabled": "Bootstrap UI enabled",
+  "config.field.north.ui.box_notices": "Warnings on the openccu-lite Status page",
   "config.field.north.ui.embedded": "Embedded in Home Assistant",
   "config.field.north.ui.embedded_scope": "Scope of the embedded mode",
   "config.field.north.ui.profiles": "Navigation profiles",
@@ -1735,6 +1736,8 @@ const EN: Catalog = {
     "Token-bucket size — maximum concurrent requests per identity before the limiter gates.",
   "config.help.north.ui.enabled":
     "Bootstrap UI surface (login, /setup wizard, /health). The SPA itself lives on the REST listener.",
+  "config.help.north.ui.box_notices":
+    "Show this daemon's warnings on the Status page of the openccu-lite box it runs on, as the add-on's notices: an unhealthy component, failed operations, a pairing request that waits. The box's administrators silence them there like any warning of the box. On by default in the openccu-lite add-on and without effect anywhere else. The service messages of the box itself are left out; the box lists them already.",
   "config.help.north.ui.embedded":
     "Turn on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration runs against this daemon. Hides what HA already owns. Not derived from Ingress: the add-on is also used without the integration. Where the setting applies is a separate question — see “Scope of the embedded mode”.",
   "config.help.north.ui.embedded_scope":
@@ -1786,7 +1789,7 @@ const EN: Catalog = {
   "config.help.north.rest.auth.occulite_sso":
     "Accept what the openccu-lite box gate accepted — the box shell's session or a box API token — as a Loom sign-in, so neither an operator signed in to the box nor a paired program needs a second credential.",
   "config.help.north.rest.auth.occulite_sso.enabled":
-    "Trust the openccu-lite box shell's session: a request the box gate passes on signs in as the box user (box admin = admin, box user = operator) — no login. A box API token the gate accepted signs in too: with the add-on's scope addon:openccu-loom as operator, with Full access as admin. Accepted only beside an openccu-lite box; every session is live-verified against the box, the header alone authenticates nothing. Default (unset) = on in the openccu-lite add-on, off in any other build; set On/Off to override. Real tokens/sessions still win. Restart required.",
+    "Trust the openccu-lite box shell's session: a request the box gate passes on signs in as the box user by the account's level on the box (administer = admin, operate and configure = operator, read = viewer) — no login. A box API token the gate accepted signs in too: with the add-on's scope addon:openccu-loom as operator, with Full access as admin. Accepted only beside an openccu-lite box; every session is live-verified against the box, the header alone authenticates nothing. Default (unset) = on in the openccu-lite add-on, off in any other build; set On/Off to override. Real tokens/sessions still win. Restart required.",
   "config.help.north.rest.auth.session_idle_timeout":
     "Log a session out after this much inactivity, even while its absolute lifetime is still running (e.g. 30m, 2h). 0 disables the idle check and leaves only the absolute session lifetime in charge.",
   "config.help.north.rest.openapi_spec_path":
@@ -5516,6 +5519,7 @@ const DE: Catalog = {
     "Refill-Rate (Req/s)",
   "config.field.north.rest.rate_limit.burst": "Burst-Kapazität",
   "config.field.north.ui.enabled": "Bootstrap-UI aktiv",
+  "config.field.north.ui.box_notices": "Warnungen auf der openccu-lite-Statusseite",
   "config.field.north.ui.embedded": "In Home Assistant eingebettet",
   "config.field.north.ui.embedded_scope": "Geltungsbereich des eingebetteten Modus",
   "config.field.north.ui.profiles": "Navigationsprofile",
@@ -5835,6 +5839,8 @@ const DE: Catalog = {
     "Token-Bucket-Größe — maximale gleichzeitige Requests pro Identity vor Drosselung.",
   "config.help.north.ui.enabled":
     "Bootstrap-UI-Oberfläche (Login, /setup-Wizard, /health). Die SPA selbst läuft auf dem REST-Listener.",
+  "config.help.north.ui.box_notices":
+    "Die Warnungen dieses Daemons auf der Statusseite der openccu-lite-Box anzeigen, auf der er läuft, als Hinweise der Zusatzsoftware: eine gestörte Komponente, fehlgeschlagene Vorgänge, eine wartende Pairing-Anfrage. Die Administratoren der Box schalten sie dort stumm wie jede Warnung der Box. Im openccu-lite-Add-on standardmäßig an, überall sonst ohne Wirkung. Die Servicemeldungen der Box selbst bleiben außen vor; die Box führt sie bereits auf.",
   "config.help.north.ui.embedded":
     "Aktivieren, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon läuft. Blendet aus, was HA bereits besitzt. Wird nicht aus Ingress abgeleitet: das Add-on wird auch ohne die Integration betrieben. Wo die Einstellung greift, ist eine eigene Frage — siehe „Geltungsbereich des eingebetteten Modus“.",
   "config.help.north.ui.embedded_scope":
@@ -5886,7 +5892,7 @@ const DE: Catalog = {
   "config.help.north.rest.auth.occulite_sso":
     "Was das Gate der openccu-lite-Box akzeptiert hat — die Sitzung der Box-Shell oder ein API-Token der Box — als Loom-Anmeldung akzeptieren, damit weder ein an der Box angemeldeter Bediener noch ein gekoppeltes Programm eine zweite Anmeldung braucht.",
   "config.help.north.rest.auth.occulite_sso.enabled":
-    "Der Sitzung der openccu-lite-Box-Shell vertrauen: eine vom Box-Gate weitergereichte Anfrage meldet sich als Box-Benutzer an (Box-Admin = admin, Box-Benutzer = operator) — ohne Login. Ein vom Gate akzeptiertes API-Token der Box meldet sich ebenfalls an: mit dem Add-on-Scope addon:openccu-loom als operator, mit Vollzugriff als admin. Nur neben einer openccu-lite-Box akzeptiert; jede Sitzung wird live gegen die Box geprüft, der Header allein authentifiziert nichts. Standard (nicht gesetzt) = an im openccu-lite-Add-on, aus in jedem anderen Build; An/Aus überschreibt. Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
+    "Der Sitzung der openccu-lite-Box-Shell vertrauen: eine vom Box-Gate weitergereichte Anfrage meldet sich als Box-Benutzer an nach der Stufe des Kontos auf der Box (administer = admin, operate und configure = operator, read = viewer) — ohne Login. Ein vom Gate akzeptiertes API-Token der Box meldet sich ebenfalls an: mit dem Add-on-Scope addon:openccu-loom als operator, mit Vollzugriff als admin. Nur neben einer openccu-lite-Box akzeptiert; jede Sitzung wird live gegen die Box geprüft, der Header allein authentifiziert nichts. Standard (nicht gesetzt) = an im openccu-lite-Add-on, aus in jedem anderen Build; An/Aus überschreibt. Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
   "config.help.north.rest.auth.session_idle_timeout":
     "Meldet eine Sitzung nach dieser Zeit ohne Aktivität ab, auch wenn ihre absolute Lebensdauer noch läuft (z. B. 30m, 2h). 0 deaktiviert die Leerlaufprüfung; dann gilt nur die absolute Lebensdauer.",
   "config.help.north.rest.openapi_spec_path":

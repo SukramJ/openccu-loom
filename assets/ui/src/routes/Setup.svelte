@@ -79,6 +79,12 @@
       : ccuInterfaces.filter((i) => i !== name);
   }
 
+  // The wizard always adds a central, so the interfaces a box offers
+  // replace the selection; a name the wizard does not list is skipped.
+  function applyOfferedInterfaces(names: string[]) {
+    ccuInterfaces = CCU_INTERFACES.filter((i) => names.includes(i));
+  }
+
   // Apply the chosen locale/theme live so the wizard immediately reflects the
   // selection — the same preference is persisted server-side on finalize.
   function onLocaleChange(v: string) {
@@ -261,7 +267,7 @@
           <Input type="text" placeholder="192.168.0.10" bind:value={ccuHost} />
         </label>
         <div class="mb-3">
-          <CentralOnboarding host={ccuHost} setup bind:value={ccuOnboarding} />
+          <CentralOnboarding host={ccuHost} setup bind:value={ccuOnboarding} oninterfaces={applyOfferedInterfaces} />
         </div>
         {#if !ccuIsLite}
           <div class="mb-3 grid grid-cols-2 gap-3">

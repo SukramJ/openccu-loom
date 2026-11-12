@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -524,6 +525,18 @@ func TestPostSystemFirmwareDownload_UnknownCentral_Returns404(t *testing.T) {
 	PostSystemFirmwareDownload(svc, nil).ServeHTTP(w, firmwareDownloadRequest(`{"url":"https://x/fw.tgz","central":"nope"}`))
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPostSystemFirmwareDownload_Busy_Returns409 pins that a system which
+// already runs a system update answers a conflict, not a gateway failure.
+func TestPostSystemFirmwareDownload_Busy_Returns409(t *testing.T) {
+	t.Parallel()
+	svc := &fakeFirmwareDownloader{err: fmt.Errorf("%w: a download is running", hmerr.ErrBusy)}
+	w := httptest.NewRecorder()
+	PostSystemFirmwareDownload(svc, nil).ServeHTTP(w, firmwareDownloadRequest(`{}`))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

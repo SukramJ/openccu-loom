@@ -140,6 +140,7 @@ func (o *LiteOnboarding) Probe(ctx context.Context, in hmapi.CentralProbeRequest
 		info := &hmapi.LiteProbeInfo{APIMajors: det.Majors, PairingAvailable: det.Pairing}
 		if v := det.Version; v != nil {
 			info.Implementation = v.Implementation
+			info.Interfaces = v.Interfaces
 			if v.HMIP != nil {
 				info.HMIPKeyMode = &hmapi.HMIPKeyMode{
 					KeyserverMode: v.HMIP.KeyserverMode, DeviceKeys: v.HMIP.DeviceKeys, OfflinePairing: v.HMIP.OfflinePairing,

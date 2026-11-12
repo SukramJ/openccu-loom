@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.1.0
+  version: 16.2.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3354,8 +3354,10 @@ paths:
 
         Returns 202 once the CCU reported the download succeeded, and 502
         when it reported a failure — there is no image for that version and
-        serial, or the transfer failed. The whole body is optional for
-        single-CCU deployments.
+        serial, or the transfer failed. A system that runs one system
+        update at a time (openccu-lite) answers 409 while a download, an
+        upload or an install is already running; the problem's detail
+        names it. The whole body is optional for single-CCU deployments.
       tags: [system]
       security:
         - basicAuth: []
@@ -3372,6 +3374,7 @@ paths:
           description: Download triggered
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -13576,6 +13579,15 @@ components:
           type: object
           additionalProperties: { type: integer }
         pairing_available: { type: boolean }
+        interfaces:
+          type: array
+          items: { type: string }
+          description: |
+            The interfaces the box offers (`BidCos-RF`, `HmIP-RF`, …),
+            sorted, as it names them without a credential. A client
+            proposes exactly these when the box is added. Absent on a box
+            that does not name them — the client then keeps its own
+            default; an empty list says the box offers none.
         hmip_key_mode: { $ref: "#/components/schemas/HMIPKeyMode" }
     HMIPKeyMode:
       type: object
