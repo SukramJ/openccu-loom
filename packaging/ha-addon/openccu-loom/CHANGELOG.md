@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.101.0
+
+- **A Projection tab in the device detail** shows how the device appears
+  on Matter, in Home Assistant (MQTT discovery), on the raw MQTT topics,
+  on REST and in measurement forwarding: what is published and under
+  which name, and for everything left out the rule behind it. Useful
+  when a device or an entity is missing where you expect it.
+- **For assistants and scripts**: the same answer through the MCP tool
+  `get_device_projection` and `GET /devices/{addr}/projection`.
+- **REST API 16.3.4**, additive since 16.2.0.
+
 ## 0.100.0
 
 - **Breaking: the daemon no longer stores measurements or draws charts.**

@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.101.0
+
+- **Version follows OpenCCU-Loom 0.101.0.** The daemon behind the proxy
+  gains a Projection tab in the device detail; see the OpenCCU-Loom
+  changelog. The proxy itself is unchanged.
+
 # 0.100.0
 
 - **Version follows OpenCCU-Loom 0.100.0.** The daemon behind the proxy

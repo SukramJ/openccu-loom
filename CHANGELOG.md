@@ -6,78 +6,65 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.101.0] - 2026-11-12
+
+One question gets an answer in this release: how does a device appear on
+each plane the daemon bridges it to, and why is something missing there.
+
 ### Added
 
-- **A device's projection answers for REST (REST API 16.3.4).**
-  `GET /devices/{addr}/projection`, the MCP tool `get_device_projection`
-  and the Projection tab gain the plane `rest`: which data points the
-  data-point list of each channel carries, with their path, and for the
-  others the rule that leaves them out (`channel_hidden`,
-  `hidden_parameter`). The list handler and the plane ask one function.
-  With this the projection answers for all five planes of the concept.
-  No route or schema changed.
-- **A device's projection answers for the raw MQTT topics (REST API
-  16.3.3).** `GET /devices/{addr}/projection`, the MCP tool
-  `get_device_projection` and the Projection tab gain the plane
-  `mqtt_raw`: the retained status topics the daemon writes for the
-  device (availability, info, diagnostics, firmware update, the state of
-  every parameter, the aggregate state of a channel's custom data point,
-  week profile, schedule sensor and switches, combined data points),
-  each with its topic, and for a parameter without one the rule that
-  refuses it. Two reasons describe the moment and pass by themselves:
-  `not_observed_yet` for a state written with the channel's first value,
-  `empty_value` where there is nothing to write. An end-to-end test
-  compares the plane with the status topics a broker holds, in both
-  directions. The non-retained event pulses and the `meta` config
-  companions are not part of the plane. No route or schema changed.
-- **Config UI: a Projection tab in the device detail.** It shows how the
-  device appears on Matter, in Home Assistant discovery and in
-  measurement forwarding: per plane whether it is active, each entity or
-  endpoint with the name it has there (endpoint number, config topic,
-  measurement and tags), what is carried by another entry, and for
-  everything left out the rule behind it as a sentence, in English and
-  German. The table can be filtered by result and searched. The tab is
-  registered as the navigation surface `device.projection`, visible in
-  every profile, and is offered by a daemon that advertises
-  `projection.v1`.
-- **A device's projection answers for Home Assistant discovery (REST API
-  16.3.2).** `GET /devices/{addr}/projection` and the MCP tool
-  `get_device_projection` gain the plane `ha_discovery`: every entity
-  the daemon announces for the device, with its component, node id,
-  object id and config topic, and for every parameter and channel that
-  gets no entity the named reason (`hidden_parameter`, `not_visible`,
-  `channel_hidden`, `part_of_channel_entity`, `usage_no_create`,
-  `no_component`, …). A parameter carried by its channel's entity is
-  shown as folded into it. The plane walks the device the way the
-  announcing snapshot does and asks with the same events, and an
-  end-to-end test compares it with the config topics a broker holds, in
-  both directions. With MQTT or discovery off the plane is `inactive`.
-  No route or schema changed.
-- **A device's projection answers for measurement forwarding (REST API
-  16.3.1).** `GET /devices/{addr}/projection` and the MCP tool
-  `get_device_projection` gain the plane `measurements`: for every data
-  point of the device, whether its values are forwarded and under which
-  measurement and tags, or why not (`not_numeric`, `pattern_excludes`,
-  `override_off`, `no_live_value`). The plane answers with the
-  forwarder's own rules; with forwarding off it is `inactive`, and
-  `central_excluded` names a central that `disabled_centrals` leaves
-  out. No route or schema changed.
-- **A device's projection, first for Matter (REST API 16.3.0).**
-  `GET /devices/{addr}/projection` answers how one device stands on a
-  north-bound plane: which of its channels and data points are published
-  and under which identifiers, which are carried by another entry, and
-  which are left out, each with a named reason (`not_on_allow_list`,
-  `channel_hidden`, `secondary_channel`, `consumed_by_parent`,
-  `no_matter_mapping`, …). The answer comes from the same pass that
-  describes the bridge's endpoints, so it cannot say something else than
-  a controller sees; with the bridge switched off the plane answers
-  `inactive`. For a published source it names the endpoint number and
-  the device type once the bridge has assigned them. This first step
-  answers for Matter; Home Assistant discovery, the raw MQTT topics,
-  measurement forwarding and REST follow. The MCP tool
-  `get_device_projection` gives an assistant the same answer, and
-  `/info` advertises `projection.v1`. There is no view in the Config UI
-  yet.
+- **A device's projection (REST API 16.3.4).**
+  `GET /devices/{addr}/projection` answers, for one device and per
+  plane, what is published and under which identifiers, what is carried
+  by another entry, and what is left out with a named reason. `/info`
+  advertises it as `projection.v1`; `?plane=` narrows the answer. Five
+  planes answer:
+
+  | Plane | Entries | Named by |
+  |---|---|---|
+  | `matter` | the endpoints of the bridge, the sources folded into one (a button's press parameters, a metering channel's electrical values, a battery) | source key, endpoint number, device type |
+  | `ha_discovery` | every Home Assistant entity announced for the device, with companions | component, node id, object id, config topic |
+  | `mqtt_raw` | the retained status topics: availability, info, diagnostics, firmware update, parameter states, a channel's aggregate state, week profile, schedule, combined data points | topic |
+  | `measurements` | the data points whose values are forwarded | measurement and tags |
+  | `rest` | the data points of each channel's data-point list | path |
+
+  A reason is one value of the plane's closed set, named after the rule:
+  `not_on_allow_list`, `channel_hidden`, `hidden_parameter`,
+  `part_of_channel_entity`, `pattern_excludes`, `override_off`, and so
+  on. A few describe the moment and pass by themselves
+  (`no_live_value`, `not_observed_yet`, `central_not_ready`). A plane
+  that is switched off answers `inactive`.
+
+  Each plane answers from the decision its publisher acts on, not from a
+  second copy of the rules: the Matter assembler, the measurement
+  forwarder, the discovery builder with the MQTT and event bridges, the
+  data-point list handler. End-to-end tests compare the answer with what
+  a broker, a time-series target and the REST list actually hold, in
+  both directions. For Matter that comparison runs against the
+  assembler's described endpoints, not against a running bridge.
+
+  Not part of any plane: the non-retained MQTT event pulses, the `meta`
+  config companions of the parameters, WebSocket pushes and MASTER
+  parameters on REST.
+- **MCP: `get_device_projection`.** The same answer for an assistant:
+  "why is this device missing in my controller", "why is there no entity
+  for this in Home Assistant", "why does this value not reach my
+  time-series store".
+- **Config UI: a Projection tab in the device detail.** One card per
+  plane with its state and counts, and a table of the entries that can
+  be filtered by result and searched: the name an entry has on the
+  plane, or the rule that leaves it out as a sentence, in English and
+  German. The tab is the navigation surface `device.projection`,
+  visible in every profile, and reads and changes nothing.
+
+### Changed
+
+- **Home Assistant discovery is announced from one description per
+  entity.** Every path that announces an entity (a data point's event,
+  the boot snapshot, press events, custom data points, schedules,
+  combined data points, firmware updates) now builds a description
+  first and publishes exactly that. Topics, payloads and publish order
+  are unchanged; the discovery goldens did not move.
 
 ## [0.100.0] - 2026-11-11
 
