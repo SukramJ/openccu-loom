@@ -216,6 +216,8 @@ device, how it appears on each plane the daemon bridges it to:
   store, with the measurement and tags they are written under.
 - **MQTT (raw topics)** — which retained status topics exist for the
   device, with the topic of each.
+- **REST** — which data points the REST data-point list carries, with
+  their path.
 
 Each plane says whether it is active. Every entry is either *published*,
 *carried* by another entry (a battery reported through its device's

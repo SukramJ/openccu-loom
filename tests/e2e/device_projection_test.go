@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -75,7 +76,7 @@ func TestDeviceProjectionAnswersThroughTheDaemon(t *testing.T) {
 	if out.Address != addr || out.Central == "" {
 		t.Errorf("answer names %q on %q; want %q on its central", out.Address, out.Central, addr)
 	}
-	want := []string{"matter", "measurements", "ha_discovery", "mqtt_raw"}
+	want := []string{"matter", "measurements", "ha_discovery", "mqtt_raw", "rest"}
 	got := make([]string, 0, len(out.Planes))
 	for _, p := range out.Planes {
 		got = append(got, p.Plane)
@@ -84,6 +85,14 @@ func TestDeviceProjectionAnswersThroughTheDaemon(t *testing.T) {
 		t.Fatalf("planes = %v; want %v", got, want)
 	}
 	for _, p := range out.Planes {
+		// REST is the daemon itself and always answers; the other planes
+		// are off in a harness without MQTT, Matter and forwarding.
+		if p.Plane == "rest" {
+			if p.State != "active" || len(p.Entries) == 0 {
+				t.Errorf("rest plane = %s with %d entries; want active with entries", p.State, len(p.Entries))
+			}
+			continue
+		}
 		if p.State != "inactive" || p.Reason != "plane_disabled" || len(p.Entries) != 0 {
 			t.Errorf("%s plane = %+v; want inactive, plane_disabled, no entries", p.Plane, p)
 		}
@@ -439,4 +448,85 @@ func TestRawProjectionIsWhatTheBrokerHolds(t *testing.T) {
 			len(unexplained), strings.Join(unexplained, "\n  "))
 	}
 	t.Logf("%d topics shown, %d status topics on the broker, %d withheld entries", len(shown), len(onBroker), withheld)
+}
+
+// TestRESTProjectionIsWhatTheListCarries is the round trip of the REST
+// plane: for every channel of every device, the data points the default
+// list returns are exactly the ones the projection calls published.
+func TestRESTProjectionIsWhatTheListCarries(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{StartCCUNotReady: true, AuthMode: harness.AuthSession})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	h.CCU().V().SetReady(true)
+	awaitCentralReady(t, h, harness.CentralName)
+
+	var missing, unexplained []string
+	shownTotal, withheld := 0, 0
+	for _, raw := range getJSONArray(t, h, "/api/v1/devices", "items") {
+		dev, _ := raw.(map[string]any)
+		addr, _ := dev["address"].(string)
+		status, out := getProjection(t, h, "/api/v1/devices/"+addr+"/projection?plane=rest")
+		if status != http.StatusOK || len(out.Planes) != 1 || out.Planes[0].State != "active" {
+			t.Fatalf("%s: status %d, planes %+v", addr, status, out.Planes)
+		}
+		shown := map[string]bool{} // "<channel>/<parameter>"
+		channels := map[int]bool{}
+		for _, rawEntry := range out.Planes[0].Entries {
+			var e measurementEntry
+			if err := json.Unmarshal(rawEntry, &e); err != nil {
+				t.Fatalf("decode entry: %v", err)
+			}
+			channels[e.Channel] = true
+			switch e.Verdict {
+			case "published":
+				want := fmt.Sprintf("/api/v1/devices/%s/channels/%d/data-points/%s", addr, e.Channel, e.Key)
+				if e.Identity["path"] != want {
+					t.Errorf("%s: entry %d/%s names path %q; want %q", addr, e.Channel, e.Key, e.Identity["path"], want)
+				}
+				shown[fmt.Sprintf("%d/%s", e.Channel, e.Key)] = true
+				shownTotal++
+			case "withheld":
+				withheld++
+				if e.Reason == "" {
+					t.Errorf("%s: entry %d/%s is withheld without a reason", addr, e.Channel, e.Key)
+				}
+			}
+		}
+		listed := map[string]bool{}
+		for no := range channels {
+			items, err := fetchJSONArray(h, fmt.Sprintf("/api/v1/devices/%s/channels/%d/data-points", addr, no), "")
+			if err != nil {
+				t.Fatalf("%s channel %d: %v", addr, no, err)
+			}
+			for _, it := range items {
+				dp, _ := it.(map[string]any)
+				param, _ := dp["parameter"].(string)
+				listed[fmt.Sprintf("%d/%s", no, param)] = true
+			}
+		}
+		for k := range shown {
+			if !listed[k] {
+				missing = append(missing, addr+" "+k)
+			}
+		}
+		for k := range listed {
+			if !shown[k] {
+				unexplained = append(unexplained, addr+" "+k)
+			}
+		}
+	}
+	if shownTotal == 0 || withheld == 0 {
+		t.Fatalf("%d shown, %d withheld; the comparison needs both", shownTotal, withheld)
+	}
+	slices.Sort(missing)
+	slices.Sort(unexplained)
+	if len(missing) > 0 {
+		t.Errorf("%d data points are called published and are not in the list:\n  %s", len(missing), strings.Join(missing, "\n  "))
+	}
+	if len(unexplained) > 0 {
+		t.Errorf("%d data points are in the list and in no projection:\n  %s", len(unexplained), strings.Join(unexplained, "\n  "))
+	}
+	t.Logf("%d data points shown, %d withheld", shownTotal, withheld)
 }
