@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, '../fixtures');
 
-function fixture(name: string): unknown {
+export function fixture(name: string): unknown {
   return JSON.parse(readFileSync(join(fixturesDir, name), 'utf-8'));
 }
 

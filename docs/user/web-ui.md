@@ -203,6 +203,30 @@ nothing is sent until you enable it (`north.measurements` in the
 configuration), and the choice appears only then. The Config UI draws
 no charts; chart the measurements in the store they are sent to.
 
+## Where a device appears, and why not
+
+The device detail view has a **Projection** tab. It answers, for this one
+device, how it appears on each plane the daemon bridges it to:
+
+- **Matter** — which channels became endpoints, with their endpoint number
+  and device type.
+- **Home Assistant (MQTT discovery)** — which entities are announced, with
+  their config topic.
+- **Measurement forwarding** — which values are sent to your time-series
+  store, with the measurement and tags they are written under.
+
+Each plane says whether it is active. Every entry is either *published*,
+*carried* by another entry (a battery reported through its device's
+endpoint, a parameter that is part of its channel's entity), or *left
+out* — and a left-out entry names the rule: the channel is hidden, the
+source is not switched on in the Matter exposure list, the parameter is
+part of the channel's entity, the include and exclude patterns leave it
+out, and so on.
+
+The tab reads and changes nothing. To change what is published, use the
+setting the rule names: the channel's hidden switch, the Matter exposure
+list, the recording choice on the History tab.
+
 ## Health and diagnostics
 
 The **Diagnostics** view shows the daemon's overall health and connection status to each CCU and interface — useful when a device seems unresponsive or a CCU dropped offline. There is also a server-rendered `/health` page if you only need a quick up/down check.

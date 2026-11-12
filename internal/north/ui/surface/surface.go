@@ -305,6 +305,9 @@ var registry = []Surface{
 	// The change log of the device and the choice of which data points are
 	// captured. The log needs no capture, so the tab carries no gate.
 	{ID: "device.history", Group: GroupDevice, Defaults: everywhere()},
+	// How the device appears on the bridged planes and why something is
+	// missing there. It reads and changes nothing, so every host keeps it.
+	{ID: "device.projection", Group: GroupDevice, Defaults: everywhere()},
 }
 
 // Registry returns every registered surface in editor order.
