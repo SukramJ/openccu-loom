@@ -21,7 +21,7 @@ type DeviceProjector interface {
 
 type getDeviceProjectionIn struct {
 	Address string `json:"address" jsonschema:"device address, as list_devices reports it"`
-	Plane   string `json:"plane,omitempty" jsonschema:"narrow the answer to one plane, e.g. matter; empty asks every plane"`
+	Plane   string `json:"plane,omitempty" jsonschema:"narrow the answer to one plane: matter or measurements; empty asks every plane"`
 }
 
 type getDeviceProjectionOut struct {
@@ -36,7 +36,7 @@ func registerGetDeviceProjection(s *mcpsdk.Server, d Deps) {
 		Name: "get_device_projection",
 		Description: "How one device stands on the north-bound planes: per plane, what is published and under " +
 			"which identifiers, what is carried inside another entry, and what is left out with the named reason. " +
-			"Answers for the planes this daemon projects (today: matter).",
+			"Answers for the planes this daemon projects (today: matter and measurements).",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getDeviceProjectionIn) (*mcpsdk.CallToolResult, getDeviceProjectionOut, error) {
 		out, ok, err := d.Projection.ProjectDevice(ctx, strings.TrimSpace(in.Address), strings.TrimSpace(in.Plane))
 		if err != nil {

@@ -54,7 +54,7 @@ type restMountDeps struct {
 	// measurementsProjection is the forwarder's side of a device's
 	// projection, from the southbound phase that wires the forwarder.
 	measurementsProjection *measurements.ProjectionPlane
-	reload *reloadDeps
+	reload                 *reloadDeps
 
 	// bootstrap is the server-rendered, no-JS diagnostic surface (/health,
 	// /about), folded onto the REST listener (ADR 0044/0045). noUsers is the

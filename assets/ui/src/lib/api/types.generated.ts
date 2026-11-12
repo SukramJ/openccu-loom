@@ -405,7 +405,7 @@ export interface paths {
          *     is computed when asked; nothing is recorded.
          *
          *     Planes are added release by release. This version answers for
-         *     `matter`. Capability `projection.v1`.
+         *     `matter` and `measurements`. Capability `projection.v1`.
          */
         get: operations["getDeviceProjection"];
         put?: never;
@@ -7321,11 +7321,15 @@ export interface components {
         ProjectionPlane: {
             /**
              * @description The plane's name. An open set that grows with the daemon;
-             *     today `matter`.
+             *     today `matter` and `measurements`.
              */
             plane: string;
             state: components["schemas"]["ProjectionPlaneState"];
-            /** @description Set when `state` is `inactive`: `plane_disabled`. */
+            /**
+             * @description Set when `state` is `inactive`: `plane_disabled`, or on
+             *     `measurements` `central_excluded` when forwarding runs but
+             *     not for the device's central.
+             */
             reason?: string;
             entries: components["schemas"]["ProjectionEntry"][];
         };
@@ -7335,13 +7339,16 @@ export interface components {
             /**
              * @description The kind of subject in the plane's vocabulary. Absent for an
              *     entry about the whole channel. On `matter`: `custom`,
-             *     `calculated`, `combined`, `generic`.
+             *     `calculated`, `combined`, `generic`. Absent on
+             *     `measurements`, whose subjects are the data points of the
+             *     VALUES paramset.
              */
             kind?: string;
             /**
              * @description The subject's key in the plane's vocabulary. On `matter` the
              *     parameter or data-point key, or the key of a consolidated
-             *     endpoint (`BUTTON`, `ELECTRICAL`).
+             *     endpoint (`BUTTON`, `ELECTRICAL`). On `measurements` the
+             *     parameter.
              */
             key?: string;
             verdict: components["schemas"]["ProjectionVerdict"];
@@ -7350,9 +7357,12 @@ export interface components {
              *     closed set, named after the rule. On `matter`:
              *     `channel_hidden`, `secondary_channel`, `usage_ignored`,
              *     `consumed_by_parent`, `secondary_member`, `no_matter_mapping`,
-             *     `not_on_allow_list`, `measurements_not_included`. A later
-             *     daemon may state a reason this list does not have; show it as
-             *     it is.
+             *     `not_on_allow_list`, `measurements_not_included`. On
+             *     `measurements`: `not_numeric`, `pattern_excludes`,
+             *     `override_off`, and `no_live_value` (the daemon has observed
+             *     no value on the wire since it started; it passes with the
+             *     next one). A later daemon may state a reason this list does
+             *     not have; show it as it is.
              */
             reason?: string;
             /**
@@ -7364,7 +7374,10 @@ export interface components {
             /**
              * @description Set for a published entry: what the subject is called on the
              *     plane. On `matter`: `source_key`, and `endpoint_id` and
-             *     `device_type` once the bridge has assigned the endpoint.
+             *     `device_type` once the bridge has assigned the endpoint. On
+             *     `measurements` the measurement and the tags the samples are
+             *     written under: `measurement`, `central`, `interface_id`,
+             *     `channel`, `parameter`.
              */
             identity?: {
                 [key: string]: string;
