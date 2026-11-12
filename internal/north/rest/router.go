@@ -71,6 +71,9 @@ type Deps struct {
 	Pairing     handlers.PairingService
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// Projection answers GET /devices/{addr}/projection. Nil leaves the
+	// route unmounted.
+	Projection handlers.DeviceProjector
 	// Onboarding backs the probe and client-pairing routes under
 	// /centrals and /setup. Nil leaves them unmounted.
 	Onboarding handlers.CentralOnboarding
@@ -898,6 +901,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/functions", handlers.ListFunctions(d.Devices))
 				pr.Get("/devices", handlers.ListDevices(d.Devices))
 				pr.Get("/devices/{addr}", handlers.GetDevice(d.Devices, d.Labels))
+				if d.Projection != nil {
+					pr.Get("/devices/{addr}/projection", handlers.GetDeviceProjection(d.Projection))
+				}
 				pr.Get("/devices/{addr}/channels", handlers.ListChannels(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/channels/{no}", handlers.GetChannel(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/channels/{no}/event-groups", handlers.ListEventGroups(d.Devices))

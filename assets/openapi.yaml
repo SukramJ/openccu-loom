@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.2.0
+  version: 16.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -584,6 +584,39 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /devices/{addr}/projection:
+    get:
+      operationId: getDeviceProjection
+      tags: [devices]
+      summary: How the device stands on the north-bound planes
+      description: |
+        Per plane: what is published for the device and under which
+        identifiers, what is carried inside another entry, and what is
+        left out with the named reason.
+
+        A plane answers from the decision its publisher acts on, so the
+        answer and the published set follow one set of rules. The answer
+        is computed when asked; nothing is recorded.
+
+        Planes are added release by release. This version answers for
+        `matter`. Capability `projection.v1`.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - name: plane
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Narrows the answer to one plane. A name this daemon does not
+            answer for yields an empty `planes` list.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceProjection" }
+        "404":
+          $ref: "#/components/responses/NotFound"
   /devices/{addr}/channels:
     get:
       operationId: listDeviceChannels
@@ -9619,6 +9652,8 @@ components:
           description: |
             Runtime feature set. Always-on entries:
             `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`,
+            `projection.v1` (`GET /devices/{addr}/projection` answers how
+            a device stands on the north-bound planes),
             `central.features.v1` (each central reports what it offers in
             `features` on `GET /system/ccu`, and an operation a central
             does not offer answers the `feature_unavailable` problem),
@@ -10428,6 +10463,91 @@ components:
         page: { type: integer }
         per_page: { type: integer }
         total: { type: integer }
+    DeviceProjection:
+      type: object
+      required: [address, central, planes]
+      properties:
+        address: { type: string }
+        central: { type: string }
+        planes:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectionPlane" }
+
+    ProjectionPlaneState:
+      type: string
+      enum: [active, inactive]
+      description: Whether the plane runs for the device's central.
+
+    ProjectionVerdict:
+      type: string
+      enum: [published, folded, withheld]
+      description: |
+        `published`: the subject is an entry of its own on the plane.
+        `folded`: another entry carries it (`folded_into`). `withheld`:
+        the plane leaves it out for `reason`.
+
+    ProjectionPlane:
+      type: object
+      required: [plane, state, entries]
+      properties:
+        plane:
+          type: string
+          description: |
+            The plane's name. An open set that grows with the daemon;
+            today `matter`.
+        state: { $ref: "#/components/schemas/ProjectionPlaneState" }
+        reason:
+          type: string
+          description: |
+            Set when `state` is `inactive`: `plane_disabled`.
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectionEntry" }
+
+    ProjectionEntry:
+      type: object
+      required: [channel, verdict]
+      properties:
+        channel:
+          type: integer
+          description: The channel number the subject belongs to.
+        kind:
+          type: string
+          description: |
+            The kind of subject in the plane's vocabulary. Absent for an
+            entry about the whole channel. On `matter`: `custom`,
+            `calculated`, `combined`, `generic`.
+        key:
+          type: string
+          description: |
+            The subject's key in the plane's vocabulary. On `matter` the
+            parameter or data-point key, or the key of a consolidated
+            endpoint (`BUTTON`, `ELECTRICAL`).
+        verdict: { $ref: "#/components/schemas/ProjectionVerdict" }
+        reason:
+          type: string
+          description: |
+            Set when `verdict` is `withheld`: one value of the plane's
+            closed set, named after the rule. On `matter`:
+            `channel_hidden`, `secondary_channel`, `usage_ignored`,
+            `consumed_by_parent`, `secondary_member`, `no_matter_mapping`,
+            `not_on_allow_list`, `measurements_not_included`. A later
+            daemon may state a reason this list does not have; show it as
+            it is.
+        folded_into:
+          type: string
+          description: |
+            Set when `verdict` is `folded`: the `key` of the entry that
+            carries the subject. On `matter` also `POWER_SOURCE`, the
+            power source cluster on one of the device's endpoints.
+        identity:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Set for a published entry: what the subject is called on the
+            plane. On `matter`: `source_key`, and `endpoint_id` and
+            `device_type` once the bridge has assigned the endpoint.
+
     DeviceDetail:
       description: |
         A device summary plus its channel list. `firmware` and `availability`
