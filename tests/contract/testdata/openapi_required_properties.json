@@ -537,6 +537,11 @@
   "device_address",
   "interface_id"
  ],
+ "DeviceProjection": [
+  "address",
+  "central",
+  "planes"
+ ],
  "DeviceRefreshedPayload": [
   "central",
   "device_address",
@@ -1094,6 +1099,15 @@
   "id",
   "name",
   "unique_id"
+ ],
+ "ProjectionEntry": [
+  "channel",
+  "verdict"
+ ],
+ "ProjectionPlane": [
+  "entries",
+  "plane",
+  "state"
  ],
  "PutConfigSectionResponse": [
   "applied",

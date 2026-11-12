@@ -1,5 +1,5 @@
 {
- "api_version": "16.2.0",
+ "api_version": "16.3.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -94,6 +94,7 @@
   "GET /devices/{addr}/links": "listLinks",
   "GET /devices/{addr}/paramsets/{key}": "getParamset",
   "GET /devices/{addr}/paramsets/{key}/apply-targets": "getParamsetApplyTargets",
+  "GET /devices/{addr}/projection": "getDeviceProjection",
   "GET /devices/{addr}/replace-candidates": "listDeviceReplaceCandidates",
   "GET /devices/{addr}/schedule": "getDeviceSchedule",
   "GET /diagnostics": "diagnosticsDump",
@@ -1183,6 +1184,11 @@
    "device_address:string",
    "interface_id:string"
   ],
+  "DeviceProjection": [
+   "address:string",
+   "central:string",
+   "planes:array\u003c$ref:ProjectionPlane\u003e"
+  ],
   "DeviceRefreshedPayload": [
    "central:string",
    "device_address:string",
@@ -1976,6 +1982,23 @@
    "name:string",
    "unique_id:string"
   ],
+  "ProjectionEntry": [
+   "channel:integer",
+   "folded_into:string",
+   "identity:object",
+   "key:string",
+   "kind:string",
+   "reason:string",
+   "verdict:$ref:ProjectionVerdict"
+  ],
+  "ProjectionPlane": [
+   "entries:array\u003c$ref:ProjectionEntry\u003e",
+   "plane:string",
+   "reason:string",
+   "state:$ref:ProjectionPlaneState"
+  ],
+  "ProjectionPlaneState": [],
+  "ProjectionVerdict": [],
   "PutConfigSectionResponse": [
    "applied:boolean",
    "apply_error:string",
