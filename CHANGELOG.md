@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A device's projection answers for measurement forwarding (REST API
+  16.3.1).** `GET /devices/{addr}/projection` and the MCP tool
+  `get_device_projection` gain the plane `measurements`: for every data
+  point of the device, whether its values are forwarded and under which
+  measurement and tags, or why not (`not_numeric`, `pattern_excludes`,
+  `override_off`, `no_live_value`). The plane answers with the
+  forwarder's own rules; with forwarding off it is `inactive`, and
+  `central_excluded` names a central that `disabled_centrals` leaves
+  out. No route or schema changed.
 - **A device's projection, first for Matter (REST API 16.3.0).**
   `GET /devices/{addr}/projection` answers how one device stands on a
   north-bound plane: which of its channels and data points are published

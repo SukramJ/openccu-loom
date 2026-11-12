@@ -943,6 +943,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		tokenPurger:            rw.tokenPurger,
 		sessions:               sessions,
 		matter:                 matter,
+		measurementsProjection: sb.measurementsProjection,
 		reload:                 deps,
 		healthAdapter:          healthAdapter,
 		configAdapter:          configAdapter,
