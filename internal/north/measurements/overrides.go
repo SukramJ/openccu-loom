@@ -71,16 +71,22 @@ func (o *RecordingOverrides) Load(ctx context.Context) error {
 // wins, otherwise the caller's glob-policy decision stands. Runs on the
 // publisher goroutine — a single RLock + map lookup, no I/O.
 func (o *RecordingOverrides) Decide(central, iface, channel, parameter string, policyAllow bool) bool {
-	if o == nil {
-		return policyAllow
-	}
-	o.mu.RLock()
-	v, ok := o.m[overrideKey{central, iface, channel, parameter}]
-	o.mu.RUnlock()
-	if ok {
+	if v, ok := o.lookup(central, iface, channel, parameter); ok {
 		return v
 	}
 	return policyAllow
+}
+
+// lookup returns the override for one data point and whether one exists.
+// Safe on a nil overlay, which holds none.
+func (o *RecordingOverrides) lookup(central, iface, channel, parameter string) (record, ok bool) {
+	if o == nil {
+		return false, false
+	}
+	o.mu.RLock()
+	record, ok = o.m[overrideKey{central, iface, channel, parameter}]
+	o.mu.RUnlock()
+	return record, ok
 }
 
 // Effective reports the current recording decision for one data point

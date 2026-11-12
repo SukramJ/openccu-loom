@@ -252,6 +252,10 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 	e.exported.Add(int64(len(batch)))
 }
 
+// MeasurementName is the line-protocol measurement every sample is
+// written under.
+func (e *InfluxExporter) MeasurementName() string { return e.measurement }
+
 // lineProtocol renders a batch as InfluxDB line protocol, one line per
 // sample: <measurement>,<tags> value=<v> <ts_ns>.
 func (e *InfluxExporter) lineProtocol(batch []Sample) string {

@@ -19,7 +19,8 @@ import (
 
 // Plane names.
 const (
-	PlaneMatter = "matter"
+	PlaneMatter       = "matter"
+	PlaneMeasurements = "measurements"
 )
 
 // Plane states.

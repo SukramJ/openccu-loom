@@ -162,8 +162,7 @@ func (f *Forwarder) onValueChanged(unit *central.Unit, e hmevent.DataPointValueC
 	if !ok {
 		return
 	}
-	policyAllow := allow(e.Key.Parameter, f.include, f.exclude)
-	if !f.overrides.Decide(unit.Name(), e.Key.InterfaceID, e.Key.ChannelAddress, e.Key.Parameter, policyAllow) {
+	if f.policy(unit.Name(), e.Key.InterfaceID, e.Key.ChannelAddress, e.Key.Parameter) != "" {
 		return
 	}
 	dev, ok := unit.ModelRegistry.Get(hmtypes.DeviceAddress(e.Key.ChannelAddress))
@@ -173,9 +172,7 @@ func (f *Forwarder) onValueChanged(unit *central.Unit, e hmevent.DataPointValueC
 	// Provenance guard: forward only a genuine live wire observation.
 	// The boot-time zero default, a cache replay and a source-only flip
 	// are not measurements.
-	dp := dev.DataPoint(e.Key.ChannelAddress, hmenum.Parameter(e.Key.Parameter))
-	src, ok := dp.(liveSourced)
-	if !ok || src.Source() != hmenum.ValueSourceLive {
+	if provenance(dev.DataPoint(e.Key.ChannelAddress, hmenum.Parameter(e.Key.Parameter))) != "" {
 		return
 	}
 	f.exporter.Export(Sample{
@@ -187,6 +184,51 @@ func (f *Forwarder) onValueChanged(unit *central.Unit, e hmevent.DataPointValueC
 		Value:          val,
 	})
 	f.forwarded.Add(1)
+}
+
+// WithheldReason names the rule by which the forwarder leaves a data
+// point's value out. The set is closed.
+type WithheldReason string
+
+const (
+	// WithheldNotNumeric means: the value is not a number; a switch
+	// state or a text is not a measurement.
+	WithheldNotNumeric WithheldReason = "not_numeric"
+	// WithheldPatternExcludes means: the include / exclude patterns of
+	// north.measurements leave the parameter out.
+	WithheldPatternExcludes WithheldReason = "pattern_excludes"
+	// WithheldOverrideOff means: the operator switched recording off for
+	// this data point.
+	WithheldOverrideOff WithheldReason = "override_off"
+	// WithheldNoLiveValue means: the daemon holds no value it observed on
+	// the wire since it started. It passes with the next value.
+	WithheldNoLiveValue WithheldReason = "no_live_value"
+)
+
+// policy is the recording decision for one data point: an override wins
+// over the patterns. "" forwards.
+func (f *Forwarder) policy(centralName, iface, channel, parameter string) WithheldReason {
+	if record, ok := f.overrides.lookup(centralName, iface, channel, parameter); ok {
+		if record {
+			return ""
+		}
+		return WithheldOverrideOff
+	}
+	if allow(parameter, f.include, f.exclude) {
+		return ""
+	}
+	return WithheldPatternExcludes
+}
+
+// provenance is the guard on where a data point's value came from. "" is
+// a value observed live. dp is any because the model's data points share
+// no type that carries the source.
+func provenance(dp any) WithheldReason {
+	src, ok := dp.(liveSourced)
+	if !ok || src.Source() != hmenum.ValueSourceLive {
+		return WithheldNoLiveValue
+	}
+	return ""
 }
 
 // numericValue extracts a float64 from a numeric ParamValue. Bool,

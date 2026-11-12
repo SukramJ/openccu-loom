@@ -84,14 +84,14 @@ func wireMeasurementForwarder(
 	overrides *measurements.RecordingOverrides,
 	healthTracker *health.Tracker,
 	logger *slog.Logger,
-) (teardown func()) {
+) (plane *measurements.ProjectionPlane, teardown func()) {
 	if cfg == nil || reg == nil {
-		return func() {}
+		return measurements.NewProjectionPlane(nil), func() {}
 	}
 	mc := cfg.North.Measurements
 	exporter := buildMeasurementExporter(mc, logger)
 	if exporter == nil {
-		return func() {}
+		return measurements.NewProjectionPlane(nil), func() {}
 	}
 	fwd := measurements.New(exporter, measurements.Options{
 		EnabledFor: mc.EnabledFor,
@@ -113,7 +113,7 @@ func wireMeasurementForwarder(
 				func() float64 { return float64(infl.Metrics().Dropped) })
 		}
 	}
-	return stop
+	return measurements.NewProjectionPlane(fwd), stop
 }
 
 // buildMeasurementExporter constructs the forwarding target from config, or

@@ -78,6 +78,10 @@ type southboundWiringDeps struct {
 // southboundWiring is the result of the southbound wiring phase. It
 // surfaces the values that later phases of the composition root read.
 type southboundWiring struct {
+	// measurementsProjection is the measurement side of a device's
+	// projection (GET /devices/{addr}/projection). Never nil: with
+	// forwarding switched off it answers that the plane is inactive.
+	measurementsProjection *measurements.ProjectionPlane
 	// backupAdapter is constructed up-front so WireCentrals can inject
 	// the live HTTPBackupRestorer after the first hub handshake; the
 	// REST backup handler reads it later.
@@ -341,7 +345,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// The measurement forwarder subscribes to genuine live wire value
 	// changes and hands numeric samples to the configured target (no-op
 	// while forwarding is off). It manages its own shutdown context.
-	stopMeasurementForwarder := wireMeasurementForwarder(cfg, reg, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the forwarder bounds its own shutdown context
+	measurementsProjection, stopMeasurementForwarder := wireMeasurementForwarder(cfg, reg, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the forwarder bounds its own shutdown context
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
@@ -506,6 +510,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		backupAdapter:   backupAdapter,
 		bringUpManager:  bringUpMgr,
 		hubReadyTrigger: hubReadyTriggerFn,
+
+		measurementsProjection: measurementsProjection,
 	}
 	return result, teardown
 }

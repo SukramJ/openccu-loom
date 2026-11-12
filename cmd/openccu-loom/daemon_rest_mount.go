@@ -51,6 +51,9 @@ import (
 type restMountDeps struct {
 	reg    *central.Registry
 	matter matterWiring
+	// measurementsProjection is the forwarder's side of a device's
+	// projection, from the southbound phase that wires the forwarder.
+	measurementsProjection *measurements.ProjectionPlane
 	reload *reloadDeps
 
 	// bootstrap is the server-rendered, no-JS diagnostic surface (/health,
@@ -323,7 +326,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Health:                  d.healthAdapter,
 		Config:                  d.configAdapter,
 		Devices:                 d.devicesAdapter,
-		Projection:              newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection),
+		Projection:              newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection, d.measurementsProjection),
 		DeviceAdmin:             d.deviceAdminDomain,
 		DeviceReplacer:          d.deviceAdminDomain,
 		FirmwareRefresher:       firmwareRefresherFrom(d.firmwareRefresher),
@@ -773,7 +776,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 	mcpInner := d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:      d.reg,
 		Devices:       d.devicesAdapter,
-		Projection:    newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection),
+		Projection:    newDeviceProjector(d.devicesAdapter, d.reg, d.matter.projection, d.measurementsProjection),
 		Writer:        d.dpWriterAdapter,
 		Paramsets:     d.paramsetsDomain,
 		ParamsetApply: paramsetApplyServiceOrNil(d.paramsetApplyDomain),
