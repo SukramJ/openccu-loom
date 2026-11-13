@@ -3,26 +3,32 @@
 
 // @vitest-environment happy-dom
 //
-// The projection view presents what the daemon decided: a plane's state
-// with its reason, a published entry's identity, a withheld entry's rule.
-// A token this build has no sentence for is shown as it is.
+// The projection view arranges what the daemon decided as a matrix: a row
+// per subject, a column per active plane. It opens on what appears
+// somewhere; the rest is behind two switches and the list of rules.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, waitFor, fireEvent } from "@testing-library/svelte";
 
-const { mockProjection } = vi.hoisted(() => ({ mockProjection: vi.fn() }));
+const { mockProjection, mockToast } = vi.hoisted(() => ({
+  mockProjection: vi.fn(),
+  mockToast: { success: vi.fn(), error: vi.fn(), warn: vi.fn() },
+}));
 
 vi.mock("$lib/api/client", () => ({
   api: { deviceProjection: (...a: unknown[]) => mockProjection(...a) },
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));
+vi.mock("$lib/stores/toast.svelte", () => ({ toastStore: mockToast }));
 
 // A catalogue with a few entries: a key it does not hold comes back as the
 // key, which is how the real catalogue signals a missing entry.
 const catalogue: Record<string, string> = {
   "projection.plane.matter": "Matter",
+  "projection.plane.ha_discovery": "Home Assistant (MQTT discovery)",
+  "projection.plane_short.ha_discovery": "Home Assistant",
   "projection.reason.plane_disabled": "This plane is switched off.",
   "projection.reason.not_on_allow_list": "Not switched on in the exposure list.",
-  "projection.kind.custom": "Custom data point",
+  "projection.reason.hidden_parameter": "Hidden by the visibility rules.",
   "projection.identity.endpoint_id": "Endpoint",
 };
 vi.mock("$lib/i18n", () => ({
@@ -40,56 +46,87 @@ const answer = {
       plane: "matter",
       state: "active",
       entries: [
-        {
-          channel: 3,
-          kind: "custom",
-          key: "STATE",
-          verdict: "published",
-          identity: { source_key: "ccu1|DEV1|3|custom|STATE", endpoint_id: "7" },
-        },
-        { channel: 4, kind: "custom", key: "STATE", verdict: "withheld", reason: "not_on_allow_list" },
+        { channel: 3, kind: "custom", key: "STATE", verdict: "published", identity: { source_key: "k3", endpoint_id: "7" } },
+        { channel: 3, kind: "generic", key: "HUMIDITY", verdict: "withheld", reason: "not_on_allow_list" },
         { channel: 5, kind: "generic", key: "LEVEL", verdict: "withheld", reason: "a_rule_from_a_later_daemon" },
-        { channel: 6, kind: "generic", key: "POWER", verdict: "folded", folded_into: "ELECTRICAL" },
       ],
     },
     { plane: "measurements", state: "inactive", reason: "plane_disabled", entries: [] },
-    { plane: "a_later_plane", state: "inactive", reason: "a_later_reason", entries: [] },
+    {
+      plane: "ha_discovery",
+      state: "active",
+      entries: [
+        { channel: 3, kind: "channel_entity", verdict: "published", identity: { discovery_topic: "ha/switch/n/3_switch/config" } },
+        { channel: 3, kind: "data_point", key: "HUMIDITY", verdict: "published", identity: { discovery_topic: "ha/sensor/n/3_humidity/config" } },
+        { channel: 3, kind: "data_point", key: "MASTER:ON_TIME", verdict: "withheld", reason: "hidden_parameter" },
+      ],
+    },
   ],
 };
 
-beforeEach(() => mockProjection.mockReset());
+function rowTexts(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll("tbody tr")).map((r) => r.textContent ?? "");
+}
+const hasRow = (container: HTMLElement, text: string) => rowTexts(container).some((r) => r.includes(text));
+
+beforeEach(() => {
+  mockProjection.mockReset();
+  mockToast.success.mockReset();
+  mockToast.error.mockReset();
+});
 afterEach(() => cleanup());
 
 describe("DeviceProjection", () => {
-  it("shows each plane with what the daemon decided", async () => {
+  it("opens on what appears somewhere, one column per active plane", async () => {
     mockProjection.mockResolvedValue(answer);
-    const { getByTestId, container } = render(DeviceProjection, { address: "DEV1" });
+    const { getByTestId, container } = render(DeviceProjection, {
+      address: "DEV1",
+      channels: [{ number: 3, name: "Lamp", type_label: "Switch" }],
+    });
     await waitFor(() => expect(getByTestId("device-projection")).toBeTruthy());
     expect(mockProjection).toHaveBeenCalledWith("DEV1");
 
-    const matter = getByTestId("projection-plane-matter").textContent ?? "";
-    expect(matter).toContain("Matter");
-    // The published entry names where it is: a translated identity key and
-    // an untranslated one, both with their values.
-    expect(matter).toContain("Endpoint: 7");
-    expect(matter).toContain("source_key: ccu1|DEV1|3|custom|STATE");
-    // A withheld entry states its rule, as a sentence where one exists…
-    expect(matter).toContain("Not switched on in the exposure list.");
-    // …and as the daemon's token where this build has none.
-    expect(matter).toContain("a_rule_from_a_later_daemon");
-    expect(matter).toContain("Custom data point: STATE");
-    expect(matter).toContain('projection.folded_into {"target":"ELECTRICAL"}');
+    const headers = Array.from(container.querySelectorAll("thead th")).map((h) => h.textContent?.trim());
+    expect(headers).toContain("Matter");
+    expect(headers).toContain("Home Assistant");
+    // The inactive plane is a line above the table, not a column.
+    expect(headers.join("|")).not.toContain("measurements");
+    expect(getByTestId("projection-plane-measurements").textContent).toContain("This plane is switched off.");
 
-    // An inactive plane says why and lists nothing.
-    const measurements = getByTestId("projection-plane-measurements");
-    expect(measurements.textContent).toContain("This plane is switched off.");
-    expect(measurements.querySelector("table")).toBeNull();
+    // Rows that appear somewhere are shown…
+    expect(hasRow(container, "projection.row.entity")).toBe(true);
+    expect(hasRow(container, "HUMIDITY")).toBe(true);
+    // …a row no plane carries and a configuration parameter are not.
+    expect(hasRow(container, "LEVEL")).toBe(false);
+    expect(hasRow(container, "ON_TIME")).toBe(false);
+    expect(getByTestId("projection-hidden-count").textContent).toContain('"n":2');
 
-    // A plane this build does not know is shown under its own name.
-    const later = getByTestId("projection-plane-a_later_plane").textContent ?? "";
-    expect(later).toContain("a_later_plane");
-    expect(later).toContain("a_later_reason");
-    expect(container.textContent).not.toContain("undefined");
+    // The channel's name heads its group.
+    expect(container.textContent).toContain('projection.group.channel_named {"n":3,"name":"Lamp"}');
+    // One subject, two planes, two verdicts in one row.
+    const humidity = Array.from(container.querySelectorAll("tbody tr")).find((r) => r.textContent?.includes("HUMIDITY"))!;
+    const verdicts = Array.from(humidity.querySelectorAll("[data-verdict]")).map((d) => d.getAttribute("data-verdict"));
+    expect(verdicts).toEqual(["withheld", "published"]);
+  });
+
+  it("lists what is left out by rule and shows the rows behind one", async () => {
+    mockProjection.mockResolvedValue(answer);
+    const { getByTestId, container } = render(DeviceProjection, { address: "DEV1" });
+    await waitFor(() => expect(getByTestId("projection-withheld")).toBeTruthy());
+
+    const withheld = getByTestId("projection-withheld");
+    expect(withheld.textContent).toContain("Not switched on in the exposure list.");
+    expect(withheld.textContent).toContain("Hidden by the visibility rules.");
+    // A rule this build has no sentence for is shown as the daemon's token.
+    expect(withheld.textContent).toContain("a_rule_from_a_later_daemon");
+
+    const item = Array.from(withheld.querySelectorAll("li")).find((li) => li.textContent?.includes("Hidden by the visibility rules."))!;
+    const show = Array.from(item.querySelectorAll("button")).find((b) => b.textContent?.includes("projection.withheld.show"))!;
+    await fireEvent.click(show);
+    await waitFor(() => expect(getByTestId("projection-reason-filter")).toBeTruthy());
+    // Exactly the rows behind the rule, the configuration parameter included.
+    expect(hasRow(container, "ON_TIME")).toBe(true);
+    expect(hasRow(container, "HUMIDITY")).toBe(false);
   });
 
   it("offers a retry when the daemon does not answer", async () => {

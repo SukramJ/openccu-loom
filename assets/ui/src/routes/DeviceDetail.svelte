@@ -1413,7 +1413,14 @@
           <AuditLog deviceFilter={detail.address} embedded />
         </div>
       {:else if topTab === "projection"}
-        <DeviceProjection address={detail.address} />
+        <DeviceProjection
+          address={detail.address}
+          channels={detail.channels}
+          onOpenTab={(tab) => {
+            topTab = tab;
+            if (tab === "history") onHistoryTabClick();
+          }}
+        />
       {/if}
     {:else}
       <EmptyState message={t("device.no_channels")} />

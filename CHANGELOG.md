@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Config UI: the Projection tab is a matrix.** Five stacked tables,
+  each dominated by hundreds of left-out configuration parameters, made
+  the tab hard to read. It is now one table for the device: a row per
+  subject of a channel, grouped under the channel's name, and a column
+  per active plane with a dot for published, carried or left out. It
+  opens on what appears somewhere; two switches bring in the rows no
+  plane carries and the configuration parameters. Opening a row shows
+  the name it has on each plane with a copy button, or the rule that
+  leaves it out with a link to the setting behind it. Everything left
+  out is counted per rule below the matrix, and each rule lists its
+  rows on request. A plane that is switched off is one line above the
+  matrix.
+
 ### Added
 
 - **An incident names its type and interface (REST API 16.4.0).**

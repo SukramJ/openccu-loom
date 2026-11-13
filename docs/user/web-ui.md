@@ -219,13 +219,19 @@ device, how it appears on each plane the daemon bridges it to:
 - **REST** — which data points the REST data-point list carries, with
   their path.
 
-Each plane says whether it is active. Every entry is either *published*,
-*carried* by another entry (a battery reported through its device's
-endpoint, a parameter that is part of its channel's entity), or *left
-out* — and a left-out entry names the rule: the channel is hidden, the
-source is not switched on in the Matter exposure list, the parameter is
-part of the channel's entity, the include and exclude patterns leave it
-out, and so on.
+The tab is a matrix: one row per subject of a channel (the channel's own
+entity, each parameter, its schedule, its key-press events), one column
+per plane. A filled dot means *published*, a half dot *carried* by another
+entry (a battery reported through its device's endpoint, a parameter that
+is part of its channel's entity), a ring *left out*.
+
+- It opens on what appears somewhere. Two switches bring in the rest:
+  rows no plane carries, and configuration parameters.
+- Open a row to see the name it has on each plane, with a copy button, or
+  the rule that leaves it out and a link to the setting behind that rule.
+- **Left out, by rule** below the matrix counts everything a plane leaves
+  out per rule; **Show rows** lists the rows behind one.
+- A plane that is switched off is named above the matrix with the reason.
 
 The tab reads and changes nothing. To change what is published, use the
 setting the rule names: the channel's hidden switch, the Matter exposure
