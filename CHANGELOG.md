@@ -19,7 +19,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   leaves it out with a link to the setting behind it. Everything left
   out is counted per rule below the matrix, and each rule lists its
   rows on request. A plane that is switched off is one line above the
-  matrix.
+  matrix. On a phone the matrix reflows into one card per row and the
+  rule list puts each sentence on a line of its own.
 
 ### Added
 
