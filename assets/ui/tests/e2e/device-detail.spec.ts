@@ -445,8 +445,76 @@ function projectionFixture() {
               discovery_topic: 'homeassistant/climate/ccu1_0001d3c99b4e2f/1_climate/config',
             },
           },
+          {
+            channel: 1,
+            kind: 'data_point',
+            key: 'HUMIDITY',
+            verdict: 'published',
+            identity: {
+              component: 'sensor',
+              node_id: 'ccu1_0001d3c99b4e2f',
+              object_id: '1_humidity',
+              discovery_topic: 'homeassistant/sensor/ccu1_0001d3c99b4e2f/1_humidity/config',
+            },
+          },
           { channel: 1, kind: 'data_point', key: 'SET_POINT_TEMPERATURE', verdict: 'withheld', reason: 'part_of_channel_entity' },
+          { channel: 1, kind: 'data_point', key: 'MASTER:TEMPERATURE_OFFSET', verdict: 'withheld', reason: 'hidden_parameter' },
           { channel: 0, kind: 'data_point', key: 'CONFIG_PENDING', verdict: 'withheld', reason: 'hidden_parameter' },
+        ],
+      },
+      {
+        plane: 'mqtt_raw',
+        state: 'active',
+        entries: [
+          {
+            channel: -1,
+            kind: 'device',
+            key: 'online',
+            verdict: 'published',
+            identity: { topic: `openccu-loom/status/ccu1/HmIP-RF/${DEVICE_ADDRESS}/online` },
+          },
+          {
+            channel: 1,
+            kind: 'channel_state',
+            key: 'climate',
+            verdict: 'published',
+            identity: { topic: `openccu-loom/status/ccu1/HmIP-RF/${DEVICE_ADDRESS}/1/custom/climate` },
+          },
+          {
+            channel: 1,
+            kind: 'data_point',
+            key: 'HUMIDITY',
+            verdict: 'published',
+            identity: { topic: `openccu-loom/status/ccu1/HmIP-RF/${DEVICE_ADDRESS}/1/values/HUMIDITY` },
+          },
+          {
+            channel: 1,
+            kind: 'data_point',
+            key: 'SET_POINT_TEMPERATURE',
+            verdict: 'published',
+            identity: { topic: `openccu-loom/status/ccu1/HmIP-RF/${DEVICE_ADDRESS}/1/values/SET_POINT_TEMPERATURE` },
+          },
+          { channel: 1, kind: 'data_point', key: 'MASTER:TEMPERATURE_OFFSET', verdict: 'withheld', reason: 'hidden_parameter' },
+          { channel: 0, kind: 'data_point', key: 'CONFIG_PENDING', verdict: 'withheld', reason: 'hidden_parameter' },
+        ],
+      },
+      {
+        plane: 'rest',
+        state: 'active',
+        entries: [
+          {
+            channel: 1,
+            key: 'HUMIDITY',
+            verdict: 'published',
+            identity: { path: `/api/v1/devices/${DEVICE_ADDRESS}/channels/1/data-points/HUMIDITY` },
+          },
+          {
+            channel: 1,
+            key: 'SET_POINT_TEMPERATURE',
+            verdict: 'published',
+            identity: { path: `/api/v1/devices/${DEVICE_ADDRESS}/channels/1/data-points/SET_POINT_TEMPERATURE` },
+          },
+          { channel: 0, key: 'CONFIG_PENDING', verdict: 'withheld', reason: 'hidden_parameter' },
         ],
       },
     ],
@@ -484,17 +552,35 @@ test.describe('Device detail — projection', () => {
       await page.waitForSelector('#main');
       await page.getByRole('tab', { name: 'Projection' }).click();
 
-      const matter = page.getByTestId('projection-plane-matter');
-      await expect(matter).toContainText('Endpoint: 4');
-      await expect(matter).toContainText('It could be exposed, but is not switched on in the Matter exposure list.');
+      const view = page.getByTestId('device-projection');
+      // The inactive plane is a line above the matrix, not a column.
       await expect(page.getByTestId('projection-plane-measurements')).toContainText('This plane is switched off.');
-      await expect(page.getByTestId('projection-plane-ha_discovery')).toContainText(
-        'homeassistant/climate/ccu1_0001d3c99b4e2f/1_climate/config',
-      );
+      await expect(view.getByRole('columnheader', { name: 'Home Assistant' })).toBeVisible();
+      await expect(view.getByRole('columnheader', { name: 'Measurements' })).toHaveCount(0);
+
+      // It opens on what appears somewhere: the channel's entity and the
+      // humidity are there, the configuration parameter is not.
+      await expect(view.getByRole('row', { name: /Channel entity/ })).toBeVisible();
+      await expect(view.getByRole('row', { name: /HUMIDITY/ })).toBeVisible();
+      await expect(view.getByText('TEMPERATURE_OFFSET')).toHaveCount(0);
+      await expect(view).toContainText('Channel 1 · Living Room Thermostat');
+
+      // What is left out is counted per rule…
+      const withheld = page.getByTestId('projection-withheld');
+      await expect(withheld).toContainText('The parameter is hidden or ignored by the visibility rules.');
+      await expect(withheld).toContainText('It could be exposed, but is not switched on in the Matter exposure list.');
+
+      // …and a row opens to the name it has on each plane.
+      await view.getByRole('row', { name: /Channel entity/ }).getByRole('button').first().click();
+      const detail = page.getByTestId('projection-row-detail');
+      await expect(detail).toContainText('homeassistant/climate/ccu1_0001d3c99b4e2f/1_climate/config');
+      await expect(detail).toContainText('Thermostat');
 
       await page.waitForTimeout(500);
       await addStylesForStableScreenshots(page);
-      await expect(page).toHaveScreenshot(`device-projection-${theme}.png`, { fullPage: true });
+      // The view alone: a full-page capture repeats the fixed sidebar
+      // partway down a page this long.
+      await expect(view).toHaveScreenshot(`device-projection-${theme}.png`);
     });
   }
 });
