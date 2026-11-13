@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A central with `system_type: auto` could stay waiting until the
+  daemon was restarted.** The daemon identifies such a system in the
+  background and then replaces the central's placeholder with the real
+  bring-up. A system that answered at once was identified before the
+  placeholder had been registered, the replacement was refused as if
+  the central had been removed, and nothing tried again: the central
+  showed "waiting for CCU" with its type already resolved and stored.
+  The identification now waits until the placeholder is registered.
+  Seen as an occasional failure of an onboarding test; a central added
+  at runtime takes the same path.
+
 ### Changed
 
 - **Config UI: the Projection tab is a matrix.** Five stacked tables,
