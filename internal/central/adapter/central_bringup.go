@@ -32,6 +32,11 @@ type centralBringUp struct {
 	cc   config.CentralConfig
 	unit *central.Unit
 	deps WireDeps
+	// registered is closed once the manager holds this handle. It is set
+	// only on the placeholder of a central whose system type is still being
+	// identified; every other handle leaves it nil.
+	registered     chan struct{}
+	registeredOnce sync.Once
 	// profile is the central's south strategy, selected once when the
 	// handle is built; every bring-up generation reads readiness through it.
 	profile            SouthProfile
@@ -88,6 +93,14 @@ type centralBringUp struct {
 	// RemoveCentral: a goroutine and a CCU callback registration that
 	// survive until the daemon exits.
 	closed atomic.Bool
+}
+
+// markRegistered says the manager holds this handle. Only a placeholder
+// ([BringUpManager.resolveThenBuild]) has anyone waiting for it.
+func (b *centralBringUp) markRegistered() {
+	if b.registered != nil {
+		b.registeredOnce.Do(func() { close(b.registered) })
+	}
 }
 
 // addPermanentCloser registers a closer that survives re-inits and runs only on
@@ -420,9 +433,12 @@ func releaseEveryHeldDevice(ctx context.Context, u *central.Unit) []string {
 
 func (m *BringUpManager) add(b *centralBringUp) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.byCentral[b.cc.Name] = b
 	m.order = append(m.order, b.cc.Name)
+	m.mu.Unlock()
+	// After the handle is in the map: a placeholder's probe waits for this
+	// before it asks for the placeholder to be replaced.
+	b.markRegistered()
 }
 
 // buildAndStart constructs a single central's bring-up handle — hydrates the
@@ -611,7 +627,10 @@ var autoDetectInterval = 3 * time.Second
 // by one brought up as that type. The central shows as waiting, with the
 // reason, until then.
 func (m *BringUpManager) resolveThenBuild(cc *config.CentralConfig, unit *central.Unit) *centralBringUp {
-	b := &centralBringUp{cfg: m.cfg, cc: *cc, unit: unit, deps: m.deps, logger: m.logger, parentCtx: m.parentCtx}
+	b := &centralBringUp{
+		cfg: m.cfg, cc: *cc, unit: unit, deps: m.deps, logger: m.logger, parentCtx: m.parentCtx,
+		registered: make(chan struct{}),
+	}
 	parent := m.parentCtx
 	if parent == nil {
 		parent = context.Background()
@@ -629,6 +648,18 @@ func (m *BringUpManager) resolveThenBuild(cc *config.CentralConfig, unit *centra
 		m.logger.Info("wire.central.system_type_resolved", slog.String("central", cc.Name), slog.String("system_type", string(st)))
 		if m.deps.PersistSystemType != nil {
 			m.deps.PersistSystemType(ctx, cc.Name, st)
+		}
+		// The callers register the placeholder after buildAndStart has
+		// returned it, and a system that answers at once is identified
+		// before that. replaceResolved replaces only the handle the manager
+		// holds, so asking earlier is refused as "removed meanwhile" and the
+		// central stays waiting for good. Wait until the manager has it;
+		// ctx ends with the placeholder, so a handle that is never
+		// registered does not keep this goroutine.
+		select {
+		case <-b.registered:
+		case <-ctx.Done():
+			return
 		}
 		//nolint:contextcheck // the resolved central runs on the manager's context; this probe's context ends with the placeholder it replaces
 		m.replaceResolved(b, &resolved)
