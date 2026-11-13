@@ -8,6 +8,7 @@
 // somewhere; the rest is behind two switches and the list of rules.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, waitFor, fireEvent } from "@testing-library/svelte";
+import type { ChannelSummary } from "$lib/api/types";
 
 const { mockProjection, mockToast } = vi.hoisted(() => ({
   mockProjection: vi.fn(),
@@ -81,7 +82,9 @@ describe("DeviceProjection", () => {
     mockProjection.mockResolvedValue(answer);
     const { getByTestId, container } = render(DeviceProjection, {
       address: "DEV1",
-      channels: [{ number: 3, name: "Lamp", type_label: "Switch" }],
+      // The view reads a channel's number, name and type label; the rest of
+      // the summary does not reach it.
+      channels: [{ number: 3, name: "Lamp", type_label: "Switch" }] as unknown as ChannelSummary[],
     });
     await waitFor(() => expect(getByTestId("device-projection")).toBeTruthy());
     expect(mockProjection).toHaveBeenCalledWith("DEV1");
