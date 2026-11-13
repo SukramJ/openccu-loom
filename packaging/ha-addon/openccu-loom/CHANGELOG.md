@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.102.0
+
+- **The Projection tab is now one matrix**: a row per channel entity and
+  parameter, a column per plane (Matter, Home Assistant, MQTT, REST,
+  measurements). It opens on what appears somewhere; open a row for the
+  name it has there or for the rule that leaves it out.
+- **Fixed: a CCU or box added with "detect automatically" could stay at
+  "waiting" until the add-on was restarted.**
+- **Incidents name their type and interface**, which Home Assistant's
+  incident list on this backend reads. REST API 16.4.0.
+- **Matter stack go-fabric 0.22.2**: the bridge keeps announcing itself
+  when no network interface was up at start, and a failed first pairing
+  no longer reopens the pairing window.
+
 ## 0.101.0
 
 - **A Projection tab in the device detail** shows how the device appears
