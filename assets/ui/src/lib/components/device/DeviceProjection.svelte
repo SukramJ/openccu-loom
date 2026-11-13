@@ -302,10 +302,12 @@
         <p class="mb-3 text-sm text-[var(--ha-secondary-text-color)]">{t("projection.withheld.description")}</p>
         <ul class="divide-y divide-[var(--ha-divider-color)] text-sm">
           {#each matrix.withheld as w (`${w.plane}|${w.reason}`)}
+            <!-- Narrow screens give the sentence a line of its own: between
+                 the count and the two actions it would wrap word by word. -->
             <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
-              <span class="w-12 text-right font-semibold tabular-nums">{w.count}</span>
+              <span class="w-8 text-right font-semibold tabular-nums sm:w-12">{w.count}</span>
               <Badge variant="muted">{planeShort(w.plane)}</Badge>
-              <span class="min-w-0 flex-1">{reasonText(w.reason)}</span>
+              <span class="min-w-0 basis-full sm:flex-1 sm:basis-0">{reasonText(w.reason)}</span>
               {@render goto(targetFor(w.plane, w.reason))}
               <Button variant="ghost" size="sm" onclick={() => (reasonFilter = { plane: w.plane, reason: w.reason })}>
                 {t("projection.withheld.show")}
