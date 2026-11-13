@@ -6,18 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
+## [0.102.0] - 2026-11-13
 
-- **A central with `system_type: auto` could stay waiting until the
-  daemon was restarted.** The daemon identifies such a system in the
-  background and then replaces the central's placeholder with the real
-  bring-up. A system that answered at once was identified before the
-  placeholder had been registered, the replacement was refused as if
-  the central had been removed, and nothing tried again: the central
-  showed "waiting for CCU" with its type already resolved and stored.
-  The identification now waits until the placeholder is registered.
-  Seen as an occasional failure of an onboarding test; a central added
-  at runtime takes the same path.
+The Projection tab becomes readable, incidents name their type and
+interface, and a central configured with `system_type: auto` no longer
+stays waiting after a start.
+
+### Added
+
+- **An incident names its type and interface (REST API 16.4.0).**
+  `GET /incidents` and the MCP tool `list_incidents` carry `type`, the
+  incident type the entry was recorded under, and `interface_id` for an
+  interface-scoped incident, the id `GET /interfaces` reports. Both were
+  stored and only reachable by parsing `component` or, for the type, a
+  `summary` without a message. Home Assistant's incident list on the
+  openccu-loom backend reads them.
 
 ### Changed
 
@@ -34,19 +37,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rows on request. A plane that is switched off is one line above the
   matrix. On a phone the matrix reflows into one card per row and the
   rule list puts each sentence on a line of its own.
-
-### Added
-
-- **An incident names its type and interface (REST API 16.4.0).**
-  `GET /incidents` and the MCP tool `list_incidents` carry `type`, the
-  incident type the entry was recorded under, and `interface_id` for an
-  interface-scoped incident, the id `GET /interfaces` reports. Both were
-  stored and only reachable by parsing `component` or, for the type, a
-  `summary` without a message. Home Assistant's incident list on the
-  openccu-loom backend reads them.
-
-### Changed
-
 - **go-fabric v0.21.0 → v0.22.2.** What reaches the bridge: its mDNS
   responder keeps its sockets when no network interface is up at start and
   joins each interface as it comes up; a failed first commissioning no
@@ -58,6 +48,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **go-fabric-ui v0.9.0 → v0.9.2** (the Go module and `@sukramj/fabric-ui`):
   dependency-only releases on go-fabric v0.22.2; the pages and the contract
   (0.9.0) are unchanged, so the REST API does not move.
+
+### Fixed
+
+- **A central with `system_type: auto` could stay waiting until the
+  daemon was restarted.** The daemon identifies such a system in the
+  background and then replaces the central's placeholder with the real
+  bring-up. A system that answered at once was identified before the
+  placeholder had been registered, the replacement was refused as if
+  the central had been removed, and nothing tried again: the central
+  showed "waiting for CCU" with its type already resolved and stored.
+  The identification now waits until the placeholder is registered.
+  Seen as an occasional failure of an onboarding test; a central added
+  at runtime takes the same path.
 
 ## [0.101.0] - 2026-11-12
 
