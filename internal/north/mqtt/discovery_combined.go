@@ -39,6 +39,11 @@ type CombinedEvent struct {
 	// Device, when non-nil, is consulted by deviceDescriptor for the
 	// `payload:"info"` map — same as Event.Device.
 	Device any
+	// Channel, when non-nil, is the channel the combined data point sits
+	// on — same as Event.Channel. deviceDescriptor reads the channel group
+	// off it, so the entity lands on the group's child device beside the
+	// channel's other entities.
+	Channel ChannelInspector
 	// Kind is the combined-DP kind ("duration", "hs_color", …). Used both
 	// as the topic segment and as the suffix on object_id / unique_id.
 	Kind string
@@ -160,8 +165,9 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 		Model:         ev.Model,
 		ChannelNo:     ev.ChannelNo,
 		Device:        ev.Device,
+		Channel:       ev.Channel,
 	}
-	dev := modelDeviceFromInfo(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}

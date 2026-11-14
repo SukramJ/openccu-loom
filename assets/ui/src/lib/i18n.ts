@@ -1589,7 +1589,7 @@ const EN: Catalog = {
   "config.help.north.mqtt.tls_insecure_skip_verify":
     "Dangerous: do not verify the broker certificate at all, so anyone on the network path can impersonate the broker and read the credentials. Requires a TLS broker URL, cannot be combined with the CA file, and is logged as a warning. Prefer the CA file.",
   "config.help.north.mqtt.sub_devices_enabled":
-    "Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA.",
+    "Put each channel group of a multi-channel-group device, and a device's schedule, on a Home Assistant child device of the device. Needs Home Assistant 2026.11 or later; an older version drops the entities concerned.",
   "config.help.north.matter.enabled":
     "Master switch for the Matter bridge. Off by default. When enabled the daemon stands up the UDP listener and mDNS records.",
   "config.help.north.matter.enable_time_sync":
@@ -5795,7 +5795,7 @@ const DE: Catalog = {
   "config.help.north.mqtt.tls_insecure_skip_verify":
     "Gefährlich: Das Broker-Zertifikat wird gar nicht geprüft, jeder auf dem Netzwerkpfad kann sich als Broker ausgeben und die Zugangsdaten mitlesen. Erfordert eine TLS-Broker-URL, ist nicht mit der CA-Datei kombinierbar und wird als Warnung protokolliert. Besser die CA-Datei verwenden.",
   "config.help.north.mqtt.sub_devices_enabled":
-    "Multi-Channel-Group-Geräte als ein HA-Gerät pro Kanal-Gruppe rendern. Zeigt Parent + N Children in HA.",
+    "Jede Kanalgruppe eines Geräts mit mehreren Kanalgruppen und den Zeitplan eines Geräts als Home-Assistant-Untergerät (Child Device) des Geräts anlegen. Erfordert Home Assistant 2026.11 oder neuer; eine ältere Version verwirft die betroffenen Entitäten.",
   "config.help.north.matter.enabled":
     "Hauptschalter der Matter-Bridge. Standard aus. Aktiv = UDP-Listener und mDNS-Records gehen hoch.",
   "config.help.north.matter.enable_time_sync":

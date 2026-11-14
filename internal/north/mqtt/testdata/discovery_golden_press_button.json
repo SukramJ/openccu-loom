@@ -300,14 +300,20 @@
       "availability_mode": "all",
       "command_topic": "gh/set/ccu-01/HmIP-RF/0001D3C99C5678/3/values/PRESS_SHORT",
       "device": {
+        "child_device": {
+          "identifiers": [
+            "openccu-loom_0001d3c99c5678-2"
+          ],
+          "name": "Tor Links"
+        },
         "identifiers": [
-          "openccu-loom_0001d3c99c5678-2"
+          "openccu-loom_0001d3c99c5678"
         ],
         "manufacturer": "eQ-3",
         "model": "HmIP-MOD-RC8",
-        "name": "Tor Links",
+        "name": "Rollladenaktor Garage",
         "serial_number": "0001D3C99C5678",
-        "via_device": "openccu-loom_0001d3c99c5678"
+        "via_device": "openccu-loom_central_ccu-01"
       },
       "enabled_by_default": false,
       "name": "ch3 Press Short",

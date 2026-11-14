@@ -61,6 +61,7 @@
   "discovery.schedule_named": "Schedule {name}",
   "discovery.security_system": "Security & Safety",
   "discovery.service_messages": "Service messages",
+  "discovery.sub_device_group": "Group {no}",
   "discovery.sunshine_counter_today": "Sunshine Counter Today",
   "discovery.sunshine_counter_total": "Sunshine Counter Total",
   "discovery.sunshine_counter_yesterday": "Sunshine Counter Yesterday",

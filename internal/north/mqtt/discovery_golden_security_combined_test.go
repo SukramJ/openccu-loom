@@ -390,15 +390,15 @@ func combinedGoldenCases(t *testing.T) []combinedGoldenCase {
 	noDevice.Device = nil
 
 	// Identity hazard: a device that reports sub-devices, with the split
-	// enabled on the builder. It cannot take effect here —
-	// [deviceDescriptor] needs a channel inspector and CombinedEvent
-	// carries none — so the combined entity stays on the parent card while
-	// the per-parameter entities of the same channel move to the
-	// sub-device's. That asymmetry is pinned deliberately: a migration that
-	// "fixed" it in passing would move every combined entity on every
-	// multi-group device to a different device card.
+	// enabled on the builder, and a channel in a channel group. The
+	// combined entity sits on the group's child device, where the
+	// per-parameter entities of the same channel sit. Pinned because the
+	// device an entity is on decides which card it shows under: an event
+	// that lost its channel would put it back on the physical device
+	// without anything failing.
 	subDevice := withoutLabel
 	subDevice.Device = combinedGoldenParent{Device: combinedGoldenSiren()}
+	subDevice.Channel = fakeSubDeviceChannel{groupNo: 2, multiGroup: true, subName: "Sirene Signal"}
 
 	// Identity hazard: a projection that sets its own unique_id. The
 	// builder documents that it never overwrites a field the projection

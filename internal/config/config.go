@@ -1665,11 +1665,15 @@ type NorthMQTT struct {
 	// cannot be combined with tls_ca_file.
 	TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify,omitempty" json:"tls_insecure_skip_verify,omitempty" cfg:"expert"`
 
-	// SubDevicesEnabled splits multi-channel-group devices into one
-	// HA device per channel group. Each sub-device's MQTT discovery
-	// stamps `device.identifiers = "<topic_base>_<addr>-<group_no>"`
-	// and `device.via_device = "<topic_base>_<addr>"`, so HA renders
-	// the parent + N children hierarchy.
+	// SubDevicesEnabled puts each channel group of a multi-channel-group
+	// device, and a device's schedule, on a Home Assistant child device of
+	// the device: the entity's MQTT discovery keeps the device's own block
+	// and adds `device.child_device` with the identifier
+	// `openccu-loom_<addr>-<group_no>` or `openccu-loom_<addr>_schedule`.
+	// Needs Home Assistant 2026.11.0 or later — an earlier core refuses a
+	// device block with that key and drops the entity. Off, a channel group
+	// stays on the device and the schedule is a device of its own linked
+	// with `via_device`.
 	SubDevicesEnabled bool `yaml:"sub_devices_enabled" json:"sub_devices_enabled" cfg:"basic"`
 
 	// RetainCleanupWindowMs is the broker snapshot window (in milliseconds)

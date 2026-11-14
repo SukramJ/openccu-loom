@@ -236,7 +236,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 		Model:         ev.Model,
 		Device:        ev.Device,
 	}
-	dev := modelDeviceFromInfo(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}

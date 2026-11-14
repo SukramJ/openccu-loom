@@ -217,13 +217,19 @@
       "availability_mode": "all",
       "command_topic": "gh/set/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
       "device": {
+        "child_device": {
+          "identifiers": [
+            "openccu-loom_000a0001-2"
+          ],
+          "name": "Jalousie Ost"
+        },
         "identifiers": [
-          "openccu-loom_000a0001-2"
+          "openccu-loom_000a0001"
         ],
         "manufacturer": "eQ-3",
         "model": "HmIP-BROLL",
-        "name": "Jalousie Ost",
-        "via_device": "openccu-loom_000a0001"
+        "name": "Wohnzimmer Jalousie",
+        "via_device": "openccu-loom_central_ccu-01"
       },
       "device_class": "shutter",
       "json_attributes_template": "{{ value_json | tojson }}",

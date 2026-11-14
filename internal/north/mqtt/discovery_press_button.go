@@ -230,7 +230,7 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 	if !scoped {
 		return DiscoveryItem{}
 	}
-	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}

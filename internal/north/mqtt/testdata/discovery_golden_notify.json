@@ -215,14 +215,20 @@
       "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
       "command_topic": "gh/set/ccu-01/HmIP-RF/002A5D8989D5C3/3/custom/text_display/write",
       "device": {
+        "child_device": {
+          "identifiers": [
+            "openccu-loom_002a5d8989d5c3-2"
+          ],
+          "name": "Display Oben"
+        },
         "identifiers": [
-          "openccu-loom_002a5d8989d5c3-2"
+          "openccu-loom_002a5d8989d5c3"
         ],
         "manufacturer": "eQ-3",
         "model": "HmIP-WRCD",
-        "name": "Display Oben",
+        "name": "Displayschalter Flur",
         "serial_number": "002A5D8989D5C3",
-        "via_device": "openccu-loom_002a5d8989d5c3"
+        "via_device": "openccu-loom_central_ccu-01"
       },
       "name": null,
       "origin": {

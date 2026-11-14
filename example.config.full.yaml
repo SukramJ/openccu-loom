@@ -350,8 +350,9 @@ north:
     # Enable HA auto-discovery.  [default: false]
     discovery_enabled: false
 
-    # Sub-devices: splits devices with multiple channel groups into one
-    # HA device per group. Parent device is linked via via_device.
+    # Sub-devices: puts each channel group of a device with several, and a
+    # device's schedule, on a Home Assistant child device of the device.
+    # Needs Home Assistant 2026.11 or later.
     # [default: false]
     sub_devices_enabled: false
 

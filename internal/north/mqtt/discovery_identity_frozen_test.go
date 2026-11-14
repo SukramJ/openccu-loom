@@ -59,12 +59,30 @@ func identityOf(t *testing.T, entry map[string]json.RawMessage) frozenIdentity {
 		var dev struct {
 			Identifiers []string `json:"identifiers"`
 			ViaDevice   string   `json:"via_device"`
+			ChildDevice *struct {
+				Identifiers []string `json:"identifiers"`
+			} `json:"child_device"`
 		}
 		if err := json.Unmarshal(raw, &dev); err != nil {
 			t.Fatalf("device: %v", err)
 		}
 		id.DeviceIDs = dev.Identifiers
 		id.DeviceViaDevice = dev.ViaDevice
+		// An entity on a Home Assistant child device: the device it sits on
+		// is the child, and the device above that is the block's own. That
+		// is the same pair the frozen file recorded when the channel group
+		// was a device of its own with the physical device as via_device —
+		// and the child's identifier standing still is exactly what Home
+		// Assistant converts the existing device into a child by, keeping
+		// its device id. So the pair is compared in its old places and the
+		// frozen file stays as extracted.
+		if dev.ChildDevice != nil {
+			if len(dev.Identifiers) != 1 {
+				t.Fatalf("device with a child_device has identifiers %v, want exactly one to stand for the parent", dev.Identifiers)
+			}
+			id.DeviceIDs = dev.ChildDevice.Identifiers
+			id.DeviceViaDevice = dev.Identifiers[0]
+		}
 	}
 	if raw, ok := payload["components"]; ok {
 		var comps map[string]map[string]json.RawMessage
@@ -102,6 +120,14 @@ func identityOf(t *testing.T, entry map[string]json.RawMessage) frozenIdentity {
 // (discovery_golden_security_combined.json), plus every other plane's golden.
 // The goldens themselves are pinned against the builders by their own tests,
 // so a builder that changed an identity fails there first and here second.
+//
+// One entry was amended by hand since: `combined/sub-devices-enabled`. A
+// combined entity of a channel in a channel group moved from the physical
+// device onto the group's child device, where the channel's other entities
+// sit; its recorded device is the child, with the physical device above it.
+// Its discovery topic and `unique_id` stand as extracted, which is what
+// lets Home Assistant keep the entity and re-point it to the other device
+// (components/mqtt/entity.py:1704-1720 at core 2026.11.1).
 //
 // Falsifiability: change one `unique_id` in a current golden, or rename the
 // security entity key `state` to `severity` (its item was renamed; its key

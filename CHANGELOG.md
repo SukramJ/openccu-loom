@@ -6,6 +6,62 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking — MQTT: sub-devices are Home Assistant child devices, and
+  need Home Assistant 2026.11.** An installation that already has
+  `north.mqtt.sub_devices_enabled` on changes with this upgrade, without
+  a setting being touched. With `north.mqtt.sub_devices_enabled`, a channel
+  group was a device of its own, linked to its device with `via_device`.
+  Home Assistant now has child devices for a part of one product
+  ([developer blog](https://contributors.home-assistant.io/blog/2026/10/22/child-devices/)),
+  and reads them from MQTT discovery since 2026.11.0, so a channel group is
+  published as a child device of its device. With the option on, the
+  device's schedule is one too; it used to be a separate device either way
+  and stays that when the option is off.
+  - **An older Home Assistant drops these entities.** It refuses a
+    discovery config that names a child device. Leave the option off until
+    Home Assistant is on 2026.11.
+  - **Switching the option off again does not bring the schedule back by
+    itself.** Off, the schedule is published as a device of its own
+    under the identifier Home Assistant now holds as a child device, and
+    Home Assistant refuses a device whose identifier a child device
+    has. Delete the schedule child device in Home Assistant, then reload
+    its MQTT integration. Channel groups are not affected: their
+    entities go back to the device.
+  - The identifiers are unchanged, so Home Assistant converts the existing
+    devices in place and keeps their device id, area and automations. It
+    does that only for a device the MQTT integration has not registered
+    since it was loaded: restart Home Assistant, or reload its MQTT
+    integration, once after the daemon upgrade.
+  - A child device has no manufacturer, model or firmware of its own, takes
+    its device's area unless it has one, and is removed or disabled with
+    its device.
+  - Its name no longer repeats the device name, which Home Assistant puts
+    in front itself: `Schedule` / `Zeitplan`, and `Group 2` / `Gruppe 2`
+    for a channel group without a name where it was `<device>-2`. A named
+    group keeps its name.
+  - A combined entity of a channel in a channel group (a timer, a colour,
+    a combined level) sits on the group's child device, with the
+    channel's other entities. It stayed on the device before, also while
+    channel groups were devices of their own.
+  - With `north.mqtt.discovery_bundles`, the device document lists them
+    under `child_devices`. Before, a document had room for one device, and
+    a channel group's entities landed on whichever device the first
+    component named.
+  - Entity ids, `unique_id`s and all topics are unchanged.
+
+### Fixed
+
+- **MQTT, `north.mqtt.discovery_bundles`: a device document describes the
+  device, whichever entity is published first.** With sub-devices off, a
+  schedule published before the device's other entities gave the
+  document the schedule's identity, and every entity of the device
+  moved onto "<device> Schedule" in Home Assistant. The device a block
+  names as its `via_device` now takes the document. In a device
+  document the schedule's entities sit on the device itself when
+  sub-devices are off; a document has room for one device.
+
 ## [0.102.1] - 2026-11-14
 
 The CCU add-on starts on an openccu-lite box that runs it as root.

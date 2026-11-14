@@ -141,3 +141,32 @@ func TestChannelInfoPayloadSubDeviceFields(t *testing.T) {
 		t.Errorf("sub_device_name=%v, want Jalousie Ost", info.SubDeviceName)
 	}
 }
+
+// TestChannelSubDeviceLabel pins the prefix-free naming a Home Assistant
+// child device takes: the master channel's own name, or no name and the
+// number that stands in for it — the master's numeric name, else the group
+// number. It never carries the device name, which the consumer composes.
+func TestChannelSubDeviceLabel(t *testing.T) {
+	cases := []struct {
+		name, masterName, wantName, wantNumber string
+	}{
+		{"named master", "Jalousie Ost", "Jalousie Ost", ""},
+		{"numeric master name", "7", "", "7"},
+		{"unnamed master", "", "", "5"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, master, member := newSubDeviceFixture(t, "Wohnzimmer Jalousie", tc.masterName)
+			for _, ch := range []*Channel{master, member} {
+				name, number := ch.SubDeviceLabel()
+				if name != tc.wantName || number != tc.wantNumber {
+					t.Errorf("SubDeviceLabel() = (%q, %q), want (%q, %q)", name, number, tc.wantName, tc.wantNumber)
+				}
+			}
+		})
+	}
+	var none *Channel
+	if name, number := none.SubDeviceLabel(); name != "" || number != "" {
+		t.Errorf("nil channel = (%q, %q), want empty", name, number)
+	}
+}

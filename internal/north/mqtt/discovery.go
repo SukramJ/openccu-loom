@@ -202,11 +202,10 @@ type DefaultDiscoveryBuilder struct {
 	// URL) for each CCU. Populated via [SetHubInfoFor]; lookup performed
 	// by [hubFor]. Falls back to [Hub] when the central name is unknown.
 	hubs map[string]HubInfo
-	// SubDevicesEnabled splits multi-channel-group devices into one HA
-	// device per channel group. When true and the event's parent device
-	// reports HasSubDevices() and the channel sits in a multi-group, the
-	// discovery payload's `device` block stamps a sub-device identifier
-	// with the parent device as `via_device`.
+	// SubDevicesEnabled puts the channel groups of a multi-channel-group
+	// device, and a device's schedule, on Home Assistant child devices of
+	// the device. Needs Home Assistant 2026.11.0 or later: an earlier core
+	// refuses a device block that carries `child_device`.
 	SubDevicesEnabled bool
 	// Locale selects the language of the discovery entity names the daemon
 	// synthesises itself (hub entities + CCU-auto-generated system variables).
@@ -645,7 +644,7 @@ func (d *DefaultDiscoveryBuilder) decide(ev Event) DiscoveryVerdict { //nolint:g
 		nodeID:     nodeID,
 	}
 	entity, renderErr := hadiscovery.RenderComponent(
-		ctx, modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled)),
+		ctx, modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey))),
 		modelEntity, *BuildOriginInfo(),
 	)
 	if renderErr != nil {
@@ -1324,13 +1323,20 @@ func centralDeviceIdentifier(centralName string) string {
 // synthetic hub device. Pass "" to omit the field.
 //
 // When subDevices is true and the event's parent device + channel report
-// `HasSubDevices() && IsInMultiGroup()`, the descriptor identifies the
-// logical sub-device (one HA device per channel group) and stamps the
-// parent device as `via_device`. Otherwise the descriptor identifies the
-// physical device with the central as `via_device`. When ev.Device
-// carries a `payload:"info"` partition it is applied on top through
-// [assignDeviceInfo].
-func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.DeviceInfo {
+// `HasSubDevices() && IsInMultiGroup()`, the entity sits on a Home Assistant
+// child device of the physical device, one per channel group: the block
+// keeps describing the physical device, with the central as `via_device`,
+// and `child_device` carries the group's identifier and name. groupLabel
+// names a group whose master channel has no name of its own; `{no}` in it
+// is the group's number. When ev.Device carries a `payload:"info"`
+// partition it is applied on top through [assignDeviceInfo].
+//
+// A channel group was a device of its own, `via_device`-linked to the
+// physical one, before Home Assistant had child devices. Its identifier is
+// unchanged, which is what makes Home Assistant convert the existing device
+// into a child in place and keep its device id, area and automations
+// (helpers/device_registry.py:3067-3090 at core 2026.11.1).
+func deviceDescriptor(ev Event, hubURL string, subDevices bool, groupLabel string) *hadiscovery.DeviceInfo {
 	parentID := physicalDeviceIdentifier(ev.Central, ev.DeviceAddress)
 	dev := &hadiscovery.DeviceInfo{
 		Identifiers:  []string{parentID},
@@ -1345,10 +1351,6 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.Dev
 	if ev.Central != "" {
 		dev.ViaDevice = centralDeviceIdentifier(ev.Central)
 	}
-	// Sub-device override: when enabled and the parent device + channel
-	// confirm the multi-group structure, swap the descriptor to identify
-	// the sub-device.
-	var subDeviceName string
 	if subDevices && ev.Device != nil && ev.Channel != nil {
 		hasSubs := false
 		if hsd, ok := ev.Device.(deviceWithSubDevices); ok {
@@ -1356,12 +1358,11 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.Dev
 		}
 		if hasSubs {
 			if sdi, ok := ev.Channel.(SubDeviceInspector); ok && sdi.IsInMultiGroup() {
-				groupNo := sdi.GroupNumber()
-				if groupNo > 0 {
-					subDeviceID := parentID + "-" + strconv.Itoa(groupNo)
-					dev.Identifiers = []string{subDeviceID}
-					dev.ViaDevice = parentID
-					subDeviceName = sdi.SubDeviceName()
+				if groupNo := sdi.GroupNumber(); groupNo > 0 {
+					dev.ChildDevice = &hadiscovery.ChildDeviceInfo{
+						Identifiers: []string{parentID + "-" + strconv.Itoa(groupNo)},
+						Name:        subDeviceChildName(sdi, groupLabel),
+					}
 				}
 			}
 		}
@@ -1390,12 +1391,7 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.Dev
 			modelLabel = ml
 		}
 	}
-	// Sub-device naming wins over both the harvested info name and
-	// the event-level default — the sub-device represents only the
-	// channel-group slice of the physical device.
 	switch {
-	case subDeviceName != "":
-		dev.Name = subDeviceName
 	case dev.Name != "":
 	case ev.DeviceName != "":
 		dev.Name = ev.DeviceName
@@ -1445,6 +1441,29 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.Dev
 		dev.SuggestedArea = room
 	}
 	return dev
+}
+
+// subDeviceGroupLabelKey is the catalogue key for the name of a channel
+// group whose master channel has none: "Group {no}".
+const subDeviceGroupLabelKey = "discovery.sub_device_group"
+
+// subDeviceChildName names a channel group's child device. Home Assistant
+// shows a child device under its parent and composes the names itself, so
+// the name carries no device prefix: the master channel's own name, or
+// groupLabel with the group's number in it.
+func subDeviceChildName(sdi SubDeviceInspector, groupLabel string) string {
+	labeller, ok := sdi.(subDeviceLabeller)
+	if !ok {
+		return sdi.SubDeviceName()
+	}
+	name, number := labeller.SubDeviceLabel()
+	if name != "" {
+		return name
+	}
+	if number == "" {
+		number = strconv.Itoa(sdi.GroupNumber())
+	}
+	return strings.ReplaceAll(groupLabel, "{no}", number)
 }
 
 // scopedUniqueID builds a device-bound unique_id and reports whether it

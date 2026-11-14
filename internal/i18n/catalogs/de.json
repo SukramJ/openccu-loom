@@ -61,6 +61,7 @@
   "discovery.schedule_named": "Zeitplan {name}",
   "discovery.security_system": "Sicherheit & Gefahrenmelder",
   "discovery.service_messages": "Servicemeldungen",
+  "discovery.sub_device_group": "Gruppe {no}",
   "discovery.sunshine_counter_today": "Sonnenscheinzähler Heute",
   "discovery.sunshine_counter_total": "Sonnenscheinzähler Gesamt",
   "discovery.sunshine_counter_yesterday": "Sonnenscheinzähler Gestern",

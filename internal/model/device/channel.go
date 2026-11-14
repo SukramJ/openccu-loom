@@ -966,6 +966,33 @@ func (c *Channel) IsInMultiGroup() bool {
 	return len(c.device.GroupChannels(groupNo)) > 1
 }
 
+// SubDeviceLabel returns what names the channel's sub-device without the
+// parent device's name in it: the group master's own name when it carries
+// one, and otherwise an empty name with the number that stands in for it.
+// The number is the master's numeric name when it has one and the group
+// number otherwise, the same choice [Channel.SubDeviceName] makes.
+//
+// It is [Channel.SubDeviceName] minus the device prefix, for a consumer that
+// shows the sub-device under its device and composes the two names itself —
+// a Home Assistant child device.
+func (c *Channel) SubDeviceLabel() (name, number string) {
+	if c == nil {
+		return "", ""
+	}
+	master := c.GroupMaster()
+	if master == nil {
+		return "", ""
+	}
+	masterName := master.Name()
+	if isNumericString(masterName) {
+		return "", masterName
+	}
+	if masterName != "" {
+		return masterName, ""
+	}
+	return "", itoa(master.GroupNumber())
+}
+
 // SubDeviceName returns the name to use for the channel's logical sub-device
 // when the parent device is exposed as multiple sub-devices (MQTT discovery
 // `sub_devices_enabled`). Resolution order:

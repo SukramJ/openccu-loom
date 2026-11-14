@@ -1189,9 +1189,9 @@
     },
     "combined/sub-devices-enabled": {
       "device_identifiers": [
-        "openccu-loom_0001abcd"
+        "openccu-loom_0001abcd-2"
       ],
-      "device_via_device": "openccu-loom_central_ccu-01",
+      "device_via_device": "openccu-loom_0001abcd",
       "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
       "unique_id": "openccu-loom_0001abcd_3_duration"
     },
