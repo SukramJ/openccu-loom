@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.102.1] - 2026-11-14
+
+The CCU add-on starts on an openccu-lite box that runs it as root.
+
+### Fixed
+
+- **CCU add-on: the daemon starts on an openccu-lite box that runs the
+  add-on as root.** A box that cannot confine the add-on (it refuses the
+  add-on's directories, for one, when `/usr/local` is writable by
+  everybody) runs it as root, and its unit then calls the rc.d script
+  with `start` only. The script answered `start` with "use init to
+  start", so the installation finished, no daemon ran, the box counted a
+  crash loop and `/addons/loom/` answered 503. `start` now starts the
+  daemon as `init` does; where both are called (a classic CCU's boot, a
+  confined add-on's unit) the second call finds the daemon and leaves it
+  alone.
+
 ## [0.102.0] - 2026-11-13
 
 The Projection tab becomes readable, incidents name their type and
