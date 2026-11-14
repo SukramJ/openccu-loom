@@ -332,3 +332,126 @@ func TestTheComponentBodyIsTheOneTheEntityFormPublished(t *testing.T) {
 		t.Errorf("component body drifted\n got: %v\nwant: %v", got, want)
 	}
 }
+
+// childBundleComponent is a per-entity body whose entity sits on a child
+// device: the parent's block plus `child_device`.
+func childBundleComponent(name, childID, childName string) []byte {
+	return marshalComponent(hadiscovery.Component{
+		Name:       name,
+		UniqueID:   "openccu-loom_" + name,
+		StateTopic: "loom/ccu/dev/1/values/" + name,
+		Device: &hadiscovery.DeviceInfo{
+			Identifiers: []string{"openccu-loom_ccu_0001abc"},
+			Name:        "Thermostat",
+			ChildDevice: &hadiscovery.ChildDeviceInfo{Identifiers: []string{childID}, Name: childName},
+		},
+		Origin: &hadiscovery.Origin{Name: "openccu-loom"},
+	})
+}
+
+// bundleDocument is the document as Home Assistant reads it.
+type bundleDocument struct {
+	Device     map[string]any            `json:"device"`
+	Components map[string]map[string]any `json:"components"`
+	Children   []struct {
+		Identifiers []string                  `json:"identifiers"`
+		Name        string                    `json:"name"`
+		Components  map[string]map[string]any `json:"components"`
+	} `json:"child_devices"`
+}
+
+func renderBundleDocument(t *testing.T, s *discoveryBundleStore, nodeID string) bundleDocument {
+	t.Helper()
+	bundle, ok := s.Bundle(nodeID)
+	if !ok {
+		t.Fatal("no bundle")
+	}
+	if errs := hadiscovery.Inspect(bundle, hadiscovery.InspectOptions{}).Errors(); len(errs) > 0 {
+		t.Fatalf("the bundle is one Home Assistant refuses: %v", errs)
+	}
+	raw, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatalf("marshal bundle: %v", err)
+	}
+	var doc bundleDocument
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	return doc
+}
+
+// TestBundleListsChildDeviceComponentsUnderTheirChild: the per-entity form
+// names the child inside the device block, a document lists the component
+// under the child. The store moves it, whichever component arrives first —
+// a device block that kept `child_device` would get the whole document
+// refused (go-hamqtt KindChildDevice).
+func TestBundleListsChildDeviceComponentsUnderTheirChild(t *testing.T) {
+	t.Parallel()
+	for _, childFirst := range []bool{true, false} {
+		s := newDiscoveryBundleStore()
+		put := func(objectID string, body []byte) {
+			t.Helper()
+			if err := s.Put("node", objectID, "sensor", body); err != nil {
+				t.Fatalf("Put %s: %v", objectID, err)
+			}
+		}
+		if childFirst {
+			put("level_2", childBundleComponent("level_2", "openccu-loom_ccu_0001abc-2", "Gruppe 2"))
+			put("temp", bundleComponent("temp"))
+		} else {
+			put("temp", bundleComponent("temp"))
+			put("level_2", childBundleComponent("level_2", "openccu-loom_ccu_0001abc-2", "Gruppe 2"))
+		}
+		put("schedule", childBundleComponent("schedule", "openccu-loom_ccu_0001abc_schedule", "Zeitplan"))
+
+		doc := renderBundleDocument(t, s, "node")
+		if _, has := doc.Device["child_device"]; has {
+			t.Errorf("childFirst=%v: the document's device block carries child_device", childFirst)
+		}
+		if _, ok := doc.Components["temp"]; !ok || len(doc.Components) != 1 {
+			t.Errorf("childFirst=%v: device components = %v, want temp alone", childFirst, doc.Components)
+		}
+		got := map[string]string{}
+		for _, child := range doc.Children {
+			for key := range child.Components {
+				got[key] = child.Identifiers[0] + "|" + child.Name
+			}
+		}
+		want := map[string]string{
+			"level_2":  "openccu-loom_ccu_0001abc-2|Gruppe 2",
+			"schedule": "openccu-loom_ccu_0001abc_schedule|Zeitplan",
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("childFirst=%v: child components = %v, want %v", childFirst, got, want)
+		}
+	}
+}
+
+// TestBundleChildAssignmentFollowsTheComponent: a component that moves off
+// its child device — sub-devices switched off — goes back onto the device,
+// and a removed one leaves its tombstone on the child it was on.
+func TestBundleChildAssignmentFollowsTheComponent(t *testing.T) {
+	t.Parallel()
+	s := newDiscoveryBundleStore()
+	for _, key := range []string{"level_2", "state_2"} {
+		if err := s.Put("node", key, "sensor", childBundleComponent(key, "openccu-loom_ccu_0001abc-2", "Gruppe 2")); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+	}
+	if err := s.Put("node", "level_2", "sensor", bundleComponent("level_2")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	s.Remove("node", "state_2")
+
+	doc := renderBundleDocument(t, s, "node")
+	if _, ok := doc.Components["level_2"]; !ok {
+		t.Errorf("device components = %v, want level_2 back on the device", doc.Components)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("child_devices = %+v, want the one child holding the tombstone", doc.Children)
+	}
+	want := map[string]map[string]any{"state_2": {"platform": "sensor"}}
+	if !reflect.DeepEqual(doc.Children[0].Components, want) {
+		t.Errorf("child components = %v, want %v", doc.Children[0].Components, want)
+	}
+}

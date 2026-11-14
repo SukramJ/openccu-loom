@@ -59,12 +59,30 @@ func identityOf(t *testing.T, entry map[string]json.RawMessage) frozenIdentity {
 		var dev struct {
 			Identifiers []string `json:"identifiers"`
 			ViaDevice   string   `json:"via_device"`
+			ChildDevice *struct {
+				Identifiers []string `json:"identifiers"`
+			} `json:"child_device"`
 		}
 		if err := json.Unmarshal(raw, &dev); err != nil {
 			t.Fatalf("device: %v", err)
 		}
 		id.DeviceIDs = dev.Identifiers
 		id.DeviceViaDevice = dev.ViaDevice
+		// An entity on a Home Assistant child device: the device it sits on
+		// is the child, and the device above that is the block's own. That
+		// is the same pair the frozen file recorded when the channel group
+		// was a device of its own with the physical device as via_device —
+		// and the child's identifier standing still is exactly what Home
+		// Assistant converts the existing device into a child by, keeping
+		// its device id. So the pair is compared in its old places and the
+		// frozen file stays as extracted.
+		if dev.ChildDevice != nil {
+			if len(dev.Identifiers) != 1 {
+				t.Fatalf("device with a child_device has identifiers %v, want exactly one to stand for the parent", dev.Identifiers)
+			}
+			id.DeviceIDs = dev.ChildDevice.Identifiers
+			id.DeviceViaDevice = dev.Identifiers[0]
+		}
 	}
 	if raw, ok := payload["components"]; ok {
 		var comps map[string]map[string]json.RawMessage

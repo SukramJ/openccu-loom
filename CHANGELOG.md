@@ -6,6 +6,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **MQTT: sub-devices are Home Assistant child devices — needs Home
+  Assistant 2026.11.** With `north.mqtt.sub_devices_enabled`, a channel
+  group was a device of its own, linked to its device with `via_device`.
+  Home Assistant now has child devices for a part of one product
+  ([developer blog](https://contributors.home-assistant.io/blog/2026/10/22/child-devices/)),
+  and reads them from MQTT discovery since 2026.11.0, so a channel group is
+  published as a child device of its device. With the option on, the
+  device's schedule is one too; it used to be a separate device either way
+  and stays that when the option is off.
+  - **An older Home Assistant drops these entities.** It refuses a
+    discovery config that names a child device. Leave the option off until
+    Home Assistant is on 2026.11.
+  - The identifiers are unchanged, so Home Assistant converts the existing
+    devices in place and keeps their device id, area and automations. It
+    does that only for a device the MQTT integration has not registered
+    since it was loaded: restart Home Assistant, or reload its MQTT
+    integration, once after the daemon upgrade.
+  - A child device has no manufacturer, model or firmware of its own, takes
+    its device's area unless it has one, and is removed or disabled with
+    its device.
+  - Its name no longer repeats the device name, which Home Assistant puts
+    in front itself: `Schedule` / `Zeitplan`, and `Group 2` / `Gruppe 2`
+    for a channel group without a name where it was `<device>-2`. A named
+    group keeps its name.
+  - With `north.mqtt.discovery_bundles`, the device document lists them
+    under `child_devices`. Before, a document had room for one device, and
+    a channel group's entities landed on whichever device the first
+    component named.
+  - Entity ids, `unique_id`s and all topics are unchanged.
+
 ## [0.102.0] - 2026-11-13
 
 The Projection tab becomes readable, incidents name their type and

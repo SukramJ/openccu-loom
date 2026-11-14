@@ -184,9 +184,8 @@ func (d *DefaultDiscoveryBuilder) renderScheduleItem(
 // active schedule entries; the rich schedule structure is exposed via
 // json_attributes_topic.
 //
-// The entity lives on a **sub-device** "<device-name> Zeitplan" linked
-// to the parent device via HA's `via_device` mechanism so each
-// schedule surface gets its own HA device card.
+// The entity lives on the schedule device of its device; see
+// [scheduleSubDeviceDescriptor].
 //
 // The payload is rendered by the shared model's per-entity discovery form
 // ([hadiscovery.RenderComponent]), which attaches the device and origin
@@ -212,7 +211,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 		Device:        ev.Device,
 	}
 	dev := modelDeviceFromInfo(
-		scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr(scheduleLabelKey)),
+		scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr(scheduleLabelKey), d.SubDevicesEnabled),
 	)
 	if dev == nil {
 		return DiscoveryItem{}
@@ -365,7 +364,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 		Device:        ev.Device,
 	}
 	dev := modelDeviceFromInfo(
-		scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr(scheduleLabelKey)),
+		scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr(scheduleLabelKey), d.SubDevicesEnabled),
 	)
 	if dev == nil {
 		return DiscoveryItem{}
@@ -416,24 +415,24 @@ func (b *Bridge) DescribeScheduleSwitchDiscovery(centralName string, ev Schedule
 }
 
 // scheduleSubDeviceDescriptor builds the HA `device` block for the
-// schedule sub-device: the Zeitplan sensor + ScheduleChannelSwitches
-// all land on a dedicated HA device card "<parent-name> Zeitplan",
-// `via_device`-linked to the parent. This keeps the parent device card
-// uncluttered (sensors / switches that control the real outputs stay
-// there; schedule administration lives in its own card).
+// schedule entities: the Zeitplan sensor and the ScheduleChannelSwitches
+// sit on a device of their own rather than on the physical device's card,
+// which keeps the entities that control the real outputs apart from
+// schedule administration.
 //
-// Identifiers diverge from the parent (`openccu-loom_<addr>_schedule`
-// vs. `openccu-loom_<addr>`), so HA creates a separate device. The
-// parent device is referenced via the `via_device` field so HA renders
-// the schedule sub-device as a child entry under the parent in the
-// Devices view.
+// With childDevice set — `sub_devices_enabled` — that device is a Home
+// Assistant child device of the physical device: the block is the physical
+// device's own ([deviceDescriptor]) and `child_device` carries the schedule
+// identifier and the bare label, which Home Assistant shows under the
+// device's name. See [deviceDescriptor] for why the identifier is the one
+// the device had before it was a child.
 //
-// Manufacturer / model / model_id / sw_version are copied from the
-// parent device descriptor so the schedule card carries the same
-// hardware identity as the parent — HA shows them as related units.
-// suggested_area is also inherited so the sub-device falls into the
-// same room.
-func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) *hadiscovery.DeviceInfo {
+// Without it the schedule device is a device of its own, "<parent-name>
+// Zeitplan", `via_device`-linked to the physical one, as it was before Home
+// Assistant had child devices. Its manufacturer / model / model_id /
+// sw_version and suggested_area are copied from the parent so the card
+// carries the same hardware identity.
+func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string, childDevice bool) *hadiscovery.DeviceInfo {
 	// Through the same helper the parent card declares its own identifier with:
 	// a hand-built "openccu-loom_<addr>" misses the central prefix that helper
 	// adds for the repeating address classes, so via_device pointed at an
@@ -441,6 +440,14 @@ func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) *hadisc
 	// unparented in Home Assistant — visible on a single CCU too.
 	parentID := physicalDeviceIdentifier(ev.Central, ev.DeviceAddress)
 	subID := parentID + "_schedule"
+	if childDevice {
+		// The schedule hangs on the physical device even when its channel
+		// is in a channel group: a child device cannot have a child.
+		ev.Channel = nil
+		dev := deviceDescriptor(ev, hubURL, false, "")
+		dev.ChildDevice = &hadiscovery.ChildDeviceInfo{Identifiers: []string{subID}, Name: scheduleLabel}
+		return dev
+	}
 	parentName := ev.DeviceName
 	if parentName == "" {
 		parentName = ev.DeviceAddress

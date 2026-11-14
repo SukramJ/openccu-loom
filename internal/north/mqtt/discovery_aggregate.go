@@ -237,7 +237,7 @@ type channelEventSpec struct {
 // for an unscoped unique id.
 func (d *DefaultDiscoveryBuilder) renderChannelEvent(s channelEventSpec) ([]byte, bool) {
 	central := d.centralFor(s.ev)
-	dev := modelDeviceFromInfo(deviceDescriptor(s.ev, d.hubURLFor(s.ev), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(s.ev, d.hubURLFor(s.ev), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return nil, false
 	}
@@ -640,7 +640,7 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if !scoped {
 		return "", "", "", nil, false
 	}
-	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return "", "", "", nil, false
 	}
