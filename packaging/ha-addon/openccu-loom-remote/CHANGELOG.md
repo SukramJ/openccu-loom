@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.102.1
+
+- **Version follows OpenCCU-Loom 0.102.1**, which fixes the start of
+  the CCU add-on on an openccu-lite box; see the OpenCCU-Loom
+  changelog. The proxy itself is unchanged.
+
 # 0.102.0
 
 - **Version follows OpenCCU-Loom 0.102.0.** The daemon behind the proxy

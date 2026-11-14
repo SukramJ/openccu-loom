@@ -414,3 +414,78 @@ func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 		t.Fatalf("a backup directory the add-on cannot create reached the daemon as %q, want it unset", got)
 	}
 }
+
+// TestCCUAddonRCScriptStartsTheDaemonOnStart pins the action openccu-lite's
+// generated unit runs: its ExecStart is "<script> start". A box that could
+// not confine the add-on runs it as root, and for a root add-on nothing runs
+// `init` inside the unit — it comes from the boot's run-parts or from the
+// installer, both outside, where the script starts nothing. `start` is then
+// the only call that can bring the daemon up; answered with a usage hint it
+// left the unit "active" with no daemon and the box restarting it in a loop.
+//
+// A classic CCU runs `init` and later `start` over every rc.d script, and a
+// confined add-on's unit runs `init` right before its `start`, so the second
+// call has to find the daemon and leave it alone. The negative control is
+// the installer's scope, where `start` starts as little as `init` does.
+func TestCCUAddonRCScriptStartsTheDaemonOnStart(t *testing.T) {
+	t.Parallel()
+
+	t.Run("start inside the unit starts the daemon once", func(t *testing.T) {
+		t.Parallel()
+		e := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
+		e.run(t, "start")
+		if n := len(e.waitStarts(t, 1, 5*time.Second)); n != 1 {
+			t.Fatalf("start inside the unit started the daemon %d times, want 1", n)
+		}
+		e.run(t, "start")
+		e.run(t, "init")
+		if n := len(e.waitStarts(t, 2, 3*time.Second)); n != 1 {
+			t.Fatalf("a second start and an init beside the running daemon made %d starts, want 1", n)
+		}
+		e.run(t, "stop")
+	})
+
+	t.Run("init then start is one daemon", func(t *testing.T) {
+		t.Parallel()
+		e := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
+		e.run(t, "init")
+		e.run(t, "start")
+		if n := len(e.waitStarts(t, 2, 3*time.Second)); n != 1 {
+			t.Fatalf("init followed by start made %d starts, want 1", n)
+		}
+		e.run(t, "stop")
+	})
+
+	t.Run("with monit init then start is one daemon", func(t *testing.T) {
+		t.Parallel()
+		if _, err := exec.LookPath("start-stop-daemon"); err != nil {
+			t.Skip("start-stop-daemon not installed")
+		}
+		e := newRCScriptEnv(t, true)
+		e.run(t, "init")
+		first := e.waitStarts(t, 1, 5*time.Second)
+		if len(first) != 1 {
+			t.Fatalf("init started the daemon %d times, want 1", len(first))
+		}
+		e.run(t, "start")
+		if n := len(e.waitStarts(t, 2, 3*time.Second)); n != 1 {
+			t.Fatalf("init followed by start made %d starts, want 1", n)
+		}
+		if pid, ok := e.pidfilePID(); !ok || pid != first[0] {
+			t.Fatalf("pidfile names %d (ok=%v) after the second call, want the daemon %d", pid, ok, first[0])
+		}
+		e.run(t, "stop")
+	})
+
+	t.Run("start in the installer's scope starts nothing", func(t *testing.T) {
+		t.Parallel()
+		e := newRCScriptEnvIn(t, false, rcScriptInstallCgroup)
+		e.run(t, "start")
+		if n := len(e.waitStarts(t, 1, 3*time.Second)); n != 0 {
+			t.Fatalf("start in the installer's scope started the daemon %d times, want 0", n)
+		}
+		if _, err := os.Stat(e.pidfile()); !os.IsNotExist(err) {
+			t.Fatalf("start in the installer's scope wrote a pidfile (stat err %v)", err)
+		}
+	})
+}

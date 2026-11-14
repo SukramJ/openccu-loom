@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 559.
+Guards without a doc comment: 8 of 560.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -60,6 +60,7 @@ Guards without a doc comment: 8 of 559.
 | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite pins the second half of the install incident: the root-run loop left a root-owned pidfile in the unit's runtime directory, which the add-on's user cannot overwrite. |
 | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit pins what the SPA's "Restart" relies on where no monit runs (openccu-lite): the daemon SIGTERMs itself and the rc.d script must start it again. |
 | TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit pins the install path on openccu-lite: the installer runs the script as root in its own scope, where a supervising loop would outlive the install and keep starting a second daemon as root beside the unit's. |
+| TestCCUAddonRCScriptStartsTheDaemonOnStart | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptStartsTheDaemonOnStart pins the action openccu-lite's generated unit runs: its ExecStart is "<script> start". |
 | TestCCUAddonRCScriptStopIgnoresAStalePidfile | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptStopIgnoresAStalePidfile pins the failure seen on openccu-lite: the pidfile was left by a root-run install and named a PID that no longer belonged to the daemon. |
 | TestCCUAddonUpdateScriptExitCodeContract | ccu_addon_update_script_test.go | TestCCUAddonUpdateScriptExitCodeContract locks the exit-code contract OpenCCU's /bin/install_addon relies on: 0 means "installed without reboot", 10 means "reboot required" and anything else means the platform identifier ($1) was rejected outright. |
 | TestCentralLinksEligibilityMatchesDeviceRule | central_links_eligibility_test.go | TestCentralLinksEligibilityMatchesDeviceRule pins the dispatching adapter to the domain rule it claims to follow. |

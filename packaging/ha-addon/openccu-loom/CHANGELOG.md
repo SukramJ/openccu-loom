@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.102.1
+
+- **Version follows OpenCCU-Loom 0.102.1**, which fixes the start of
+  the CCU add-on on an openccu-lite box. Nothing changes for the Home
+  Assistant add-on.
+
 ## 0.102.0
 
 - **The Projection tab is now one matrix**: a row per channel entity and
