@@ -425,6 +425,12 @@
       "availability_mode": "all",
       "command_topic": "gh/set/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
       "device": {
+        "child_device": {
+          "identifiers": [
+            "openccu-loom_0001abcd-2"
+          ],
+          "name": "Sirene Signal"
+        },
         "identifiers": [
           "openccu-loom_0001abcd"
         ],

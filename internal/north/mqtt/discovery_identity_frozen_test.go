@@ -121,6 +121,14 @@ func identityOf(t *testing.T, entry map[string]json.RawMessage) frozenIdentity {
 // The goldens themselves are pinned against the builders by their own tests,
 // so a builder that changed an identity fails there first and here second.
 //
+// One entry was amended by hand since: `combined/sub-devices-enabled`. A
+// combined entity of a channel in a channel group moved from the physical
+// device onto the group's child device, where the channel's other entities
+// sit; its recorded device is the child, with the physical device above it.
+// Its discovery topic and `unique_id` stand as extracted, which is what
+// lets Home Assistant keep the entity and re-point it to the other device
+// (components/mqtt/entity.py:1704-1720 at core 2026.11.1).
+//
 // Falsifiability: change one `unique_id` in a current golden, or rename the
 // security entity key `state` to `severity` (its item was renamed; its key
 // must not be), and this test names the case.

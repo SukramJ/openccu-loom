@@ -6,6 +6,7 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 
@@ -58,6 +59,11 @@ type bundleNode struct {
 	// the child device its entity was on.
 	children map[string]hadiscovery.ChildDeviceInfo
 	childOf  map[string]string
+}
+
+// hangsOn reports whether satellite names parent as its `via_device`.
+func hangsOn(satellite, parent *hadiscovery.DeviceInfo) bool {
+	return satellite.ViaDevice != "" && slices.Contains(parent.Identifiers, satellite.ViaDevice)
 }
 
 func newDiscoveryBundleStore() *discoveryBundleStore {
@@ -133,7 +139,13 @@ func (s *discoveryBundleStore) Put(nodeID, objectID, platform string, body []byt
 		node.childOf[objectID] = id
 	}
 	dev.ChildDevice = nil
-	if node.device == nil && hasDevice {
+	// The one block that does replace the first: the device the kept block
+	// names as its `via_device`. A document has room for one device, and a
+	// component whose per-entity block describes a device of its own hung
+	// on the node's device — the schedule, with sub-devices off — sits in
+	// the node's document all the same. Kept because it arrived first, that
+	// block would move every entity of the device onto it.
+	if hasDevice && (node.device == nil || hangsOn(node.device, &dev)) {
 		node.device = &dev
 	}
 	if node.origin == nil {

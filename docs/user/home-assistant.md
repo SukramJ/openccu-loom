@@ -146,6 +146,13 @@ only does that for a device the MQTT integration has not registered since
 it was last loaded, so after the daemon upgrade restart Home Assistant or
 reload its MQTT integration once.
 
+Switching the option off again takes one step in Home Assistant. A channel
+group's entities go back to the device by themselves. The schedule is then
+published as a device of its own again, under the identifier Home Assistant
+holds as a child device by now, and Home Assistant refuses a device whose
+identifier a child device has: delete the schedule child device in Home
+Assistant and reload its MQTT integration.
+
 By default every entity gets its own retained discovery config.
 `north.mqtt.discovery_bundles` (expert, off by default) publishes one
 document per device on `homeassistant/device/<node_id>/config` instead;

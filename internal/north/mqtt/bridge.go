@@ -113,11 +113,10 @@ type BridgeConfig struct {
 	QoS              QoSProfile
 	DiscoveryBuilder DiscoveryBuilder // optional, may be nil
 
-	// SubDevicesEnabled toggles the per-channel-group sub-device split
-	// in the HA discovery `device` block. When true, multi-channel-group
-	// devices (HmIP-DRBLI4, HmIP-DRSI4, …) appear as one HA parent
-	// device with N sub-devices instead of one flat device with N×K
-	// entities.
+	// SubDevicesEnabled puts each channel group of a multi-channel-group
+	// device (HmIP-DRBLI4, HmIP-DRSI4, …), and a device's schedule, on a
+	// Home Assistant child device of the device, instead of one flat
+	// device with N×K entities. Needs Home Assistant 2026.11.0 or later.
 	SubDevicesEnabled bool
 
 	// Locale selects the language of daemon-synthesised discovery names (e.g.

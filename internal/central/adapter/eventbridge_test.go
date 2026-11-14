@@ -675,6 +675,33 @@ func TestPublishCombinedDPSnapshotDiscardedErrorIsCounted(t *testing.T) {
 	}
 }
 
+// TestCombinedDiscoveryEventCarriesItsChannel: the MQTT bridge reads the
+// channel group off the event's channel to put a combined entity on the
+// group's Home Assistant child device, beside the channel's other
+// entities. An event without it leaves the entity on the physical device
+// and nothing fails. Both the snapshot and the discovery description build
+// their event here.
+func TestCombinedDiscoveryEventCarriesItsChannel(t *testing.T) {
+	t.Parallel()
+
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, failingPublisher{})
+	eb := NewEventBridge(nil, nil, mqtt.NewWiring(bridge, nil))
+	dev := device.New(device.Config{Address: "TIMERDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-ASIR"})
+	ch := dev.AddChannel("TIMERDEV001:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	timer := combined.NewTimer(ch.Address, &noopCombinedWriter{}, "DURATION_VALUE", "DURATION_UNIT")
+
+	ev, ok := eb.combinedDiscoveryEvent(bridge.Topics(), "ccu-01", "HmIP-RF", dev, ch, 1, timer)
+	if !ok {
+		t.Fatal("no discovery event for the timer")
+	}
+	if got, isChannel := ev.Channel.(*device.Channel); !isChannel || got != ch {
+		t.Fatalf("event channel = %v, want the channel the data point sits on", ev.Channel)
+	}
+}
+
 // noopCombinedWriter is a no-op [combined.Writer] — the discovery-publish
 // paths under test never invoke SetValue.
 type noopCombinedWriter struct{}

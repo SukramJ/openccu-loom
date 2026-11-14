@@ -3920,6 +3920,7 @@ func (b *EventBridge) combinedDiscoveryEvent(
 		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
+		Channel:       ch,
 		Kind:          kind,
 		Component:     proj.HACombinedDiscovery(dctx),
 	}, true
