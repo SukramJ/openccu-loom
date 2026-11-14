@@ -6,6 +6,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.102.1] - 2026-11-14
+
+The CCU add-on starts on an openccu-lite box that runs it as root.
+
 ### Fixed
 
 - **CCU add-on: the daemon starts on an openccu-lite box that runs the
