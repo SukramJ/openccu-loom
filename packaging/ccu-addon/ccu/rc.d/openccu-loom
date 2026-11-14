@@ -7,10 +7,11 @@
 # etc/monit-openccu-loom.cfg), and driven from the add-on web page.
 #
 # On openccu-lite the same script runs inside a oneshot systemd unit
-# (addon-openccu-loom.service), confined to the add-on's own user, and there
-# is no monit. Three things differ there, all decided below: the pidfile
-# lives in the unit's runtime directory, the script supervises the daemon
-# itself, and it does so only inside that unit.
+# (addon-openccu-loom.service) whose action is `start`, and there is no
+# monit. The box confines the unit to the add-on's own user where it can and
+# runs it as root where it cannot. Three things differ there, all decided
+# below: the pidfile lives in the unit's runtime directory, the script
+# supervises the daemon itself, and it does so only inside that unit.
 
 ADDON_ID=openccu-loom
 ADDON_NAME="OpenCCU-Loom"
@@ -283,9 +284,14 @@ uninstall() {
   logger -t ${ADDON_ID} -p user.info "Uninstalled"
 }
 
+# `start` starts the daemon as `init` does. A CCU runs both over every rc.d
+# script at boot, `init` first; the second call finds the daemon running and
+# leaves it alone. On openccu-lite `start` is the unit's own action, and for
+# an add-on the box runs as root it is the only call made inside the unit:
+# `init` then comes from outside, where start() refuses to leave a loop
+# behind.
 case "$1" in
-  ""|init)   start ;;
-  start)     echo "use init to start" ;;
+  ""|init|start) start ;;
   stop)      stop ;;
   restart|reload) stop; start ;;
   uninstall) uninstall ;;
