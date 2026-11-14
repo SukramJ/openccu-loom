@@ -38,7 +38,7 @@ func TestDeviceDescriptorSuggestedAreaFollowsTheDeviceRoom(t *testing.T) {
 				DeviceName:    "Stehlampe",
 				Device:        fakeRoomDevice{room: tc.room},
 			}
-			desc := deviceDescriptor(ev, "", false)
+			desc := deviceDescriptor(ev, "", false, "Group {no}")
 			got := desc.SuggestedArea
 			if got != tc.want {
 				t.Errorf("suggested_area = %q, want %q", got, tc.want)
@@ -64,7 +64,7 @@ func TestScheduleSubDeviceDescriptorInheritsTheParentRoom(t *testing.T) {
 		DeviceName:    "Heizung",
 		Device:        fakeRoomDevice{room: "Bad"},
 	}
-	desc := scheduleSubDeviceDescriptor(ev, "", "Zeitprogramm")
+	desc := scheduleSubDeviceDescriptor(ev, "", "Zeitprogramm", false)
 	if got := desc.SuggestedArea; got != "Bad" {
 		t.Errorf("suggested_area = %q, want Bad", got)
 	}

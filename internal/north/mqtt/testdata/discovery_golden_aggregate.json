@@ -273,14 +273,20 @@
       "availability_mode": "all",
       "command_topic": "gh/set/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/cover_command",
       "device": {
+        "child_device": {
+          "identifiers": [
+            "openccu-loom_0001drbli401-10"
+          ],
+          "name": "Group 10"
+        },
         "identifiers": [
-          "openccu-loom_0001drbli401-10"
+          "openccu-loom_0001drbli401"
         ],
         "manufacturer": "eQ-3",
         "model": "HmIP-DRBLI4",
-        "name": "Jalousieaktor Süd-10",
+        "name": "Jalousieaktor Süd",
         "serial_number": "0001DRBLI401",
-        "via_device": "openccu-loom_0001drbli401"
+        "via_device": "openccu-loom_central_ccu-01"
       },
       "device_class": "blind",
       "name": "ch10",

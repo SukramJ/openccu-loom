@@ -132,8 +132,19 @@ This is the mainstream path today.
 `number`, `text`, `event` and `update` entities, plus system variables
 and programs as hub entities, plus an `alarm_control_panel` when the
 daemon's alarm system is configured. Entity names are localized by the
-daemon (`de` / `en`). `north.mqtt.sub_devices_enabled` additionally
-groups channels as HA sub-devices.
+daemon (`de` / `en`).
+
+`north.mqtt.sub_devices_enabled` additionally puts each channel group of a
+device with several, and a device's schedule, on a
+[child device](https://contributors.home-assistant.io/blog/2026/10/22/child-devices/)
+of the device. This needs Home Assistant 2026.11 or later: an older version
+refuses the discovery config of every entity on a child device, so those
+entities disappear. A channel group or schedule that was a device of its own
+before keeps its identifier, and Home Assistant converts it into a child
+device in place — the device id, area and automations stay. Home Assistant
+only does that for a device the MQTT integration has not registered since
+it was last loaded, so after the daemon upgrade restart Home Assistant or
+reload its MQTT integration once.
 
 By default every entity gets its own retained discovery config.
 `north.mqtt.discovery_bundles` (expert, off by default) publishes one

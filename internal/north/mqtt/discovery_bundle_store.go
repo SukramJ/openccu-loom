@@ -52,6 +52,12 @@ type bundleNode struct {
 	platforms map[string]string
 	// removed are the object ids to publish as platform-only tombstones.
 	removed map[string]struct{}
+	// children are the node's Home Assistant child devices by their first
+	// identifier, and childOf says which component sits on which. Like
+	// platforms, childOf outlives a removal, so a tombstone is published on
+	// the child device its entity was on.
+	children map[string]hadiscovery.ChildDeviceInfo
+	childOf  map[string]string
 }
 
 func newDiscoveryBundleStore() *discoveryBundleStore {
@@ -101,6 +107,8 @@ func (s *discoveryBundleStore) Put(nodeID, objectID, platform string, body []byt
 			components: map[string]map[string]any{},
 			platforms:  map[string]string{},
 			removed:    map[string]struct{}{},
+			children:   map[string]hadiscovery.ChildDeviceInfo{},
+			childOf:    map[string]string{},
 		}
 		s.nodes[nodeID] = node
 	}
@@ -109,10 +117,24 @@ func (s *discoveryBundleStore) Put(nodeID, objectID, platform string, body []byt
 	// hub and alarm planes attach a *narrower* block to some of their
 	// entities, and letting those overwrite would shrink the device Home
 	// Assistant already knows.
-	if node.device == nil {
-		if dev, ok := decodeInto[hadiscovery.DeviceInfo](decoded["device"]); ok {
-			node.device = &dev
-		}
+	//
+	// The child device is the one part of the block that is per component:
+	// the per-entity form says "this entity sits on that child of the
+	// device" inside the device block, and a document says it by listing
+	// the component under the child (`child_devices`). So it comes off the
+	// block before the block is kept, and is recorded against the
+	// component — a block that kept it would be refused, with the whole
+	// document.
+	dev, hasDevice := decodeInto[hadiscovery.DeviceInfo](decoded["device"])
+	delete(node.childOf, objectID)
+	if hasDevice && dev.ChildDevice != nil && len(dev.ChildDevice.Identifiers) > 0 {
+		id := dev.ChildDevice.Identifiers[0]
+		node.children[id] = *dev.ChildDevice
+		node.childOf[objectID] = id
+	}
+	dev.ChildDevice = nil
+	if node.device == nil && hasDevice {
+		node.device = &dev
 	}
 	if node.origin == nil {
 		if org, ok := decodeInto[hadiscovery.Origin](decoded["origin"]); ok {
@@ -209,6 +231,13 @@ func (s *discoveryBundleStore) Bundle(nodeID string) (*hadiscovery.Bundle, bool)
 	}
 	for k := range node.removed {
 		bundle.Components[k] = hadiscovery.Component{Platform: hacatalog.Platform(node.platforms[k])}
+	}
+	// Sorted, so the document's `child_devices` list is the same bytes on
+	// every publish and the publisher's hash dedup holds.
+	for _, k := range bundle.Keys() {
+		if id, ok := node.childOf[k]; ok {
+			bundle.AssignChild(node.children[id], k)
+		}
 	}
 	return bundle, true
 }

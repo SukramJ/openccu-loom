@@ -161,7 +161,7 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 		ChannelNo:     ev.ChannelNo,
 		Device:        ev.Device,
 	}
-	dev := modelDeviceFromInfo(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}

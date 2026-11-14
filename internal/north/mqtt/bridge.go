@@ -417,6 +417,14 @@ type SubDeviceInspector interface {
 	SubDeviceName() string
 }
 
+// subDeviceLabeller is the optional [SubDeviceInspector] extension that
+// names a sub-device without the parent device's name in it. Production
+// channels (`*device.Channel`) satisfy it; a channel that does not keeps its
+// [SubDeviceInspector.SubDeviceName].
+type subDeviceLabeller interface {
+	SubDeviceLabel() (name, number string)
+}
+
 // CustomDPNamingInspector is an optional extension on ChannelInspector
 // that exposes the custom-DP primary/secondary classification. It is
 // what tells [displayChannelName] that a channel carries a custom data

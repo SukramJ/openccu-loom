@@ -196,7 +196,7 @@ func (d *DefaultDiscoveryBuilder) BuildTextDisplayNotify(ev Event) DiscoveryItem
 	}
 	// The same device block the channel's other entities hang off, so the
 	// notify entity groups under the same HA device card as the text entity.
-	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled, d.tr(subDeviceGroupLabelKey)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
