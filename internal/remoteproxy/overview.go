@@ -95,20 +95,6 @@ func (p *instanceProxy) authWallData(loc locale, pairURL string) authWallPage {
 	return d
 }
 
-// pairLabelsJSON carries the pairing strings the browser script needs.
-func (l locale) pairLabelsJSON() (template.JS, error) {
-	raw, err := json.Marshal(struct {
-		Pair   string            `json:"pair"`
-		Repair string            `json:"repair"`
-		States map[string]string `json:"states"`
-		Errors map[string]string `json:"errors"`
-	}{l.PairButton, l.RepairButton, l.pairStates, l.pairErrors})
-	if err != nil {
-		return "", err
-	}
-	return template.JS(raw), nil //nolint:gosec // G203: marshaled from compile-time locale constants only.
-}
-
 // serveUnreachable is the browser-facing 502 for a dead upstream.
 func serveUnreachable(w http.ResponseWriter, r *http.Request, instance string) {
 	loc := localeFor(r)
@@ -151,6 +137,20 @@ type locale struct {
 	WallPaired   string
 	WallNotLocal string
 	WallOptions  string
+}
+
+// pairLabelsJSON carries the pairing strings the browser script needs.
+func (l locale) pairLabelsJSON() (template.JS, error) {
+	raw, err := json.Marshal(struct {
+		Pair   string            `json:"pair"`
+		Repair string            `json:"repair"`
+		States map[string]string `json:"states"`
+		Errors map[string]string `json:"errors"`
+	}{l.PairButton, l.RepairButton, l.pairStates, l.pairErrors})
+	if err != nil {
+		return "", err
+	}
+	return template.JS(raw), nil //nolint:gosec // G203: marshaled from compile-time locale constants only.
 }
 
 var (

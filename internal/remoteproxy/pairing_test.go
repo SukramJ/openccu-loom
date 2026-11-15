@@ -4,6 +4,7 @@
 package remoteproxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -110,7 +111,7 @@ func (f *boxTFake) servePoll(w http.ResponseWriter, r *http.Request) {
 	cn, _ := hex.DecodeString(r.URL.Query().Get("client_nonce"))
 	sum := sha256.Sum256(cn)
 	f.mu.Lock()
-	if string(sum[:]) != string(f.commit) {
+	if !bytes.Equal(sum[:], f.commit) {
 		f.mu.Unlock()
 		f.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "invalid"})
 		return
