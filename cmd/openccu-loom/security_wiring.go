@@ -99,6 +99,12 @@ func wireSecurityService(cfg *config.Config, reg *central.Registry, db *gosql.DB
 // boot-registered central can be detached without running AttachCentral —
 // whose index rebuild has no business firing while a CCU is being deleted.
 //
+// The restart half keeps the central's open faults in the ledger. A restart
+// through the removal detach closed every one of them, and the re-adopted
+// central raised the still-active ones again as new faults: a new id, a
+// reset `since`, the acknowledgement lost and a second "raised" report to
+// the webhook, MQTT and WebSocket sinks.
+//
 //nolint:contextcheck // central-adoption hooks detach from the request ctx by design
 func securityCentralHook(svc *security.Service) perCentralHook {
 	if svc == nil {
@@ -110,7 +116,8 @@ func securityCentralHook(svc *security.Service) perCentralHook {
 			svc.AttachCentral(name)
 			return func() { svc.DetachCentral(name) }
 		},
-		detach: svc.DetachCentral,
+		detach:           svc.DetachCentral,
+		detachForRestart: svc.DetachCentralForRestart,
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -443,5 +444,213 @@ func TestAcknowledgeFaultAnnouncesRealOpenCount(t *testing.T) {
 	}
 	if ev.OpenCount != 2 {
 		t.Errorf("acknowledged fault event OpenCount = %d, want 2 — a consumer reading this field on the one transition that proves a fault stands was told 'no fault stands'", ev.OpenCount)
+	}
+}
+
+// --- restart keeps the fault ledger ---
+
+const (
+	restartCentral = "c1"
+	restartDevice  = "DEV0009"
+	restartIface   = "HmIP-RF"
+)
+
+// newRestartTestUnit builds a southbound-ready central holding one device
+// whose UNREACH data point reports unreachable, as a unit adopted again
+// after a restart does once its model has loaded.
+func newRestartTestUnit(t *testing.T, unreachable bool) *central.Unit {
+	t.Helper()
+	dev := device.New(device.Config{
+		InterfaceID: restartIface, Address: restartDevice, Model: "HmIP-SWDO", Name: "Side Door",
+	})
+	maint := dev.AddChannel(restartDevice+":0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	unreach := generic.NewBinarySensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID: restartIface, ChannelAddress: maint.Address,
+			ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterUnreach),
+		},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeBool, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	unreach.OnEvent(unreachable)
+	maint.Put(unreach)
+
+	unit, err := central.New(central.Config{Name: restartCentral})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	unit.ModelRegistry.Put(dev)
+	unit.MarkSouthboundReady()
+	return unit
+}
+
+// restartLedgerFixture is a started service over one central with one
+// unreachable device and an acknowledged fault for it, opened an hour ago.
+type restartLedgerFixture struct {
+	svc    *Service
+	stores *Stores
+	reg    *central.Registry
+	seed   sqlitestore.SecurityFault
+}
+
+func newRestartLedgerFixture(t *testing.T) *restartLedgerFixture {
+	t.Helper()
+	ctx := context.Background()
+	reg := central.NewRegistry()
+	if err := reg.Register(newRestartTestUnit(t, true)); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	svc, stores := newTestService(t, func(d *Deps) { d.Registry = reg })
+
+	now := time.Now().UnixMilli()
+	// Diagnostic classes are aggregated only for a device the alarm domain
+	// has enrolled a sensor on; any channel of the device enrolls it.
+	if err := stores.Sensors.Upsert(ctx, sqlitestore.AlarmSensorRow{
+		ID: "s1", ZoneID: "z1", CentralName: restartCentral, InterfaceID: restartIface,
+		ChannelAddress: restartDevice + ":1", Parameter: "STATE", SensorType: hmenum.AlarmSensorTypeDoor,
+		Name: "Side Door", ConfigJSON: "{}", CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		t.Fatalf("seed alarm sensor enrollment: %v", err)
+	}
+	// A fault that has stood for an hour, with an id no raise in this test
+	// can produce, so a re-raise is told apart from the kept row.
+	ref := hmevent.NewSecuritySourceRef(restartCentral, restartIface, restartDevice+":0", string(hmenum.ParameterUnreach))
+	seed := sqlitestore.SecurityFault{
+		ID: ref.Ref + "|seed", Ref: ref.Ref,
+		Class: string(hmenum.SecurityClassTechnical), Reason: string(hmenum.SecurityFaultReasonUnreachable),
+		Severity:    string(hmenum.SeverityForClass(hmenum.SecurityClassTechnical)),
+		CentralName: restartCentral, InterfaceID: restartIface, DeviceAddress: restartDevice,
+		ChannelAddress: restartDevice + ":0", Parameter: string(hmenum.ParameterUnreach), Name: "Side Door",
+		SinceMS: now - time.Hour.Milliseconds(),
+	}
+	if _, _, err := stores.Faults.Raise(ctx, seed); err != nil {
+		t.Fatalf("seed raise: %v", err)
+	}
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Stop(ctx) })
+
+	rows, err := stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != seed.ID {
+		t.Fatalf("precondition: open rows after Start = %+v, want only the seeded fault — the seed does not "+
+			"match the source the index derives, and the rest of the test would pass vacuously", rows)
+	}
+	if ok, err := svc.AcknowledgeFault(ctx, seed.ID, "operator"); err != nil || !ok {
+		t.Fatalf("precondition: AcknowledgeFault = %v, %v", ok, err)
+	}
+	return &restartLedgerFixture{svc: svc, stores: stores, reg: reg, seed: seed}
+}
+
+// restart replaces the registered unit by a fresh one under the same name,
+// around the restart detach, the way the orchestrator's restart does.
+func (f *restartLedgerFixture) restart(t *testing.T, unreachable bool) {
+	t.Helper()
+	f.svc.DetachCentralForRestart(restartCentral)
+	f.reg.Unregister(restartCentral)
+	if err := f.reg.Register(newRestartTestUnit(t, unreachable)); err != nil {
+		t.Fatalf("reg.Register(restarted): %v", err)
+	}
+	f.svc.AttachCentral(restartCentral)
+}
+
+// TestRestartDetachKeepsStandingFaultIDSinceAndStaysSilent pins that a
+// central restarted under the same name keeps its standing faults.
+//
+// The restart used to run the removal detach, which closed every open fault
+// of the central. The re-adopted central's reconcile then raised the
+// still-active condition again: a new id, `since` reset to the restart, the
+// operator's acknowledgement gone, and a "raised" report to every sink for a
+// device whose state had not changed.
+func TestRestartDetachKeepsStandingFaultIDSinceAndStaysSilent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newRestartLedgerFixture(t)
+
+	faultEvents := collectFaultEvents(t, f.svc)
+	var raised []hmevent.SecurityNotificationEvent
+	unsub := f.svc.Bus().Subscribe(func(e hmevent.SecurityNotificationEvent) {
+		if e.Verb == hmenum.SecurityVerbRaised {
+			raised = append(raised, e)
+		}
+	})
+	t.Cleanup(unsub)
+
+	f.restart(t, true)
+
+	for _, e := range *faultEvents {
+		if e.Open {
+			t.Errorf("the restart published an opening fault transition %+v; the fault never closed", e)
+		}
+	}
+	if len(raised) != 0 {
+		t.Errorf("the restart sent %d \"raised\" report(s); a fault that stood throughout must stay silent", len(raised))
+	}
+
+	rows, err := f.stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != f.seed.ID || rows[0].SinceMS != f.seed.SinceMS {
+		t.Fatalf("open rows after the restart = %+v, want only the original fault %q since %d — the restart "+
+			"closed it and raised it again", rows, f.seed.ID, f.seed.SinceMS)
+	}
+	faults := f.svc.Faults()
+	if len(faults) != 1 || faults[0].ID != f.seed.ID {
+		t.Fatalf("Faults() after the restart = %+v, want the original fault — the ledger row stands but "+
+			"no surface shows it", faults)
+	}
+	if faults[0].SinceMS != f.seed.SinceMS || faults[0].AcknowledgedAtMS == 0 || faults[0].AcknowledgedBy != "operator" {
+		t.Errorf("fault after the restart = since %d, acknowledged %d by %q; want since %d, acknowledged by operator",
+			faults[0].SinceMS, faults[0].AcknowledgedAtMS, faults[0].AcknowledgedBy, f.seed.SinceMS)
+	}
+}
+
+// TestRestartDetachClosesFaultThatEndedMeanwhile pins the other half of the
+// kept ledger: a condition that ended while the central was down is closed
+// by the re-adopted central's reconcile, not left standing because the
+// restart detach kept its row.
+func TestRestartDetachClosesFaultThatEndedMeanwhile(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newRestartLedgerFixture(t)
+
+	f.restart(t, false)
+
+	rows, err := f.stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("open rows after a restart on a reachable device = %+v, want none — the kept fault "+
+			"stands for a condition that has ended", rows)
+	}
+	if faults := f.svc.Faults(); len(faults) != 0 {
+		t.Errorf("Faults() after the restart = %+v, want none", faults)
+	}
+}
+
+// TestDetachCentralStillClearsEveryOpenFault pins that the removal detach
+// keeps closing the faults of a central that leaves for good: the restart
+// flavour must not have taken that half with it.
+func TestDetachCentralStillClearsEveryOpenFault(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newRestartLedgerFixture(t)
+
+	f.svc.DetachCentral(restartCentral)
+
+	rows, err := f.stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("open rows after removing the central = %+v, want none — a removed central's faults "+
+			"would stand for a CCU that is no longer configured", rows)
+	}
+	if faults := f.svc.Faults(); len(faults) != 0 {
+		t.Errorf("Faults() after removing the central = %+v, want none", faults)
 	}
 }

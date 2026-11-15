@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 560.
+Guards without a doc comment: 8 of 561.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -455,6 +455,7 @@ Guards without a doc comment: 8 of 560.
 | TestPin_OptionPresetVal_LabelKey_InEasymodeDecoder | wiring_pins/ccudata_wiring_test.go | TestPin_OptionPresetVal_LabelKey_InEasymodeDecoder pins that OptionPresetVal in ccudata/easymode.go declares LabelKey AND binds it to the `label_key` JSON field. |
 | TestPin_BootCentralRemovalMirrorsEveryAdoptHook | wiring_pins/central_boot_removal_test.go | TestPin_BootCentralRemovalMirrorsEveryAdoptHook pins the shape that keeps the two removal paths from drifting apart. |
 | TestCentralMetricsReachTheDiagnosticsDump | wiring_pins/central_metrics_diagnostics_test.go | TestCentralMetricsReachTheDiagnosticsDump pins the last link of the per-central metrics chain: the composition root must hand the REST router the provider that reads every central's aggregator. |
+| TestPin_CentralRestartReachesSecurityRestartDetach | wiring_pins/central_restart_security_test.go | TestPin_CentralRestartReachesSecurityRestartDetach pins the chain that keeps a restarted central's open security faults standing. |
 | TestPin_EvaluateCentralState_CalledInCentralStart | wiring_pins/central_wiring_test.go | TestPin_EvaluateCentralState_CalledInCentralStart pins that central.go calls EvaluateCentralState during the Start sequence. |
 | TestPin_IsAlive_CalledInEvaluateCentralState | wiring_pins/central_wiring_test.go | TestPin_IsAlive_CalledInEvaluateCentralState pins that central.go calls Clients.IsAlive() inside EvaluateCentralState. |
 | TestPin_SyncCentralState_CalledInCentral | wiring_pins/central_wiring_test.go | TestPin_SyncCentralState_CalledInCentral pins that central.go calls Health.SyncCentralState so that subsequent client-health transitions feed back into EvaluateCentralState. |

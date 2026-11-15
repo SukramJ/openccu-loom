@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	loomendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 const (
@@ -254,5 +256,160 @@ func TestLiveCentralAdminPutDisableStillPurgesTheCentralsStoredState(t *testing.
 	}
 	if n := f.valuesRows(ctx, t, name, "HmIP-RF"); n != 0 {
 		t.Errorf("values cache rows after the removal = %d, want 0", n)
+	}
+}
+
+// restartSecurityFault starts the real Security & Safety domain through the
+// composition root's wiring helper, hooks it onto f's orchestrator and seeds
+// one open, hour-old fault for the central name before the domain starts, as
+// a fault that stood across the daemon's last start does. It returns the
+// domain's fault store and the seeded row.
+func restartSecurityFault(ctx context.Context, t *testing.T, f *restartFixture, dbName, name string) (
+	*sqlitestore.SecurityFaultStore, func() []string, sqlitestore.SecurityFault,
+) {
+	t.Helper()
+	db := openMigratedTestDB(t, dbName)
+	faults := sqlitestore.NewSecurityFaultStore(db)
+	ref := hmevent.SecurityRefKey(name, name+"-HmIP-RF", restartDevice+":0", string(hmenum.ParameterUnreach))
+	seed := sqlitestore.SecurityFault{
+		ID: ref + "|seed", Ref: ref,
+		Class: string(hmenum.SecurityClassTechnical), Reason: string(hmenum.SecurityFaultReasonUnreachable),
+		Severity:    string(hmenum.SeverityForClass(hmenum.SecurityClassTechnical)),
+		CentralName: name, InterfaceID: name + "-HmIP-RF", DeviceAddress: restartDevice,
+		ChannelAddress: restartDevice + ":0", Parameter: string(hmenum.ParameterUnreach), Name: "Switch",
+		SinceMS: time.Now().Add(-time.Hour).UnixMilli(),
+	}
+	if _, _, err := faults.Raise(ctx, seed); err != nil {
+		t.Fatalf("seed security fault: %v", err)
+	}
+	svc := wireSecurityService(config.Default(), f.reg, db, nil, nil, nil, discardTestLogger())
+	if svc == nil {
+		t.Fatal("wireSecurityService returned nil")
+	}
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("security service Start: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Stop(context.Background()) })
+	f.orch.setSecurityCentralHook(securityCentralHook(svc))
+	shown := func() []string {
+		shownFaults := svc.Faults()
+		ids := make([]string, 0, len(shownFaults))
+		for i := range shownFaults {
+			ids = append(ids, shownFaults[i].ID)
+		}
+		return ids
+	}
+	return faults, shown, seed
+}
+
+// openSecurityFaults returns the ids of the open ledger rows of the central.
+func openSecurityFaults(ctx context.Context, t *testing.T, faults *sqlitestore.SecurityFaultStore, name string) []string {
+	t.Helper()
+	rows, err := faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("security faults ListOpen: %v", err)
+	}
+	var ids []string
+	for i := range rows {
+		if rows[i].CentralName == name {
+			ids = append(ids, rows[i].ID)
+		}
+	}
+	return ids
+}
+
+// TestLiveCentralAdminPutRestartKeepsOpenSecurityFaults pins that restarting
+// a running central — the move to openccu-lite is such an edit — keeps the
+// open faults the security domain holds for it.
+//
+// The restart ran the domain's removal detach, which closed every open fault
+// of the central; the re-adopted central's reconcile then raised each
+// still-active condition as a new fault with a new id, a reset `since`, the
+// acknowledgement lost and a second "raised" report to every sink.
+func TestLiveCentralAdminPutRestartKeepsOpenSecurityFaults(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	f := newRestartFixture(ctx, t, "central_restart_keeps_faults.db")
+
+	const name = "restart-keeps-faults"
+	faults, shown, seed := restartSecurityFault(ctx, t, f, "central_restart_keeps_faults_security.db", name)
+	row := sqlitestore.CentralRow{
+		Name: name, Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}},
+	}
+	if err := f.admin.Put(ctx, row); err != nil {
+		t.Fatalf("Put(initial): %v", err)
+	}
+	t.Cleanup(func() { _ = f.orch.removeCentral(context.Background(), name) })
+	if ids := openSecurityFaults(ctx, t, faults, name); !slices.Equal(ids, []string{seed.ID}) {
+		t.Fatalf("precondition: open faults after the adopt = %v, want [%s]", ids, seed.ID)
+	}
+
+	edited := row
+	edited.Host = "127.0.0.2"
+	edited.SystemType = "openccu-lite"
+	if err := f.admin.Put(ctx, edited); err != nil {
+		t.Fatalf("Put(edited): %v", err)
+	}
+
+	if ids := openSecurityFaults(ctx, t, faults, name); !slices.Equal(ids, []string{seed.ID}) {
+		t.Errorf("open faults after the restart = %v, want [%s] — the restart closed the central's faults "+
+			"like a removal", ids, seed.ID)
+	}
+	if ids := shown(); !slices.Equal(ids, []string{seed.ID}) {
+		t.Errorf("faults the domain shows after the restart = %v, want [%s]", ids, seed.ID)
+	}
+}
+
+// TestRestartCentralWhoseReadoptFailsClosesItsSecurityFaults pins the
+// failure half of the kept ledger: when the adopt after a restart teardown
+// fails, the central is live nowhere, so its faults are closed as for a
+// removal. Kept, they would stand forever: a later delete of a central that
+// is not live tolerates errCentralNotLive and never reaches the domain.
+func TestRestartCentralWhoseReadoptFailsClosesItsSecurityFaults(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	f := newRestartFixture(ctx, t, "central_restart_failed_faults.db")
+
+	const name = "restart-fails"
+	faults, shown, seed := restartSecurityFault(ctx, t, f, "central_restart_failed_faults_security.db", name)
+	row := sqlitestore.CentralRow{
+		Name: name, Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}},
+	}
+	if err := f.admin.Put(ctx, row); err != nil {
+		t.Fatalf("Put(initial): %v", err)
+	}
+	if ids := openSecurityFaults(ctx, t, faults, name); !slices.Equal(ids, []string{seed.ID}) {
+		t.Fatalf("precondition: open faults after the adopt = %v, want [%s]", ids, seed.ID)
+	}
+
+	// The re-adopt fails at its registration: a different unit already holds
+	// the name by the time the new one would enter the registry. Every domain
+	// hook attaches after that point, so no adopt rollback reaches them.
+	f.orch.setCentralSeed(func(*central.Unit, string) {
+		squatter, err := central.New(central.Config{Name: name, Logger: discardTestLogger()})
+		if err != nil {
+			t.Errorf("central.New(squatter): %v", err)
+			return
+		}
+		if err := f.reg.Register(squatter); err != nil {
+			t.Errorf("register squatter: %v", err)
+		}
+	})
+	t.Cleanup(func() { f.reg.Unregister(name) })
+
+	edited := row
+	edited.Host = "127.0.0.2"
+	if err := f.admin.Put(ctx, edited); err == nil {
+		t.Fatal("Put(edited) succeeded; the test needs the re-adopt to fail")
+	}
+
+	if ids := openSecurityFaults(ctx, t, faults, name); len(ids) != 0 {
+		t.Errorf("open faults after a failed restart = %v, want none — the central is live nowhere and "+
+			"nothing else will ever close them", ids)
+	}
+	if ids := shown(); len(ids) != 0 {
+		t.Errorf("faults the domain shows after a failed restart = %v, want none", ids)
 	}
 }

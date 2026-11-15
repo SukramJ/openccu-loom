@@ -153,7 +153,7 @@ func (s *Service) Start(ctx context.Context) error {
 	s.started = true
 	s.mu.Unlock()
 
-	if err := s.loadFaults(ctx); err != nil {
+	if err := s.loadFaults(ctx, ""); err != nil {
 		// A failed ledger load degrades the fault plane but must not
 		// prevent hazard reporting: the classes matter more.
 		s.log.Error("security: load fault ledger", "error", err)
@@ -214,6 +214,14 @@ func (s *Service) Stop(_ context.Context) error {
 }
 
 // AttachCentral subscribes a runtime-adopted central.
+//
+// It restores the central's standing faults from the ledger before the
+// index rebuild. After [Service.DetachCentralForRestart] the rows are
+// still open but no longer in the aggregate; without the reload the
+// rebuild's reconcile would find no standing fault for a still-active
+// source, the ledger would answer the raise as already standing, and the
+// fault would stay invisible to every surface while its row stayed open.
+// After a removal the central has no open rows, so the reload is a no-op.
 func (s *Service) AttachCentral(name string) {
 	s.mu.Lock()
 	started := s.started
@@ -223,6 +231,9 @@ func (s *Service) AttachCentral(name string) {
 	}
 	if u, ok := s.reg.Get(name); ok {
 		s.attachUnit(u)
+		if err := s.loadFaults(context.Background(), name); err != nil {
+			s.log.Error("security: load fault ledger of attached central", "central", name, "error", err)
+		}
 		// A newly adopted central brings data points the index has not
 		// seen; rebuilding is cheaper than reasoning about the delta.
 		if err := s.RebuildIndex(context.Background()); err != nil {
@@ -232,12 +243,33 @@ func (s *Service) AttachCentral(name string) {
 }
 
 // DetachCentral drops a removed central's subscriptions and every trace
-// of it from the aggregate.
+// of it from the aggregate, and closes its open faults in the ledger.
 //
 // The teardown is the load-bearing half: without it a detached central
 // leaves ghost sources behind that pin their class permanently active,
 // so `smoke` would stay on for a CCU that is no longer configured.
 func (s *Service) DetachCentral(name string) {
+	s.detachCentral(name, false)
+}
+
+// DetachCentralForRestart is [Service.DetachCentral] for a central that
+// comes straight back under the same name: it drops the subscriptions and
+// the aggregate's view of the central, but leaves its open faults standing
+// in the ledger.
+//
+// Closing them would turn a restart into a removal for the fault plane:
+// the re-adopted central's reconcile re-raises every still-active
+// condition as a new fault, with a new id, a reset `since`, the operator's
+// acknowledgement lost and a fresh "raised" report to every notification
+// sink. [Service.AttachCentral] reloads the kept rows instead, and the
+// reconcile then closes the ones whose condition ended meanwhile.
+func (s *Service) DetachCentralForRestart(name string) {
+	s.detachCentral(name, true)
+}
+
+// detachCentral is the teardown both detach flavours share; keepLedger
+// leaves the central's open faults standing in the ledger.
+func (s *Service) detachCentral(name string, keepLedger bool) {
 	s.mu.Lock()
 	list := s.centralUnsubs[name]
 	delete(s.centralUnsubs, name)
@@ -248,8 +280,10 @@ func (s *Service) DetachCentral(name string) {
 	for _, u := range list {
 		u()
 	}
-	if _, err := s.stores.Faults.ClearByCentral(context.Background(), name, nowMS(time.Now())); err != nil {
-		s.log.Error("security: clear faults of detached central", "central", name, "error", err)
+	if !keepLedger {
+		if _, err := s.stores.Faults.ClearByCentral(context.Background(), name, nowMS(time.Now())); err != nil {
+			s.log.Error("security: clear faults of detached central", "central", name, "error", err)
+		}
 	}
 	s.publishState(snap)
 }
@@ -307,8 +341,9 @@ func (s *Service) startRetention() {
 	chain()
 }
 
-// loadFaults restores the standing fault set.
-func (s *Service) loadFaults(ctx context.Context) error {
+// loadFaults restores the standing fault set of one central, or of every
+// central when centralName is empty.
+func (s *Service) loadFaults(ctx context.Context, centralName string) error {
 	rows, err := s.stores.Faults.ListOpen(ctx)
 	if err != nil {
 		return err
@@ -316,6 +351,9 @@ func (s *Service) loadFaults(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range rows {
+		if centralName != "" && rows[i].CentralName != centralName {
+			continue
+		}
 		f := faultFromRow(rows[i])
 		s.agg.faults[f.ID] = &f
 	}
