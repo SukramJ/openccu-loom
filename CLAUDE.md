@@ -603,44 +603,53 @@ Architektur, zukunftsweisend, innovativ, herausragend"). Taken over here on
 ## Which model does which work
 
 Set on 2026-10-10, mirrored from go-fabric's rule of the same date; the
-review split of 2026-11-08 (go-fabric #456) likewise. A
-statement that lands in this repo is cited later as fact — a ratchet
-justification, a comment naming a consumer, a `by_design.md` entry, a claim
-about CCU or Matter behaviour — so the work that produces such statements
-gets the strongest model, and the work a guard checks may use a cheaper one.
-The agents in the next section carry a default model each; the rows below
-decide when a call overrides it (`model:` on the Agent tool). Implementation
-defaults to Opus.
+review split of 2026-11-08 (go-fabric #456) likewise; re-cut by the owner on
+2026-11-15, mirrored from go-fabric #529 ("Wichtig ist, dass die Qualität
+hoch ist, aber Fable gezielt für die Dinge eingesetzt wird, die es wirklich
+besser kann"). The bar is unchanged: a statement that lands in this repo is
+cited later as fact — a ratchet justification, a comment naming a consumer, a
+`by_design.md` entry, a claim about CCU or Matter behaviour — so it comes from
+the strongest model. But the strongest model does only the part that needs
+it: reading the reference and judging. The writing, the mechanics and the
+code review are Opus. The agents in the next section carry a default model
+each; the rows below decide when a call overrides it (`model:` on the Agent
+tool). Implementation defaults to Opus.
 
 | Work | Model |
 | --- | --- |
-| Analysis, planning, audits; anything written into an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md`, a ratchet entry (`wiringSettersWithoutCaller`, `eventsWithoutSubscriber`, …) or a comment that names a consumer, a caller, or a CCU / matter.js behaviour; *which* guard gets built and its bite line; the never-delegate list of the next section (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling); rebases and merge conflicts where `main` may have overtaken the change; every live-CCU write | **Fable** (the default for this repo; also the `hunt` agent) |
-| Implementation of a finished plan with guards behind it: a device profile once the pattern exists in `internal/model/custom/`, a REST handler whose `openapi.yaml` entry is already written, a SPA view behind a registered surface, rewording refuted comment claims from a findings list the owner has verified, a CHANGELOG entry for a finished diff | **Opus** (the `impl` default; also what fast mode runs on) |
-| **Review of a slice's pull request, split (owner decision 2026-11-08, go-fabric #456).** The code review — correctness, concurrency, error paths, tests, the fixed report shape — is **Opus**. On top of it **Fable** reads, bounded: every new comment that names a consumer, a caller or a CCU / matter.js behaviour against the code or the pinned source, every line that enters an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md` or a ratchet entry, the never-delegate paths of the first row (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling), and the brief's decisions against the CCU firmware, aiohomematic and matter.js — the behavioural gaps a code review does not see. The load-bearing claims of the Opus review are verified before they reach the implementer. | **Opus**, then **Fable** |
+| **Coordination** of a slice: starting agents, integrating, guards, pull requests, status. Every live-CCU write is the coordinating session's own call, never an agent's ([Live-CCU writes need explicit user approval](#live-ccu-writes-need-explicit-user-approval--including-device-selection)) | **Opus**, in a fresh session per slice (the state is in the notes and the memory, never in a long context) |
+| **Planning and decisions:** the slice plan; the decision briefs behind the owner's wizard, with the architecture reasoning ([the architecture standard](#the-architecture-standard) above); *which* guard gets built and its bite line; the verdict where the CCU firmware, openccu-lite, aiohomematic, matter.js and a specification contradict each other | **Fable**, as a targeted agent |
+| **Reading the reference and judging:** what the CCU firmware, openccu-lite / occulited, the aiohomematic family, Home Assistant or matter.js / chip do at the pinned source, and whether a difference is a deliberate divergence or a gap; and what this repo's own wiring does (who consumes an event, who calls a setter) — for an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md`, a ratchet entry (`wiringSettersWithoutCaller`, `eventsWithoutSubscriber`, …) and every comment that names a consumer, a caller, or a CCU / matter.js behaviour; the adversarial read of the `hunt` agent | **Fable** gives the verdict with the lines as a short fact note; **Opus** writes the entry or the comment in the file's form; **Fable** reads the finished text once against its note. Every reference statement comes from Fable |
+| **Implementation**, also on the paths the next section keeps out of an agent's hands (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling); test ports; CHANGELOG and docs; rebases and merge conflicts | **Opus** (the `impl` default; also what fast mode runs on) — with the Fable read of the next row before it merges where it touches one of those paths or mirrors a reference |
+| **Review** of a slice's pull request | **Opus** does the code review — correctness, concurrency, error paths, tests, the fixed report shape. **Fable** reads on top, bounded: behaviour against the CCU firmware, aiohomematic and matter.js at the pin, the paths of the row above, and every finding of high or medium severity for confirmation before it reaches an implementer |
+| **Citations** | The guards (`TestDocPurity_MarkdownRefsExist`, `TestMarkdownLinksValid`) and **Opus** check every range (the file, the lines, the construct the sentence names). **Fable** reads every citation that is the reason for behaviour ("as the CCU does", "mirrors matter.js"), every doubtful one and a sample of the rest |
 | Work a test or generator checks immediately: `make generate` / `make export-schemas`, `gofumpt`, `config.field.*` / `config.help.*` catalogue work, table cases on an existing pattern, a version bump across the changelog set, regenerating a ratchet baseline; search and first reading of a tree whose result a stronger model or the owner reads again — the comment-claims sweep's VERIFIED / REFUTED table included | **Sonnet** (the `guard` default; `impl` with `model: "sonnet"`) |
 | Mechanical inventories whose answer is a list the caller can re-grep: which files reference X, which `cfg:` fields lack a catalogue key, which links are dead | **Haiku** (`sweep` default) |
 
 Sonnet never writes a claim about wiring, consumers, CCU or Matter behaviour
-into the repo, and never touches the paths named in the first row. Haiku
-returns lists, never verdicts. When in doubt about which row a task is in, it
-is in the first.
+into the repo. Opus does not either: it writes what Fable's fact note states.
+Haiku returns lists, never verdicts. When in doubt whether a statement is a
+reference fact, it is one.
 
 ---
 
 ## Sub-Agent Delegation
 
-The main conversation owns planning, contract and wire decisions, guard
-specifications, sub-agent steering, and final verification. It does not own
-typing.
+The main conversation coordinates: integration, guards, sub-agent steering,
+final verification, and push / pull request / tag. Planning, contract and wire
+decisions and guard specifications come from Fable (the planning row of
+[Which model does which work](#which-model-does-which-work)) and reach the
+coordinator as a plan or a fact note. It still does not own typing.
 
 **Delegate what a gate can prove; keep what only a reader can accept.**
 Delegate freely: table cases, fakes, scaffolding, vitest cases,
 `config.field.*` catalogue work, doc-purity and link cleanups, version bumps
-across the changelog set, inventories and grep sweeps. Never delegate: the
-composition root and any new wiring seam, `assets/openapi.yaml` /
+across the changelog set, inventories and grep sweeps. Never delegate to an
+agent: the composition root and any new wiring seam, `assets/openapi.yaml` /
 `assets/wsapi.json` semantics and `pkg/hmapi` DTOs, Matter constants, auth /
-session / secret handling, and *which* guard gets built. Locating is
-delegable; reading is not.
+session / secret handling — those are implemented in the coordinating session
+or by `impl` under a brief that names the Fable read; *which* guard gets built
+is Fable's. Locating is delegable; reading is not.
 
 | Agent | Default model | Use for |
 |---|---|---|
@@ -734,6 +743,33 @@ doubling.
   scripted call with asserted anchors, not a chain of interactive edits;
   a generated file (`spa_dist`, the contract catalogue, the wire
   snapshots, the discovery goldens) is regenerated, never patched.
+- **The strongest model for the part that needs it.** Set by the owner on
+  2026-11-15. Fable reads references, judges and plans (the table above);
+  it does not coordinate, format, write prose or run mechanics. A Fable
+  agent's brief is bounded: the lines to read, the question to answer, a
+  fact note back.
+- **Few turns in a long session.** A coordinator waits for several agents
+  at once and integrates them together; a status message carries new
+  information or is not sent; a slice starts in a fresh session.
+- **The assistant says when to clear the context.** Set by the owner on
+  2026-11-15. It does not wait to be asked: it proposes a fresh session
+  when a slice or a pull request is merged; when the context has been
+  summarised once and the work that remains is of another kind; or when
+  what it still needs fits in a short hand-over and the turns are mostly
+  waiting for agents or pipelines. It does NOT propose one while agents of
+  the session are running or a decision of the owner is open. The proposal
+  comes with the hand-over already written — the state, the open points
+  with where each goes, the next step, the lessons — into the memory file
+  and the notes (never only into the chat), and with the exact way to go
+  on: `/clear`, the model to switch to (`/model`), and the first message
+  to send, which names the files to read.
+- **The pipeline's guards before the pull request, not after.** The local
+  guard set is the list of `make` targets CI runs (`.github/workflows/`); a
+  SPA change adds `npm run check`, `npm run typecheck` and `npm run test`
+  under `assets/ui/`; a change to the Matter bridge's composition or
+  FeatureMaps gets its chip-tool run (the `needs-chiptool` label) before
+  the pull request opens. A red pipeline costs a round of coordinator
+  turns.
 - **Agents read what the brief names.** An implementing agent gets the
   file list and the pinned sources in the brief, reads those, and reports
   in the fixed shape; it does not survey the tree. One agent per brief;
