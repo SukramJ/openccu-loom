@@ -34,6 +34,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Full-access box token). Instead of looping into the box's login, the
   panel now explains how to get through it, and a tile whose credential is
   refused shows "Login required" (ADR 0091).
+- **Documentation: moving a central to openccu-lite.** A new user page
+  covers the automatic and the guided move, what changes, the fallback, and
+  OpenCCU-Loom Remote through the box without port 8119.
 
 ### Changed
 

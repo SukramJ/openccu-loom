@@ -41,7 +41,9 @@ const (
 
 // PairingAccess is the access level a client asks for, per area. An empty
 // area is not requested. The box turns the levels into scopes and never
-// grants `*`, auth:admin, radio:keys, power or backup this way.
+// grants `*`, auth:admin, radio:keys or power this way; it pairs backup
+// only to an address range with its administrator's confirmation, and this
+// client does not ask for that area.
 type PairingAccess struct {
 	Devices string `json:"devices,omitempty"` // read | operate | configure | administer
 	Names   string `json:"names,omitempty"`   // read | configure

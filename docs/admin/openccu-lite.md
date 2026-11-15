@@ -87,8 +87,8 @@ steps:
    - **Pair** — pick an access level (**full**, **control-only** or
      **read-only**); the web UI shows a six-digit code, which the box's
      administrator enters on the box to approve the request. The pairing session is cancellable and
-     shows its live state while you wait. A token from pairing can
-     never carry the `backup`, `power`, `radio:keys`, `addons:write`,
+     shows its live state while you wait. A token from Loom's pairing
+     never carries the `backup`, `power`, `radio:keys`, `addons:write`,
      `led` or `auth:admin` scopes — pair for everyday operation, and
      use a manual token when you need those.
    - **Paste a token** — a token created on the box's own console:
@@ -208,8 +208,9 @@ from the box's Addons page. A few things differ from a CCU:
   The token is read from its file on every request, so the rotation at
   each occulited start needs nothing from you (the central's
   `api_token_file` field; also useful for container secret mounts).
-  `backup` and `power` are never part of an add-on token: pair with the
-  box when you want backups or reboots from Loom, exactly as the
+  `backup` and `power` are never part of an add-on token, nor of a
+  token from Loom's pairing: use a token created on the box with those
+  scopes when you want backups or reboots from Loom, exactly as the
   feature table's `missing_scope` reasons say. Deleting the
   auto-onboarded central sticks for as long as any central exists; an
   empty list on the box re-onboards at the next start (ADR 0077).
