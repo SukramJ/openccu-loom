@@ -48,11 +48,25 @@ type centralHandle struct {
 	// kept here and not only in the adopt-time rollback list because that
 	// list is discarded once the adopt succeeds: an unwire that lives only
 	// there lets a removed central keep publishing.
-	unwires []func()
+	unwires []func(teardownMode)
 	// detachBridge releases the north-bound event bridge. It is separate
 	// from unwires because it must run LAST — see [centralHooks].
 	detachBridge func()
 }
+
+// teardownMode tells the per-central teardown whether the central is leaving
+// for good or coming straight back under the same name.
+type teardownMode int
+
+const (
+	// teardownRemove is a removal: every domain releases what it holds for
+	// the central, stored state included.
+	teardownRemove teardownMode = iota
+	// teardownRestart is a restart: the central is adopted again under the
+	// same name in the same lifecycle-locked flow, so a domain releases only
+	// what the next adopt rebuilds and keeps what is stored under the name.
+	teardownRestart
+)
 
 // centralOrchestrator is the live-CCU-adopt composition seam: it drives one
 // central's southbound + model + scheduler-jobs lifecycle up or down at
@@ -160,7 +174,7 @@ type centralOrchestrator struct {
 // half-remembered: a hook that registers an unwire is torn down, or it is not
 // registered at all.
 type centralHooks struct {
-	unwires []func()
+	unwires []func(teardownMode)
 	// detachBridge is the one teardown that is deliberately NOT in the list:
 	// the north-bound event bridge carries the per-device retractions that
 	// the model eviction publishes during teardown, so detaching it in
@@ -190,17 +204,17 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	// at boot, so without this subscription the adopted central's bus reaches
 	// neither the MQTT fan-out nor the WebSocket live plane, and the CCU
 	// stays invisible to every north-bound consumer until a daemon restart.
+	name := unit.Name()
 	if bridge := o.sbDeps.bridge; bridge != nil {
 		bridge.AttachCentral(unit)
-		name := unit.Name()
 		h.detachBridge = func() { bridge.DetachCentral(name) }
 	}
 	for _, hook := range o.perCentralHooks() {
 		if hook.attach == nil {
 			continue
 		}
-		if unwire := hook.attach(unit); unwire != nil {
-			h.unwires = append(h.unwires, unwire)
+		if teardown := hook.teardownFor(name, hook.attach(unit)); teardown != nil {
+			h.unwires = append(h.unwires, teardown)
 		}
 	}
 	return h
@@ -224,9 +238,41 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 // detach is nil for a domain whose per-central state is nothing but
 // subscriptions on the removed unit's own EventBus: [central.Unit.Stop] drops
 // those, and there is nothing left to release by name.
+//
+// detachForRestart replaces the whole teardown of the hook — the attach's
+// unwire as well as detach — when the central is restarted rather than
+// removed. It is for a domain that keeps stored state under the central's
+// name which a removal deletes and a restart must not: the security domain's
+// fault ledger. Nil means a restart tears the hook down exactly like a
+// removal.
 type perCentralHook struct {
-	attach func(u *central.Unit) (unwire func())
-	detach func(name string)
+	attach           func(u *central.Unit) (unwire func())
+	detach           func(name string)
+	detachForRestart func(name string)
+}
+
+// teardownFor returns the hook's teardown for the central name, or nil when
+// the hook holds nothing to release for it. unwire is what the hook's attach
+// returned for a central this orchestrator adopted, and nil for one the boot
+// path registered, which is torn down through the name-keyed halves alone.
+//
+// It is the one place a teardown mode is mapped onto a hook, shared by the
+// adopted and the boot-registered central, so both restart through the same
+// half.
+func (hook perCentralHook) teardownFor(name string, unwire func()) func(teardownMode) {
+	if unwire == nil && hook.detach == nil && hook.detachForRestart == nil {
+		return nil
+	}
+	return func(mode teardownMode) {
+		switch {
+		case mode == teardownRestart && hook.detachForRestart != nil:
+			hook.detachForRestart(name)
+		case unwire != nil:
+			unwire()
+		case hook.detach != nil:
+			hook.detach(name)
+		}
+	}
 }
 
 // perCentralHooks returns every per-central domain hook the orchestrator
@@ -586,7 +632,11 @@ func (o *centralOrchestrator) adoptCentralLocked(ctx context.Context, cc config.
 	// subscribing first makes the window a non-event.) Nil when the Matter
 	// bridge is disabled.
 	hooks := o.attachCentralHooks(unit)
-	undo = append(undo, hooks.unwires...)
+	// A failed adopt is a removal for every domain: nothing comes back up
+	// under this name to take over what a restart teardown would keep.
+	for _, unwire := range hooks.unwires {
+		undo = append(undo, func() { unwire(teardownRemove) })
+	}
 	// A failed adopt has no model to evict, so the ordering constraint that
 	// keeps detachBridge out of the unwire list does not apply here — the
 	// rollback simply must not leave the bridge attached to a central that
@@ -643,7 +693,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	lock.Lock()
 	defer lock.Unlock()
 
-	h, err := o.teardownCentralLocked(name, evictModel) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
+	h, err := o.teardownCentralLocked(name, teardownRemove) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
 	if err != nil {
 		return err
 	}
@@ -677,14 +727,23 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 //
 // It is not a removal: the central keeps its name, and with it everything
 // stored under that name — channel flags, visibility un-ignore patterns,
-// recording overrides, Matter exposures and the Matter partition — so none
-// of removeCentral's purges run. The model is evicted as a teardown
+// recording overrides, Matter exposures, the Matter partition and the open
+// faults of the security domain's ledger — so none of removeCentral's purges
+// run. The model is evicted as a teardown
 // ([central.Unit.RemoveDeviceForTeardown]): the north-bound planes still
 // retract the devices, while the per-device evictors of the channel flags,
 // the recording overrides and the VALUES/MASTER cache stand down, exactly as
-// for a cache-clear re-init. The only stored rows that go are the
-// VALUES/MASTER cache rows of interfaces the previous configuration had and
-// cc no longer has; nothing can ever reach them again.
+// for a cache-clear re-init. The per-central domains are torn down with
+// [teardownRestart], so the security domain keeps its open faults: the
+// re-adopted central reloads them with their id, `since` and
+// acknowledgement instead of raising them again. The only stored rows that
+// go are the VALUES/MASTER cache rows of interfaces the previous
+// configuration had and cc no longer has; nothing can ever reach them again.
+//
+// When the adopt fails, nothing comes back under the name, so the domains
+// are released as for a removal: the kept faults would otherwise stand for
+// a central that is live nowhere, and a later delete — which tolerates
+// [errCentralNotLive] — would never close them.
 //
 // The central's lifecycle lock is held across the teardown and the adopt,
 // so no concurrent adopt or remove can observe the central between the two.
@@ -696,16 +755,30 @@ func (o *centralOrchestrator) restartCentral(ctx context.Context, cc config.Cent
 	lock.Lock()
 	defer lock.Unlock()
 
-	h, err := o.teardownCentralLocked(cc.Name, evictModelForRestart) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
+	h, err := o.teardownCentralLocked(cc.Name, teardownRestart) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
 	if err != nil {
 		return err
 	}
 	o.purgeDroppedInterfaceCaches(ctx, h.cc, cc)
 	if err := o.adoptCentralLocked(ctx, cc); err != nil {
+		o.releaseCentralDomains(cc.Name)
 		return fmt.Errorf("central_restart: %w", err)
 	}
 	o.logger.Info("central.restart.live", slog.String("central", cc.Name))
 	return nil
+}
+
+// releaseCentralDomains runs every per-central domain's removal teardown for
+// name. It is the domain half of a removal for a central whose restart left
+// it live nowhere: the adopt failed after the teardown had kept what a
+// restart keeps. A detach is idempotent, so a domain an adopt rollback has
+// already released is released again harmlessly.
+func (o *centralOrchestrator) releaseCentralDomains(name string) {
+	for _, hook := range o.perCentralHooks() {
+		if teardown := hook.teardownFor(name, nil); teardown != nil {
+			teardown(teardownRemove)
+		}
+	}
 }
 
 // purgeDroppedInterfaceCaches deletes the VALUES/MASTER cache rows of every
@@ -735,12 +808,23 @@ func (o *centralOrchestrator) purgeDroppedInterfaceCaches(ctx context.Context, p
 
 // teardownCentralLocked is the teardown removeCentral and restartCentral
 // share, run with the central's lifecycle lock held: it drops the handle,
-// drains southbound, runs the per-central unwires, retracts the hub plane,
-// evicts the model through evict, stops the unit and detaches the event
-// bridge — in the order removeCentral documents. It returns the handle, whose
+// drains southbound, runs the per-central unwires in mode, retracts the hub
+// plane, evicts the model, stops the unit and detaches the event bridge — in
+// the order removeCentral documents. It returns the handle, whose
 // configuration names the interfaces the central had, or [errCentralNotLive]
-// when the name is live nowhere. It deletes nothing stored.
-func (o *centralOrchestrator) teardownCentralLocked(name string, evict func(*central.Unit)) (*centralHandle, error) {
+// when the name is live nowhere.
+//
+// mode decides the two things a restart does differently. The model is
+// evicted through [evictModel] for a removal and [evictModelForRestart] for
+// a restart. The unwires run in mode, and of what they release only the
+// security domain's removal detach deletes anything stored: it closes the
+// central's open faults, which its restart detach keeps. Every other stored
+// row is purged by the caller.
+func (o *centralOrchestrator) teardownCentralLocked(name string, mode teardownMode) (*centralHandle, error) {
+	evict := evictModel
+	if mode == teardownRestart {
+		evict = evictModelForRestart
+	}
 	o.mu.Lock()
 	h, ok := o.handles[name]
 	if ok {
@@ -796,7 +880,7 @@ func (o *centralOrchestrator) teardownCentralLocked(name string, evict func(*cen
 	// must be processed for a central whose teardown has begun — and all of
 	// them run before the model teardown below.
 	for _, unwire := range h.unwires {
-		unwire()
+		unwire(mode)
 	}
 	// Climate before availability, mirroring wireSouthbound's teardown order
 	// (its LIFO defer runs climate closers before availability closers).
@@ -875,10 +959,9 @@ func (o *centralOrchestrator) bootHandle(name string) *centralHandle {
 		}
 	}
 	for _, hook := range o.perCentralHooks() {
-		if hook.detach == nil {
-			continue
+		if teardown := hook.teardownFor(name, nil); teardown != nil {
+			h.unwires = append(h.unwires, teardown)
 		}
-		h.unwires = append(h.unwires, func() { hook.detach(name) })
 	}
 	if bridge := o.sbDeps.bridge; bridge != nil {
 		h.detachBridge = func() { bridge.DetachCentral(name) }

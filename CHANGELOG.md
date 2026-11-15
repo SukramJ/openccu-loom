@@ -17,6 +17,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   type or the interfaces of a running central needed a daemon restart
   before; the central is now restarted on the new configuration when the
   edit is saved.
+- **Security & Safety: restarting a central keeps its open faults.**
+  Restarting a running central, including the move to openccu-lite, closed
+  every open security fault of the central and raised the ones still
+  active again as new faults. They now stay open across the restart, keep
+  their age and acknowledgement, and send no second "raised"
+  notification. A central that is removed still closes its faults.
 
 ## [0.104.0] - 2026-11-15
 
