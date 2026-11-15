@@ -102,6 +102,11 @@ type EventBridge struct {
 	// detach.
 	liveSubs map[liveSubKey]liveSub
 
+	// holdMu guards hold, the deferred-retraction bookkeeping of
+	// eventbridge_hold.go.
+	holdMu sync.Mutex
+	hold   holdState
+
 	// fanout decouples the live value-change MQTT publish work from the bus
 	// dispatch goroutine (see mqtt_fanout.go). Created in Start, drained by a
 	// single worker, torn down in Stop. Held behind an atomic pointer so the
@@ -270,6 +275,9 @@ func (b *EventBridge) AttachCentral(u *central.Unit) {
 		return
 	}
 	b.DetachCentral(u.Name())
+	// A central adopted again under a removed one's name starts with no
+	// released hold: its removals defer like any other central's.
+	b.clearModelHoldRelease(u.Name())
 
 	b.startMu.Lock()
 	defer b.startMu.Unlock()
@@ -340,12 +348,15 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		bus.Subscribe(func(e hmevent.DataPointSourceChangedEvent) {
 			b.onSourceChanged(u.Name(), e)
 		}),
-		// Prune the MQTT bridge's declared map when a device is removed so
-		// the dedup gate does not suppress subsequent orphan-cleanup evictions
-		// of the same topics, and so snapshot passes do not re-emit discovery
-		// configs for a device that no longer exists in the model.
+		// Retract (or, during a model reload, hold) a removed device's MQTT
+		// surface. Whether the removal belongs to a reload is read here, on
+		// the dispatch of the removal, not when the queued job runs: a worker
+		// still behind other jobs could otherwise find the reloaded model
+		// already complete and retract a device the reload brings back.
 		bus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
-			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceRemoved(jobCtx, e) })
+			_, complete := u.ModelGeneration()
+			duringReload := !complete
+			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceRemoved(jobCtx, duringReload, e) })
 		}),
 		// Per-central southbound-ready: the readiness-gated bring-up loads each
 		// central's devices (with names) asynchronously, after this boot-time
@@ -627,7 +638,14 @@ func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSou
 // permanently `available:true` with a stale last value (raw-plane / non-HA
 // consumers) until the next boot's orphan-cleanup pass. Called from the
 // DeviceRemovedEvent subscription wired in Start.
-func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemovedEvent) {
+//
+// A removal during a model reload (duringReload: the central's model
+// generation was incomplete when the removal was dispatched — a restart or a
+// cache-reset re-pull) defers both retractions instead (see
+// eventbridge_hold.go): the device is most likely about to come back, and
+// retracting its configs would delete its entities in Home Assistant
+// together with their registry entries.
+func (b *EventBridge) onDeviceRemoved(ctx context.Context, duringReload bool, e hmevent.DeviceRemovedEvent) {
 	if b == nil {
 		return
 	}
@@ -648,14 +666,23 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 		b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
 		return
 	}
+	if duringReload && b.holdRemovedDevice(ctx, bridge, e) {
+		return
+	}
+	b.retractRemovedDevice(ctx, bridge, e.CentralName, e.InterfaceID, e.Address)
+}
+
+// retractRemovedDevice clears one device's discovery configs and raw-plane
+// topics and then its availability transition state.
+func (b *EventBridge) retractRemovedDevice(ctx context.Context, bridge *mqtt.Bridge, centralName, interfaceID, address string) {
 	// Both retractions are scoped to the removal's own central. Device
 	// addresses are unique per CCU but repeat verbatim across CCUs — the
 	// virtual remote (HmIP-RCV-1), the BidCoS pseudo devices and the
 	// INT000* internal devices carry the identical address everywhere — so
 	// an unscoped discovery sweep would clear the other centrals' live
 	// entities along with this one's.
-	bridge.RetractDiscoveryForCentralDevice(ctx, e.CentralName, e.Address)
-	bridge.RetractRawStateForDevice(ctx, e.CentralName, e.InterfaceID, e.Address)
+	bridge.RetractDiscoveryForCentralDevice(ctx, centralName, address)
+	bridge.RetractRawStateForDevice(ctx, centralName, interfaceID, address)
 	// Drop the availability transition state AFTER the topic it describes
 	// is gone, never before.
 	//
@@ -672,7 +699,7 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 	// is not hypothetical for a device the CCU is still reporting. The
 	// ordering closes it: whatever the cache picks up during the
 	// retraction is discarded with it.
-	b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
+	b.forgetAvailability(centralName, interfaceID, address)
 }
 
 // PublishInitialSnapshot walks every registered central's device
@@ -785,6 +812,9 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 	// the registry here removes the ordering question instead of timing
 	// around it.
 	b.stampHubSerial(u)
+	// Read before the walk: the held devices are reconciled only against a
+	// model this pass saw whole, and only if no teardown began meanwhile.
+	gen, complete := u.ModelGeneration()
 	ctx, tracker := withSnapshotPublishTracking(ctx)
 	for _, d := range u.ModelRegistry.List() {
 		b.publishDeviceSnapshot(ctx, centralName, d)
@@ -811,6 +841,12 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 	b.hookMu.Unlock()
 	if hook != nil {
 		hook(ctx, centralName)
+	}
+	// After the hook, which closed the boot's bundle batch: the deferred
+	// retractions go out as one document per node, after every config the
+	// model still declares has been published.
+	if complete {
+		b.reconcileModelHold(ctx, u, gen)
 	}
 }
 
@@ -886,6 +922,7 @@ func (b *EventBridge) publishDeviceSnapshot(ctx context.Context, centralName str
 		!u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(ifaceID), d.Address) {
 		return
 	}
+	b.touchHeldDevice(centralName, d)
 	// Publish per-device availability FIRST. The HA Discovery
 	// payload references the device-availability topic (with
 	// `availability_mode: all`) — without an explicit publish

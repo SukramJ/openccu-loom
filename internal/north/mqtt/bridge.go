@@ -633,6 +633,11 @@ type Bridge struct {
 	// Guarded by mu.
 	bundleCentral map[string]string
 
+	// holds names the discovery configs whose retraction is deferred until
+	// the central's model is whole again; see discovery_hold.go. It is not a
+	// runtime gate: a broker reconnect must not forget a deferred retraction.
+	holds discoveryHolds
+
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.
 	collector *metrics.MqttCollector
@@ -1961,6 +1966,31 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 	if deviceAddress == "" || !b.cfg.HADiscoveryEnabled {
 		return 0
 	}
+	// The declared set lives in the runtime now, so the needle runs over
+	// the topic list it reports and the retraction goes back through it:
+	// [hapublisher.Runtime.Retract] clears the broker's retained message
+	// and drops both the dedup entry and the in-flight claim, which is
+	// exactly what the local map walk used to do by hand.
+	matched := b.centralDeviceDiscoveryTopics(centralName, deviceAddress)
+	for _, topic := range matched {
+		// A retraction settles a deferred one of the same topic.
+		b.holds.cancel(topicHoldKey(topic))
+		// Best-effort per topic: a publish error is counted but does not
+		// abort the sweep — a boot-time orphan-cleanup pass is the
+		// backstop. Retracted one at a time so the count is per topic.
+		if err := b.pub.Retract(ctx, topic); err != nil {
+			b.incPublishErrors(centralName)
+		}
+	}
+	return len(matched)
+}
+
+// centralDeviceDiscoveryTopics lists the declared discovery topics of one
+// device under the central's node-id namespace — the set
+// [Bridge.RetractDiscoveryForCentralDevice] clears and
+// [Bridge.HoldDiscoveryForCentralDevice] holds. An empty centralName matches
+// the address under any central.
+func (b *Bridge) centralDeviceDiscoveryTopics(centralName, deviceAddress string) []string {
 	addr := strings.ToLower(deviceAddress)
 	match := func(topic string) bool { return strings.Contains(topic, "_"+addr+"/") }
 	// Both node-id spellings the sweep recognises: the canonical
@@ -1976,26 +2006,13 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 			return false
 		}
 	}
-	// The declared set lives in the runtime now, so the needle runs over
-	// the topic list it reports and the retraction goes back through it:
-	// [hapublisher.Runtime.Retract] clears the broker's retained message
-	// and drops both the dedup entry and the in-flight claim, which is
-	// exactly what the local map walk used to do by hand.
 	var matched []string
 	for _, topic := range b.pub.Declared() {
 		if match(strings.ToLower(topic)) {
 			matched = append(matched, topic)
 		}
 	}
-	for _, topic := range matched {
-		// Best-effort per topic: a publish error is counted but does not
-		// abort the sweep — a boot-time orphan-cleanup pass is the
-		// backstop. Retracted one at a time so the count is per topic.
-		if err := b.pub.Retract(ctx, topic); err != nil {
-			b.incPublishErrors(centralName)
-		}
-	}
-	return len(matched)
+	return matched
 }
 
 // retractTopicsMatching walks m for every topic match accepts, publishes
@@ -2208,6 +2225,10 @@ func (b *Bridge) publishDiscovery(ctx context.Context, centralName, component, n
 		return b.routeToBundle(ctx, centralName, component, nodeID, objectID, payload)
 	}
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
+	// The mark of the deferred retraction, before the dedup gate: an
+	// unchanged config the runtime does not republish is still one the
+	// current model declares, and a retraction settles the hold as well.
+	b.holds.cancel(topicHoldKey(topic))
 
 	// An empty payload goes through Retract rather than Publish. The two
 	// answer different questions: the runtime's dedup gate only retracts

@@ -210,7 +210,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		south.Host, south.JSONRPC = liteHostPort(t, h.lite)
 		south.Lite = true
 	} else {
-		h.ccu = startMockCCU(t, opts.Devices, opts.StartCCUNotReady)
+		h.ccu = startMockCCU(t, opts.Devices, opts.StartCCUNotReady, nil)
 		xmlrpcAddr, ok := h.ccu.v.XMLRPCAddr().(*net.TCPAddr)
 		if !ok {
 			t.Fatalf("mock CCU XML-RPC address %T is not TCP", h.ccu.v.XMLRPCAddr())

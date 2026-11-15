@@ -392,7 +392,10 @@ type DeviceRemovedEvent struct {
 	// WebSocket device-lifecycle push, the Matter bridge, the alarm and
 	// security indexes — must react either way: a device the CCU no longer
 	// reports has to disappear from them, and a teardown is the only moment
-	// they learn it. The persistent VALUES/MASTER cache evictors must not:
+	// they learn it. (The MQTT plane defers its retraction until the
+	// reloaded model is complete, reading that from the central rather than
+	// from this flag, and then retracts only what the model no longer
+	// declares.) The persistent VALUES/MASTER cache evictors must not:
 	// a scoped cache clear (ADR 0042) already deleted exactly the rows the
 	// operator asked for, and evicting on the teardown would drop every other
 	// device's cache with it.

@@ -51,6 +51,7 @@ func (b *Bridge) routeToBundle(ctx context.Context, centralName, component, node
 	// publish call keeps the store keyed on the same string the broker sees,
 	// which is what [Bridge.RunBundleRollbackOnce] matches on when it sweeps.
 	nodeID = naming.ScopedDiscoveryNodeID(b.topics.Base, nodeID)
+	b.holds.cancel(bundleHoldKey(nodeID, objectID))
 	if len(payload) == 0 {
 		b.bundles.Remove(nodeID, objectID)
 	} else if err := b.bundles.Put(nodeID, objectID, component, payload); err != nil {

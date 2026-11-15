@@ -248,6 +248,14 @@ func (b *centralBringUp) reinit(ctx context.Context) {
 	}
 	b.logger.Info("central.reinit.begin", slog.String("central", b.cc.Name))
 	b.teardown()
+	// The re-pull reloads the model under the same name: the generation opens
+	// before the first device leaves it, so every removal below is dispatched
+	// as part of a reload and the MQTT planes hold it instead of retracting;
+	// the re-pull's first complete snapshot settles what the CCU no longer
+	// reports.
+	if b.unit != nil {
+		b.unit.BeginModelTeardown()
+	}
 	b.clearModel()
 	if ctx.Err() != nil {
 		b.logger.Warn("central.reinit.cancelled", slog.String("central", b.cc.Name))
@@ -274,7 +282,9 @@ func (b *centralBringUp) reinit(ctx context.Context) {
 // consumers this teardown has: the persistent VALUES/MASTER cache evictors
 // stand down (the operator's requested scope was already deleted by
 // cachereset.Service.Clear, and evicting again would wipe every other device's
-// cache — ADR 0042), while every north-bound plane still reacts.
+// cache — ADR 0042), while every north-bound plane still reacts; the MQTT
+// plane holds its configs until the re-pull's first complete snapshot
+// (eventbridge_hold.go) and then retracts only what the CCU no longer reports.
 //
 // Suppressing the event altogether was the earlier shape, and it was wrong in
 // the one case that matters: a device the CCU has genuinely dropped is not

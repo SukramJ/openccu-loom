@@ -266,3 +266,22 @@ func (s *discoveryBundleStore) Nodes() []string {
 	sort.Strings(out)
 	return out
 }
+
+// LiveObjects lists the object ids of the node's components that are not
+// tombstones, in stable order. A tombstone already tells Home Assistant the
+// entity is gone, so only a live component has a retraction left to defer.
+func (s *discoveryBundleStore) LiveObjects(nodeID string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	node, ok := s.nodes[nodeID]
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(node.components))
+	for k := range node.components {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
