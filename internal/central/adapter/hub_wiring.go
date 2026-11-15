@@ -1125,6 +1125,7 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			h.RemoveProgram(existing.ID)
 		}
 	}
+	h.MarkProgramsObserved()
 	return nil
 }
 
@@ -1251,6 +1252,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], alarmByID[v.ID], haveDescs)
 	}
 	pruneRemovedSysvars(h, freshNames)
+	h.MarkSysvarsObserved()
 	return nil
 }
 

@@ -179,6 +179,12 @@ type Unit struct {
 	// loaded model survives mid-life CCU reconnects, so the registry view
 	// stays authoritative once the initial load has completed.
 	southboundReady bool
+	// modelGen counts the model teardowns this unit has begun (see
+	// [Unit.BeginModelTeardown]); readyGen is the generation the last
+	// [Unit.MarkSouthboundReady] completed. Both are guarded by
+	// southboundReadyMu, so one lock orders a teardown against the latch.
+	modelGen uint64
+	readyGen uint64
 
 	// readinessMu guards readiness below.
 	readinessMu sync.RWMutex
@@ -524,7 +530,36 @@ func (u *Unit) IsDevicesCreated() bool {
 func (u *Unit) MarkSouthboundReady() {
 	u.southboundReadyMu.Lock()
 	u.southboundReady = true
+	u.readyGen = u.modelGen
 	u.southboundReadyMu.Unlock()
+}
+
+// BeginModelTeardown opens a new model generation: the model about to be
+// torn down is replaced by whatever the next completed bring-up loads. It is
+// called synchronously before the first device leaves the model — by a
+// restart of the central and by the cache-reset re-pull — so a consumer that
+// reads [Unit.ModelGeneration] on the dispatch of one of the removals sees
+// the generation as incomplete. A consumer that defers its handling must read
+// it there, not later: the next bring-up may complete the generation first.
+//
+// The southboundReady latch cannot carry this: it is never cleared, so it
+// reads true throughout a re-pull while the model is empty.
+func (u *Unit) BeginModelTeardown() {
+	u.southboundReadyMu.Lock()
+	u.modelGen++
+	u.southboundReadyMu.Unlock()
+}
+
+// ModelGeneration reports the unit's current model generation and whether a
+// bring-up has completed it. complete is false from
+// [Unit.BeginModelTeardown] until the next [Unit.MarkSouthboundReady], and
+// before the first one. A consumer that defers work until the model is whole
+// again compares the generation it read before acting with the one after, so
+// a teardown begun in between is never mistaken for the completed model.
+func (u *Unit) ModelGeneration() (gen uint64, complete bool) {
+	u.southboundReadyMu.RLock()
+	defer u.southboundReadyMu.RUnlock()
+	return u.modelGen, u.southboundReady && u.readyGen == u.modelGen
 }
 
 // IsSouthboundReady reports whether the initial southbound bring-up has
@@ -919,8 +954,9 @@ func (u *Unit) RemoveDevice(address string) bool {
 // requested clear scope was already applied by cachereset.Service.Clear, and
 // evicting again here would take the whole fleet's cache with it (ADR 0042).
 // Every other consumer still reacts, so a device the CCU has genuinely
-// dropped disappears from the north-bound planes at teardown rather than
-// lingering until the next daemon boot.
+// dropped disappears from the north-bound planes rather than lingering until
+// the next daemon boot — the MQTT plane once the reloaded model is complete
+// ([Unit.BeginModelTeardown]), the others at teardown.
 func (u *Unit) RemoveDeviceForTeardown(address string) bool {
 	return u.removeDevice(address, true)
 }

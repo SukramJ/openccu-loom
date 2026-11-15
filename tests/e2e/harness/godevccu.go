@@ -89,7 +89,29 @@ func (m *MockCCU) JSONRPCPort() int { return jsonrpcPort(m) }
 // share callback state. An empty devices slice loads [DefaultDevices].
 func StartCCU(t *testing.T, devices []string) *MockCCU {
 	t.Helper()
-	return startMockCCU(t, devices, false)
+	return startMockCCU(t, devices, false, nil)
+}
+
+// StartCCUWithInterfaces is [StartCCU] for a CCU that runs one interface
+// process per name in interfaces (for example "HmIP-RF" and "BidCos-RF"),
+// each with its own listener and only the devices of its protocol family.
+// Read the resolved ports back with [MockCCU.InterfacePort].
+func StartCCUWithInterfaces(t *testing.T, devices, interfaces []string) *MockCCU {
+	t.Helper()
+	return startMockCCU(t, devices, false, interfaces)
+}
+
+// InterfacePort returns the OS-assigned XML-RPC port of one interface
+// process, or 0 when the mock has no such listener.
+func (m *MockCCU) InterfacePort(name string) int {
+	if m == nil || m.v == nil {
+		return 0
+	}
+	addr, ok := m.v.InterfaceAddr(name).(*net.TCPAddr)
+	if !ok || addr == nil {
+		return 0
+	}
+	return addr.Port
 }
 
 // V returns the underlying VirtualCCU. Tests that need to inject
@@ -114,23 +136,31 @@ func (m *MockCCU) Stop() error {
 // startMockCCU spins up a godevccu instance in CCU mode (auth
 // enabled, JSON-RPC available) on OS-assigned ephemeral ports and
 // registers a t.Cleanup that stops it.
-func startMockCCU(t *testing.T, devices []string, notReady bool) *MockCCU {
+func startMockCCU(t *testing.T, devices []string, notReady bool, interfaces []string) *MockCCU {
 	t.Helper()
 	if len(devices) == 0 {
 		devices = DefaultDevices
 	}
+	var ports map[string]int
+	if len(interfaces) > 0 {
+		ports = make(map[string]int, len(interfaces))
+		for _, name := range interfaces {
+			ports[name] = godevccu.EphemeralPort
+		}
+	}
 	v, err := godevccu.New(godevccu.Config{
-		Mode:          godevccu.BackendModeCCU,
-		Host:          "127.0.0.1",
-		XMLRPCPort:    godevccu.EphemeralPort,
-		JSONRPCPort:   godevccu.EphemeralPort,
-		Username:      "Admin",
-		Password:      "",
-		AuthEnabled:   true,
-		Devices:       devices,
-		Serial:        "GODEVCCU0001",
-		SetupDefaults: true,
-		StartNotReady: notReady,
+		InterfacePorts: ports,
+		Mode:           godevccu.BackendModeCCU,
+		Host:           "127.0.0.1",
+		XMLRPCPort:     godevccu.EphemeralPort,
+		JSONRPCPort:    godevccu.EphemeralPort,
+		Username:       "Admin",
+		Password:       "",
+		AuthEnabled:    true,
+		Devices:        devices,
+		Serial:         "GODEVCCU0001",
+		SetupDefaults:  true,
+		StartNotReady:  notReady,
 	})
 	if err != nil {
 		t.Fatalf("godevccu.New: %v", err)

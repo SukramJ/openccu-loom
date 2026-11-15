@@ -95,6 +95,12 @@ type HubMQTTPublisher struct {
 	// probing a decommissioned host and re-seeds a retained `online` on the
 	// gate topic that was just retracted.
 	regaPollers map[string]func()
+
+	// holds is what a restart held of each central's hub plane, keyed by
+	// central name; see hub_mqtt_hold.go. Guarded by mu. It lives on the
+	// publisher, not on the fan-out generation, because Start begins with
+	// Stop on every broker reconnect.
+	holds map[string]*hubHold
 }
 
 // NewHubMQTTPublisher constructs the publisher. No subscriptions are
@@ -362,67 +368,13 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterface
 	}
 
 	var items []mqtt.DiscoveryItem
-	if hubModel := u.HubModel; hubModel != nil {
-		for _, prog := range hubModel.Programs() {
-			if prog == nil || prog.Internal() {
-				continue
-			}
-			items = append(items, disco.BuildProgramDiscoveryRoles(
-				centralName, programSpecFor(prog), b.ProgramRoles(centralName, prog),
-			)...)
-		}
-		for _, sv := range hubModel.Sysvars() {
-			if sv == nil {
-				continue
-			}
-			items = append(items, disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv)))
-		}
-		for _, dp := range hubModel.InstallModeDPs() {
-			if dp == nil || dp.InterfaceID == "" {
-				continue
-			}
-			items = append(items,
-				disco.BuildInstallModeSensorDiscovery(centralName, dp.InterfaceID),
-				disco.BuildInstallModeButtonDiscovery(centralName, dp.InterfaceID))
-		}
+	for _, g := range hubPlaneItemGroups(u, b, disco, connectivityInterfaces) {
+		items = append(items, g.items...)
 	}
-	// Connectivity: one binary_sensor per registered interface, keyed by the same
-	// `<central>-<iface>` wire id seedConnectivityDiscovery declares.
-	switch {
-	case connectivityInterfaces != nil:
-		for _, iface := range connectivityInterfaces {
-			if iface == "" {
-				continue
-			}
-			items = append(items, disco.BuildConnectivityDiscovery(centralName, WireInterfaceID(centralName, iface)))
-		}
-	case u.Clients != nil:
-		for _, entry := range u.Clients.List() {
-			if entry == nil {
-				continue
-			}
-			iface := entry.Interface
-			if iface == "" {
-				iface = BareInterfaceFromWireID(centralName, entry.InterfaceID)
-			}
-			if iface == "" {
-				continue
-			}
-			items = append(items, disco.BuildConnectivityDiscovery(centralName, WireInterfaceID(centralName, iface)))
-		}
-	}
-	// Central-wide singletons, published unconditionally in wireOneCentral.
-	items = append(
-		items,
-		disco.BuildAlarmMessagesDiscovery(centralName),
-		disco.BuildServiceMessagesDiscovery(centralName),
-		disco.BuildDaemonStatusDiscovery(centralName),
-		disco.BuildSystemHealthDiscovery(centralName),
-		disco.BuildLastEventAgeDiscovery(centralName),
-		disco.BuildConnectionLatencyDiscovery(centralName),
-		disco.BuildInboxDiscovery(centralName),
-		disco.BuildHubUpdateDiscovery(centralName),
-	)
+	// What a restart held for this central goes with it: the live model of
+	// a unit that never became ready again is empty, so the items above do
+	// not reach a held entity.
+	p.retractHeldHub(ctx, b, centralName)
 
 	p.publish(func() {
 		retractHubDiscoveryItems(ctx, b, items)
@@ -838,7 +790,7 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		publishUpdate(info)
 	}))
 
-	p.declareHubPlane(u, b, centralName)
+	p.declareHubPlane(ctx, u, b, centralName)
 }
 
 // gatedHubEntity is a hub-plane entity declared only while the central
@@ -911,11 +863,16 @@ func (p *HubMQTTPublisher) applyHubFeatureGate(ctx context.Context, u *central.U
 // declared nothing, and claiming otherwise would let the sweep retract the
 // previous boot's hub entities moments before the re-wire (which the daemon
 // runs once the serial lands) re-announces them.
-func (p *HubMQTTPublisher) declareHubPlane(u *central.Unit, b *mqtt.Bridge, centralName string) {
+func (p *HubMQTTPublisher) declareHubPlane(ctx context.Context, u *central.Unit, b *mqtt.Bridge, centralName string) {
 	if hi := hubInfoFromUnit(u); hi.Serial == "" {
 		return
 	}
 	p.publish(func() { b.MarkHubPlaneDeclared(centralName) })
+	// A restart's held hub plane is settled behind the same declares, and
+	// only against a model a completed bring-up loaded.
+	if _, complete := u.ModelGeneration(); complete {
+		p.publish(func() { p.reconcileHeldHub(ctx, u, b) })
+	}
 }
 
 // hubInfoFromUnit projects a central's resolved CCU metadata onto the MQTT

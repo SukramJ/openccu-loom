@@ -399,6 +399,26 @@ func (b *Bridge) announceHubStatusOffline(ctx context.Context) {
 	}
 }
 
+// AnnounceHubStatusOfflineFor writes `offline` to one CCU's reachability
+// gate, immediately and without the dwell, and forgets the debounced level.
+//
+// It is the per-central form of the graceful-stop announcement, for a
+// central whose model is being reloaded: its entities stay declared, so the
+// gate must not be retracted, but the CCU behind them is not being served
+// until the reload completes. The next wiring of the central seeds the gate
+// again from its first probe.
+func (b *Bridge) AnnounceHubStatusOfflineFor(ctx context.Context, centralName string) {
+	if !b.cfg.RawEnabled {
+		return
+	}
+	central := b.resolvedCentral(centralName)
+	b.hubStatus.forget(central)
+	if _, err := b.publishOnline(ctx, b.hubStatusTopic(central), false); err != nil {
+		b.incPublishErrors(central)
+	}
+	b.syncConnected(ctx)
+}
+
 // RetractHubStatus clears one CCU's reachability gate and forgets the
 // debounced level, for a central removed from the running fleet.
 //

@@ -202,7 +202,7 @@ func TestOnDeviceRemovedForgetsAvailability(t *testing.T) {
 
 	eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE02", true)
 
-	eb.onDeviceRemoved(ctx, hmevent.DeviceRemovedEvent{
+	eb.onDeviceRemoved(ctx, false, hmevent.DeviceRemovedEvent{
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",
 		Address:     "AVAILGATE02",
@@ -324,7 +324,7 @@ func TestOnDeviceRemovedForgetsAvailabilityAfterTheRetraction(t *testing.T) {
 		once.Do(func() { eb.markAvailability(ctx, "ccu-01", "HmIP-RF", addr, true) })
 	}
 
-	eb.onDeviceRemoved(ctx, hmevent.DeviceRemovedEvent{
+	eb.onDeviceRemoved(ctx, false, hmevent.DeviceRemovedEvent{
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",
 		Address:     addr,

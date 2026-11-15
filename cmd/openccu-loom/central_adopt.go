@@ -735,7 +735,8 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 // faults of the security domain's ledger — so none of removeCentral's purges
 // run. The model is evicted as a teardown
 // ([central.Unit.RemoveDeviceForTeardown]): the north-bound planes still
-// retract the devices, while the per-device evictors of the channel flags,
+// react to the removals — the MQTT planes hold their configs until the
+// restarted model settles them — while the per-device evictors of the channel flags,
 // the recording overrides and the VALUES/MASTER cache stand down, exactly as
 // for a cache-clear re-init. The per-central domains are torn down with
 // [teardownRestart], so the security domain keeps its open faults: the
@@ -769,6 +770,15 @@ func (o *centralOrchestrator) restartCentral(ctx context.Context, cc config.Cent
 	o.purgeDroppedInterfaceState(ctx, h.cc, cc, h.droppedDevices)
 	if err := o.adoptCentralLocked(ctx, cc); err != nil {
 		o.releaseCentralDomains(cc.Name)
+		// Nothing comes back under the name to settle what the teardown
+		// held on MQTT, so it is retracted as a removal would have.
+		if o.sbDeps.bridge != nil {
+			o.sbDeps.bridge.ReleaseModelHold(cc.Name)
+		}
+		if o.sbDeps.hubMQTT != nil {
+			//nolint:contextcheck // ReleaseHeldCentral publishes on the fan-out worker's own context, like every publisher method
+			o.sbDeps.hubMQTT.ReleaseHeldCentral(cc.Name)
+		}
 		return fmt.Errorf("central_restart: %w", err)
 	}
 	o.logger.Info("central.restart.live", slog.String("central", cc.Name))
@@ -826,14 +836,16 @@ func (o *centralOrchestrator) purgeDroppedInterfaceState(ctx context.Context, pr
 // teardownCentralLocked is the teardown removeCentral and restartCentral
 // share, run with the central's lifecycle lock held: it drops the handle,
 // drains southbound, runs the per-central unwires in mode, retracts the hub
-// plane, evicts the model, stops the unit and detaches the event bridge — in
+// plane (holds it, for a restart), evicts the model, stops the unit and detaches the event bridge — in
 // the order removeCentral documents. It returns the handle, whose
 // configuration names the interfaces the central had, or [errCentralNotLive]
 // when the name is live nowhere.
 //
-// mode decides the two things a restart does differently. The model is
-// evicted through [evictModel] for a removal and [evictModelForRestart] for
-// a restart. The unwires run in mode, and of what they release only the
+// mode decides what a restart does differently. The model is evicted
+// through [evictModel] for a removal and [evictModelForRestart] for a
+// restart, and a restart opens a new model generation first and holds the
+// hub plane, so the MQTT planes defer their retractions until the restarted
+// model is complete. The unwires run in mode, and of what they release only the
 // security domain's removal detach deletes anything stored: it closes the
 // central's open faults, which its restart detach keeps. Every other stored
 // row is purged by the caller.
@@ -914,17 +926,39 @@ func (o *centralOrchestrator) teardownCentralLocked(name string, mode teardownMo
 	}
 
 	if unit, live := o.reg.Get(name); live {
-		// Retract this central's hub-plane discovery (programs, sysvars,
-		// connectivity, install-mode, system/messages) BEFORE the model is torn
-		// down: the per-entity OnRemoved hooks only clear an entity the CCU
-		// drops one at a time, and the orphan sweep is scoped to registered
-		// centrals, so nothing else ever reaches a whole central that is
-		// leaving. Its retained configs would otherwise keep the removed CCU's
-		// hub entities alive in Home Assistant forever. The device entities are
-		// retracted separately by the model eviction below via the event bridge.
-		if o.sbDeps.hubMQTT != nil {
-			//nolint:contextcheck // RetractCentral publishes on the fan-out worker's own context, like every publisher method
-			o.sbDeps.hubMQTT.RetractCentral(unit, connectivityInterfaces)
+		if mode == teardownRestart {
+			// A restart reloads the model under the same name, so the MQTT
+			// planes hold instead of retracting: a retracted config deletes
+			// the entity in Home Assistant with its registry entry, and the
+			// rediscovery resets a renamed entity id and deletes the helpers
+			// built on it. The generation opens BEFORE the first device leaves
+			// the model, so the event bridge holds every one of the removals
+			// below; the restarted central's first complete snapshot settles
+			// what its model no longer declares.
+			unit.BeginModelTeardown()
+			if o.sbDeps.hubMQTT != nil {
+				//nolint:contextcheck // HoldCentral publishes on the fan-out worker's own context, like every publisher method
+				o.sbDeps.hubMQTT.HoldCentral(unit, connectivityInterfaces, droppedInterfaces(h.cc, next))
+			}
+		} else {
+			// A removal ends whatever an earlier restart still holds, before
+			// the eviction below, so its removals retract at once.
+			if o.sbDeps.bridge != nil {
+				o.sbDeps.bridge.ReleaseModelHold(name)
+			}
+			// Retract this central's hub-plane discovery (programs, sysvars,
+			// connectivity, install-mode, system/messages) BEFORE the model is
+			// torn down: the per-entity OnRemoved hooks only clear an entity the
+			// CCU drops one at a time, and the orphan sweep is scoped to
+			// registered centrals, so nothing else ever reaches a whole central
+			// that is leaving. Its retained configs would otherwise keep the
+			// removed CCU's hub entities alive in Home Assistant forever. The
+			// device entities are retracted separately by the model eviction
+			// below via the event bridge.
+			if o.sbDeps.hubMQTT != nil {
+				//nolint:contextcheck // RetractCentral publishes on the fan-out worker's own context, like every publisher method
+				o.sbDeps.hubMQTT.RetractCentral(unit, connectivityInterfaces)
+			}
 		}
 		evict(unit)
 		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
@@ -1026,7 +1060,7 @@ func evictModel(u *central.Unit) {
 
 // evictModelForRestart is [evictModel] for a central that comes straight back
 // under the same name: each removal carries ModelTeardown, so the north-bound
-// planes still retract the devices while the per-device evictors of stored
+// planes still react to it while the per-device evictors of stored
 // state stand down — the restarted central re-pulls the same devices and the
 // operator's settings for them must still apply.
 //

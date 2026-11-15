@@ -320,10 +320,16 @@ type Hub struct {
 	// SysvarUsageRemote returning [ErrNoSysvarUsageReader].
 	sysvarUsageReader SysvarUsageReader
 
-	mu             sync.RWMutex
-	programs       map[string]*Program
-	sysvars        map[string]*Sysvar
-	installModeDPs map[string]*InstallMode // keyed by InterfaceID
+	mu       sync.RWMutex
+	programs map[string]*Program
+	sysvars  map[string]*Sysvar
+	// programsObserved / sysvarsObserved record that a complete fetch of the
+	// class succeeded since the last clear: an empty class is then a fact
+	// about the CCU, not a load that has not happened or failed. Guarded by
+	// mu like the maps.
+	programsObserved bool
+	sysvarsObserved  bool
+	installModeDPs   map[string]*InstallMode // keyed by InterfaceID
 	// connectivity holds the per-interface reachability aggregate.
 	// Populated via [Hub.SetConnectivity] once the adapter layer creates it.
 	connectivity *Connectivity
@@ -452,7 +458,25 @@ func (h *Hub) Programs() []*Program {
 func (h *Hub) ClearPrograms() {
 	h.mu.Lock()
 	h.programs = make(map[string]*Program)
+	h.programsObserved = false
 	h.mu.Unlock()
+}
+
+// MarkProgramsObserved records that a complete fetch of the CCU's programs
+// succeeded and the registered set is what the CCU has.
+func (h *Hub) MarkProgramsObserved() {
+	h.mu.Lock()
+	h.programsObserved = true
+	h.mu.Unlock()
+}
+
+// ProgramsObserved reports whether a complete program fetch succeeded since
+// the last [Hub.ClearPrograms]. An empty set is only a statement about the
+// CCU when this is true.
+func (h *Hub) ProgramsObserved() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.programsObserved
 }
 
 // RemoveProgram drops the program and reports whether one existed. Fires the
@@ -608,7 +632,25 @@ func (h *Hub) Sysvars() []*Sysvar {
 func (h *Hub) ClearSysvars() {
 	h.mu.Lock()
 	h.sysvars = make(map[string]*Sysvar)
+	h.sysvarsObserved = false
 	h.mu.Unlock()
+}
+
+// MarkSysvarsObserved records that a complete fetch of the CCU's system
+// variables succeeded and the registered set is what the CCU has.
+func (h *Hub) MarkSysvarsObserved() {
+	h.mu.Lock()
+	h.sysvarsObserved = true
+	h.mu.Unlock()
+}
+
+// SysvarsObserved reports whether a complete system-variable fetch
+// succeeded since the last [Hub.ClearSysvars]. An empty set is only a
+// statement about the CCU when this is true.
+func (h *Hub) SysvarsObserved() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.sysvarsObserved
 }
 
 // RemoveSysvar drops a sysvar from the in-memory cache and reports

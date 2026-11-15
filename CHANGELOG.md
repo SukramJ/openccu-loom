@@ -31,6 +31,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Centrals: changing the API token file restarts the central.** An
   edit of only `api_token_file` was saved but took effect only after a
   daemon restart.
+- **MQTT: a restart of a central or a cache reset keeps the Home Assistant
+  entities.** Both used to clear every discovery config of the central and
+  publish it again, and Home Assistant deleted the entities in between: a
+  renamed entity id fell back to its default and helpers built on an entity
+  (switch as x) were deleted. The configs now stay; once the central's
+  devices are loaded again, only what is really gone is removed — the
+  devices of a dropped interface, a device deleted on the CCU. While the CCU
+  is not reachable nothing is removed, and the devices read unavailable.
 
 ## [0.104.1] - 2026-11-15
 
