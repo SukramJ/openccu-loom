@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.104.1
+
+- **Version follows OpenCCU-Loom 0.104.1**, which fixes the move of a
+  central to openccu-lite and applies an edit to a running central on
+  save; see the OpenCCU-Loom changelog. The proxy itself is unchanged.
+
 # 0.104.0
 
 - **Version follows OpenCCU-Loom 0.104.0**, which changes the CCU

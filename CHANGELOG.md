@@ -6,6 +6,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.104.1] - 2026-11-15
+
+The move of a central from OpenCCU to openccu-lite keeps the central's
+settings and its open security faults, and an edit to a running central
+takes effect on save.
+
 ### Fixed
 
 - **openccu-lite add-on: the automatic move of a central keeps its

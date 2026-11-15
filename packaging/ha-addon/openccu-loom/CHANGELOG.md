@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.104.1
+
+- **Editing a running central takes effect on save.** Changing the
+  host, the ports, TLS, the credentials, the system type or the
+  interfaces of a central restarts that central on the new
+  configuration; a restart of the add-on is no longer needed. Its
+  hidden and locked channels, visibility and recording exceptions,
+  Matter exposures and open security faults are kept; a fault that
+  still stands keeps its age and acknowledgement and is not reported
+  a second time.
+
 ## 0.104.0
 
 - **Version follows OpenCCU-Loom 0.104.0**, in which the CCU add-on on
