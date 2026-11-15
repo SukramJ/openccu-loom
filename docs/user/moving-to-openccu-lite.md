@@ -101,7 +101,7 @@ a person gives on the box.
 - **Backups and reboots need a token with those scopes.** System
   management on openccu-lite is available wherever the API token carries
   the scope for it. `backup` and `power` are never part of an add-on
-  token, and a token from pairing can never carry them either; use a
+  token, and OpenCCU-Loom's pairing never asks for them; use a
   manual token created on the box when you need them (see
   [Connecting openccu-lite](../admin/openccu-lite.md#adding-an-openccu-lite-box)).
   A box from 2026-11-10 on restores only a backup of openccu-lite; a
