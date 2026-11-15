@@ -73,6 +73,7 @@ nav:
           - Keycloak (OIDC): admin/keycloak-oidc.md
           - Multi-CCU Operations: user/multi-ccu.md
           - Connecting openccu-lite: admin/openccu-lite.md
+          - Moving a Central to openccu-lite: user/moving-to-openccu-lite.md
           - Security: SECURITY.md
           - Privacy: privacy.md
           - Backup & Restore: admin/backup.md
