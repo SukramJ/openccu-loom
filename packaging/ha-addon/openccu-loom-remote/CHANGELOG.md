@@ -4,6 +4,17 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.105.0
+
+- **Reach OpenCCU-Loom on an openccu-lite box without port 8119.** Point
+  an instance at `https://<box>/addons/loom` and press "Pair with box":
+  approve the shown code in the box's web interface, and the add-on keeps
+  the token (operator role) in its own data. A token in the options still
+  wins and remains the way to admin rights (a Full-access box token).
+- **The box's login no longer loops.** The panel explains how to get
+  through it, and a tile whose credential is refused shows "Login
+  required".
+
 # 0.104.1
 
 - **Version follows OpenCCU-Loom 0.104.1**, which fixes the move of a
