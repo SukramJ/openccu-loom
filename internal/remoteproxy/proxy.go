@@ -225,7 +225,8 @@ func (t *upstreamTransport) build(pin []byte) *http.Transport {
 		// A paired box: the pin replaces chain verification, accepting
 		// exactly the certificate the pairing code was bound to.
 		transport.TLSClientConfig.VerifyConnection = pinVerifier(pin)
-		transport.TLSClientConfig.InsecureSkipVerify = true
+		// The chain check is off only because the pin above is installed.
+		transport.TLSClientConfig.InsecureSkipVerify = transport.TLSClientConfig.VerifyConnection != nil //nolint:gosec // the pin in VerifyConnection is the verification
 	}
 	return transport
 }

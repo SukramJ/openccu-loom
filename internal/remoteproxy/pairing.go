@@ -149,14 +149,27 @@ func boxPairingTransport(pin []byte) *http.Transport {
 		}).DialContext,
 		TLSHandshakeTimeout: 10 * time.Second,
 		IdleConnTimeout:     30 * time.Second,
-		// The certificate check is the code comparison (unpinned) or the
-		// pin below, never the chain.
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true}, //nolint:gosec // G402: see above; the code or the pin authenticates the certificate.
+		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 	}
+	// The certificate check is the code comparison (unpinned) or the pin,
+	// never the chain: an unpinned connection only has to present the
+	// certificate the code binds.
 	if pin != nil {
 		t.TLSClientConfig.VerifyConnection = pinVerifier(pin)
+	} else {
+		t.TLSClientConfig.VerifyConnection = requirePeerCertificate
 	}
+	t.TLSClientConfig.InsecureSkipVerify = t.TLSClientConfig.VerifyConnection != nil //nolint:gosec // VerifyConnection above is the verification
 	return t
+}
+
+// requirePeerCertificate refuses a handshake without a server certificate,
+// which leaves the pairing code nothing to bind.
+func requirePeerCertificate(cs tls.ConnectionState) error {
+	if len(cs.PeerCertificates) == 0 {
+		return errors.New("box presented no certificate")
+	}
+	return nil
 }
 
 // pinVerifier accepts exactly the leaf certificate whose SHA-256 is pin.
