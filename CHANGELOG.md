@@ -6,6 +6,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **openccu-lite add-on: a central still waiting for its move is a
+  warning.** When the daemon cannot move a central from OpenCCU to
+  openccu-lite by itself (no API token of the system, several centrals
+  pointing at it, or the switch did not complete), the central now stands
+  on the warning list, and through it on the box's Status page, with the
+  way out for that reason. The warning goes once the central is switched.
+
+### Changed
+
+- **openccu-lite add-on: the `/health` component `config.lite_addon` is
+  gone.** The warning above replaces it.
+
+### Fixed
+
+- **Centrals: a restart without an interface removes that interface's
+  devices completely.** When an edit drops an interface from a running
+  central (CUxD, on the move to openccu-lite), its devices' hidden and
+  locked channels, recording exceptions and Matter exposures are deleted
+  with them; they stayed behind before, and the Matter exposures went on
+  counting in the node status.
+- **Centrals: changing the API token file restarts the central.** An
+  edit of only `api_token_file` was saved but took effect only after a
+  daemon restart.
+
 ## [0.104.1] - 2026-11-15
 
 The move of a central from OpenCCU to openccu-lite keeps the central's

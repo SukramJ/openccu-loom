@@ -18,9 +18,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -37,10 +37,6 @@ import (
 // no longer exists. That one central is moved to openccu-lite in place,
 // keeping its name, so everything keyed by the name stays with it.
 const (
-	// liteAddonCentralsHealthComponent is the /health component naming the
-	// CCU centrals that point at this openccu-lite box and could not be
-	// moved over by the daemon.
-	liteAddonCentralsHealthComponent = "config.lite_addon"
 	// liteAddonTokenPath is where occulited writes the add-on's minted
 	// API token (0600, the add-on's user; the secret plus a newline).
 	liteAddonTokenPath = "/run/occulite/addon-tokens/openccu-loom.api"
@@ -64,9 +60,11 @@ const (
 // liteAddonOnboarder adopts the local openccu-lite box as a central on a
 // first boot. It is constructed by the composition root only.
 type liteAddonOnboarder struct {
-	admin   handlers.CentralAdminService
-	tracker *health.Tracker
-	logger  *slog.Logger
+	admin handlers.CentralAdminService
+	// moves takes the centrals the onboarder leaves as CCU centrals, for
+	// the warning list.
+	moves  *liteMoveLedger
+	logger *slog.Logger
 	// ifaceAddrs lists this machine's interface addresses (net.InterfaceAddrs
 	// in production), against which a central's host is compared.
 	ifaceAddrs  func() ([]net.Addr, error)
@@ -86,10 +84,10 @@ type liteAddonOnboarder struct {
 // the box itself is still to be moved over. On every other host it is a
 // cheap no-op. The goroutine ends on success, at the window's deadline, or
 // when ctx is cancelled — whichever comes first.
-func maybeStartLiteAddonOnboarding(ctx context.Context, admin handlers.CentralAdminService, tracker *health.Tracker, logger *slog.Logger) {
+func maybeStartLiteAddonOnboarding(ctx context.Context, admin handlers.CentralAdminService, moves *liteMoveLedger, logger *slog.Logger) {
 	o := &liteAddonOnboarder{
 		admin:       admin,
-		tracker:     tracker,
+		moves:       moves,
 		logger:      logger,
 		ifaceAddrs:  net.InterfaceAddrs,
 		tokenPath:   envOr(liteAddonTokenPathEnv, liteAddonTokenPath),
@@ -141,7 +139,7 @@ func (o *liteAddonOnboarder) run(ctx context.Context) {
 		// OpenCCU brought along.
 		local := o.localCCUCentrals(ctx, rows)
 		if len(local) != 1 {
-			o.recordStranded(local, "more than one central points at this system")
+			o.recordStranded(local, warnings.LiteMoveAmbiguous)
 			return
 		}
 		convert = local[0]
@@ -171,6 +169,9 @@ func (o *liteAddonOnboarder) run(ctx context.Context) {
 		case <-ctx.Done():
 			o.logger.Info("lite_addon.onboard.gave_up",
 				slog.Duration("window", o.window), slog.String("base_url", o.baseURL))
+			if convert != "" {
+				o.recordStranded([]string{convert}, warnings.LiteMoveFailed)
+			}
 			return
 		case <-time.After(o.retryEvery):
 		}
@@ -336,6 +337,7 @@ func (o *liteAddonOnboarder) convert(ctx context.Context, client *occulited.Clie
 	if err := o.admin.Put(ctx, next); err != nil {
 		o.logger.Warn("lite_addon.convert.put_failed",
 			slog.String("central", name), slog.String("err", err.Error()))
+		o.recordStranded([]string{name}, warnings.LiteMoveFailed)
 		return false, false
 	}
 	o.logger.Info("lite_addon.convert.done",
@@ -355,28 +357,19 @@ func (o *liteAddonOnboarder) reportStrandedCentrals(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	o.recordStranded(o.localCCUCentrals(ctx, rows), "this add-on has no API token of the system")
+	o.recordStranded(o.localCCUCentrals(ctx, rows), warnings.LiteMoveNoToken)
 }
 
-// recordStranded puts the centrals the daemon left as CCU centrals on
-// /health, with the reason and the way out. Non-critical, and recorded once
-// (Sticky): it states a boot-time fact, not a heartbeat.
-func (o *liteAddonOnboarder) recordStranded(names []string, reason string) {
+// recordStranded hands the centrals the daemon left as CCU centrals to the
+// warning list, with the reason — each reason has its own way out, which
+// the warning names.
+func (o *liteAddonOnboarder) recordStranded(names []string, reason warnings.LiteMoveReason) {
 	if len(names) == 0 {
 		return
 	}
 	o.logger.Warn("lite_addon.convert.skipped",
-		slog.String("centrals", strings.Join(names, ",")), slog.String("reason", reason))
-	if o.tracker == nil {
-		return
-	}
-	o.tracker.Record(liteAddonCentralsHealthComponent, health.Sample{
-		Healthy: false,
-		Sticky:  true,
-		Note: "configured as a CCU, but this system runs openccu-lite: " + strings.Join(names, ", ") +
-			" (" + reason + ") — switch the central to openccu-lite in its settings, " +
-			"or install the add-on from the system's add-on page and restart it",
-	})
+		slog.String("centrals", strings.Join(names, ",")), slog.String("reason", string(reason)))
+	o.moves.record(names, reason)
 }
 
 // hostPort splits the base URL into the row's host and json_rpc_port.

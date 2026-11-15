@@ -213,6 +213,80 @@ func TestLiveCentralAdminPutRestartKeepsTheCentralsStoredState(t *testing.T) {
 	}
 }
 
+// TestLiveCentralAdminPutRestartRemovesTheDevicesOfADroppedInterface pins
+// the one thing a restart does delete: a device on an interface the new
+// configuration no longer has cannot come back, so it is removed as by a
+// removal — its hidden channel, recording override and Matter exposure go —
+// while the devices of the kept interface keep theirs. The move of a central
+// to openccu-lite drops CUxD this way.
+func TestLiveCentralAdminPutRestartRemovesTheDevicesOfADroppedInterface(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	f := newRestartFixture(ctx, t, "central_restart_dropped_iface.db")
+
+	const name = "restart-drops"
+	row := sqlitestore.CentralRow{
+		Name: name, Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}, {Name: "CUxD", Port: 1}},
+	}
+	f.adoptAndSeed(ctx, t, row)
+
+	const cuxdDevice = "CUX2801001"
+	const cuxdChannel = cuxdDevice + ":1"
+	unit, _ := f.reg.Get(name)
+	d := device.New(device.Config{
+		InterfaceID: name + "-CUxD", Interface: hmenum.InterfaceCUxD,
+		Address: cuxdDevice, Model: "HM-LC-Sw1-Pl", Name: "CUxD switch",
+	})
+	d.AddChannel(cuxdChannel, 1, "SWITCH", hmenum.ParamsetKeyValues)
+	unit.ModelRegistry.Put(d)
+	if err := f.flags.Set(ctx, name, cuxdChannel, true, false, "test"); err != nil {
+		t.Fatalf("seed channel flag: %v", err)
+	}
+	f.overlay.Set(name, cuxdChannel, channelflags.Flags{Hidden: true})
+	if err := f.recording.Set(ctx, name, d.InterfaceID, cuxdChannel, "STATE", false, "test"); err != nil {
+		t.Fatalf("seed recording override: %v", err)
+	}
+	cuxdExposure := loomendpoint.SourceKey{CentralName: name, DeviceAddress: cuxdDevice, ChannelNo: 1, DPKind: loomendpoint.DPKindCustom, DPKey: "switch"}
+	if err := f.exposures.UpsertExposure(ctx, loomendpoint.ExposureRecord{Key: cuxdExposure, Enabled: true, Actor: "test"}); err != nil {
+		t.Fatalf("seed Matter exposure: %v", err)
+	}
+
+	edited := row
+	edited.SystemType = "openccu-lite"
+	edited.Interfaces = []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}}
+	if err := f.admin.Put(ctx, edited); err != nil {
+		t.Fatalf("Put(edited): %v", err)
+	}
+	t.Cleanup(func() { _ = f.orch.removeCentral(context.Background(), name) })
+
+	// The per-device evictors run on the bus.
+	deadline := time.Now().Add(5 * time.Second)
+	for f.overlay.Get(name, cuxdChannel).Hidden && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(250 * time.Millisecond)
+
+	if f.overlay.Get(name, cuxdChannel).Hidden {
+		t.Error("the dropped interface's device keeps its hidden channel in the overlay")
+	}
+	if !f.overlay.Get(name, restartChannel).Hidden {
+		t.Error("the kept interface's device lost its hidden channel")
+	}
+	if rows, err := f.flags.List(ctx); err != nil || len(rows) != 1 {
+		t.Errorf("channel flag rows after the restart = %+v (err %v), want the kept device's row only", rows, err)
+	}
+	if overrides, err := f.recStore.List(ctx); err != nil || len(overrides) != 1 {
+		t.Errorf("recording override rows after the restart = %+v (err %v), want the kept device's row only", overrides, err)
+	}
+	if _, err := f.exposures.GetExposure(ctx, cuxdExposure); err == nil {
+		t.Error("the dropped interface's device keeps its Matter exposure")
+	}
+	if _, err := f.exposures.GetExposure(ctx, f.exposure); err != nil {
+		t.Errorf("the kept interface's device lost its Matter exposure: %v", err)
+	}
+}
+
 // TestLiveCentralAdminPutDisableStillPurgesTheCentralsStoredState pins the
 // other half: a disabled save of a running central is a removal, and a
 // removal deletes everything stored under the central's name.

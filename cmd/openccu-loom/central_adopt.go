@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/measurements"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -52,6 +53,9 @@ type centralHandle struct {
 	// detachBridge releases the north-bound event bridge. It is separate
 	// from unwires because it must run LAST — see [centralHooks].
 	detachBridge func()
+	// droppedDevices lists, after a restart's teardown, the devices it
+	// removed because the new configuration no longer has their interface.
+	droppedDevices []string
 }
 
 // teardownMode tells the per-central teardown whether the central is leaving
@@ -693,7 +697,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	lock.Lock()
 	defer lock.Unlock()
 
-	h, err := o.teardownCentralLocked(name, teardownRemove) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
+	h, err := o.teardownCentralLocked(name, teardownRemove, nil) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
 	if err != nil {
 		return err
 	}
@@ -736,9 +740,12 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 // for a cache-clear re-init. The per-central domains are torn down with
 // [teardownRestart], so the security domain keeps its open faults: the
 // re-adopted central reloads them with their id, `since` and
-// acknowledgement instead of raising them again. The only stored rows that
-// go are the VALUES/MASTER cache rows of interfaces the previous
-// configuration had and cc no longer has; nothing can ever reach them again.
+// acknowledgement instead of raising them again. What goes is what belongs to
+// an interface the previous configuration had and cc no longer has — CUxD,
+// when a central moves to openccu-lite: its devices are removed as by a
+// removal ([evictModelForRestart]), so every per-device evictor deletes
+// their stored state, and its VALUES/MASTER cache rows go as a whole.
+// Nothing can ever reach them again.
 //
 // When the adopt fails, nothing comes back under the name, so the domains
 // are released as for a removal: the kept faults would otherwise stand for
@@ -755,11 +762,11 @@ func (o *centralOrchestrator) restartCentral(ctx context.Context, cc config.Cent
 	lock.Lock()
 	defer lock.Unlock()
 
-	h, err := o.teardownCentralLocked(cc.Name, teardownRestart) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
+	h, err := o.teardownCentralLocked(cc.Name, teardownRestart, &cc) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
 	if err != nil {
 		return err
 	}
-	o.purgeDroppedInterfaceCaches(ctx, h.cc, cc)
+	o.purgeDroppedInterfaceState(ctx, h.cc, cc, h.droppedDevices)
 	if err := o.adoptCentralLocked(ctx, cc); err != nil {
 		o.releaseCentralDomains(cc.Name)
 		return fmt.Errorf("central_restart: %w", err)
@@ -781,11 +788,21 @@ func (o *centralOrchestrator) releaseCentralDomains(name string) {
 	}
 }
 
-// purgeDroppedInterfaceCaches deletes the VALUES/MASTER cache rows of every
-// interface prev configured and next does not. The rows are keyed by
-// `<central>-<interface>`, so a retained interface keeps its rows across the
-// restart and a dropped one would otherwise keep them forever.
-func (o *centralOrchestrator) purgeDroppedInterfaceCaches(ctx context.Context, prev, next config.CentralConfig) {
+// purgeDroppedInterfaceState deletes what a restart leaves of the interfaces
+// prev configured and next does not: the Matter exposures of droppedDevices,
+// and the VALUES/MASTER cache rows of each such interface. The cache rows
+// are keyed by `<central>-<interface>`, so a retained interface keeps its
+// rows across the restart and a dropped one would otherwise keep them
+// forever — including rows of devices that were not in the model.
+func (o *centralOrchestrator) purgeDroppedInterfaceState(ctx context.Context, prev, next config.CentralConfig, droppedDevices []string) {
+	if o.matterExposureStore != nil {
+		for _, addr := range droppedDevices {
+			if err := o.matterExposureStore.DeleteForDevice(ctx, prev.Name, addr); err != nil {
+				o.logger.Warn("central.restart.purge_matter_exposures",
+					slog.String("central", prev.Name), slog.String("device", addr), slog.String("err", err.Error()))
+			}
+		}
+	}
 	for _, ifc := range prev.Interfaces {
 		if slices.ContainsFunc(next.Interfaces, func(n config.InterfaceSpec) bool { return n.Name == ifc.Name }) {
 			continue
@@ -820,11 +837,11 @@ func (o *centralOrchestrator) purgeDroppedInterfaceCaches(ctx context.Context, p
 // security domain's removal detach deletes anything stored: it closes the
 // central's open faults, which its restart detach keeps. Every other stored
 // row is purged by the caller.
-func (o *centralOrchestrator) teardownCentralLocked(name string, mode teardownMode) (*centralHandle, error) {
-	evict := evictModel
-	if mode == teardownRestart {
-		evict = evictModelForRestart
-	}
+//
+// next is the configuration a restart adopts afterwards (nil for a removal).
+// A device on an interface next no longer has does not come back, so a
+// restart removes it as a removal would.
+func (o *centralOrchestrator) teardownCentralLocked(name string, mode teardownMode, next *config.CentralConfig) (*centralHandle, error) {
 	o.mu.Lock()
 	h, ok := o.handles[name]
 	if ok {
@@ -850,6 +867,11 @@ func (o *centralOrchestrator) teardownCentralLocked(name string, mode teardownMo
 		if h = o.bootHandle(name); h == nil {
 			return nil, fmt.Errorf("%w: %s", errCentralNotLive, name)
 		}
+	}
+
+	evict := evictModel
+	if mode == teardownRestart {
+		evict = func(u *central.Unit) { h.droppedDevices = evictModelForRestart(u, droppedInterfaces(h.cc, next)) }
 	}
 
 	// Snapshot the interface list for the connectivity retract BEFORE
@@ -999,7 +1021,7 @@ func evictModel(u *central.Unit) {
 	if u == nil || u.ModelRegistry == nil {
 		return
 	}
-	evictDevices(u, u.RemoveDevice)
+	evictDevices(u, func(d *device.Device) bool { return u.RemoveDevice(d.Address) })
 }
 
 // evictModelForRestart is [evictModel] for a central that comes straight back
@@ -1007,16 +1029,50 @@ func evictModel(u *central.Unit) {
 // planes still retract the devices while the per-device evictors of stored
 // state stand down — the restarted central re-pulls the same devices and the
 // operator's settings for them must still apply.
-func evictModelForRestart(u *central.Unit) {
+//
+// The exception is a device on an interface in dropped: the new
+// configuration cannot re-pull it, so it is removed as by [evictModel], and
+// every per-device evictor deletes what is stored for it — its channel
+// flags, recording overrides, VALUES/MASTER cache rows and Matter exposure.
+// Kept, those would describe a device that exists nowhere, and the Matter
+// exposure would go on counting in the node status. The Matter exposure is
+// the one no evictor deletes (the Matter forget frees the endpoint numbers
+// only), so [centralOrchestrator.purgeDroppedInterfaceState] deletes it for
+// the returned addresses.
+//
+// It returns the addresses of the devices it removed that way.
+func evictModelForRestart(u *central.Unit, dropped map[hmenum.Interface]bool) (removed []string) {
 	if u == nil || u.ModelRegistry == nil {
-		return
+		return nil
 	}
-	evictDevices(u, u.RemoveDeviceForTeardown)
+	evictDevices(u, func(d *device.Device) bool {
+		if dropped[adapter.BareInterfaceFromWireID(u.Name(), d.InterfaceID)] {
+			removed = append(removed, d.Address)
+			return u.RemoveDevice(d.Address)
+		}
+		return u.RemoveDeviceForTeardown(d.Address)
+	})
+	return removed
+}
+
+// droppedInterfaces names the interfaces prev configures and next does not.
+// A nil next drops nothing.
+func droppedInterfaces(prev config.CentralConfig, next *config.CentralConfig) map[hmenum.Interface]bool {
+	if next == nil {
+		return nil
+	}
+	dropped := map[hmenum.Interface]bool{}
+	for _, ifc := range prev.Interfaces {
+		if !slices.ContainsFunc(next.Interfaces, func(n config.InterfaceSpec) bool { return n.Name == ifc.Name }) {
+			dropped[hmenum.Interface(ifc.Name)] = true
+		}
+	}
+	return dropped
 }
 
 // evictDevices drops every device from u's model registries and removes it
 // from the unit through remove, which decides the removal event's flavour.
-func evictDevices(u *central.Unit, remove func(address string) bool) {
+func evictDevices(u *central.Unit, remove func(d *device.Device) bool) {
 	for _, d := range u.ModelRegistry.List() {
 		iface := hmtypes.ParseWireInterfaceID(d.InterfaceID)
 		if u.DescRegistry != nil {
@@ -1030,7 +1086,7 @@ func evictDevices(u *central.Unit, remove func(address string) bool) {
 		if u.DeviceRegistry != nil {
 			u.DeviceRegistry.Remove(iface, d.Address)
 		}
-		remove(d.Address)
+		remove(d)
 	}
 }
 
@@ -1219,6 +1275,7 @@ func centralConfigNeedsRestart(prev, next sqlite.CentralRow) bool {
 		prev.SystemType != next.SystemType ||
 		prev.APITokenPlain != next.APITokenPlain ||
 		prev.APITokenEnv != next.APITokenEnv ||
+		prev.APITokenFile != next.APITokenFile ||
 		prev.TLSFingerprint != next.TLSFingerprint ||
 		!slices.Equal(prev.Interfaces, next.Interfaces)
 }

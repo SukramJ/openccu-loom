@@ -80,6 +80,36 @@ type PairingSource interface {
 	PendingCount() int
 }
 
+// LiteMoveReason says why a central of an openccu-lite box is still
+// configured as a CCU central. Each reason has its own way out, so each
+// carries its own message.
+type LiteMoveReason string
+
+// The reasons a move to openccu-lite did not happen by itself.
+const (
+	// LiteMoveNoToken: the box minted no API token for the add-on, so the
+	// daemon cannot authenticate against it.
+	LiteMoveNoToken LiteMoveReason = "no_token"
+	// LiteMoveAmbiguous: more than one central points at the box, and the
+	// daemon does not pick one.
+	LiteMoveAmbiguous LiteMoveReason = "ambiguous"
+	// LiteMoveFailed: the box did not answer within the onboarding window,
+	// or saving the moved central failed.
+	LiteMoveFailed LiteMoveReason = "failed"
+)
+
+// LiteMove is one central waiting to be moved to openccu-lite.
+type LiteMove struct {
+	Central string
+	Reason  LiteMoveReason
+}
+
+// LiteMoveSource reports the centrals that point at this openccu-lite box
+// but are still configured as CCU centrals.
+type LiteMoveSource interface {
+	PendingLiteMoves() []LiteMove
+}
+
 // SilenceStore persists per-user silences. The production implementation
 // is sqlite.WarningSilenceStore.
 type SilenceStore interface {
@@ -98,6 +128,7 @@ type Aggregator struct {
 	incidents IncidentSource
 	hubs      HubSource
 	pairing   PairingSource
+	liteMoves LiteMoveSource
 	silences  SilenceStore
 }
 
@@ -112,6 +143,13 @@ func New(h HealthSource, inc IncidentSource, hubs HubSource, silences SilenceSto
 // construction, which the wiring pin drives.
 func (a *Aggregator) WithPairing(p PairingSource) *Aggregator {
 	a.pairing = p
+	return a
+}
+
+// WithLiteMoves adds the pending moves to openccu-lite, one warning per
+// central. A wither for the same reason as [Aggregator.WithPairing].
+func (a *Aggregator) WithLiteMoves(s LiteMoveSource) *Aggregator {
+	a.liteMoves = s
 	return a
 }
 
@@ -197,6 +235,16 @@ func (a *Aggregator) Active() []Warning {
 				ID: "pairing:pending", Severity: SeverityWarning,
 				MessageKey: "warnings.pairing_pending",
 				Args:       map[string]string{"count": strconv.Itoa(n)},
+			})
+		}
+	}
+
+	if a.liteMoves != nil {
+		for _, m := range a.liteMoves.PendingLiteMoves() {
+			out = append(out, Warning{
+				ID: "lite-move:" + m.Central, Severity: SeverityWarning, Central: m.Central,
+				MessageKey: "warnings.lite_move_pending." + string(m.Reason),
+				Args:       map[string]string{"central": m.Central},
 			})
 		}
 	}

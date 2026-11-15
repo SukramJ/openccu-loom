@@ -73,17 +73,25 @@ central is moved to openccu-lite in place.
   are the CCU's and go; the interfaces are read from the box, as at a first
   boot, and the token comes from `api_token_file`.
 - The move is one save through the admin service, which restarts a running
-  central on such an edit. Only the cache rows of interfaces the box does
-  not have go.
+  central on such an edit. What goes is what belongs to an interface the
+  box does not have (CUxD): its devices are removed as by a removal, so
+  their channel flags, recording overrides, cache rows and Matter
+  exposures go with them.
 - Nothing is moved when a central already uses the add-on token (the box
   is configured; a leftover CCU central is the operator's to delete) or
   when more than one CCU central points at the box (which one is the box
   is not the daemon's to guess).
-- Where the daemon leaves such a central alone — that ambiguity, or a box
-  that minted no token because the add-on's manifest was not applied —
-  the non-critical `/health` component `config.lite_addon` names the
-  central, the reason and the way out, instead of an endless "waiting
-  for CCU".
+- Where the daemon leaves such a central alone — that ambiguity, a box
+  that minted no token because the add-on's manifest was not applied, or a
+  move that did not complete (the box did not answer within the window, or
+  the save failed) — the central lands on the operator warning list as
+  `lite-move:<central>`, with one sentence per reason that names the way
+  out, instead of an endless "waiting for CCU". The warning list is
+  mirrored onto the box's Status page (ADR 0090), so the notice stands
+  where the operator looks after the system update. It clears by itself
+  once the central is no longer stored as a CCU central. It replaced the
+  `/health` component `config.lite_addon` of 0.104.0, which would have
+  reached the same list a second time as a generic "unhealthy" line.
 
 **Better than before, and the right cut.** Before, the operator had to
 find out that the central's type was the problem and re-enter it by hand

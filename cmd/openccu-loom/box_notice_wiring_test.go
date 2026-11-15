@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -35,6 +36,8 @@ type boxNoticeFixture struct {
 	fake    *litefake.Fake
 	tracker *health.Tracker
 	reg     *central.Registry
+	admin   *fakeCentralAdmin
+	moves   *liteMoveLedger
 	mirror  *boxNotices
 }
 
@@ -59,10 +62,11 @@ func startBoxNoticeFixture(t *testing.T, cfg *config.Config) *boxNoticeFixture {
 	if err != nil {
 		t.Fatalf("i18n.NewCatalogs: %v", err)
 	}
-	fx := &boxNoticeFixture{fake: fake, tracker: health.NewTracker(), reg: central.NewRegistry()}
+	fx := &boxNoticeFixture{fake: fake, tracker: health.NewTracker(), reg: central.NewRegistry(), admin: newFakeCentralAdmin()}
+	fx.moves = newLiteMoveLedger(fx.admin)
 	fx.mirror = startBoxNotices(t.Context(), cfg, boxNoticeDeps{
-		warnings: warnings.New(trackerHealth{fx.tracker}, nil, nil, nil),
-		catalogs: catalogs, health: fx.tracker, reg: fx.reg,
+		warnings: newWarningsAggregator(trackerHealth{fx.tracker}, nil, nil, nil, fx.moves),
+		catalogs: catalogs, health: fx.tracker, reg: fx.reg, admin: fx.admin, liteMoves: fx.moves,
 	}, slog.New(slog.DiscardHandler))
 	t.Cleanup(fx.mirror.Stop)
 	if fx.mirror != nil {
@@ -164,6 +168,42 @@ func TestBoxNoticesFollowACentralRegisteredLater(t *testing.T) {
 	})
 }
 
+// TestBoxNoticesFollowAPendingLiteMove pins the move warning's way to the
+// box's Status page through the composition root's own constructors: a
+// central the onboarder could not move stands there as soon as it is
+// recorded, worded for its reason in both languages, and goes once the
+// central was switched to openccu-lite — whose restart registers it again,
+// which is what makes the mirror look.
+func TestBoxNoticesFollowAPendingLiteMove(t *testing.T) {
+	fx := startBoxNoticeFixture(t, &config.Config{})
+	if fx.mirror == nil {
+		t.Fatal("no mirror")
+	}
+	row := sqlitestore.CentralRow{Name: "Otto", Host: "127.0.0.1", Enabled: true}
+	if err := fx.admin.Put(t.Context(), row); err != nil {
+		t.Fatal(err)
+	}
+	fx.moves.record([]string{"Otto"}, warnings.LiteMoveNoToken)
+	waitBoxNotices(t, "the notice for the pending move", func() bool { return len(fx.fake.AddonNotices()) == 1 })
+	n := fx.fake.AddonNotices()[0]
+	if n.ID != "lite-move.otto" || !strings.Contains(n.Title.EN, "Otto") || !strings.Contains(n.Title.DE, "Otto") {
+		t.Errorf("box holds %q, want the move notice naming Otto", fx.titles())
+	}
+
+	row.SystemType = "openccu-lite"
+	if err := fx.admin.Put(t.Context(), row); err != nil {
+		t.Fatal(err)
+	}
+	unit, err := central.New(central.Config{Name: "Otto"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := fx.reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	waitBoxNotices(t, "the notice to go once the central was switched", func() bool { return len(fx.fake.AddonNotices()) == 0 })
+}
+
 // TestBoxNoticesAreOffWhereThereIsNoBox pins the switch: explicitly off
 // on the add-on, and inert on a host that is not the add-on whatever the
 // switch says.
@@ -211,6 +251,9 @@ func TestBoxNoticeTextsCoverEveryWarning(t *testing.T) {
 		{MessageKey: "warnings.incidents", Args: map[string]string{"component": "mqtt", "count": "3"}},
 		{MessageKey: "warnings.service_messages", Args: map[string]string{"central": "attic", "count": "3"}},
 		{MessageKey: "warnings.pairing_pending", Args: map[string]string{"count": "3"}},
+		{MessageKey: "warnings.lite_move_pending.no_token", Args: map[string]string{"central": "attic"}},
+		{MessageKey: "warnings.lite_move_pending.ambiguous", Args: map[string]string{"central": "attic"}},
+		{MessageKey: "warnings.lite_move_pending.failed", Args: map[string]string{"central": "attic"}},
 	} {
 		got := texts.Warning(w)
 		for lang, s := range map[string]string{"de": got.DE, "en": got.EN} {
