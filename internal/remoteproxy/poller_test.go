@@ -87,7 +87,7 @@ func pollTUpstream(t *testing.T, health, info pollTResponse) (*httptest.Server, 
 // instance, without going through Options validation.
 func pollTNewInstanceProxy(t *testing.T, name, url, token string) *instanceProxy {
 	t.Helper()
-	ip, err := newInstanceProxy(Instance{Name: name, URL: url, Token: token}, "", pollTLogger())
+	ip, err := newInstanceProxy(Instance{Name: name, URL: url, Token: token}, "", nil, pollTLogger())
 	if err != nil {
 		t.Fatalf("newInstanceProxy: %v", err)
 	}

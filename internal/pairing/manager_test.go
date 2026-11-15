@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/pairingcode"
 )
 
 type fakeMinter struct {
@@ -61,12 +62,12 @@ func TestCodeGoldenVector(t *testing.T) {
 	sum := sha256.Sum256(append(append(append([]byte{}, nonce...), clientNonce...), fp...))
 	want := fmt.Sprintf("%06d", uint32(sum[0])<<24|uint32(sum[1])<<16|uint32(sum[2])<<8|uint32(sum[3]))
 	want = want[len(want)-6:]
-	if got := Code(nonce, clientNonce, fp); got != Code(nonce, clientNonce, fp) || len(got) != 6 {
+	if got := pairingcode.Code(nonce, clientNonce, fp); got != pairingcode.Code(nonce, clientNonce, fp) || len(got) != 6 {
 		t.Fatalf("Code not stable/6 digits: %q", got)
 	}
 	// Independent recomputation must agree (mod is the only step above
 	// beyond the raw big-endian read, and %06d of the mod result).
-	if got := Code(nonce, clientNonce, fp); got != fmt.Sprintf("%06d", (uint32(sum[0])<<24|uint32(sum[1])<<16|uint32(sum[2])<<8|uint32(sum[3]))%1_000_000) {
+	if got := pairingcode.Code(nonce, clientNonce, fp); got != fmt.Sprintf("%06d", (uint32(sum[0])<<24|uint32(sum[1])<<16|uint32(sum[2])<<8|uint32(sum[3]))%1_000_000) {
 		t.Fatalf("Code = %q, want independent derivation %q", got, want)
 	}
 }
@@ -100,7 +101,7 @@ func TestPairingHappyPathTokenExactlyOnce(t *testing.T) {
 		// The client derives the same code from its own halves.
 		nonce, _ := hex.DecodeString(ans.Nonce)
 		cn, _ := hex.DecodeString(nonceHex)
-		if clientCode := Code(nonce, cn, nil); clientCode != views[0].Code {
+		if clientCode := pairingcode.Code(nonce, cn, nil); clientCode != views[0].Code {
 			t.Fatalf("client code %q != card code %q", clientCode, views[0].Code)
 		}
 

@@ -25,6 +25,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   programs and system variables, which openccu-lite does not have. The MCP
   server does not offer this move, because it ends in an approval a person
   gives on the box.
+- **OpenCCU-Loom Remote: pair with an openccu-lite box.** An instance
+  reached through the box (`https://<box>/addons/loom`, no port 8119) no
+  longer needs a hand-copied token: "Pair with box" in the panel shows a
+  code to approve in the box's web interface, and the add-on keeps the
+  resulting token (operator role) in `/data/paired.json`. A token in the
+  add-on options still wins, and remains the way to admin rights (a
+  Full-access box token). Instead of looping into the box's login, the
+  panel now explains how to get through it, and a tile whose credential is
+  refused shows "Login required" (ADR 0091).
 
 ### Changed
 
