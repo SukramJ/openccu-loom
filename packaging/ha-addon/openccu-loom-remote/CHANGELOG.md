@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.103.0
+
+- **Version follows OpenCCU-Loom 0.103.0**: MQTT sub-devices become
+  Home Assistant child devices (needs Home Assistant 2026.11), and a
+  CCU central can be switched to openccu-lite; see the OpenCCU-Loom
+  changelog. The proxy itself is unchanged.
+
 # 0.102.1
 
 - **Version follows OpenCCU-Loom 0.102.1**, which fixes the start of

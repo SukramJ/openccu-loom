@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.103.0
+
+- **Breaking — MQTT sub-devices are Home Assistant child devices and
+  need Home Assistant 2026.11.** With `north.mqtt.sub_devices_enabled`
+  on, channel groups and the schedule are published as child devices
+  of their device. Restart Home Assistant or reload its MQTT
+  integration once after the upgrade; an older Home Assistant drops
+  these entities. Entity ids and topics are unchanged. Details are in
+  the OpenCCU-Loom changelog.
+- **A CCU central can be switched to openccu-lite, and back.** Saving
+  the central with an API token or an approved pairing failed after a
+  box moved from OpenCCU to openccu-lite.
+- With `north.mqtt.discovery_bundles`, a device document describes the
+  device whichever entity is published first.
+
 ## 0.102.1
 
 - **Version follows OpenCCU-Loom 0.102.1**, which fixes the start of
