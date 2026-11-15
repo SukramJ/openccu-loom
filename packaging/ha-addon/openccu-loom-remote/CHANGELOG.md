@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.104.0
+
+- **Version follows OpenCCU-Loom 0.104.0**, which changes the CCU
+  add-on on an openccu-lite box; see the OpenCCU-Loom changelog. The
+  proxy itself is unchanged.
+
 # 0.103.0
 
 - **Version follows OpenCCU-Loom 0.103.0**: MQTT sub-devices become

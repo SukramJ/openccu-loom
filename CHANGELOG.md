@@ -6,6 +6,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.104.0] - 2026-11-15
+
+On an openccu-lite box, the add-on moves the central a move from
+OpenCCU brought along to openccu-lite by itself.
+
 ### Added
 
 - **openccu-lite add-on: the central a move from OpenCCU brings along is

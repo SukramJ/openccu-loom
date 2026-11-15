@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.104.0
+
+- **Version follows OpenCCU-Loom 0.104.0**, in which the CCU add-on on
+  an openccu-lite box switches the central a move from OpenCCU brought
+  along to openccu-lite by itself. Nothing changes for the Home
+  Assistant add-on.
+
 ## 0.103.0
 
 - **Breaking — MQTT sub-devices are Home Assistant child devices and
