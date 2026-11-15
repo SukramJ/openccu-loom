@@ -27,6 +27,7 @@ func main() {
 func run() int {
 	optionsPath := flag.String("options", "/data/options.json", "path to the add-on options file")
 	listen := flag.String("listen", ":8234", "listen address (must match the add-on's ingress_port)")
+	statePath := flag.String("state", "", "path of the file keeping paired openccu-lite box tokens (empty: memory only)")
 	flag.Parse()
 
 	opts, err := remoteproxy.LoadOptions(*optionsPath)
@@ -34,6 +35,7 @@ func run() int {
 		slog.Error("invalid configuration", "path", *optionsPath, "error", err)
 		return 1
 	}
+	opts.StateFile = *statePath
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel(opts.LogLevel)}))
 	slog.SetDefault(log)

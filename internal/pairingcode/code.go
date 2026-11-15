@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-// Package pairing lets an external client obtain an API token without
-// anybody copying a secret: the client asks unauthenticated, both sides
-// independently derive the same six-digit code, an administrator compares
-// and TYPES that code in the Config UI, and the waiting client receives
-// its token exactly once. The protocol mirrors the occulited pairing this
-// daemon already speaks as a client (internal/client/transport/occulited),
-// with loom's role model in place of scope areas; the wire contract is
-// documented in docs/adr/0076-client-pairing.md.
-package pairing
+// Package pairingcode holds the six-digit code derivation of the pairing
+// protocol (docs/adr/0076-client-pairing.md). It is a stdlib-only leaf so
+// every side that speaks the protocol shares one formula: the daemon's own
+// pairing server (internal/pairing), its client towards an openccu-lite box
+// (internal/client/transport/occulited) and the remote add-on's proxy
+// (internal/remoteproxy), which must stay free of the daemon's auth stack.
+package pairingcode
 
 import (
 	"crypto/sha256"

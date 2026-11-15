@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/pairing"
+	"github.com/SukramJ/openccu-loom/internal/pairingcode"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -125,7 +126,7 @@ func TestClientPairingRoundTripMintsAUsableToken(t *testing.T) {
 		t.Fatalf("admin list: %v %s", err, rec.Body.String())
 	}
 	nonce, _ := hex.DecodeString(ans.Nonce)
-	if clientSide := pairing.Code(nonce, clientNonce, fingerprint); clientSide != list.Items[0].Code {
+	if clientSide := pairingcode.Code(nonce, clientNonce, fingerprint); clientSide != list.Items[0].Code {
 		t.Fatalf("client derives %q, card shows %q", clientSide, list.Items[0].Code)
 	}
 	// The card is admin-gated: an anonymous read is refused.

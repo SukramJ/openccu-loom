@@ -25,6 +25,9 @@ import (
 type Options struct {
 	LogLevel  string     `json:"log_level"`
 	Instances []Instance `json:"instances"`
+	// StateFile is where paired box tokens are kept (the --state flag,
+	// never part of the options file). Empty keeps them in memory only.
+	StateFile string `json:"-"`
 }
 
 // Instance describes one remote OpenCCU-Loom daemon reachable from the
@@ -34,7 +37,8 @@ type Options struct {
 type Instance struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
-	// Token is an optional API token of the remote instance. When set,
+	// Token is an optional API token of the remote instance. It wins
+	// over a token from a box pairing. When set,
 	// the proxy injects it as a Bearer credential into every upstream
 	// request that carries no credential of its own, so HA admins land
 	// in the UI without a second login (ADR 0054). When empty, requests

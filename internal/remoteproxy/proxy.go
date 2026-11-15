@@ -4,16 +4,22 @@
 package remoteproxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -57,25 +63,137 @@ type instanceProxy struct {
 	rp     *httputil.ReverseProxy
 	// client shares the proxy transport (connection pool, TLS mode) for
 	// the poller's direct status probes.
-	client *http.Client
-	log    *slog.Logger
+	client    *http.Client
+	transport *upstreamTransport
+	log       *slog.Logger
+
+	// normURL is the key a paired token is bound to.
+	normURL string
+	store   *pairStore
+	// pairOps serialises starting and cancelling a pairing.
+	pairOps sync.Mutex
+
+	mu sync.RWMutex
+	// paired is the box token a pairing left behind; zero when unpaired.
+	paired pairedCredential
+	// session is the latest pairing attempt, pending or finished.
+	session *pairSession
 }
 
-// newInstanceProxy wires the ReverseProxy for one instance. The URL has
-// been validated by LoadOptions; a parse failure here is programmer
-// error, hence the error return instead of a panic to keep the caller's
-// startup path uniform.
-func newInstanceProxy(inst Instance, prefix string, log *slog.Logger) (*instanceProxy, error) {
-	target, err := parseInstanceURL(inst.URL)
-	if err != nil {
-		return nil, fmt.Errorf("instance %q: %w", inst.Name, err)
+// Credential sources of an instance, as the overview and the pairing
+// routes report them.
+const (
+	authSourceNone    = ""
+	authSourceOptions = "options"
+	authSourcePaired  = "paired"
+)
+
+// authToken is the Bearer credential the proxy injects upstream. A
+// non-empty token from the add-on options always wins over a paired one:
+// the operator wrote it deliberately, typically a Full-access token for
+// admin rights a pairing never grants.
+func (p *instanceProxy) authToken() string {
+	if p.inst.Token != "" {
+		return p.inst.Token
 	}
-	p := &instanceProxy{
-		inst:   inst,
-		target: target,
-		prefix: prefix,
-		log:    log.With("instance", inst.Name),
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.paired.Token
+}
+
+// authSource names where authToken comes from.
+func (p *instanceProxy) authSource() string {
+	if p.inst.Token != "" {
+		return authSourceOptions
 	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.paired.Token != "" {
+		return authSourcePaired
+	}
+	return authSourceNone
+}
+
+// setPaired stores the credential a pairing yielded, then makes it the
+// instance's credential and pins its certificate.
+func (p *instanceProxy) setPaired(cred pairedCredential) error {
+	if err := p.store.put(p.inst.Name, cred); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	p.paired = cred
+	p.mu.Unlock()
+	p.applyPin()
+	return nil
+}
+
+// forgetPaired drops the paired credential from memory and from the state
+// file, and lifts its certificate pin.
+func (p *instanceProxy) forgetPaired(reason string) {
+	if err := p.store.drop(p.inst.Name); err != nil {
+		p.log.Warn("forgetting the paired token on disk failed", "error", err)
+	}
+	p.mu.Lock()
+	had := p.paired.Token != ""
+	p.paired = pairedCredential{}
+	p.mu.Unlock()
+	p.applyPin()
+	if had {
+		p.log.Info("paired token dropped", "reason", reason)
+	}
+}
+
+// applyPin pins the upstream transport to the paired certificate while
+// the paired token is the credential in use, and lifts the pin otherwise.
+func (p *instanceProxy) applyPin() {
+	var pin []byte
+	if p.inst.Token == "" {
+		p.mu.RLock()
+		fp := p.paired.Fingerprint
+		p.mu.RUnlock()
+		if b, err := hex.DecodeString(fp); err == nil && len(b) > 0 {
+			pin = b
+		}
+	}
+	p.transport.setPin(pin)
+}
+
+// upstreamTransport routes every upstream call (proxied requests and
+// status probes) through the current http.Transport. A pairing swaps the
+// transport when the certificate pin changes; connections of the old one
+// are closed when idle.
+type upstreamTransport struct {
+	https    bool
+	insecure bool
+	cur      atomic.Pointer[http.Transport]
+}
+
+func newUpstreamTransport(target *url.URL, insecure bool) *upstreamTransport {
+	t := &upstreamTransport{https: target.Scheme == "https", insecure: insecure}
+	t.cur.Store(t.build(nil))
+	return t
+}
+
+// RoundTrip implements http.RoundTripper.
+func (t *upstreamTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return t.cur.Load().RoundTrip(r)
+}
+
+// CloseIdleConnections lets http.Client.CloseIdleConnections reach the
+// current transport.
+func (t *upstreamTransport) CloseIdleConnections() {
+	t.cur.Load().CloseIdleConnections()
+}
+
+// setPin replaces the transport with one that accepts exactly the pinned
+// certificate (nil: the operator's verification mode).
+func (t *upstreamTransport) setPin(pin []byte) {
+	if old := t.cur.Swap(t.build(pin)); old != nil {
+		old.CloseIdleConnections()
+	}
+}
+
+func (t *upstreamTransport) build(pin []byte) *http.Transport {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -95,24 +213,60 @@ func newInstanceProxy(inst Instance, prefix string, log *slog.Logger) (*instance
 		// handshake, which the client transport does not speak over h2.
 		ForceAttemptHTTP2: false,
 	}
-	if target.Scheme == "https" {
-		transport.TLSClientConfig = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			//nolint:gosec // G402: explicit per-instance operator opt-in for self-signed LAN certificates (ADR 0054).
-			InsecureSkipVerify: inst.TLSInsecure,
-		}
+	if !t.https {
+		return transport
 	}
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		//nolint:gosec // G402: explicit per-instance operator opt-in for self-signed LAN certificates (ADR 0054).
+		InsecureSkipVerify: t.insecure,
+	}
+	if pin != nil {
+		// A paired box: the pin replaces chain verification, accepting
+		// exactly the certificate the pairing code was bound to.
+		transport.TLSClientConfig.VerifyConnection = pinVerifier(pin)
+		// The chain check is off only because the pin above is installed.
+		transport.TLSClientConfig.InsecureSkipVerify = transport.TLSClientConfig.VerifyConnection != nil //nolint:gosec // the pin in VerifyConnection is the verification
+	}
+	return transport
+}
+
+// newInstanceProxy wires the ReverseProxy for one instance. The URL has
+// been validated by LoadOptions; a parse failure here is programmer
+// error, hence the error return instead of a panic to keep the caller's
+// startup path uniform.
+func newInstanceProxy(inst Instance, prefix string, store *pairStore, log *slog.Logger) (*instanceProxy, error) {
+	target, err := parseInstanceURL(inst.URL)
+	if err != nil {
+		return nil, fmt.Errorf("instance %q: %w", inst.Name, err)
+	}
+	if store == nil {
+		store = &pairStore{log: log, entries: map[string]pairedCredential{}}
+	}
+	p := &instanceProxy{
+		inst:      inst,
+		target:    target,
+		prefix:    prefix,
+		log:       log.With("instance", inst.Name),
+		normURL:   normaliseInstanceURL(inst.URL),
+		store:     store,
+		transport: newUpstreamTransport(target, inst.TLSInsecure),
+	}
+	if cred, ok := store.get(inst.Name); ok {
+		p.paired = cred
+	}
+	p.applyPin()
 	p.rp = &httputil.ReverseProxy{
 		Rewrite:        p.rewrite,
 		ModifyResponse: p.modifyResponse,
 		ErrorHandler:   p.errorHandler,
-		Transport:      transport,
+		Transport:      p.transport,
 		// Flush every write immediately so streamed responses (SSE,
 		// long polls) traverse both proxy hops without buffering delay.
 		FlushInterval: -1,
 		ErrorLog:      slog.NewLogLogger(p.log.Handler(), slog.LevelWarn),
 	}
-	p.client = &http.Client{Transport: transport}
+	p.client = &http.Client{Transport: p.transport}
 	return p, nil
 }
 
@@ -146,8 +300,8 @@ func (p *instanceProxy) rewrite(pr *httputil.ProxyRequest) {
 	} else {
 		pr.Out.Header.Del(ingressPathHeader)
 	}
-	if p.inst.Token != "" && pr.In.Header.Get("Authorization") == "" {
-		pr.Out.Header.Set("Authorization", "Bearer "+p.inst.Token)
+	if token := p.authToken(); token != "" && pr.In.Header.Get("Authorization") == "" {
+		pr.Out.Header.Set("Authorization", "Bearer "+token)
 		// The injected token is the sole intended credential in token mode.
 		// Drop any daemon session cookie the browser sends so it cannot compete
 		// with (and, on the daemon, override) the token — a stale lower-role
@@ -191,6 +345,10 @@ func stripSessionCookie(req *http.Request) {
 // are scoped onto it so two instances cannot clobber each other's
 // session on the shared HA origin.
 func (p *instanceProxy) modifyResponse(resp *http.Response) error {
+	if p.isAuthWall(resp) {
+		p.serveAuthWall(resp)
+		return nil
+	}
 	// resp.Request is the outbound request, whose header already holds
 	// ingress base + instance prefix — exactly the browser-facing base.
 	// With no base AND no upstream base path there is nothing to map.
@@ -344,4 +502,70 @@ func (p *instanceProxy) errorHandler(w http.ResponseWriter, r *http.Request, err
 	}
 	p.log.Warn("upstream request failed", "path", r.URL.Path, "error", err)
 	serveUnreachable(w, r, p.inst.Name)
+}
+
+// isAuthWall reports whether an upstream answer is the openccu-lite box's
+// login wall in front of a browser navigation: a 401/403, or the gate's
+// redirect to the box login outside the instance path. Forwarded as is,
+// the redirect would be rebased into the ingress panel and bounce back
+// into the gate in a loop; the 401/403 would leave a bare JSON error.
+func (p *instanceProxy) isAuthWall(resp *http.Response) bool {
+	req := resp.Request
+	if req == nil || (req.Method != http.MethodGet && req.Method != http.MethodHead) {
+		return false
+	}
+	if !strings.Contains(req.Header.Get("Accept"), "text/html") {
+		return false
+	}
+	if mode := req.Header.Get("Sec-Fetch-Mode"); mode != "" && mode != "navigate" {
+		return false
+	}
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return true
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
+		http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return p.isBoxLoginRedirect(resp.Header.Get("Location"))
+	default:
+		return false
+	}
+}
+
+// isBoxLoginRedirect reports whether loc points at the box's /login page,
+// which lies outside the instance's base path on the same host.
+func (p *instanceProxy) isBoxLoginRedirect(loc string) bool {
+	u, err := url.Parse(loc)
+	if err != nil || (u.Host != "" && u.Host != p.target.Host) {
+		return false
+	}
+	if u.Path != "/login" || p.target.Path == "" {
+		return false
+	}
+	return !strings.HasPrefix(u.Path, p.target.Path+"/")
+}
+
+// serveAuthWall replaces the upstream answer with the page that explains
+// how to get through the box's login: pairing, or a token in the options.
+func (p *instanceProxy) serveAuthWall(resp *http.Response) {
+	// The outbound X-Ingress-Path is ingress base + instance prefix; the
+	// pairing route lives at the ingress base.
+	root := strings.TrimSuffix(resp.Request.Header.Get(ingressPathHeader), p.prefix)
+	status := resp.StatusCode
+	if status != http.StatusForbidden {
+		status = http.StatusUnauthorized
+	}
+	var buf bytes.Buffer
+	if err := authWallTmpl.Execute(&buf, p.authWallData(localeFor(resp.Request), root+"/-/pair/"+p.inst.Name)); err != nil {
+		p.log.Warn("rendering the login explanation failed", "error", err)
+	}
+	_ = resp.Body.Close()
+	resp.Body = io.NopCloser(&buf)
+	resp.ContentLength = int64(buf.Len())
+	resp.Header = http.Header{
+		"Content-Type":   {"text/html; charset=utf-8"},
+		"Cache-Control":  {"no-store"},
+		"Content-Length": {strconv.Itoa(buf.Len())},
+	}
+	resp.StatusCode = status
+	resp.Status = fmt.Sprintf("%d %s", status, http.StatusText(status))
 }

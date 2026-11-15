@@ -85,3 +85,12 @@ small, self-contained Go reverse proxy (`cmd/openccu-loom-remote`,
   audit log.
 - MQTT and Matter of the remote instance are out of scope by design —
   the add-on bridges the UI/REST/WS surface only.
+
+## Amendment (2026-11-15)
+
+An instance behind an openccu-lite box's gate can now be paired from the
+panel instead of carrying a hand-copied token: the proxy keeps the paired
+box token in its own state file, injects it like the options token (which
+still wins), pins the box certificate and explains the box's login wall
+instead of looping into it. The status poller runs in single-instance mode
+too. See [ADR 0091](./0091-remote-addon-box-pairing.md).

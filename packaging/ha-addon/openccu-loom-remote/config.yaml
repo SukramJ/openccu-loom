@@ -37,7 +37,9 @@ options:
   # Configure at least one remote instance before starting the add-on:
   #   - name: main            # slug; becomes the URL path /i/<name>/
   #     url: "http://192.168.1.10:8119"
-  #     token: "<api token>"  # optional: auto-login for HA admins
+  #     token: "<api token>"  # optional: auto-login for HA admins; wins over a
+  #                           # box pairing (an openccu-lite instance can be paired
+  #                           # from the panel instead, see DOCS.md)
   #     tls_insecure: false   # optional: allow self-signed https
   instances: []
 

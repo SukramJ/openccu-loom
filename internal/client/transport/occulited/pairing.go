@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/pairing"
+	"github.com/SukramJ/openccu-loom/internal/pairingcode"
 )
 
 // Pairing error codes of the box that a caller branches on.
@@ -195,9 +195,10 @@ func (c *Client) CancelPairing(ctx context.Context, p *Pairing) error {
 }
 
 // PairingCode is the six-digit code both sides compute. The derivation
-// is shared with this daemon's own pairing server (internal/pairing) —
-// the two speak the same protocol, one as the asking side against an
-// occulited box, one as the answering side towards external clients.
+// lives in internal/pairingcode, shared with this daemon's own pairing
+// server (internal/pairing) and the remote add-on's proxy: all speak the
+// same protocol, this client and the proxy as the asking side against an
+// occulited box, the server as the answering side towards external clients.
 func PairingCode(nonce, clientNonce, fingerprint []byte) string {
-	return pairing.Code(nonce, clientNonce, fingerprint)
+	return pairingcode.Code(nonce, clientNonce, fingerprint)
 }

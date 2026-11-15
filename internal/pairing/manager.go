@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
+// Package pairing lets an external client obtain an API token without
+// anybody copying a secret: the client asks unauthenticated, both sides
+// independently derive the same six-digit code (internal/pairingcode), an
+// administrator compares and TYPES that code in the Config UI, and the
+// waiting client receives its token exactly once. The protocol mirrors the
+// occulited pairing this daemon already speaks as a client
+// (internal/client/transport/occulited), with loom's role model in place of
+// scope areas; the wire contract is documented in
+// docs/adr/0076-client-pairing.md.
 package pairing
 
 import (
@@ -19,6 +28,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/pairingcode"
 )
 
 // Protocol limits. They are the contract's own throttle — the HTTP layer
@@ -514,7 +524,7 @@ func (m *Manager) Pending() []View {
 		out = append(out, View{
 			ID: r.id, App: r.ask.App, AppVersion: r.ask.AppVersion, Instance: r.ask.Instance,
 			Name: r.ask.Name, Address: r.address, Role: string(r.role), Purpose: r.ask.Purpose,
-			Code:        Code(r.nonce, r.clientNonce, r.fingerprint),
+			Code:        pairingcode.Code(r.nonce, r.clientNonce, r.fingerprint),
 			Fingerprint: hex.EncodeToString(r.fingerprint),
 			Created:     r.created, Expires: r.expires,
 		})
@@ -568,7 +578,7 @@ func (m *Manager) Approve(ctx context.Context, id, code, by string) (View, error
 		m.mu.Unlock()
 		return View{}, ErrNotReady
 	}
-	want := Code(r.nonce, r.clientNonce, r.fingerprint)
+	want := pairingcode.Code(r.nonce, r.clientNonce, r.fingerprint)
 	if subtle.ConstantTimeCompare([]byte(want), []byte(strings.TrimSpace(code))) != 1 {
 		r.state = StateRejected
 		m.mutes[r.address+"|"+r.ask.App] = time.Now().Add(MuteFor)

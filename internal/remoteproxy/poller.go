@@ -6,6 +6,8 @@ package remoteproxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,8 +22,12 @@ type InstanceStatus struct {
 	Name string `json:"name"`
 	// Status is the remote daemon's composite health when reachable
 	// (healthy | degraded | unhealthy), "unreachable" on probe failure,
-	// and "unknown" before the first probe completes.
-	Status     string    `json:"status"`
+	// "unauthorized" when the remote or the box in front of it refuses
+	// the credential (401/403), and "unknown" before the first probe.
+	Status string `json:"status"`
+	// Auth names the credential the proxy injects: "options", "paired"
+	// or empty. It is read live, not from the last probe.
+	Auth       string    `json:"auth,omitempty"`
 	Version    string    `json:"version,omitempty"`
 	APIVersion string    `json:"api_version,omitempty"`
 	Uptime     string    `json:"uptime,omitempty"`
@@ -30,8 +36,9 @@ type InstanceStatus struct {
 
 // Probe statuses beyond the remote daemon's own health vocabulary.
 const (
-	statusUnknown     = "unknown"
-	statusUnreachable = "unreachable"
+	statusUnknown      = "unknown"
+	statusUnreachable  = "unreachable"
+	statusUnauthorized = "unauthorized"
 )
 
 // defaultProbeInterval balances tile freshness against load on remote
@@ -105,7 +112,9 @@ func (p *poller) snapshot() []InstanceStatus {
 	defer p.mu.RUnlock()
 	out := make([]InstanceStatus, 0, len(p.instances))
 	for _, ip := range p.instances {
-		out = append(out, p.statuses[ip.inst.Name])
+		st := p.statuses[ip.inst.Name]
+		st.Auth = ip.authSource()
+		out = append(out, st)
 	}
 	return out
 }
@@ -131,7 +140,19 @@ func (p *poller) probe(ctx context.Context, ip *instanceProxy) InstanceStatus {
 	var health healthProbeResponse
 	// /api/v1/health answers 200 or, when unhealthy, 503 — both carry
 	// the JSON body, so the status code is deliberately not checked.
-	if err := ip.getJSON(ctx, "/api/v1/health", &health); err != nil || health.Status == "" {
+	err := ip.getJSON(ctx, "/api/v1/health", &health)
+	var refused *refusedError
+	if errors.As(err, &refused) {
+		st.Status = statusUnauthorized
+		// Only a 401 says the token itself is gone (unknown or expired on
+		// the box); a 403 is a token that is valid but does not open this
+		// path, which a new pairing would not change by itself.
+		if refused.status == http.StatusUnauthorized && ip.authSource() == authSourcePaired {
+			ip.forgetPaired("the box no longer accepts the paired token")
+		}
+		return st
+	}
+	if err != nil || health.Status == "" {
 		if err != nil {
 			p.log.Debug("health probe failed", "instance", ip.inst.Name, "error", err)
 		}
@@ -149,9 +170,16 @@ func (p *poller) probe(ctx context.Context, ip *instanceProxy) InstanceStatus {
 	return st
 }
 
+// refusedError is a probe the remote (or the box gate in front of it)
+// refused with 401 or 403.
+type refusedError struct{ status int }
+
+func (e *refusedError) Error() string { return fmt.Sprintf("credential refused with %d", e.status) }
+
 // getJSON issues one bounded GET against the instance and decodes the
 // JSON body. It reuses the proxy transport (connection pool, TLS mode)
 // and the instance token, mirroring what a proxied browser call sees.
+// A 401 or 403 is a *refusedError.
 func (ip *instanceProxy) getJSON(ctx context.Context, path string, into any) error {
 	reqCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -160,13 +188,16 @@ func (ip *instanceProxy) getJSON(ctx context.Context, path string, into any) err
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	if ip.inst.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+ip.inst.Token)
+	if token := ip.authToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := ip.client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return &refusedError{status: resp.StatusCode}
+	}
 	return json.NewDecoder(io.LimitReader(resp.Body, maxProbeBody)).Decode(into)
 }
