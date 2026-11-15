@@ -3,7 +3,8 @@ import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // openccu-lite in the SPA: the setup wizard identifies a box, pins its
 // certificate and pairs with it; the navigation drops views no configured
-// system serves; the CCU form edits a box without username and password.
+// system serves; the CCU form edits a box without username and password;
+// a CCU central the add-on could not move is moved from its warning.
 
 const FINGERPRINT = '3f'.repeat(32);
 
@@ -75,6 +76,79 @@ async function identifyAndConfirm(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Identify system' }).click();
   await expect(page.getByText(FINGERPRINT)).toBeVisible();
   await page.getByLabel('I compared this fingerprint with the one the box shows').check();
+}
+
+// A CCU central on a machine that now runs openccu-lite, with the warning
+// the add-on raises when it could not move the central by itself. The PUT
+// that switches the central is captured into `puts`.
+async function mockPendingLiteMove(
+  page: Page,
+  approve: boolean,
+  puts: Record<string, unknown>[] = [],
+): Promise<void> {
+  await mockAllApis(page);
+  await page.route('**/api/v1/warnings', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: 'lite-move:ccu1',
+            severity: 'warning',
+            central: 'ccu1',
+            message_key: 'warnings.lite_move_pending.ambiguous',
+            args: { central: 'ccu1' },
+            silenced: false,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/api/v1/centrals', (route) =>
+    route.fulfill({
+      json: [
+        {
+          name: 'ccu1',
+          host: '192.0.2.10',
+          enabled: true,
+          system_type: 'ccu',
+          username: 'Admin',
+          password_plain: '***',
+          primary_interface: 'HmIP-RF',
+          interfaces: [{ name: 'HmIP-RF' }, { name: 'BidCos-RF' }, { name: 'CUxD' }],
+        },
+      ],
+    }),
+  );
+  await page.route('**/api/v1/centrals/ccu1', async (route, request) => {
+    if (request.method() === 'PUT') puts.push(request.postDataJSON());
+    await route.fulfill({ status: 204, body: '' });
+  });
+  await page.route('**/api/v1/centrals/probe', (route) =>
+    route.fulfill({
+      json: {
+        system_type: 'openccu-lite',
+        ready: true,
+        lite: { implementation: 'occulited', pairing_available: true, interfaces: ['BidCos-RF', 'HmIP-RF'] },
+      },
+    }),
+  );
+  await page.route('**/api/v1/centrals/pairing', (route) =>
+    route.fulfill({ status: 201, json: { pairing_id: 'p-move', code: '042317', expires_in: 300 } }),
+  );
+  await page.route('**/api/v1/centrals/pairing/p-move**', (route) => {
+    if (route.request().method() === 'DELETE') return route.fulfill({ status: 204, body: '' });
+    if (!approve) return; // never answered: the pairing stays pending
+    return route.fulfill({ json: { state: 'approved', scopes: ['rpc:read', 'rpc:operate', 'meta:read'] } });
+  });
+}
+
+async function openLiteMove(page: Page): Promise<void> {
+  await page.goto('http://localhost:5173/app/#/diagnostics');
+  await page.getByRole('button', { name: 'Move to openccu-lite' }).click();
+  await expect(page.getByRole('dialog', { name: 'Move ccu1 to openccu-lite' })).toBeVisible();
+  await expect(page.getByText('Interfaces the box does not offer, with their devices: CUxD')).toBeVisible();
+  await page.getByRole('button', { name: 'Start pairing' }).click();
+  await expect(page.getByTestId('pairing-code')).toHaveText('042317');
 }
 
 test.describe('openccu-lite onboarding', () => {
@@ -183,6 +257,29 @@ test.describe('openccu-lite onboarding', () => {
     await expect(page.getByText('Username')).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Pair' })).toBeVisible();
   });
+
+  test('a pending move is paired from its warning and switches the central', async ({ page }) => {
+    const puts: Record<string, unknown>[] = [];
+    await mockPendingLiteMove(page, true, puts);
+    await page.goto('http://localhost:5173/app/#/diagnostics');
+    await page.getByRole('button', { name: 'Move to openccu-lite' }).click();
+    await page.getByRole('button', { name: 'Start pairing' }).click();
+    await expect(page.getByText('Central ccu1 now runs on openccu-lite.').first()).toBeVisible();
+    expect(puts).toEqual([
+      {
+        name: 'ccu1',
+        host: '192.0.2.10',
+        enabled: true,
+        system_type: 'openccu-lite',
+        pairing_id: 'p-move',
+        json_rpc_port: 0,
+        tls: false,
+        tls_insecure_skip_verify: false,
+        primary_interface: 'HmIP-RF',
+        interfaces: [{ name: 'BidCos-RF' }, { name: 'HmIP-RF' }],
+      },
+    ]);
+  });
 });
 
 test.describe('openccu-lite onboarding - visual', () => {
@@ -197,6 +294,18 @@ test.describe('openccu-lite onboarding - visual', () => {
       await expect(page.getByTestId('pairing-code')).toHaveText('042317');
       await addStylesForStableScreenshots(page);
       await expect(page).toHaveScreenshot(`lite-wizard-pairing-${theme}.png`, { fullPage: true });
+    });
+  }
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`lite move dialog ${theme}`, async ({ page }) => {
+      await setTheme(page, theme);
+      await mockPendingLiteMove(page, false);
+      await openLiteMove(page);
+      await addStylesForStableScreenshots(page);
+      await expect(page.getByRole('dialog').locator(':scope > div')).toHaveScreenshot(
+        `lite-move-dialog-${theme}.png`,
+      );
     });
   }
 });

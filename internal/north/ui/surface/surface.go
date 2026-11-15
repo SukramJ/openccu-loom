@@ -264,7 +264,10 @@ var registry = []Surface{
 	{ID: "settings.rest", Group: GroupSettings, Defaults: everywhere()},
 	{ID: "settings.discovery", Group: GroupSettings, Defaults: everywhere()},
 	{
-		// On the box the daemon creates the central for it by itself.
+		// On the box the daemon creates the central for it by itself. A
+		// central it could not move to openccu-lite is moved from its
+		// warning in Diagnostics instead, which opens the move dialog
+		// itself; the dialog is not a surface of its own.
 		ID: "settings.ccus", Group: GroupSettings, Defaults: hostOwned(),
 		Warn: WarnLastCCUEditor, WarnProfile: config.ProfileStandalone,
 		HAOwns: true, BoxOwns: true, MultiCentralVisible: true,

@@ -14,6 +14,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pointing at it, or the switch did not complete), the central now stands
   on the warning list, and through it on the box's Status page, with the
   way out for that reason. The warning goes once the central is switched.
+- **openccu-lite: a central waiting for its move is moved from its
+  warning.** An administrator now finds a "Move to openccu-lite" button on
+  that warning in Diagnostics (and the same dialog behind
+  `#/settings?tab=ccus&lite_move=<central>`). The dialog checks that the
+  box is up and offers pairing, shows a code to approve in the box's web
+  interface with a link to it, and switches the central once the box
+  approved. Before the pairing it names what the move leaves behind: the
+  interfaces the box does not offer (CUxD) with their devices, and the
+  programs and system variables, which openccu-lite does not have. The MCP
+  server does not offer this move, because it ends in an approval a person
+  gives on the box.
 
 ### Changed
 

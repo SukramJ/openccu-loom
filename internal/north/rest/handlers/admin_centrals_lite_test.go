@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -204,5 +205,50 @@ func TestUpdateCentral_SwitchToCCUDropsTheLiteCredentials(t *testing.T) {
 	}
 	if got.Username != "Admin" || got.PasswordPlain != "secret" {
 		t.Errorf("stored = user %q password %q, want the CCU credentials", got.Username, got.PasswordPlain)
+	}
+}
+
+// pairedOnboarding hands out one approved pairing's token.
+type pairedOnboarding struct{ countingOnboarding }
+
+func (*pairedOnboarding) PairingToken(id string) (token, fingerprint string, err error) {
+	if id != "p1" {
+		return "", "", errors.New("unknown pairing")
+	}
+	return testLiteToken, "", nil
+}
+
+// TestUpdateCentral_GuidedLiteMoveBodySaves pins the body the SPA's guided
+// move sends for a stored CCU central on the same machine: the approved
+// pairing supplies the token, and the explicitly cleared JSON-RPC port, TLS
+// settings and dropped CUxD interface pass the lite rules instead of coming
+// back through the omitted-field overlay.
+func TestUpdateCentral_GuidedLiteMoveBodySaves(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"box": {
+			Name: "box", Host: "127.0.0.1", Enabled: true,
+			Username: "Admin", PasswordPlain: "secret",
+			Port: 2010, Ports: map[string]int{"HmIP-RF": 2010},
+			JSONRPCPort: 8181, TLS: true, TLSInsecureSkipVerify: true,
+			PrimaryInterface: "CUxD",
+			Interfaces:       []config.InterfaceSpec{{Name: "HmIP-RF"}, {Name: "CUxD"}},
+		},
+	}}
+	body := strings.NewReader(`{"name":"box","host":"127.0.0.1","enabled":true,"system_type":"openccu-lite","pairing_id":"p1",` +
+		`"json_rpc_port":0,"tls":false,"tls_insecure_skip_verify":false,"primary_interface":"","interfaces":[{"name":"HmIP-RF"}]}`)
+	req := withChiParam(httptest.NewRequest(http.MethodPut, "/admin/centrals/box", body), "name", "box")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil, &pairedOnboarding{}).ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("PUT = %d %s", w.Code, w.Body.String())
+	}
+	got := svc.centrals["box"]
+	if got.SystemType != "openccu-lite" || got.APITokenPlain != testLiteToken {
+		t.Errorf("stored = type %q token %q, want openccu-lite with the paired token", got.SystemType, got.APITokenPlain)
+	}
+	if got.JSONRPCPort != 0 || got.TLS || got.TLSInsecureSkipVerify || got.PrimaryInterface != "" || len(got.Interfaces) != 1 {
+		t.Errorf("stored = jsonrpc %d tls %v insecure %v primary %q interfaces %v, want the CCU settings gone",
+			got.JSONRPCPort, got.TLS, got.TLSInsecureSkipVerify, got.PrimaryInterface, got.Interfaces)
 	}
 }

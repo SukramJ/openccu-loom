@@ -21,6 +21,7 @@
   import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import CentralOnboarding from "./CentralOnboarding.svelte";
+  import CentralLiteMoveDialog from "./CentralLiteMoveDialog.svelte";
   import { emptyOnboarding, liteCredential, liteReady, type OnboardingValue } from "$lib/onboarding/onboarding";
   import { featureName } from "$lib/features";
   import { centralStore } from "$lib/stores/centrals.svelte";
@@ -169,6 +170,14 @@
   function toggleMarker(list: DescriptionMarker[], m: DescriptionMarker): DescriptionMarker[] {
     return list.includes(m) ? list.filter((x) => x !== m) : [...list, m];
   }
+
+  // A central named by `#/settings?tab=ccus&lite_move=<central>`: its guided
+  // move to openccu-lite opens on arrival.
+  let { liteMove }: { liteMove?: string } = $props();
+  let liteMoveCentral = $state("");
+  $effect(() => {
+    liteMoveCentral = liteMove ?? "";
+  });
 
   let centrals = $state<CentralRow[]>([]);
   let loading = $state(true);
@@ -744,6 +753,15 @@
 </div>
 
 <!-- Add / Edit modal -->
+<CentralLiteMoveDialog
+  open={liteMoveCentral !== ""}
+  central={liteMoveCentral}
+  onClose={() => {
+    liteMoveCentral = "";
+    void load();
+  }}
+/>
+
 {#if showModal}
   <div
     class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
