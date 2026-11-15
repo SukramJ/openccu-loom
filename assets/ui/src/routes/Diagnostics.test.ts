@@ -25,6 +25,9 @@ const {
   mockToastSuccess,
   mockToastError,
   mockConfirmAsk,
+  mockListCentralsV2,
+  mockProbeCentral,
+  mockAuth,
 } = vi.hoisted(() => ({
   mockHealth: vi.fn(),
   mockListInterfaces: vi.fn(),
@@ -42,6 +45,9 @@ const {
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
   mockConfirmAsk: vi.fn(),
+  mockListCentralsV2: vi.fn(),
+  mockProbeCentral: vi.fn(),
+  mockAuth: { identity: { role: "admin" } as { role: string } | null },
 }));
 
 vi.mock("$lib/api/client", () => ({
@@ -59,6 +65,12 @@ vi.mock("$lib/api/client", () => ({
     getWarnings: (...args: unknown[]) => mockGetWarnings(...args),
     silenceWarning: (...args: unknown[]) => mockSilenceWarning(...args),
     unsilenceWarning: (...args: unknown[]) => mockUnsilenceWarning(...args),
+    listCentralsV2: (...args: unknown[]) => mockListCentralsV2(...args),
+    probeCentral: (...args: unknown[]) => mockProbeCentral(...args),
+    startCentralPairing: vi.fn(),
+    getCentralPairing: vi.fn(),
+    cancelCentralPairing: vi.fn(),
+    updateCentralV2: vi.fn(),
     captureDownloadURL: () => "",
     rpcRecordingDownloadUrl: () => "",
   },
@@ -91,6 +103,12 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: mockConfirmAsk },
 }));
 
+vi.mock("$lib/stores/auth.svelte", () => ({ authStore: mockAuth }));
+
+vi.mock("$lib/stores/centrals.svelte", () => ({
+  centralStore: { byName: () => undefined, refresh: vi.fn() },
+}));
+
 import Diagnostics from "./Diagnostics.svelte";
 
 beforeEach(() => {
@@ -116,6 +134,9 @@ beforeEach(() => {
   mockSilenceWarning.mockResolvedValue(undefined);
   mockUnsilenceWarning.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
+  mockAuth.identity = { role: "admin" };
+  mockListCentralsV2.mockResolvedValue([]);
+  mockProbeCentral.mockResolvedValue({ system_type: "ccu", ready: true });
 });
 
 afterEach(() => cleanup());
@@ -474,6 +495,57 @@ describe("Diagnostics — RPC recording poll", () => {
     await vi.advanceTimersByTimeAsync(11000);
 
     expect(mockListRpcRecordings.mock.calls.length).toBeGreaterThan(afterLoad);
+  });
+});
+
+describe("Diagnostics — pending lite move", () => {
+  const pending = {
+    id: "lite-move:ccu1",
+    severity: "warning",
+    central: "ccu1",
+    message_key: "warnings.lite_move_pending.ambiguous",
+    args: { central: "ccu1" },
+    silenced: false,
+  };
+
+  it("offers an admin the guided move on the warning and opens the dialog", async () => {
+    mockGetWarnings.mockResolvedValue([pending]);
+    mockListCentralsV2.mockResolvedValue([
+      { name: "ccu1", host: "192.0.2.10", enabled: true, interfaces: [{ name: "HmIP-RF" }] },
+    ]);
+    mockProbeCentral.mockResolvedValue({
+      system_type: "openccu-lite",
+      ready: true,
+      lite: { pairing_available: true, interfaces: ["HmIP-RF"] },
+    });
+    render(Diagnostics);
+
+    const action = await screen.findByText("diagnostics.warnings.lite_move_action");
+    await fireEvent.click(action);
+
+    await waitFor(() => expect(screen.getByTestId("lite-move-dialog")).toBeInTheDocument());
+    await waitFor(() => expect(mockProbeCentral).toHaveBeenCalledWith({ host: "192.0.2.10" }));
+    expect(await screen.findByText("lite_move.start")).toBeInTheDocument();
+  });
+
+  it("offers no move to a viewer", async () => {
+    mockAuth.identity = { role: "viewer" };
+    mockGetWarnings.mockResolvedValue([pending]);
+    render(Diagnostics);
+
+    await screen.findByText("warnings.lite_move_pending.ambiguous");
+    expect(screen.queryByText("diagnostics.warnings.lite_move_action")).not.toBeInTheDocument();
+  });
+
+  it("offers no move on a warning without a central or of another kind", async () => {
+    mockGetWarnings.mockResolvedValue([
+      { ...pending, central: undefined },
+      { ...pending, id: "health:mqtt", central: "ccu2", message_key: "warnings.health.unhealthy" },
+    ]);
+    render(Diagnostics);
+
+    await screen.findByText("warnings.health.unhealthy");
+    expect(screen.queryByText("diagnostics.warnings.lite_move_action")).not.toBeInTheDocument();
   });
 });
 

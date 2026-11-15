@@ -50,7 +50,8 @@
 
   // The tab named by the URL (`#/settings?tab=users`). Deep links and the
   // redirects from the views that were folded in here both arrive this way.
-  let { tab }: { tab?: string } = $props();
+  // `liteMove` names a central whose move to openccu-lite the CCU tab opens.
+  let { tab, liteMove }: { tab?: string; liteMove?: string } = $props();
 
   // Schema loaded once; passed down to all SectionEditors.
   let schemaFields = $state<ConfigSchemaField[]>([]);
@@ -707,7 +708,7 @@
         {/if}
 
       {:else if activeTab === "ccus"}
-        <CentralsAdmin />
+        <CentralsAdmin {liteMove} />
 
       {:else if activeTab === "mqtt"}
         {#if schemaLoading}

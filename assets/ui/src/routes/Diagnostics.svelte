@@ -27,6 +27,9 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { cn } from "$lib/utils";
+  import { authStore } from "$lib/stores/auth.svelte";
+  import CentralLiteMoveDialog from "$lib/components/settings/CentralLiteMoveDialog.svelte";
+  import { isLiteMoveWarning, liteMoveReason, type LiteMoveReason } from "$lib/onboarding/lite-move";
   // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   let health = $state<HealthSnapshot | null>(null);
@@ -108,6 +111,23 @@
 
   function warningMessage(w: Warning): string {
     return t(w.message_key, w.args);
+  }
+
+  // A central the add-on could not move to openccu-lite by itself gets the
+  // guided move right on its warning: in the lite profile the CCU settings
+  // are not reachable, so this row is the operator's way in.
+  const isAdmin = $derived(authStore.identity?.role === "admin");
+  let liteMove = $state<{ central: string; reason: LiteMoveReason } | null>(null);
+
+  function liteMoveOffer(w: Warning): { central: string; reason: LiteMoveReason } | null {
+    if (!isAdmin || !w.central || !isLiteMoveWarning(w.id)) return null;
+    const reason = liteMoveReason(w.message_key);
+    return reason ? { central: w.central, reason } : null;
+  }
+
+  function closeLiteMove() {
+    liteMove = null;
+    void loadWarnings();
   }
 
   async function loadReliability() {
@@ -704,6 +724,7 @@
     {:else}
       <ul class="space-y-2">
         {#each warnings as w (w.id)}
+          {@const offer = liteMoveOffer(w)}
           <li
             class={cn(
               "rounded border border-slate-200 p-2 dark:border-slate-800",
@@ -718,6 +739,11 @@
                 <Badge variant="muted">{w.central}</Badge>
               {/if}
               <span class="flex-1 text-sm">{warningMessage(w)}</span>
+              {#if offer}
+                <Button type="button" size="sm" onclick={() => (liteMove = offer)}>
+                  {t("diagnostics.warnings.lite_move_action")}
+                </Button>
+              {/if}
               {#if w.silenced}
                 <span class="text-xs text-[var(--ha-secondary-text-color)]">
                   {t("diagnostics.warnings.silenced_until", {
@@ -1358,4 +1384,10 @@
       </ul>
     {/if}
   </Card>
+  <CentralLiteMoveDialog
+    open={liteMove !== null}
+    central={liteMove?.central ?? ""}
+    reason={liteMove?.reason ?? null}
+    onClose={closeLiteMove}
+  />
 </PageShell>

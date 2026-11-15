@@ -289,7 +289,7 @@
     | { kind: "diagnostics" }
     | { kind: "fleet" }
     | { kind: "logs" }
-    | { kind: "settings"; tab?: string }
+    | { kind: "settings"; tab?: string; liteMove?: string }
     | { kind: "inbox" }
     | { kind: "firmware" }
     | { kind: "signal" }
@@ -331,7 +331,13 @@
     if (path === "/fleet") return { kind: "fleet" };
     if (path === "/logs") return { kind: "logs" };
     if (rawPath === "/settings") {
-      return { kind: "settings", tab: new URLSearchParams(query).get("tab") ?? undefined };
+      // `lite_move` opens the guided move of that central to openccu-lite.
+      const params = new URLSearchParams(query);
+      return {
+        kind: "settings",
+        tab: params.get("tab") ?? undefined,
+        liteMove: params.get("lite_move") ?? undefined,
+      };
     }
     if (path === "/inbox") return { kind: "inbox" };
     if (path === "/firmware") return { kind: "firmware" };
@@ -539,7 +545,7 @@
             </section>
           {/if}
         {:else if route.kind === "settings"}
-          <Settings tab={route.tab} />
+          <Settings tab={route.tab} liteMove={route.liteMove} />
         {:else if route.kind === "inbox"}
           <Inbox />
         {:else if route.kind === "firmware"}
