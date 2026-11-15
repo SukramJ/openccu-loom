@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **openccu-lite add-on: the central a move from OpenCCU brings along is
+  switched to openccu-lite by itself.** After a box moved from OpenCCU to
+  openccu-lite, its central was still a CCU central and waited for a CCU
+  forever, so the daemon had no devices. At start the add-on now moves
+  the one CCU central that points at the box itself to openccu-lite,
+  with the box's add-on token; the central keeps its name. A CCU
+  elsewhere on the network is not touched. Where the daemon cannot do it
+  — the box minted no token for the add-on, or more than one central
+  points at the box — the `/health` component `config.lite_addon` names
+  the central and what to do.
+
 ## [0.103.0] - 2026-11-15
 
 MQTT sub-devices are Home Assistant child devices, and a central can
