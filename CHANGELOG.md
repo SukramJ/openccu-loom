@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **openccu-lite add-on: the automatic move of a central keeps its
+  settings.** The move from OpenCCU to openccu-lite of 0.104.0 deleted the
+  central's hidden and locked channels, visibility exceptions, recording
+  exceptions and Matter exposures. The central keeps them now.
+- **Centrals: an edit to how a running central is reached takes effect on
+  save.** Changing the host, the ports, TLS, the credentials, the system
+  type or the interfaces of a running central needed a daemon restart
+  before; the central is now restarted on the new configuration when the
+  edit is saved.
+
 ## [0.104.0] - 2026-11-15
 
 On an openccu-lite box, the add-on moves the central a move from

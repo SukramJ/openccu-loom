@@ -22,9 +22,9 @@ import (
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
-// putRecorder notes the enabled flag of every Put, in order: the live
-// admin service stops a central on a disabled save and starts it on an
-// enabled one, so the sequence is what moves a running central.
+// putRecorder notes the enabled flag of every Put, in order: a disabled save
+// is a removal to the live admin service, which deletes what is stored under
+// the central's name, so the sequence shows whether a move keeps it.
 type putRecorder struct {
 	handlers.CentralAdminService
 	mu   sync.Mutex
@@ -60,9 +60,9 @@ func migratedCCURow(name string) sqlitestore.CentralRow {
 // the central a move from OpenCCU to openccu-lite leaves behind: the one CCU
 // central pointing at the box itself becomes an openccu-lite central under
 // its own name, credentialed by the add-on token file, with the box's
-// interfaces and none of the CCU's fields — saved disabled first and then
-// enabled, which is how a running central is restarted on a new
-// configuration.
+// interfaces and none of the CCU's fields — in one enabled save, which the
+// live admin service turns into a restart; a disabled save first would be a
+// removal and delete what is stored under the central's name.
 func TestLiteAddonOnboardingMovesTheMigratedCentralToLite(t *testing.T) {
 	store, fake := startOnboardFixture(t)
 	ctx := t.Context()
@@ -119,8 +119,8 @@ func TestLiteAddonOnboardingMovesTheMigratedCentralToLite(t *testing.T) {
 	if row.PrimaryInterface != "" {
 		t.Errorf("primary interface = %q, want it dropped with CUxD", row.PrimaryInterface)
 	}
-	if seq := admin.sequence(); len(seq) != 2 || seq[0] || !seq[1] {
-		t.Errorf("Put sequence (enabled) = %v, want [false true]", seq)
+	if seq := admin.sequence(); len(seq) != 1 || !seq[0] {
+		t.Errorf("Put sequence (enabled) = %v, want [true]", seq)
 	}
 }
 

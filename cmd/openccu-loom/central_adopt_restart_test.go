@@ -1,0 +1,258 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 SukramJ.
+
+package main
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
+	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/measurements"
+	loomendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+const (
+	restartDevice  = "AAAA0001"
+	restartChannel = restartDevice + ":1"
+)
+
+// restartFixture is a live orchestrator behind the real live admin service,
+// with every store that holds per-central operator state wired the way the
+// daemon wires it — including the per-device evictors, which delete that
+// state on a device removal that is not a teardown.
+type restartFixture struct {
+	reg        *central.Registry
+	orch       *centralOrchestrator
+	admin      *liveCentralAdmin
+	flags      *sqlitestore.ChannelFlagsStore
+	overlay    *channelflags.Overlay
+	recStore   *sqlitestore.RecordingOverrideStore
+	recording  *measurements.RecordingOverrides
+	visibility *sqlitestore.VisibilityUnIgnoreStore
+	exposures  *loomendpoint.Store
+	values     *sqlitestore.ValuesCacheStore
+	exposure   loomendpoint.SourceKey
+	retired    []string
+}
+
+func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restartFixture {
+	t.Helper()
+	db := openMigratedTestDB(t, dbName)
+	f := &restartFixture{
+		reg:        central.NewRegistry(),
+		flags:      sqlitestore.NewChannelFlagsStore(db),
+		overlay:    channelflags.New(),
+		recStore:   sqlitestore.NewRecordingOverrideStore(db),
+		visibility: sqlitestore.NewVisibilityUnIgnoreStore(db),
+		exposures:  loomendpoint.New(db),
+		values:     sqlitestore.NewValuesCacheStore(db),
+	}
+	f.recording = measurements.NewRecordingOverrides(f.recStore, nil, nil)
+
+	flagsEvictor := adapter.WireChannelFlagsEviction(f.reg, f.flags, f.overlay, discardTestLogger())
+	t.Cleanup(flagsEvictor.Stop)
+	recEvictor := adapter.WireRecordingOverrideEviction(f.reg, f.recording, discardTestLogger())
+	t.Cleanup(recEvictor.Stop)
+	valuesEvictor := adapter.WireValuesCacheEviction(f.reg, f.values, discardTestLogger())
+	t.Cleanup(valuesEvictor.Stop)
+
+	f.orch = buildLiveTestOrchestrator(ctx, t, f.reg, &config.Config{})
+	f.orch.channelFlagsStore = f.flags
+	f.orch.channelFlagsOverlay = f.overlay
+	f.orch.recordingStore = f.recStore
+	f.orch.recordingOverrides = f.recording
+	f.orch.valuesCacheStore = f.values
+	f.orch.sbDeps.visibilityUnIgnoreStore = f.visibility
+	f.orch.setMatterExposureStore(f.exposures)
+	f.orch.setMatterPartitionRetirer(func(_ context.Context, name string) error {
+		f.retired = append(f.retired, name)
+		return nil
+	})
+	admin, ok := newLiveCentralAdmin(newFakeCentralAdmin(), f.orch, discardTestLogger()).(*liveCentralAdmin)
+	if !ok {
+		t.Fatal("newLiveCentralAdmin did not return the live admin service")
+	}
+	f.admin = admin
+	return f
+}
+
+// adoptAndSeed brings row up live, puts a device into its model and seeds the
+// operator state stored under its name: a channel flag, an un-ignore pattern,
+// a recording override, a Matter exposure, and a VALUES cache row per
+// configured interface.
+func (f *restartFixture) adoptAndSeed(ctx context.Context, t *testing.T, row sqlitestore.CentralRow) {
+	t.Helper()
+	if err := f.admin.Put(ctx, row); err != nil {
+		t.Fatalf("Put(initial): %v", err)
+	}
+	unit, ok := f.reg.Get(row.Name)
+	if !ok {
+		t.Fatal("precondition: central not live after the initial Put")
+	}
+	d := device.New(device.Config{
+		InterfaceID: row.Name + "-HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		Address: restartDevice, Model: "HmIP-PS", Name: "Switch",
+	})
+	d.AddChannel(restartChannel, 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	unit.ModelRegistry.Put(d)
+
+	if err := f.flags.Set(ctx, row.Name, restartChannel, true, false, "test"); err != nil {
+		t.Fatalf("seed channel flag: %v", err)
+	}
+	f.overlay.Set(row.Name, restartChannel, channelflags.Flags{Hidden: true})
+	if err := f.visibility.Replace(ctx, row.Name, []string{"ACTIVE"}, "test"); err != nil {
+		t.Fatalf("seed un-ignore pattern: %v", err)
+	}
+	// The override is keyed by the device's interface id, the value the
+	// removal event carries and the recording evictor matches on.
+	if err := f.recording.Set(ctx, row.Name, d.InterfaceID, restartChannel, "STATE", false, "test"); err != nil {
+		t.Fatalf("seed recording override: %v", err)
+	}
+	f.exposure = loomendpoint.SourceKey{CentralName: row.Name, DeviceAddress: restartDevice, ChannelNo: 1, DPKind: loomendpoint.DPKindCustom, DPKey: "switch"}
+	if err := f.exposures.UpsertExposure(ctx, loomendpoint.ExposureRecord{Key: f.exposure, Enabled: true, Actor: "test"}); err != nil {
+		t.Fatalf("seed Matter exposure: %v", err)
+	}
+	now := time.Now()
+	for _, ifc := range row.Interfaces {
+		if err := f.values.SaveValue(ctx, row.Name, row.Name+"-"+ifc.Name, restartChannel, "STATE", true, now, now); err != nil {
+			t.Fatalf("seed values cache %s: %v", ifc.Name, err)
+		}
+	}
+}
+
+// valuesRows counts the VALUES cache rows of one interface of the named central.
+func (f *restartFixture) valuesRows(ctx context.Context, t *testing.T, name, iface string) int {
+	t.Helper()
+	rows, err := f.values.LoadChannel(ctx, name, name+"-"+iface, restartChannel)
+	if err != nil {
+		t.Fatalf("LoadChannel(%s): %v", iface, err)
+	}
+	return len(rows)
+}
+
+// TestLiveCentralAdminPutRestartKeepsTheCentralsStoredState pins that an edit
+// changing how a running central is reached is a restart, not a removal. The
+// central comes back live on the new configuration, and everything the
+// operator stored under its name — hidden/locked channels, visibility
+// un-ignore patterns, recording overrides, Matter exposures and the Matter
+// partition — is still there; only the cache rows of the interface the edit
+// dropped are gone. The move of a central to openccu-lite is such an edit.
+func TestLiveCentralAdminPutRestartKeepsTheCentralsStoredState(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	f := newRestartFixture(ctx, t, "central_restart_keeps_state.db")
+
+	const name = "restart-keeps"
+	row := sqlitestore.CentralRow{
+		Name: name, Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}, {Name: "CUxD", Port: 1}},
+	}
+	f.adoptAndSeed(ctx, t, row)
+	before, _ := f.reg.Get(name)
+
+	edited := row
+	edited.Host = "127.0.0.2"
+	edited.SystemType = "openccu-lite"
+	edited.Interfaces = []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}}
+	if err := f.admin.Put(ctx, edited); err != nil {
+		t.Fatalf("Put(edited): %v", err)
+	}
+	t.Cleanup(func() { _ = f.orch.removeCentral(context.Background(), name) })
+
+	after, ok := f.reg.Get(name)
+	if !ok || after == before {
+		t.Fatalf("after the edit live=%v, same unit=%v; want a new unit on the new configuration", ok, after == before)
+	}
+	if cc, ok := f.orch.centralConfigFor(name); !ok || cc.Host != "127.0.0.2" || len(cc.Interfaces) != 1 {
+		t.Errorf("live config after the edit = %+v, want host 127.0.0.2 with one interface", cc)
+	}
+
+	// The per-device evictors run on the bus; give a wrongly flavoured
+	// removal event the window it would need to delete anything.
+	time.Sleep(250 * time.Millisecond)
+
+	rows, err := f.flags.List(ctx)
+	if err != nil {
+		t.Fatalf("channel flags List: %v", err)
+	}
+	if len(rows) != 1 || !f.overlay.Get(name, restartChannel).Hidden {
+		t.Errorf("channel flags after the restart: %d row(s), overlay hidden=%v; want the hidden channel kept",
+			len(rows), f.overlay.Get(name, restartChannel).Hidden)
+	}
+	if patterns, err := f.visibility.Patterns(ctx, name); err != nil || len(patterns) != 1 {
+		t.Errorf("un-ignore patterns after the restart = %v (err %v), want the pattern kept", patterns, err)
+	}
+	if f.recording.Decide(name, name+"-HmIP-RF", restartChannel, "STATE", true) {
+		t.Error("the recording override no longer applies after the restart")
+	}
+	if overrides, err := f.recStore.List(ctx); err != nil || len(overrides) != 1 {
+		t.Errorf("recording override rows after the restart = %+v (err %v), want the row kept", overrides, err)
+	}
+	if _, err := f.exposures.GetExposure(ctx, f.exposure); err != nil {
+		t.Errorf("Matter exposure after the restart: %v, want it kept", err)
+	}
+	if len(f.retired) != 0 {
+		t.Errorf("the restart retired the Matter partition of %v; its endpoint numbers must stay", f.retired)
+	}
+	if n := f.valuesRows(ctx, t, name, "HmIP-RF"); n != 1 {
+		t.Errorf("values cache rows of the kept interface = %d, want 1", n)
+	}
+	if n := f.valuesRows(ctx, t, name, "CUxD"); n != 0 {
+		t.Errorf("values cache rows of the dropped interface = %d, want 0", n)
+	}
+}
+
+// TestLiveCentralAdminPutDisableStillPurgesTheCentralsStoredState pins the
+// other half: a disabled save of a running central is a removal, and a
+// removal deletes everything stored under the central's name.
+func TestLiveCentralAdminPutDisableStillPurgesTheCentralsStoredState(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	f := newRestartFixture(ctx, t, "central_disable_purges_state.db")
+
+	const name = "disable-purges"
+	row := sqlitestore.CentralRow{
+		Name: name, Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}},
+	}
+	f.adoptAndSeed(ctx, t, row)
+
+	row.Enabled = false
+	if err := f.admin.Put(ctx, row); err != nil {
+		t.Fatalf("Put(disabled): %v", err)
+	}
+	if _, ok := f.reg.Get(name); ok {
+		t.Fatal("central still live after a disabled save")
+	}
+
+	if rows, err := f.flags.List(ctx); err != nil || len(rows) != 0 {
+		t.Errorf("channel flag rows after the removal = %d (err %v), want 0", len(rows), err)
+	}
+	if f.overlay.Get(name, restartChannel).Set() {
+		t.Error("the channel-flags overlay kept the removed central's entry")
+	}
+	if patterns, err := f.visibility.Patterns(ctx, name); err != nil || len(patterns) != 0 {
+		t.Errorf("un-ignore patterns after the removal = %v (err %v), want none", patterns, err)
+	}
+	if overrides, err := f.recStore.List(ctx); err != nil || len(overrides) != 0 {
+		t.Errorf("recording override rows after the removal = %+v (err %v), want none", overrides, err)
+	}
+	if _, err := f.exposures.GetExposure(ctx, f.exposure); !errors.Is(err, loomendpoint.ErrExposureNotFound) {
+		t.Errorf("Matter exposure after the removal: err=%v, want ErrExposureNotFound", err)
+	}
+	if len(f.retired) != 1 || f.retired[0] != name {
+		t.Errorf("retired partitions = %v, want [%s]", f.retired, name)
+	}
+	if n := f.valuesRows(ctx, t, name, "HmIP-RF"); n != 0 {
+		t.Errorf("values cache rows after the removal = %d, want 0", n)
+	}
+}

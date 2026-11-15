@@ -425,8 +425,8 @@ func newCentralOrchestrator(
 
 // isRegistered reports whether name is currently registered in the shared
 // central registry — true for both a boot-time central and one this
-// orchestrator adopted. The REST decorator uses this to make PUT idempotent
-// for an already-live central (update-in-place is out of scope for PR3).
+// orchestrator adopted. The REST decorator uses this to tell a PUT for an
+// already-live central (a restart or a no-op) from one that adopts it.
 func (o *centralOrchestrator) isRegistered(name string) bool {
 	_, ok := o.reg.Get(name)
 	return ok
@@ -485,7 +485,14 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	lock := o.lifecycleLock(cc.Name)
 	lock.Lock()
 	defer lock.Unlock()
+	return o.adoptCentralLocked(ctx, cc)
+}
 
+// adoptCentralLocked is adoptCentral's body, run with the central's lifecycle
+// lock already held: [centralOrchestrator.restartCentral] brings the central
+// up again under the same lock it tore it down with, so no adopt or remove
+// can slip in between.
+func (o *centralOrchestrator) adoptCentralLocked(ctx context.Context, cc config.CentralConfig) error {
 	logger := o.logger.With(slog.String("central", cc.Name))
 	unit, err := central.New(central.Config{
 		Name:         cc.Name,
@@ -636,6 +643,104 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	lock.Lock()
 	defer lock.Unlock()
 
+	h, err := o.teardownCentralLocked(name, evictModel) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
+	if err != nil {
+		return err
+	}
+
+	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.recordingStore,
+		o.recordingOverrides, o.sbDeps.visibilityUnIgnoreStore, o.channelFlagsStore, o.channelFlagsOverlay,
+		h.cc, o.logger)
+	if o.matterExposureStore != nil {
+		if err := o.matterExposureStore.DeleteForCentral(ctx, name); err != nil {
+			o.logger.Warn("central.remove.purge_matter_exposures",
+				slog.String("central", name), slog.String("err", err.Error()))
+		}
+	}
+	o.mu.Lock()
+	retire := o.matterRetire
+	o.mu.Unlock()
+	if retire != nil {
+		if err := retire(ctx, name); err != nil {
+			o.logger.Warn("central.remove.retire_matter_partition",
+				slog.String("central", name), slog.String("err", err.Error()))
+		}
+	}
+	o.logger.Info("central.remove.live", slog.String("central", name))
+	return nil
+}
+
+// restartCentral brings a live central down and up again on cc, for an edit
+// that changes how the central is reached. The running unit reads its
+// configuration once, at adopt time, so such an edit only takes effect
+// through a new unit.
+//
+// It is not a removal: the central keeps its name, and with it everything
+// stored under that name — channel flags, visibility un-ignore patterns,
+// recording overrides, Matter exposures and the Matter partition — so none
+// of removeCentral's purges run. The model is evicted as a teardown
+// ([central.Unit.RemoveDeviceForTeardown]): the north-bound planes still
+// retract the devices, while the per-device evictors of the channel flags,
+// the recording overrides and the VALUES/MASTER cache stand down, exactly as
+// for a cache-clear re-init. The only stored rows that go are the
+// VALUES/MASTER cache rows of interfaces the previous configuration had and
+// cc no longer has; nothing can ever reach them again.
+//
+// The central's lifecycle lock is held across the teardown and the adopt,
+// so no concurrent adopt or remove can observe the central between the two.
+func (o *centralOrchestrator) restartCentral(ctx context.Context, cc config.CentralConfig) error {
+	if cc.Name == "" {
+		return errors.New("central_restart: central name required")
+	}
+	lock := o.lifecycleLock(cc.Name)
+	lock.Lock()
+	defer lock.Unlock()
+
+	h, err := o.teardownCentralLocked(cc.Name, evictModelForRestart) //nolint:contextcheck // the teardown runs to completion regardless of the caller's ctx; its hub retract publishes on the fan-out worker's own context
+	if err != nil {
+		return err
+	}
+	o.purgeDroppedInterfaceCaches(ctx, h.cc, cc)
+	if err := o.adoptCentralLocked(ctx, cc); err != nil {
+		return fmt.Errorf("central_restart: %w", err)
+	}
+	o.logger.Info("central.restart.live", slog.String("central", cc.Name))
+	return nil
+}
+
+// purgeDroppedInterfaceCaches deletes the VALUES/MASTER cache rows of every
+// interface prev configured and next does not. The rows are keyed by
+// `<central>-<interface>`, so a retained interface keeps its rows across the
+// restart and a dropped one would otherwise keep them forever.
+func (o *centralOrchestrator) purgeDroppedInterfaceCaches(ctx context.Context, prev, next config.CentralConfig) {
+	for _, ifc := range prev.Interfaces {
+		if slices.ContainsFunc(next.Interfaces, func(n config.InterfaceSpec) bool { return n.Name == ifc.Name }) {
+			continue
+		}
+		wireIface := cachereset.StoreInterfaceID(prev.Name, ifc.Name)
+		if o.valuesCacheStore != nil {
+			if _, err := o.valuesCacheStore.DeleteForInterface(ctx, prev.Name, wireIface); err != nil {
+				o.logger.Warn("central.restart.purge_values_cache",
+					slog.String("central", prev.Name), slog.String("interface", wireIface), slog.String("err", err.Error()))
+			}
+		}
+		if o.masterValuesStore != nil {
+			if _, err := o.masterValuesStore.DeleteForInterface(ctx, prev.Name, wireIface); err != nil {
+				o.logger.Warn("central.restart.purge_master_values",
+					slog.String("central", prev.Name), slog.String("interface", wireIface), slog.String("err", err.Error()))
+			}
+		}
+	}
+}
+
+// teardownCentralLocked is the teardown removeCentral and restartCentral
+// share, run with the central's lifecycle lock held: it drops the handle,
+// drains southbound, runs the per-central unwires, retracts the hub plane,
+// evicts the model through evict, stops the unit and detaches the event
+// bridge — in the order removeCentral documents. It returns the handle, whose
+// configuration names the interfaces the central had, or [errCentralNotLive]
+// when the name is live nowhere. It deletes nothing stored.
+func (o *centralOrchestrator) teardownCentralLocked(name string, evict func(*central.Unit)) (*centralHandle, error) {
 	o.mu.Lock()
 	h, ok := o.handles[name]
 	if ok {
@@ -659,7 +764,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		// still has something to purge. The per-central subscriptions ride the
 		// unit's EventBus and are dropped by Unit.Stop.
 		if h = o.bootHandle(name); h == nil {
-			return fmt.Errorf("%w: %s", errCentralNotLive, name)
+			return nil, fmt.Errorf("%w: %s", errCentralNotLive, name)
 		}
 	}
 
@@ -715,7 +820,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 			//nolint:contextcheck // RetractCentral publishes on the fan-out worker's own context, like every publisher method
 			o.sbDeps.hubMQTT.RetractCentral(unit, connectivityInterfaces)
 		}
-		evictModel(unit)
+		evict(unit)
 		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
 	}
 	// The event bridge is released only now: it owns the DeviceRemovedEvent
@@ -725,27 +830,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	if h.detachBridge != nil {
 		h.detachBridge()
 	}
-
-	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.recordingStore,
-		o.recordingOverrides, o.sbDeps.visibilityUnIgnoreStore, o.channelFlagsStore, o.channelFlagsOverlay,
-		h.cc, o.logger)
-	if o.matterExposureStore != nil {
-		if err := o.matterExposureStore.DeleteForCentral(ctx, name); err != nil {
-			o.logger.Warn("central.remove.purge_matter_exposures",
-				slog.String("central", name), slog.String("err", err.Error()))
-		}
-	}
-	o.mu.Lock()
-	retire := o.matterRetire
-	o.mu.Unlock()
-	if retire != nil {
-		if err := retire(ctx, name); err != nil {
-			o.logger.Warn("central.remove.retire_matter_partition",
-				slog.String("central", name), slog.String("err", err.Error()))
-		}
-	}
-	o.logger.Info("central.remove.live", slog.String("central", name))
-	return nil
+	return h, nil
 }
 
 // bootHandle synthesises the teardown handle for a central this orchestrator
@@ -831,6 +916,24 @@ func evictModel(u *central.Unit) {
 	if u == nil || u.ModelRegistry == nil {
 		return
 	}
+	evictDevices(u, u.RemoveDevice)
+}
+
+// evictModelForRestart is [evictModel] for a central that comes straight back
+// under the same name: each removal carries ModelTeardown, so the north-bound
+// planes still retract the devices while the per-device evictors of stored
+// state stand down — the restarted central re-pulls the same devices and the
+// operator's settings for them must still apply.
+func evictModelForRestart(u *central.Unit) {
+	if u == nil || u.ModelRegistry == nil {
+		return
+	}
+	evictDevices(u, u.RemoveDeviceForTeardown)
+}
+
+// evictDevices drops every device from u's model registries and removes it
+// from the unit through remove, which decides the removal event's flavour.
+func evictDevices(u *central.Unit, remove func(address string) bool) {
 	for _, d := range u.ModelRegistry.List() {
 		iface := hmtypes.ParseWireInterfaceID(d.InterfaceID)
 		if u.DescRegistry != nil {
@@ -844,7 +947,7 @@ func evictModel(u *central.Unit) {
 		if u.DeviceRegistry != nil {
 			u.DeviceRegistry.Remove(iface, d.Address)
 		}
-		u.RemoveDevice(d.Address)
+		remove(d.Address)
 	}
 }
 
@@ -961,11 +1064,12 @@ func (l *liveCentralAdmin) List(ctx context.Context) ([]sqlite.CentralRow, error
 // disabled row that IS currently registered gets torn down (mirroring
 // Delete's live-then-persisted order, just with the persist happening
 // first here since the row itself is not removed); an edit to a row that
-// stays enabled AND already registered cannot be hot-applied — live
-// in-place reconfiguration of a running central is out of scope for now —
-// so that case is logged instead of silently doing nothing. Every branch
-// leaves an audit trail; none of them return a success signal that masks a
-// live state the operator did not ask for.
+// stays enabled AND already registered restarts the central on the new
+// configuration when it changes how the central is reached
+// ([centralConfigNeedsRestart]), keeping everything stored under its name,
+// and is a logged no-op otherwise. Every branch leaves an audit trail; none
+// of them return a success signal that masks a live state the operator did
+// not ask for.
 func (l *liveCentralAdmin) Put(ctx context.Context, row sqlite.CentralRow) error {
 	// Read the previously persisted row (if any) BEFORE the write so the
 	// still-enabled/already-live branch below can tell an actual config
@@ -991,16 +1095,19 @@ func (l *liveCentralAdmin) Put(ctx context.Context, row sqlite.CentralRow) error
 		return nil
 	}
 
+	cc, _ := configstore.RowToCentralConfig(row, os.Getenv)
 	if live {
-		if hadPrev && centralConfigNeedsRestart(prev, row) {
-			l.logger.Warn("central.edit.restart_required", slog.String("central", row.Name))
-		} else {
+		if !hadPrev || !centralConfigNeedsRestart(prev, row) {
 			l.logger.Info("central.adopt.skip_already_live", slog.String("central", row.Name))
+			return nil
+		}
+		if err := l.orch.restartCentral(ctx, cc); err != nil {
+			l.logger.Error("central.restart.failed", slog.String("central", row.Name), slog.String("err", err.Error()))
+			return err
 		}
 		return nil
 	}
 
-	cc, _ := configstore.RowToCentralConfig(row, os.Getenv)
 	if err := l.orch.adoptCentral(ctx, cc); err != nil {
 		l.logger.Error("central.adopt.failed", slog.String("central", row.Name), slog.String("err", err.Error()))
 		return err
