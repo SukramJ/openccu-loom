@@ -56,6 +56,43 @@ behaviour, not a fight. The manifest declares
 token, and the feature table reports them as `missing_scope` exactly as
 for any narrow token.
 
+### The central a move from OpenCCU brings along (2026-11-15)
+
+A box that moves from OpenCCU to openccu-lite keeps the add-on's data,
+and with it a CCU central pointing at the box itself. It can never come
+up — the readiness marker it waits for is ReGa's, and there is no ReGa —
+and the empty-list rule above keeps the onboarding away from it. So the
+attempt has a second case: when the token file is readable and **exactly
+one** stored central is a CCU central whose host is this machine (a
+loopback address, or an address one of its interfaces carries), that
+central is moved to openccu-lite in place.
+
+- It keeps its **name**, behaviour and visibility, so everything keyed by
+  the central's name stays with it. The account, the RPC ports and the
+  interface list are the CCU's and go; the interfaces are read from the
+  box, as at a first boot, and the token comes from `api_token_file`.
+- A running central reads its configuration once, so an enabled one is
+  saved disabled and then enabled through the same admin service — the
+  stop and the start a REST write would cause.
+- Nothing is moved when a central already uses the add-on token (the box
+  is configured; a leftover CCU central is the operator's to delete) or
+  when more than one CCU central points at the box (which one is the box
+  is not the daemon's to guess).
+- Where the daemon leaves such a central alone — that ambiguity, or a box
+  that minted no token because the add-on's manifest was not applied —
+  the non-critical `/health` component `config.lite_addon` names the
+  central, the reason and the way out, instead of an endless "waiting
+  for CCU".
+
+**Better than before, and the right cut.** Before, the operator had to
+find out that the central's type was the problem and re-enter it by hand
+after every such move; the CCU's own WebUI and the aiohomematic family
+have no counterpart, since neither runs on the box across that move. The
+decision belongs in the daemon's composition root, next to the first-boot
+case: it is the only place that knows both the host (`VARIANT=lite`, the
+token file) and the stored centrals, and it writes through the admin
+service so no second persistence path exists.
+
 ## Alternatives considered
 
 - **Copy the token into the store once.** Stale after the next occulited

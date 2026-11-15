@@ -69,7 +69,7 @@ func TestLiteAddonOnboardingAdoptsTheLocalBox(t *testing.T) {
 	store, fake := startOnboardFixture(t)
 	ctx := t.Context()
 
-	maybeStartLiteAddonOnboarding(ctx, store, slog.New(slog.DiscardHandler))
+	maybeStartLiteAddonOnboarding(ctx, store, nil, slog.New(slog.DiscardHandler))
 
 	var rows []sqlitestore.CentralRow
 	deadline := time.Now().Add(20 * time.Second)
@@ -128,7 +128,7 @@ func TestLiteAddonOnboardingRespectsConfiguredCentrals(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	maybeStartLiteAddonOnboarding(ctx, store, slog.New(slog.DiscardHandler))
+	maybeStartLiteAddonOnboarding(ctx, store, nil, slog.New(slog.DiscardHandler))
 	time.Sleep(2 * time.Second)
 
 	rows, err := store.List(ctx)
