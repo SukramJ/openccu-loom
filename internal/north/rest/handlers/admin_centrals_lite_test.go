@@ -148,3 +148,61 @@ func TestCentralWriteValidatesTheSystemType(t *testing.T) {
 		})
 	}
 }
+
+// TestUpdateCentral_SwitchToLiteDropsTheCCUCredentials pins the move of a
+// stored CCU central to openccu-lite: the editor's lite payload carries no
+// username, password or RPC ports, and the stored ones must not come back
+// through the omitted-field overlay — the lite rules refuse every one of
+// them, so the switch would never save.
+func TestUpdateCentral_SwitchToLiteDropsTheCCUCredentials(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"box": {
+			Name: "box", Host: "127.0.0.1", Enabled: true,
+			Username: "Admin", PasswordPlain: "secret", PasswordEnv: "CCU_PASSWORD",
+			Port: 2010, Ports: map[string]int{"HmIP-RF": 2010},
+			Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}},
+		},
+	}}
+	body := strings.NewReader(`{"host":"127.0.0.1","system_type":"openccu-lite","enabled":true,"api_token_plain":"` + testLiteToken + `","interfaces":[{"name":"HmIP-RF"}]}`)
+	req := withChiParam(httptest.NewRequest(http.MethodPut, "/admin/centrals/box", body), "name", "box")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("PUT = %d %s", w.Code, w.Body.String())
+	}
+	got := svc.centrals["box"]
+	if got.SystemType != "openccu-lite" || got.APITokenPlain != testLiteToken {
+		t.Errorf("stored = type %q token %q, want openccu-lite with the token", got.SystemType, got.APITokenPlain)
+	}
+	if got.Username != "" || got.PasswordPlain != "" || got.PasswordEnv != "" || got.Port != 0 || len(got.Ports) != 0 {
+		t.Errorf("stored = user %q password %q env %q port %d ports %v, want the CCU fields gone",
+			got.Username, got.PasswordPlain, got.PasswordEnv, got.Port, got.Ports)
+	}
+}
+
+// TestUpdateCentral_SwitchToCCUDropsTheLiteCredentials is the way back: a
+// stored lite central saved as a CCU does not keep the token, its
+// environment source or the certificate pin, which the CCU rules refuse.
+func TestUpdateCentral_SwitchToCCUDropsTheLiteCredentials(t *testing.T) {
+	t.Parallel()
+	svc := liteRowSvc()
+	row := svc.centrals["box"]
+	row.APITokenEnv = "BOX_TOKEN"
+	row.APITokenPlain = ""
+	svc.centrals["box"] = row
+	body := strings.NewReader(`{"host":"box.local","system_type":"ccu","enabled":true,"username":"Admin","password_plain":"secret","interfaces":[{"name":"HmIP-RF"}]}`)
+	req := withChiParam(httptest.NewRequest(http.MethodPut, "/admin/centrals/box", body), "name", "box")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("PUT = %d %s", w.Code, w.Body.String())
+	}
+	got := svc.centrals["box"]
+	if got.APITokenPlain != "" || got.APITokenEnv != "" || got.TLSFingerprint != "" {
+		t.Errorf("stored = token %q env %q pin %q, want the lite fields gone", got.APITokenPlain, got.APITokenEnv, got.TLSFingerprint)
+	}
+	if got.Username != "Admin" || got.PasswordPlain != "secret" {
+		t.Errorf("stored = user %q password %q, want the CCU credentials", got.Username, got.PasswordPlain)
+	}
+}

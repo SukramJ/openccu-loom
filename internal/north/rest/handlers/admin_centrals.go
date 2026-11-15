@@ -485,6 +485,54 @@ func overlayOmittedCentralFields(row *sqlite.CentralRow, existing sqlite.Central
 	if !present["api_token_plain"] || row.APITokenPlain == maskSentinel {
 		row.APITokenPlain = existing.APITokenPlain
 	}
+	dropOtherSystemFields(row, existing, present)
+}
+
+// dropOtherSystemFields undoes the overlay for the fields that belong to the
+// system type the central is leaving. An editor that moves a CCU central to
+// openccu-lite sends no username, password or RPC ports — they are not part
+// of a lite central — and the overlay above would restore the stored ones,
+// which the lite rules then refuse: the switch could never be saved. The
+// way back drops the token sources and the certificate pin likewise. A
+// field the payload did carry is left for validation to judge. Which fields
+// a system type gives a meaning to is the configuration's rule
+// ([config.CentralFieldsOf]).
+func dropOtherSystemFields(row *sqlite.CentralRow, existing sqlite.CentralRow, present map[string]bool) {
+	to := hmenum.SystemType(row.SystemType).Normalize()
+	if hmenum.SystemType(existing.SystemType).Normalize() == to {
+		return
+	}
+	has := config.CentralFieldsOf(to)
+	if !has.Account {
+		if !present["username"] {
+			row.Username = ""
+		}
+		if !present["password_env"] {
+			row.PasswordEnv = ""
+		}
+		if !present["password_plain"] || row.PasswordPlain == maskSentinel {
+			row.PasswordPlain = ""
+		}
+	}
+	if !has.RPCPorts {
+		if !present["port"] {
+			row.Port = 0
+		}
+		if !present["ports"] {
+			row.Ports = nil
+		}
+	}
+	if !has.APIToken {
+		if !present["api_token_plain"] || row.APITokenPlain == maskSentinel {
+			row.APITokenPlain = ""
+		}
+		if !present["api_token_env"] {
+			row.APITokenEnv = ""
+		}
+	}
+	if !has.CertificatePin && !present["tls_fingerprint"] {
+		row.TLSFingerprint = ""
+	}
 }
 
 // DeleteCentral handles DELETE /admin/centrals/{name}. Returns 404

@@ -2546,6 +2546,36 @@ func ValidateCentralSystemToken(idx int, cc *CentralConfig, tokenFromEnv bool) e
 	return nil
 }
 
+// CentralFieldGroups says which groups of a central's fields a system type
+// gives a meaning to.
+type CentralFieldGroups struct {
+	// Account is the username and the password in any of its sources.
+	Account bool
+	// RPCPorts is the central-wide RPC port and the per-interface port map.
+	RPCPorts bool
+	// APIToken is the occulited API token in any of its sources.
+	APIToken bool
+	// CertificatePin is tls_fingerprint.
+	CertificatePin bool
+}
+
+// CentralFieldsOf names the field groups the rules above accept for a system
+// type: a CCU has an account and RPC ports, an openccu-lite central a token
+// and a certificate pin, and `auto` keeps all of them open because detection
+// may land on either. A writer that changes a central's system type uses it
+// to leave the other system's fields behind instead of carrying them into a
+// central whose rules refuse them.
+func CentralFieldsOf(t hmenum.SystemType) CentralFieldGroups {
+	switch t.Normalize() {
+	case hmenum.SystemTypeOpenCCULite:
+		return CentralFieldGroups{APIToken: true, CertificatePin: true}
+	case hmenum.SystemTypeAuto:
+		return CentralFieldGroups{Account: true, RPCPorts: true, APIToken: true, CertificatePin: true}
+	case hmenum.SystemTypeCCU:
+	}
+	return CentralFieldGroups{Account: true, RPCPorts: true}
+}
+
 // validateLiteCentral applies the openccu-lite rules; strict also requires
 // the token and rejects the CCU-only fields (auto keeps them open).
 func validateLiteCentral(idx int, cc *CentralConfig, strict, tokenFromEnv bool) error {

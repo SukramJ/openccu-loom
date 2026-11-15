@@ -399,3 +399,33 @@ describe("CentralsAdmin — interfaces an openccu-lite box offers", () => {
     expect(mockUpdateCentral.mock.calls[0][1].interfaces.map((i: { name: string }) => i.name)).toEqual(["HmIP-RF"]);
   });
 });
+
+describe("CentralsAdmin — a stored openccu-lite central whose host answers as a CCU", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fleet = [];
+    mockUpdateCentral.mockResolvedValue(undefined);
+    mockListCentrals.mockResolvedValue([{ ...liteRow }]);
+  });
+
+  it("names the CCU system type on save, so the stored one does not stay", async () => {
+    vi.mocked(api.probeCentral).mockResolvedValue({
+      system_type: "ccu",
+      ready: true,
+    } as Awaited<ReturnType<typeof api.probeCentral>>);
+    const { container, unmount } = render(CentralsAdmin);
+    try {
+      await openEdit(container);
+      await fireEvent.click(button(container, "onboarding.probe")!);
+      // The account fields appear once the form treats the central as a CCU.
+      await waitFor(() => expect(container.textContent).toContain("centrals.field.username"));
+
+      await fireEvent.click(button(container, "common.save")!);
+      await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());
+      // The daemon keeps the stored value of a key the payload leaves out.
+      expect(mockUpdateCentral.mock.calls[0][1].system_type).toBe("ccu");
+    } finally {
+      unmount();
+    }
+  });
+});

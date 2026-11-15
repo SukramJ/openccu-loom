@@ -6,6 +6,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.103.0] - 2026-11-15
+
+MQTT sub-devices are Home Assistant child devices, and a central can
+be moved between a CCU and openccu-lite.
+
 ### Changed
 
 - **Breaking — MQTT: sub-devices are Home Assistant child devices, and
@@ -61,6 +66,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   names as its `via_device` now takes the document. In a device
   document the schedule's entities sit on the device itself when
   sub-devices are off; a document has room for one device.
+- **Centrals: a CCU central can be switched to openccu-lite.** After a
+  box moved from OpenCCU to openccu-lite, saving its central with an API
+  token or an approved pairing failed with "openccu-lite authenticates
+  with api_token, not a username and password": the stored CCU username,
+  password and RPC ports came back into the saved central although the
+  form no longer sends them. They are dropped when the system type
+  changes, and the token and certificate pin likewise on the way back to
+  a CCU. On that way back the form now names the system type; it left
+  it out, so the central stayed an openccu-lite one and was refused.
 
 ## [0.102.1] - 2026-11-14
 
