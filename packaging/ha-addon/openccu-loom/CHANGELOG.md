@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.105.0
+
+- **Home Assistant entities survive a restart of a central.** A restart
+  of a central or a cache reset no longer deletes and re-creates the
+  MQTT entities in Home Assistant: renamed entity ids and helpers built
+  on an entity (switch as x) are kept. Only what is really gone is
+  removed once the devices are loaded again.
+- **Dropping an interface removes its devices completely.** Their hidden
+  and locked channels, recording exceptions and Matter exposures go with
+  them.
+- **Changing only the API token file of a central restarts it.**
+
 ## 0.104.1
 
 - **Editing a running central takes effect on save.** Changing the

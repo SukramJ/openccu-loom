@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.105.0] - 2026-11-15
+
 ### Added
 
 - **openccu-lite add-on: a central still waiting for its move is a
