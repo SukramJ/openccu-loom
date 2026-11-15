@@ -156,3 +156,64 @@ Points collected for an openccu-lite issue (not filed):
 
 Slice 0 alone and first, released as 0.104.1. Then 1, 2, 3 as one feature
 (0.105.0), each its own pull request.
+
+## Fable reads of the two open judgements (2026-11-15, after 0.104.1)
+
+**Interface ids (judgement 2).** Interface names and device addresses are the
+same on openccu-lite: one enum without HmIP-Wired (`pkg/hmenum/interface.go:22-26`),
+lite rejects only CUxD (`internal/config/config.go:2496-2500`), `convert` copies
+the box's names (`cmd/openccu-loom/lite_addon_onboard.go`), both stacks stamp
+`WireInterfaceID(cc.Name, iface)` (`internal/central/adapter/lite_events.go:167`,
+`ccu_wiring.go:760`), and `ListDevices` goes through the box's XML-RPC proxy to
+the same processes (`internal/client/backends/lite.go:19-23`). Gap: the restart
+purged only VALUES/MASTER of a dropped interface; the CUxD devices' Matter
+exposures (counted by `/node/status`), channel flags and recording overrides
+stayed. Owner decision: a restart treats the devices of a dropped interface as
+removed (all per-device evictors run).
+
+**MQTT across a restart (judgement 1).** A restart retracts every device config
+(`eventbridge.go:657-658`, no `ModelTeardown` check) and the hub plane
+(`central_adopt.go:905`). Home Assistant deletes the registry entry on an empty
+config (`../core homeassistant/components/mqtt/entity.py:1343`); on
+rediscovery most settings come back, but a user-renamed entity_id resets where
+loom seeds `default_entity_id` (hub, update, week-profile planes;
+`entity.py:1791-1826`) and a `switch_as_x` helper is deleted
+(`switch_as_x/__init__.py:60-63`). The cache-reset re-pull has the same defect
+(`central_bringup.go:251, 285-305`).
+
+Design (Fable): deferred retraction. Teardown in restart mode holds instead of
+retracting (hub: stop the poller, gate offline as at a daemon stop, capture old
+programs/sysvars/interfaces; devices: skip both retractions — decided in the
+subscriber or carried on the event, `pkg/hmevent` being public surface).
+Reconcile by mark-and-sweep at `Bridge.publishDiscovery` (`bridge.go:2206`, the
+funnel for per-entity, bundle and hub configs): record touched keys before the
+dedup, retract declared−touched through the same funnel (bundle tombstones).
+Raw plane: old−new devices via `RetractRawStateForDevice`, programs/sysvars via
+`RetractProgramTopics`/`RetractSysvarState`. Signals: device side chained into
+the post-snapshot hook (`daemon_southbound.go:705`, after `FlushBundles`); hub
+side a queued job at `declareHubPlane` (`hub_mqtt_publisher.go:841`) gated on
+southbound ready. Box down: the hold stays open, nothing is deleted;
+remove-while-held and a failed adopt retract the whole held set; a second
+restart keeps the first baseline. Risk: ready fires with interfaces whose
+ingest failed (`ccu_wiring.go:279-283`) — scope the sweep to loaded
+interfaces. Tests: unchanged restart → zero empty retained publishes; dropped
+interface → exactly its devices + connectivity sensor, after the snapshot;
+CCU not ready → zero retractions; bite: restore the hub retract.
+
+## Owner decisions of 2026-11-15 (before Slice 1)
+
+- The restart's MQTT retraction is its own slice (**Slice 1b**), after
+  Slice 1, in a fresh session, covering the restart and the cache-reset
+  re-pull together, on the design above.
+- A restart removes the devices of a dropped interface as a removal would
+  (all per-device evictors) and deletes their Matter exposures — no evictor
+  deletes an exposure row, the Matter forget frees endpoint numbers only
+  (`internal/north/matteradapter/reconciler.go:171-215`). Done in Slice 1.
+  The same gap for a device the CCU deletes during normal operation is
+  existing behaviour and open.
+- The `/health` component `config.lite_addon` goes; the warning replaces it.
+- One warning text per reason: `warnings.lite_move_pending.{no_token,
+  ambiguous,failed}`; `failed` (window passed, save failed) is new.
+  Box titles stay within occulited's 160-rune limit
+  (`../occulited/internal/warnings/addonnotices.go:36`).
+- `centralConfigNeedsRestart` now includes `APITokenFile`.

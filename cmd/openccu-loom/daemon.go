@@ -737,7 +737,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// openccu-lite (ADR 0077). Goes through the decorated admin service
 	// above, so both follow the persist-then-adopt path a REST write
 	// takes. A no-op on every other host.
-	maybeStartLiteAddonOnboarding(ctx, centralAdminSvc, healthTracker, logger)
+	// What it leaves as a CCU central lands in liteMoves, which the warning
+	// list and the box's Status page read.
+	liteMoves := newLiteMoveLedger(centralAdminSvc)
+	maybeStartLiteAddonOnboarding(ctx, centralAdminSvc, liteMoves, logger)
 
 	// --- Adapter-Hoist ---------------------------------------- Adapters used
 	// by BOTH the WS-command router and the REST router are constructed once
@@ -920,12 +923,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		silenceStore = sqlitestore.NewWarningSilenceStore(auditDB)
 	}
-	warningsSvc := warnings.New(healthAdapter, incidentsReader, hubAdapter, silenceStore)
+	warningsSvc := newWarningsAggregator(healthAdapter, incidentsReader, hubAdapter, silenceStore, liteMoves)
 
 	// On an openccu-lite box the same list stands on the box's Status page
 	// as the add-on's notices (ADR 0090). nil everywhere else.
 	boxNoticeMirror := startBoxNotices(ctx, cfg, boxNoticeDeps{
 		warnings: warningsSvc, catalogs: catalogs, health: healthTracker, reg: reg, admin: centralAdminSvc,
+		liteMoves: liteMoves,
 	}, logger)
 	defer boxNoticeMirror.Stop()
 

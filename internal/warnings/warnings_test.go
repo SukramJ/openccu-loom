@@ -221,6 +221,36 @@ func TestPairingSourceFeedsAWarning(t *testing.T) {
 	}
 }
 
+type fakeLiteMoves []LiteMove
+
+func (f fakeLiteMoves) PendingLiteMoves() []LiteMove { return f }
+
+func TestLiteMoveSourceFeedsOneWarningPerCentral(t *testing.T) {
+	a := New(nil, nil, nil, nil).WithLiteMoves(fakeLiteMoves{
+		{Central: "kearney", Reason: LiteMoveNoToken},
+		{Central: "attic", Reason: LiteMoveAmbiguous},
+	})
+	got := a.Active()
+	if len(got) != 2 {
+		t.Fatalf("got %+v", got)
+	}
+	// Stable order is by ID: attic before kearney.
+	want := []Warning{
+		{ID: "lite-move:attic", Central: "attic", MessageKey: "warnings.lite_move_pending.ambiguous"},
+		{ID: "lite-move:kearney", Central: "kearney", MessageKey: "warnings.lite_move_pending.no_token"},
+	}
+	for i, w := range want {
+		g := got[i]
+		if g.ID != w.ID || g.Central != w.Central || g.MessageKey != w.MessageKey ||
+			g.Severity != SeverityWarning || g.Args["central"] != w.Central {
+			t.Errorf("warning %d = %+v, want %+v", i, g, w)
+		}
+	}
+	if got := New(nil, nil, nil, nil).WithLiteMoves(fakeLiteMoves{}).Active(); len(got) != 0 {
+		t.Fatalf("no pending move produced %+v", got)
+	}
+}
+
 func TestNilSourcesContributeNothing(t *testing.T) {
 	a := New(nil, nil, nil, nil)
 	if got := a.Active(); len(got) != 0 {

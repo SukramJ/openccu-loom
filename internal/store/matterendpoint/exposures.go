@@ -219,6 +219,18 @@ func (s *Store) DeleteForCentral(ctx context.Context, centralName string) error 
 	return nil
 }
 
+// DeleteForDevice removes every allowlist row of one device of centralName.
+// A central restarted without the device's interface calls it: the device
+// can never come back, so its rows would only inflate the enabled count.
+func (s *Store) DeleteForDevice(ctx context.Context, centralName, deviceAddress string) error {
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM matter_exposures WHERE central_name = ? AND device_address = ?`, centralName, deviceAddress)
+	if err != nil {
+		return fmt.Errorf("matter endpoint store: delete exposures for device: %w", err)
+	}
+	return nil
+}
+
 // CountEnabled returns the number of enabled rows for a central
 // (empty central = global). Used by `/matter/status` for the
 // dashboard summary.

@@ -17,9 +17,9 @@ import (
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 )
 
 // putRecorder notes the enabled flag of every Put, in order: a disabled save
@@ -169,9 +169,11 @@ func TestLiteAddonOnboardingLeavesOtherCentralsAsTheyAre(t *testing.T) {
 	}
 }
 
-// TestLiteAddonOnboardingNamesACentralItCannotMove pins the health hint: a
-// box without the add-on token cannot have its migrated central moved, and
-// says so on /health instead of leaving it waiting for a CCU without a word.
+// TestLiteAddonOnboardingNamesACentralItCannotMove pins the warning: a box
+// without the add-on token cannot have its migrated central moved, and the
+// central lands on the warning list with that reason instead of waiting for
+// a CCU without a word. Once the operator has switched it to openccu-lite
+// themselves, the warning goes.
 func TestLiteAddonOnboardingNamesACentralItCannotMove(t *testing.T) {
 	store, _ := startOnboardFixture(t)
 	ctx := t.Context()
@@ -181,26 +183,40 @@ func TestLiteAddonOnboardingNamesACentralItCannotMove(t *testing.T) {
 	if err := store.Put(ctx, migratedCCURow("Otto")); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	tracker := health.NewTracker()
-
-	maybeStartLiteAddonOnboarding(ctx, store, tracker, slog.New(slog.DiscardHandler))
-
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if c, ok := tracker.Get(liteAddonCentralsHealthComponent); ok {
-			if !strings.Contains(c.LastSample.Note, "Otto") {
-				t.Errorf("note %q does not name the central", c.LastSample.Note)
-			}
-			break
+	moves := newLiteMoveLedger(store)
+	changed := make(chan struct{}, 1)
+	defer moves.OnChange(func() {
+		select {
+		case changed <- struct{}{}:
+		default:
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("no health component for the central that could not be moved")
-		}
-		time.Sleep(50 * time.Millisecond)
+	})()
+	aggr := warnings.New(nil, nil, nil, nil).WithLiteMoves(moves)
+
+	maybeStartLiteAddonOnboarding(ctx, store, moves, slog.New(slog.DiscardHandler))
+
+	select {
+	case <-changed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the ledger never told its observers about the central that could not be moved")
+	}
+	got := aggr.Active()
+	if len(got) != 1 || got[0].ID != "lite-move:Otto" || got[0].Central != "Otto" ||
+		got[0].MessageKey != "warnings.lite_move_pending.no_token" {
+		t.Fatalf("warnings = %+v, want one no_token move for Otto", got)
 	}
 	rows, err := store.List(ctx)
 	if err != nil || len(rows) != 1 || rows[0].SystemType == "openccu-lite" {
-		t.Errorf("rows = %+v err = %v, want the central untouched", rows, err)
+		t.Fatalf("rows = %+v err = %v, want the central untouched", rows, err)
+	}
+
+	moved := rows[0]
+	moved.SystemType = "openccu-lite"
+	if err := store.Put(ctx, moved); err != nil {
+		t.Fatalf("switch: %v", err)
+	}
+	if got := aggr.Active(); len(got) != 0 {
+		t.Errorf("warnings after the switch = %+v, want none", got)
 	}
 }
 

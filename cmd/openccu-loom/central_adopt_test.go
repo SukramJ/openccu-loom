@@ -896,6 +896,7 @@ func TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges(t *testing.T) {
 			return r
 		}},
 		{"api_token_env", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.APITokenEnv = "BOX_TOKEN"; return r }},
+		{"api_token_file", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.APITokenFile = "/run/box.api"; return r }},
 		{"tls_fingerprint", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.TLSFingerprint = "ab"; return r }},
 		{"interfaces", func(r sqlitestore.CentralRow) sqlitestore.CentralRow {
 			r.Interfaces = []config.InterfaceSpec{{Name: "HmIP-RF", Port: 2011}}

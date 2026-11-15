@@ -54,6 +54,23 @@ type boxNoticeDeps struct {
 	health   *health.Tracker
 	reg      *central.Registry
 	admin    handlers.CentralAdminService
+	// liteMoves tells when a central waiting to be moved to openccu-lite
+	// is recorded.
+	liteMoves *liteMoveLedger
+}
+
+// newWarningsAggregator builds the operator warning list from every source
+// the daemon has at that point of the boot. The pairing feed joins later,
+// with the REST server ([warnings.Aggregator.WithPairing]).
+func newWarningsAggregator(
+	h warnings.HealthSource, inc warnings.IncidentSource, hubs warnings.HubSource,
+	silences warnings.SilenceStore, liteMoves *liteMoveLedger,
+) *warnings.Aggregator {
+	a := warnings.New(h, inc, hubs, silences)
+	if liteMoves != nil {
+		a.WithLiteMoves(liteMoves)
+	}
+	return a
 }
 
 // boxNotices is the running mirror as the composition root holds it.
@@ -138,6 +155,9 @@ func runBoxNotices(ctx context.Context, mc boxnotice.Config, d boxNoticeDeps) *b
 	if d.health != nil {
 		detach = append(detach, d.health.OnStatusChange(m.Nudge))
 	}
+	if d.liteMoves != nil {
+		detach = append(detach, d.liteMoves.OnChange(m.Nudge))
+	}
 	if d.reg != nil {
 		detach = append(detach, d.reg.OnRegisterDeclared(wiring.Seam{
 			Name:         "box_notices.sources",
@@ -157,7 +177,14 @@ func runBoxNotices(ctx context.Context, mc boxnotice.Config, d boxNoticeDeps) *b
 
 // watchCentralWarnings nudges when one central's contribution to the
 // warning list may have changed, and returns what detaches it.
+//
+// A central coming and going is such a change itself: a restart on a new
+// configuration and a deletion both register or unregister it, and a
+// warning keyed to the central's stored configuration — the pending move
+// to openccu-lite above all — clears then. So it nudges once on attach and
+// once on detach.
 func watchCentralWarnings(u *central.Unit, nudge func()) func() {
+	nudge()
 	var detach []func()
 	if u.Health != nil {
 		detach = append(detach, u.Health.OnStatusChange(nudge))
@@ -172,6 +199,7 @@ func watchCentralWarnings(u *central.Unit, nudge func()) func() {
 		for _, f := range detach {
 			f()
 		}
+		nudge()
 	}
 }
 
