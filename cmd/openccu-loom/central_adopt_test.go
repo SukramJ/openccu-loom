@@ -800,13 +800,12 @@ func TestLiveCentralAdminPutDisablesRegisteredCentralTearsDownLive(t *testing.T)
 	}
 }
 
-// TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired verifies that
-// editing an already-registered, still-enabled central's southbound-relevant
-// fields (host, in this case) surfaces a distinguishable "restart required"
-// signal instead of the same skip_already_live log a genuine no-op re-save
-// produces — an operator who edits the host of a live central must be able
-// to tell "saved but needs a restart" apart from "saved, nothing to do".
-func TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired(t *testing.T) {
+// TestLiveCentralAdminPutEditOfLiveCentralRestartsIt verifies that editing
+// an already-registered, still-enabled central's southbound-relevant fields
+// (host, in this case) brings the central up again on the new configuration
+// — a new unit in the shared registry, adopted with the new host — while a
+// re-save with no actual change stays the logged no-op it was.
+func TestLiveCentralAdminPutEditOfLiveCentralRestartsIt(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -824,33 +823,41 @@ func TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired(t *testing.T) {
 	if err := dec.Put(ctx, row); err != nil {
 		t.Fatalf("Put(initial): %v", err)
 	}
-	buf.Reset()
+	before, ok := reg.Get("edit-live")
+	if !ok {
+		t.Fatal("precondition: central not live after the initial Put")
+	}
 
-	// A config edit that changes a southbound-relevant field: the running
-	// Unit was adopted with the old host and will not pick up the new one
-	// without a restart.
 	edited := row
 	edited.Host = "127.0.0.2"
 	if err := dec.Put(ctx, edited); err != nil {
 		t.Fatalf("Put(edited): %v", err)
 	}
-	if !strings.Contains(buf.String(), "central.edit.restart_required") {
-		t.Errorf("log output after host edit = %q, want a central.edit.restart_required entry", buf.String())
+	after, ok := reg.Get("edit-live")
+	if !ok {
+		t.Fatal("central not live after the edit; the restart must bring it up again")
 	}
-	if !strings.Contains(buf.String(), "level=WARN") {
-		t.Errorf("log output after host edit = %q, want WARN level (an Info skip_already_live is not distinguishable)", buf.String())
+	if after == before {
+		t.Error("the registry still holds the unit adopted with the old host; the edit did not restart the central")
+	}
+	if cc, ok := orch.centralConfigFor("edit-live"); !ok || cc.Host != "127.0.0.2" {
+		t.Errorf("live config after the edit = (%+v, %v), want host 127.0.0.2", cc, ok)
 	}
 	buf.Reset()
 
-	// A re-save with no actual change must NOT claim a restart is required.
+	// A re-save with no actual change must not restart anything.
 	if err := dec.Put(ctx, edited); err != nil {
 		t.Fatalf("Put(unchanged resave): %v", err)
 	}
-	if strings.Contains(buf.String(), "central.edit.restart_required") {
-		t.Errorf("log output after unchanged resave = %q, want no restart_required entry", buf.String())
+	if again, _ := reg.Get("edit-live"); again != after {
+		t.Error("an unchanged re-save replaced the running unit")
 	}
 	if !strings.Contains(buf.String(), "central.adopt.skip_already_live") {
 		t.Errorf("log output after unchanged resave = %q, want central.adopt.skip_already_live", buf.String())
+	}
+
+	if err := dec.Delete(ctx, "edit-live"); err != nil {
+		t.Fatalf("Delete (cleanup): %v", err)
 	}
 }
 

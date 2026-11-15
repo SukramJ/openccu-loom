@@ -231,12 +231,9 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     expect(payload.password_plain).toBe("new-secret");
   });
 
-  it("does not claim a restart-relevant change from an untouched, GET-masked password", async () => {
-    // Regression guard for the omitted-password_plain fix above:
-    // buildRow() now sends `undefined` (not "***") when the password was
-    // not touched, so the restart-signal diff must treat that omission
-    // as "no change" rather than comparing it against the "***" sentinel
-    // stored on the loaded row and reporting a spurious restart requirement.
+  it("reports a plain success for a save with an untouched, GET-masked password", async () => {
+    // buildRow() sends `undefined` (not "***") when the password was not
+    // touched, so the save goes through and reads as an ordinary update.
     mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
     const { container } = render(CentralsAdmin);
 
@@ -250,7 +247,7 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     expect(mockToastWarn).not.toHaveBeenCalled();
   });
 
-  it("shows a restart-required warning toast (not a bare success) when the host changes on an already-enabled CCU", async () => {
+  it("reports a plain success when the host changes on an already-enabled CCU, which the daemon restarts itself", async () => {
     mockListCentrals.mockResolvedValue([{ ...baseRow }]);
     const { container } = render(CentralsAdmin);
 
@@ -267,8 +264,10 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     await waitFor(() => {
       expect(mockUpdateCentral).toHaveBeenCalledOnce();
     });
-    expect(mockToastWarn).toHaveBeenCalledWith("centrals.updated_restart_required");
-    expect(mockToastSuccess).not.toHaveBeenCalled();
+    const payload = mockUpdateCentral.mock.calls[0][1] as { host?: string };
+    expect(payload.host).toBe("10.0.0.99");
+    expect(mockToastSuccess).toHaveBeenCalledWith("centrals.updated");
+    expect(mockToastWarn).not.toHaveBeenCalled();
   });
 });
 

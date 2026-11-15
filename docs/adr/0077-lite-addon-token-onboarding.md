@@ -67,13 +67,14 @@ one** stored central is a CCU central whose host is this machine (a
 loopback address, or an address one of its interfaces carries), that
 central is moved to openccu-lite in place.
 
-- It keeps its **name**, behaviour and visibility, so everything keyed by
-  the central's name stays with it. The account, the RPC ports and the
-  interface list are the CCU's and go; the interfaces are read from the
-  box, as at a first boot, and the token comes from `api_token_file`.
-- A running central reads its configuration once, so an enabled one is
-  saved disabled and then enabled through the same admin service — the
-  stop and the start a REST write would cause.
+- It keeps its **name** and what is stored under it: channel flags,
+  visibility un-ignore patterns, recording overrides, Matter exposures and
+  its Matter partition. The account, the RPC ports and the interface list
+  are the CCU's and go; the interfaces are read from the box, as at a first
+  boot, and the token comes from `api_token_file`.
+- The move is one save through the admin service, which restarts a running
+  central on such an edit. Only the cache rows of interfaces the box does
+  not have go.
 - Nothing is moved when a central already uses the add-on token (the box
   is configured; a leftover CCU central is the operator's to delete) or
   when more than one CCU central points at the box (which one is the box

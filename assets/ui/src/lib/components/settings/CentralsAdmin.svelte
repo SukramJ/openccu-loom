@@ -183,10 +183,9 @@
   let isEdit = $state(false);
   let saving = $state(false);
   let modalError = $state<string | null>(null);
-  // Snapshot of the row as loaded when an Edit was opened — kept so
-  // saveModal can tell "nothing southbound-relevant changed" apart from
-  // "the running connection cannot pick this up without a restart"
-  // (see centralNeedsRestartSignal below). null outside an edit flow.
+  // Snapshot of the row as loaded when an Edit was opened — the stored
+  // credential references (token env / file) and system type an edit keeps.
+  // null outside an edit flow.
   let editOriginal = $state<CentralRow | null>(null);
 
   // Form fields
@@ -531,50 +530,6 @@
     };
   }
 
-  // interfaceSetKey normalises an interface list to a sorted, order-independent
-  // key so a reload that happens to reorder entries doesn't read as a change,
-  // and resolves an omitted port to the catalogue default so "no override"
-  // and "override equal to the default" compare equal too.
-  function interfaceSetKey(list: InterfaceSpec[]): string {
-    return [...list]
-      .map((i) => {
-        const port = i.port ?? INTERFACE_CATALOGUE.find((s) => s.name === i.name)?.defaultPort ?? 0;
-        return `${i.name}:${port}`;
-      })
-      .sort()
-      .join("|");
-  }
-
-  // centralNeedsRestartSignal mirrors centralConfigNeedsRestart
-  // (cmd/openccu-loom/central_adopt.go): the fields the running southbound
-  // connection only reads once, at adopt time. Editing any of them on an
-  // already-enabled CCU cannot be hot-applied — the daemon keeps the OLD
-  // connection running until restarted — so a save that changes one of
-  // these must not claim an unqualified "updated" success.
-  function centralNeedsRestartSignal(before: CentralRow, after: CentralRow): boolean {
-    return (
-      (before.system_type ?? "ccu") !== (after.system_type ?? "ccu") ||
-      (before.tls_fingerprint ?? "") !== (after.tls_fingerprint ?? "") ||
-      after.api_token_plain !== undefined ||
-      after.pairing_id !== undefined ||
-      before.host !== after.host ||
-      (before.json_rpc_port ?? 0) !== (after.json_rpc_port ?? 0) ||
-      (before.tls ?? false) !== (after.tls ?? false) ||
-      (before.tls_insecure_skip_verify ?? false) !== (after.tls_insecure_skip_verify ?? false) ||
-      (before.username ?? "") !== (after.username ?? "") ||
-      // buildRow() omits password_plain (undefined) whenever the operator
-      // never touched the field — the daemon keeps the stored credential
-      // in that case, so an omitted key can never itself be the reason a
-      // restart is required. `before.password_plain` is the GET-masked
-      // "***" sentinel, which must not be compared as if it were real.
-      (after.password_plain !== undefined &&
-        (before.password_plain ?? "") !== after.password_plain) ||
-      (before.password_env ?? "") !== (after.password_env ?? "") ||
-      (before.primary_interface ?? "") !== (after.primary_interface ?? "") ||
-      interfaceSetKey(before.interfaces) !== interfaceSetKey(after.interfaces)
-    );
-  }
-
   async function saveModal() {
     if (!CENTRAL_NAME_RE.test(fName)) {
       modalError = t("centrals.error.invalid_name");
@@ -593,15 +548,10 @@
     try {
       const row = buildRow();
       if (isEdit) {
+        // The daemon restarts a running central itself when the edit
+        // changes how it is reached, so every saved edit is in effect.
         await api.updateCentralV2(row.name, row);
-        const before = editOriginal;
-        const needsRestart =
-          !!before && before.enabled && row.enabled && centralNeedsRestartSignal(before, row);
-        if (needsRestart) {
-          toastStore.warn(t("centrals.updated_restart_required"));
-        } else {
-          toastStore.success(t("centrals.updated"));
-        }
+        toastStore.success(t("centrals.updated"));
       } else {
         await api.createCentralV2(row);
         toastStore.success(t("centrals.created"));

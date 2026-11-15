@@ -295,9 +295,10 @@ func (o *liteAddonOnboarder) hostIsThisMachine(ctx context.Context, host string)
 //
 // The central keeps its name, behaviour and visibility; the account, the
 // RPC ports and the interface list are the CCU's and go — the interfaces
-// are read from the box, as at a first boot. A running central reads its
-// configuration once, so an enabled one is saved disabled first, which
-// stops it, and then enabled, which starts it on the new configuration.
+// are read from the box, as at a first boot. It is one save of the new row:
+// the admin service restarts a running central on an edit that changes how
+// it is reached, and keeps everything stored under its name. A disabled save
+// in between would be a removal, which deletes that state.
 func (o *liteAddonOnboarder) convert(ctx context.Context, client *occulited.Client, name string) (done, retry bool) {
 	det, err := client.Detect(ctx)
 	if err != nil || det.Kind != occulited.DetectLite {
@@ -332,15 +333,6 @@ func (o *liteAddonOnboarder) convert(ctx context.Context, client *occulited.Clie
 		next.PrimaryInterface = ""
 	}
 
-	if row.Enabled {
-		stopped := next
-		stopped.Enabled = false
-		if err := o.admin.Put(ctx, stopped); err != nil {
-			o.logger.Warn("lite_addon.convert.stop_failed",
-				slog.String("central", name), slog.String("err", err.Error()))
-			return false, false
-		}
-	}
 	if err := o.admin.Put(ctx, next); err != nil {
 		o.logger.Warn("lite_addon.convert.put_failed",
 			slog.String("central", name), slog.String("err", err.Error()))
