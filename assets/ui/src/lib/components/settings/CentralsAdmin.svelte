@@ -501,8 +501,16 @@
       serial: fSerial || undefined,
       enabled: fEnabled,
       // An `auto` central keeps resolving itself until a probe here says
-      // what it is.
-      system_type: editOriginal?.system_type === "auto" && fOnboarding.systemType === "" ? "auto" : undefined,
+      // what it is. A stored openccu-lite central whose host now answers
+      // as a CCU names the type: the daemon keeps the stored value of a
+      // key the payload leaves out, and would save a lite central with
+      // an account.
+      system_type:
+        editOriginal?.system_type === "auto" && fOnboarding.systemType === ""
+          ? "auto"
+          : editOriginal?.system_type === "openccu-lite"
+            ? "ccu"
+            : undefined,
       json_rpc_port: jsonRpcPort,
       tls: fTls || undefined,
       tls_insecure_skip_verify: fTlsInsecure || undefined,
