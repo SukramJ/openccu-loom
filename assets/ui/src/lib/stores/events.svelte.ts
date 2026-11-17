@@ -3,7 +3,8 @@
 // envelope to all registered handlers and cleans up on the last
 // unsubscribe so stale browser tabs don't keep idle sockets open.
 
-import { connectEvents, type EventStream } from "$lib/api/ws";
+import type { EventStream } from "$lib/api/ws";
+import { host } from "$lib/host/host";
 import type { EventEnvelope } from "$lib/api/types";
 
 let stream: EventStream | null = null;
@@ -52,7 +53,7 @@ const counters = $state<{
 
 function ensure(): EventStream {
   if (stream) return stream;
-  stream = connectEvents();
+  stream = host().events();
   stream.onStateChange((s) => {
     connectionState.current = s;
     if (s === "open") {

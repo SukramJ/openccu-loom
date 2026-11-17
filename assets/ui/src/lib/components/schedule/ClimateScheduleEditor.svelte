@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
   import type {
     ClimateSchedule,
     ClimateWeekday,
@@ -243,7 +244,7 @@
   // visualization just clicked on. The section element receives an
   // `id="climate-day-<DAY>"` so the lookup is purely DOM-based.
   function focusWeekday(day: string): void {
-    const el = document.getElementById(`climate-day-${day}`);
+    const el = host().root().getElementById(`climate-day-${day}`);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
       el.classList.add("ring-2", "ring-brand-400");

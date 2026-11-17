@@ -15,6 +15,7 @@ const { mockGetDevice, mockGetDeviceSchedule } = vi.hoisted(() => ({
 
 vi.mock("$lib/api/client", () => ({
   api: {
+    info: vi.fn().mockResolvedValue({ capabilities: [] }),
     getDevice: (...args: unknown[]) => mockGetDevice(...args),
     getDeviceSchedule: (...args: unknown[]) => mockGetDeviceSchedule(...args),
     getPreference: vi.fn().mockResolvedValue([]),

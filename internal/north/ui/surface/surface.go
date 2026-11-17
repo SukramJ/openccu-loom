@@ -311,6 +311,11 @@ var registry = []Surface{
 	// How the device appears on the bridged planes and why something is
 	// missing there. It reads and changes nothing, so every host keeps it.
 	{ID: "device.projection", Group: GroupDevice, Defaults: everywhere()},
+	// The device lifecycle in the page header: firmware update, configuration
+	// restore and repair, cache clear, radio test, definition export and
+	// removal. Kept apart from device.configure because an embedding host
+	// shows the configuration editor without them.
+	{ID: "device.actions", Group: GroupDevice, Defaults: everywhere()},
 }
 
 // Registry returns every registered surface in editor order.

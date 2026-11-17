@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import type { ChannelSummary, DeviceProjection, ProjectionEntry } from "$lib/api/types";
@@ -195,7 +196,7 @@
 
   function follow(target: Target) {
     if (target.tab) onOpenTab?.(target.tab);
-    else if (target.href) location.hash = target.href;
+    else if (target.href) host().navigate(target.href);
   }
 </script>
 

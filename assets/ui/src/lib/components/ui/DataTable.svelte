@@ -1,4 +1,5 @@
 <script lang="ts" generics="Row">
+  import { host } from "$lib/host/host";
   import type { Snippet } from "svelte";
   import type { IconName } from "$lib/icons";
   import type { DataColumn, DataColumnGroup, DataTableSort } from "./data-table";
@@ -111,7 +112,7 @@
     };
     if (persistKey) {
       try {
-        const raw = localStorage.getItem("datatable:" + persistKey);
+        const raw = host().storage.getItem("datatable:" + persistKey);
         if (raw) {
           const parsed = JSON.parse(raw) as Partial<Persisted>;
           base = { ...base, ...parsed, filters: parsed.filters ?? {} };
@@ -134,7 +135,7 @@
     if (!persistKey) return;
     const snapshot: Persisted = { sortKey, sortAsc, query, filters };
     try {
-      localStorage.setItem("datatable:" + persistKey, JSON.stringify(snapshot));
+      host().storage.setItem("datatable:" + persistKey, JSON.stringify(snapshot));
     } catch {
       // storage unavailable — sort/search simply do not persist.
     }

@@ -1,0 +1,14 @@
+{
+  "prefixes": [
+    "/audit",
+    "/auth/me",
+    "/devices",
+    "/functions",
+    "/info",
+    "/rooms",
+    "/schedules",
+    "/sessions/edit",
+    "/system/ccu",
+    "/taxonomy"
+  ]
+}

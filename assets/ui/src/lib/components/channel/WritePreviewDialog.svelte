@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deepActiveElement } from "$lib/dom";
   import type { PreviewEntry } from "$lib/channel/write-preview";
   import { previewBody } from "$lib/channel/write-preview";
   import { t } from "$lib/i18n";
@@ -40,7 +41,7 @@
 
   $effect(() => {
     if (open) {
-      previouslyFocused = document.activeElement as HTMLElement | null;
+      previouslyFocused = deepActiveElement();
       queueMicrotask(() => focusableButtons()[0]?.focus());
     } else if (previouslyFocused) {
       previouslyFocused.focus();
@@ -61,7 +62,7 @@
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
+      const active = deepActiveElement();
       const atEdge = e.shiftKey ? active === first : active === last;
       const outside = !els.includes(active as HTMLElement);
       if (atEdge || outside) {

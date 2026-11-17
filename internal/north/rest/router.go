@@ -316,6 +316,11 @@ type Deps struct {
 	// cross-origin requests would need CORS gymnastics. Mounting here
 	// keeps the auth boundary simple.
 	SPAHandler http.Handler
+
+	// EditorComponent is the device editor's web-component bundle that an
+	// embedding integration loads (ADR 0089). Nil in a build without the
+	// bundle; GET /api/v1/ui/editor-component then answers 404.
+	EditorComponent handlers.EditorComponentSource
 	// Bootstrap serves the minimal server-rendered diagnostic surface
 	// (/about, the no-JS /health and /ui assets) on the SAME listener as the
 	// SPA, so SPA-down diagnosis works through one port / HA Ingress
@@ -1398,6 +1403,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// identity because the navigation itself reads it; only the
 				// editor's write needs admin.
 				pr.Get("/ui/surfaces", handlers.GetUISurfaces(d.ConfigAdmin, d.CentralCounter))
+				pr.Get("/ui/editor-component", handlers.GetEditorComponent(d.EditorComponent))
 				pr.With(admin).Put("/ui/surfaces",
 					handlers.PutUISurfaces(d.ConfigAdmin, d.AuditRecorder, d.CentralCounter))
 			}

@@ -613,6 +613,11 @@
   "key",
   "token"
  ],
+ "EditorComponentManifest": [
+  "hash",
+  "module_url",
+  "routes"
+ ],
  "Endpoint": [
   "clusters",
   "device_type",

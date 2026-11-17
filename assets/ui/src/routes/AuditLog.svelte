@@ -281,13 +281,15 @@
         class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
       />
     </label>
-    <a
-      href={downloadUrl}
-      class="rounded-md border border-slate-300 px-3 py-1.5 text-xs shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-      download="audit-log.csv"
-    >
-      {t("audit.export_csv")}
-    </a>
+    {#if downloadUrl}
+      <a
+        href={downloadUrl}
+        class="rounded-md border border-slate-300 px-3 py-1.5 text-xs shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+        download="audit-log.csv"
+      >
+        {t("audit.export_csv")}
+      </a>
+    {/if}
     <span class="text-xs text-slate-500 dark:text-slate-400">
       {filteredEntries.length} / {entries.length}
     </span>

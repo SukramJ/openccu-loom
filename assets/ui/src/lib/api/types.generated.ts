@@ -4862,6 +4862,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ui/editor-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the device editor's web component is, and what it calls
+         * @description The device editor ships as a web component next to the SPA
+         *     (ADR 0088, ADR 0089). An embedding integration reads this manifest,
+         *     fetches the module from `module_url` (its file name carries the
+         *     content hash, it is served without a session and cached
+         *     immutably), serves it from its own origin, and relays only REST
+         *     calls whose path lies under one of `routes`. A prefix covers itself
+         *     and every path below it.
+         *
+         *     A build without the component bundle answers 404.
+         */
+        get: operations["getEditorComponent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ui/surfaces": {
         parameters: {
             query?: never;
@@ -9724,6 +9752,17 @@ export interface components {
          * @enum {string}
          */
         UIOrigin: "direct" | "home_assistant" | "lite_shell";
+        EditorComponentManifest: {
+            /**
+             * @description Daemon path of the module; the file name carries the hash.
+             * @example /app/component/editor-3f9a.js
+             */
+            module_url: string;
+            /** @description Hex SHA-256 of the module's bytes. */
+            hash: string;
+            /** @description Path prefixes below /api/v1 the editor calls. */
+            routes: string[];
+        };
         SurfacesResponse: {
             /** @description The master toggle — whether Home Assistant owns this daemon's config surface. */
             embedded: boolean;
@@ -19746,6 +19785,27 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getEditorComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditorComponentManifest"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     getUISurfaces: {

@@ -194,3 +194,36 @@ WebSocket instead of going direct.
   budget.
 - **Whether the event relay is needed for the first version**, or the editor reloads
   after its own writes.
+
+## Settled by the build (2026-11-17)
+
+The component build (#1067 step 2b) closed four of the open points above.
+
+- **How the hash is reported and the bundle addressed.** By a route of its own,
+  decided by the owner: `GET /api/v1/ui/editor-component` answers
+  `{module_url, hash, routes}`. The module is served without a session under
+  `/app/component/editor-<hash>.js`, cached immutably; a stale hash is a 404,
+  never the SPA's `index.html`.
+- **Dialogs and selects inside a shadow root.** The primitives can be pointed
+  there; none had to be replaced. The element sets bits-ui's
+  `BitsConfig.defaultPortalTo` to a node in its shadow root, registers the
+  stylesheet's `@property` rules on the document (Tailwind's border utilities
+  read a variable only those rules give a value), and the hand-rolled dialogs
+  resolve focus through the shadow roots instead of `document.activeElement`.
+  The `--ha-*` tokens stay empty inside the root until their `:host` forms ship
+  in go-fabric-ui (SukramJ/go-fabric-ui#72); the component's spec carries that
+  as an expected failure.
+- **Whether the event relay is needed for the first version.** It is optional:
+  without an event source the editor shows what it loaded and what its own
+  writes return.
+- **Bundle size.** The whole editor (the device page's configuration part and
+  the change log, one module) is 1.6 MB, 383 kB gzip.
+
+Two contract details the decision above did not spell out: a request carries
+its headers, because a MASTER write needs the edit lock (`X-Edit-Token`) and
+the daemon answers 423 without it; and the route list is the file
+`assets/ui/src/component/editor-routes.json`, which the component enforces and
+the daemon publishes, so the two cannot differ.
+
+Still open: how the relay names the central, and who the audit log names.
+

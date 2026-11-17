@@ -6,6 +6,7 @@
 // either of them twice is how "what is hidden" and "what is explained
 // as hidden" drift apart. See notes/concepts/ui-surface-profiles.md.
 
+import { host } from "$lib/host/host";
 import { api } from "$lib/api/client";
 import { PROFILE_NAMES } from "$lib/api/surface-types";
 import type {
@@ -149,8 +150,13 @@ function createSurfacesStore() {
    * navigation renders during the first paint, before this store has
    * resolved, and guessing "hidden" there would blank the sidebar of
    * every standalone daemon for a few hundred milliseconds.
+   *
+   * A host that embeds part of the SPA narrows this further: a surface
+   * outside its set is hidden whatever the profile says.
    */
   function visible(id: string): boolean {
+    const shown = host().surfaces;
+    if (shown && !shown.has(id)) return false;
     if (!loaded) return true;
     const v = effective[id];
     return v === undefined ? true : v;

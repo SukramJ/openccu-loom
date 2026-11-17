@@ -58,6 +58,9 @@ var (
 	tabIDRe   = regexp.MustCompile(`\{\s*id:\s*"([a-z_]+)"`)
 	tsUnionRe = regexp.MustCompile(`"([a-z-]+)"`)
 	anyKeyRe  = regexp.MustCompile(`"([a-z][a-zA-Z0-9_.-]*)"\s*:`)
+	// A surface the device page gates by name rather than as a tab (the
+	// header's lifecycle actions).
+	visibleIDRe = regexp.MustCompile(`surfacesStore\.visible\("([a-z][a-z.-]*)"\)`)
 )
 
 // spaSurfaceIDs collects the surface ids the SPA actually renders.
@@ -89,6 +92,16 @@ func spaSurfaceIDs(t *testing.T) []surface.ID {
 	sub := sliceBetween(t, detail, "type ConfigSub =", ";")
 	for _, m := range tsUnionRe.FindAllStringSubmatch(sub, -1) {
 		out = append(out, surface.ID("device.configure."+m[1]))
+	}
+	seen := make(map[surface.ID]bool, len(out))
+	for _, id := range out {
+		seen[id] = true
+	}
+	for _, m := range visibleIDRe.FindAllStringSubmatch(detail, -1) {
+		if id := surface.ID(m[1]); !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
 	}
 	return out
 }
@@ -207,6 +220,9 @@ func surfaceLabelKey(id surface.ID) string {
 		return "nav." + strings.TrimPrefix(s, "nav.")
 	case strings.HasPrefix(s, "settings."):
 		return "settings.tab." + strings.TrimPrefix(s, "settings.")
+	case s == "device.actions":
+		// The header actions are no tab; they name themselves.
+		return "device.lifecycle_actions"
 	case strings.HasPrefix(s, "device.configure."):
 		sub := strings.TrimPrefix(s, "device.configure.")
 		return "device.subtab." + strings.ReplaceAll(sub, "-", "_")

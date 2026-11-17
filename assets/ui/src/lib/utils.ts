@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { host } from "$lib/host/host";
 
 /**
  * Tailwind class composition helper — pattern lifted from shadcn.
@@ -20,13 +21,13 @@ export function cn(...inputs: ClassValue[]): string {
  * never "broken" while it is being typed. An empty term matches everything.
  */
 /**
- * Read a string from localStorage, returning `fallback` when the key is
+ * Read a string from the host's storage (localStorage in the SPA), returning `fallback` when the key is
  * absent or storage is unavailable. Pair with {@link saveLS} to persist a
  * per-view filter across reloads.
  */
 export function loadLS(key: string, fallback = ""): string {
   try {
-    return localStorage.getItem(key) ?? fallback;
+    return host().storage.getItem(key) ?? fallback;
   } catch {
     return fallback;
   }
@@ -35,7 +36,7 @@ export function loadLS(key: string, fallback = ""): string {
 /** Best-effort write to localStorage; ignores a disabled or full store. */
 export function saveLS(key: string, value: string): void {
   try {
-    localStorage.setItem(key, value);
+    host().storage.setItem(key, value);
   } catch {
     // storage unavailable — the value simply does not persist.
   }

@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The device editor as a web component.** The daemon now ships the
+  device configuration editor (channel parameters, direct links, schedules
+  and the change log) as a second bundle next to the Config UI: the
+  `<loom-device-editor>` element, which the Home Assistant integration can
+  load in its panel (ADR 0088, ADR 0089). It is the same code as the device
+  page of the Config UI. The element makes no network call of its own: the
+  embedding page hands it a transport, and every call it makes stays inside
+  a published route list. `GET /api/v1/ui/editor-component` names the
+  module's URL, its content hash and that route list (REST API 16.5.0); the
+  module is served without a session under its hash.
+- **A view for the device lifecycle actions.** Firmware update,
+  configuration restore and repair, cache clear, radio test, definition
+  export and removal in the device page's header are now their own entry
+  ("Device actions") in the navigation editor, so a profile can hide them
+  while keeping the configuration editor.
+
+### Fixed
+
+- **A device page whose overview a profile hides opens on the next tab.**
+  With "Overview" hidden in the operator's profile, the device page still
+  showed the overview's content under a tab strip that no longer offered
+  it; it now opens on the first tab the strip shows.
+- **The device page loads the daemon's capabilities itself.** The
+  measurement-recording picker on the History tab appeared only once the
+  sidebar had loaded the daemon's info; a device page opened without it
+  missed the picker.
+
 ## [0.105.0] - 2026-11-15
 
 ### Added

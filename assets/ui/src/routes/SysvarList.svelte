@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deepActiveElement } from "$lib/dom";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onMount } from "svelte";
@@ -100,7 +101,7 @@
 
   $effect(() => {
     if (editing) {
-      previouslyFocused = document.activeElement as HTMLElement | null;
+      previouslyFocused = deepActiveElement();
       // The dialog's DOM is inserted by the {#if} block guarding this
       // effect's dependency; queue past the current microtask so Svelte
       // has committed it before the query runs.
@@ -124,7 +125,7 @@
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
+      const active = deepActiveElement();
       const atEdge = e.shiftKey ? active === first : active === last;
       const outside = !els.includes(active as HTMLElement);
       if (atEdge || outside) {

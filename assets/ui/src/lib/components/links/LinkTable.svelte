@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
   // The direct-link table, shared by the fleet-wide list and a device's
   // links sub-tab. It follows the CCU WebUI's link list
   // (config/ic_linkpeerlist.cgi, put_tableheader): three captioned column
@@ -213,10 +214,11 @@
         variant="ghost"
         size="sm"
         onclick={() =>
-          (location.hash =
+          host().navigate(
             side === "sender"
               ? newLinkHref({ sender: first.sender_address })
-              : newLinkHref({ receiver: first.receiver_address }))}
+              : newLinkHref({ receiver: first.receiver_address }),
+          )}
       >
         <Icon name="mdi:plus" size={16} />
         {side === "sender" ? t("links.add_receiver") : t("links.add_sender")}

@@ -16,7 +16,10 @@
   $effect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (root && !root.contains(e.target as Node)) open = false;
+      // composedPath, not target: inside a shadow root (the editor as a web
+      // component) a document listener sees the event retargeted to the
+      // host, so every click would read as "outside" and close the menu.
+      if (root && !e.composedPath().includes(root)) open = false;
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") open = false;

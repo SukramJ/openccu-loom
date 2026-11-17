@@ -68,7 +68,7 @@ vi.mock("./AuditLog.svelte", () => ({ default: () => {} }));
 // The picker under test is offered only while the daemon forwards
 // measurements.
 vi.mock("$lib/stores/info.svelte", () => ({
-  infoStore: { info: { capabilities: ["measurements.v1"] } },
+  infoStore: { info: { capabilities: ["measurements.v1"] }, ensure: () => Promise.resolve() },
 }));
 vi.mock("$lib/components/RecordToggle.svelte", () => ({ default: () => {} }));
 

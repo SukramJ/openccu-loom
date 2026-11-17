@@ -93,6 +93,8 @@ import type {
 } from "./visibility-types";
 import type { SurfacesRequest, SurfacesResponse } from "./surface-types";
 import { apiBase } from "./base";
+import { host, type HostRequest } from "$lib/host/host";
+import { CSRF_HEADER, SAFE_METHODS, csrfToken } from "$lib/host/page-host";
 
 export type Identity = {
   subject: string;
@@ -181,15 +183,6 @@ class ApiError extends Error {
   }
 }
 
-// CSRFCookieName / CSRFHeaderName mirror internal/auth/csrf.go. The
-// daemon mounts a double-submit CSRF guard on the whole REST router, so
-// every mutating request must echo the JS-readable csrf cookie back in
-// this header — otherwise the daemon answers 403 "token mismatch".
-const CSRF_COOKIE = "openccu_loom_csrf";
-const CSRF_HEADER = "X-CSRF-Token";
-
-const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
 // onUnauthorized is invoked whenever a non-auth REST call returns 401 —
 // i.e. the session cookie went stale (typically after a daemon restart,
 // since auth sessions live in memory). The auth store registers a handler
@@ -201,17 +194,6 @@ let onUnauthorized: (() => void) | null = null;
 
 export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn;
-}
-
-function csrfToken(): string {
-  const prefix = `${CSRF_COOKIE}=`;
-  for (const part of document.cookie.split(";")) {
-    const c = part.trim();
-    if (c.startsWith(prefix)) {
-      return decodeURIComponent(c.slice(prefix.length));
-    }
-  }
-  return "";
 }
 
 /**
@@ -244,25 +226,17 @@ async function request<T>(
   init: RequestInit = {},
   payloadStatuses: readonly number[] = [],
 ): Promise<T> {
-  const method = (init.method ?? "GET").toUpperCase();
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    ...((init.headers as Record<string, string>) ?? {}),
-  };
-  // Echo the double-submit CSRF token on mutating requests (the
-  // daemon's safe-method allowlist matches SAFE_METHODS above).
-  if (!SAFE_METHODS.has(method)) {
-    const token = csrfToken();
-    if (token) headers[CSRF_HEADER] = token;
-  }
-  const res = await fetch(`${apiBase()}${path}`, {
-    credentials: "same-origin",
-    ...init,
-    // headers/credentials are spread last so the merged set (Accept +
-    // per-call Content-Type + CSRF) is not clobbered by `...init`.
-    headers,
+  const res = await host().request({
+    method: (init.method ?? "GET").toUpperCase(),
+    path,
+    headers: {
+      Accept: "application/json",
+      ...((init.headers as Record<string, string>) ?? {}),
+    },
+    body: init.body as HostRequest["body"],
   });
-  if (!res.ok && !payloadStatuses.includes(res.status)) {
+  const ok = res.status >= 200 && res.status < 300;
+  if (!ok && !payloadStatuses.includes(res.status)) {
     // A 401 on any non-login call means the session is no longer valid;
     // notify the auth store so the SPA returns to the login view (which
     // unmounts the app shell and stops its background pollers). /auth/login
@@ -270,18 +244,7 @@ async function request<T>(
     if (res.status === 401 && path !== "/auth/login") {
       onUnauthorized?.();
     }
-    // Read the body once as text, then try to parse as JSON. Calling
-    // res.json() first and falling back to res.text() fails because
-    // the body stream is already consumed by the failed json() call.
-    const raw = await res.text();
-    let body: unknown = raw;
-    if (raw) {
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        // keep raw text
-      }
-    }
+    const body = res.body;
     const detail =
       typeof body === "object" && body !== null && "detail" in body
         ? String((body as { detail: unknown }).detail)
@@ -294,15 +257,10 @@ async function request<T>(
       `API ${res.status} ${path}: ${detail}`,
     );
   }
-  if (res.status === 204) return undefined as T;
   // Many mutation endpoints reply 202 Accepted with an empty body
-  // (PutSysvar, ExecuteProgram, SetValue, …). `res.json()` throws on
-  // empty input, so we read the body as text first and only parse it
-  // when something is there. Callers typed as <void> get undefined,
-  // typed-as-T callers fall through to JSON parsing.
-  const text = await res.text();
-  if (!text) return undefined as T;
-  return JSON.parse(text) as T;
+  // (PutSysvar, ExecuteProgram, SetValue, …); the host decodes that to
+  // undefined, which is what callers typed as <void> expect.
+  return res.body as T;
 }
 
 // fetchAllPages pages through an endpoint whose body is a bare JSON array
@@ -982,7 +940,7 @@ export const api = {
     device?: string;
     since?: string;
     until?: string;
-  }): string {
+  }): string | null {
     const qs = new URLSearchParams({
       format: "csv",
       limit: String(p.limit ?? 10000),
@@ -990,7 +948,9 @@ export const api = {
     if (p.device) qs.set("device", p.device);
     if (p.since) qs.set("since", p.since);
     if (p.until) qs.set("until", p.until);
-    return `${apiBase()}/audit?${qs.toString()}`;
+    // null where the host cannot hand the browser a daemon URL (the web
+    // component inside Home Assistant): the export is then not offered.
+    return host().resourceUrl(`/audit?${qs.toString()}`);
   },
   // --- Software bill of materials (Licenses page) ----------------
   // A dev build carries no SBOM and answers 404 — a property of the

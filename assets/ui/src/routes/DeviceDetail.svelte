@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
+  import { deepActiveElement } from "$lib/dom";
   import { apiErrorMessage } from "$lib/features";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, untrack } from "svelte";
@@ -278,6 +280,10 @@
   onMount(() => {
     void loadRoomFunctionCatalogs();
     void taxonomyStore.refresh();
+    // The tabs read the daemon's capabilities (recording, projection). The
+    // SPA's sidebar happens to load them too, but a host without that shell
+    // (the web component) has only this page to ask.
+    void infoStore.ensure();
     const clock = setInterval(() => {
       now = new Date();
     }, 30_000);
@@ -528,7 +534,7 @@
 
   $effect(() => {
     if (!deleteDialogOpen) return;
-    deleteDialogOpener = document.activeElement as HTMLElement | null;
+    deleteDialogOpener = deepActiveElement();
     // The dialog's DOM is inserted by the {#if} this effect depends on;
     // queue past the current microtask so Svelte has committed it.
     queueMicrotask(() => deleteDialogFocusables()[0]?.focus());
@@ -552,7 +558,7 @@
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
+      const active = deepActiveElement();
       const atEdge = e.shiftKey ? active === first : active === last;
       const outside = !els.includes(active as HTMLElement);
       if (atEdge || outside) {
@@ -572,7 +578,7 @@
       });
       toastStore.success(t("device.removed"));
       deleteDialogOpen = false;
-      location.hash = "#/devices";
+      host().navigate("#/devices");
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // The daemon no longer holds the device — another session or the
@@ -580,7 +586,7 @@
         // true, so leave the stale page for a freshly loaded list.
         toastStore.info(t("device.already_removed"));
         deleteDialogOpen = false;
-        location.hash = "#/devices";
+        host().navigate("#/devices");
         void deviceStore.refresh();
         return;
       }
@@ -832,6 +838,14 @@
     ].filter((tab) => surfacesStore.visible(`device.${tab.key}`)),
   );
 
+  // The selected top tab, reconciled against the strip the same way as the
+  // sub-tab below: the surface profile can hide the overview the page opens
+  // on, and the panel must then show the first tab the strip offers, not
+  // the hidden one.
+  const activeTopTab = $derived(
+    topTabs.some((tab) => tab.key === topTab) ? topTab : topTabs[0]?.key,
+  );
+
   type SubDef = { key: ConfigSub; label: string };
   const configSubs = $derived.by<SubDef[]>(() => {
     const out: SubDef[] = [];
@@ -1077,102 +1091,107 @@
               {t("device.rename")}
             </Button>
           {/if}
-          {#if device.update_available}
+          <!-- The device lifecycle: firmware, restore, repair, cache, radio test,
+               export and removal. A surface of its own, so a host that embeds
+               only the configuration editor leaves them out. -->
+          {#if surfacesStore.visible("device.actions")}
+            {#if device.update_available}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onUpdateFirmware()}
+                disabled={updatingFw}
+                title={t("device.firmware_update.tooltip", {
+                  current: device.firmware?.Current ?? "?",
+                  available: device.firmware?.Available ?? "?",
+                })}
+              >
+                <Icon name="mdi:download" size={14} />
+                {updatingFw ? "…" : t("device.firmware_update")}
+              </Button>
+            {/if}
+            {#if isAdmin && device.config_restore_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onRestoreConfig()}
+                disabled={restoringConfig}
+                title={t("device.restore_config.tooltip")}
+              >
+                <Icon name="mdi:backup-restore" size={14} />
+                {restoringConfig ? "…" : t("device.restore_config")}
+              </Button>
+            {/if}
+            {#if isAdmin}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => (repairOpen = true)}
+                title={t("device.repair_config.tooltip")}
+              >
+                <Icon name="mdi:cog" size={14} />
+                {t("device.repair_config")}
+              </Button>
+            {/if}
+            {#if isAdmin && device.config_cache_clear_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onClearConfigCache()}
+                disabled={clearingCache}
+                title={t("device.clear_config_cache.tooltip")}
+              >
+                <Icon name="mdi:refresh" size={14} />
+                {clearingCache ? "…" : t("device.clear_config_cache")}
+              </Button>
+            {/if}
+            {#if device.communication_test_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onTestCommunication()}
+                disabled={testingComm}
+                title={t("device.communication_test.tooltip")}
+              >
+                <Icon name="mdi:radio-tower" size={14} />
+                {testingComm
+                  ? t("device.communication_test_running")
+                  : t("device.communication_test")}
+              </Button>
+              {#if commTestResult}
+                <Badge variant={commTestResult.passed ? "success" : "warning"}>
+                  {commTestResult.passed
+                    ? t("device.communication_test_passed")
+                    : t("device.communication_test_failed")}
+                </Badge>
+              {/if}
+            {/if}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onclick={() => void onUpdateFirmware()}
-              disabled={updatingFw}
-              title={t("device.firmware_update.tooltip", {
-                current: device.firmware?.Current ?? "?",
-                available: device.firmware?.Available ?? "?",
-              })}
+              onclick={() => void exportDefinition()}
+              disabled={exportingDef}
             >
               <Icon name="mdi:download" size={14} />
-              {updatingFw ? "…" : t("device.firmware_update")}
+              {exportingDef ? "…" : t("device.export_definition")}
             </Button>
-          {/if}
-          {#if isAdmin && device.config_restore_supported}
             <Button
               type="button"
-              variant="outline"
+              variant="outline-destructive"
               size="sm"
-              onclick={() => void onRestoreConfig()}
-              disabled={restoringConfig}
-              title={t("device.restore_config.tooltip")}
+              onclick={onDelete}
+              disabled={deleting}
             >
-              <Icon name="mdi:backup-restore" size={14} />
-              {restoringConfig ? "…" : t("device.restore_config")}
+              <Icon name="mdi:trash-can" size={14} />
+              {t("device.remove")}
             </Button>
           {/if}
-          {#if isAdmin}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onclick={() => (repairOpen = true)}
-              title={t("device.repair_config.tooltip")}
-            >
-              <Icon name="mdi:cog" size={14} />
-              {t("device.repair_config")}
-            </Button>
-          {/if}
-          {#if isAdmin && device.config_cache_clear_supported}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onclick={() => void onClearConfigCache()}
-              disabled={clearingCache}
-              title={t("device.clear_config_cache.tooltip")}
-            >
-              <Icon name="mdi:refresh" size={14} />
-              {clearingCache ? "…" : t("device.clear_config_cache")}
-            </Button>
-          {/if}
-          {#if device.communication_test_supported}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onclick={() => void onTestCommunication()}
-              disabled={testingComm}
-              title={t("device.communication_test.tooltip")}
-            >
-              <Icon name="mdi:radio-tower" size={14} />
-              {testingComm
-                ? t("device.communication_test_running")
-                : t("device.communication_test")}
-            </Button>
-            {#if commTestResult}
-              <Badge variant={commTestResult.passed ? "success" : "warning"}>
-                {commTestResult.passed
-                  ? t("device.communication_test_passed")
-                  : t("device.communication_test_failed")}
-              </Badge>
-            {/if}
-          {/if}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onclick={() => void exportDefinition()}
-            disabled={exportingDef}
-          >
-            <Icon name="mdi:download" size={14} />
-            {exportingDef ? "…" : t("device.export_definition")}
-          </Button>
-          <Button
-            type="button"
-            variant="outline-destructive"
-            size="sm"
-            onclick={onDelete}
-            disabled={deleting}
-          >
-            <Icon name="mdi:trash-can" size={14} />
-            {t("device.remove")}
-          </Button>
         {/if}
       {/snippet}
     </PageHeader>
@@ -1181,7 +1200,7 @@
       <!-- Top-level tab strip — Overview / Configure / History. -->
       <Tabs
         class="mb-4"
-        active={topTab}
+        active={activeTopTab}
         items={topTabs}
         ariaLabel={t("device.aria.top_tabs")}
         onSelect={(key) => {
@@ -1190,7 +1209,7 @@
         }}
       />
 
-      {#if topTab === "overview"}
+      {#if activeTopTab === "overview"}
         <!-- Übersicht: maintenance grid (`:0` health) plus the
              CDP-tiles panel. CdpTilesPanel covers everything:
              actor widgets, orphan ChannelControl fallbacks, and the
@@ -1202,7 +1221,7 @@
           />
           <CdpTilesPanel {detail} />
         </div>
-      {:else if topTab === "configure"}
+      {:else if activeTopTab === "configure"}
         <!-- Sub-tab strip: a quiet segmented control, so the brand-underlined
              top-level tab stays the only branded navigation marker. -->
         <Tabs
@@ -1359,7 +1378,7 @@
         {:else if activeConfigSub === "schedule"}
           <ScheduleTab address={detail.address} />
         {/if}
-      {:else if topTab === "history"}
+      {:else if activeTopTab === "history"}
         <div class="space-y-6">
           <!-- Which numeric data points are forwarded to the measurement
                target. Offered only while the daemon forwards at all. -->
@@ -1412,7 +1431,7 @@
           <!-- The device's configuration change log. -->
           <AuditLog deviceFilter={detail.address} embedded />
         </div>
-      {:else if topTab === "projection"}
+      {:else if activeTopTab === "projection"}
         <DeviceProjection
           address={detail.address}
           channels={detail.channels}

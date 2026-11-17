@@ -148,6 +148,7 @@ Live config section read / write / delete + schema introspection
 | GET | `/config/sections/{section}` | Read one config section (admin) | admin |
 | PUT | `/config/sections/{section}` | Replace one config section (admin) | admin |
 | DELETE | `/config/sections/{section}` | Delete one config section (admin) | admin |
+| GET | `/ui/editor-component` | Where the device editor's web component is, and what it calls | authenticated |
 | GET | `/ui/surfaces` | Config-UI surface registry and the live profile | authenticated |
 | PUT | `/ui/surfaces` | Update the surface profiles or the embedded master toggle (admin) | admin |
 

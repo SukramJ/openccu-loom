@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deepActiveElement } from "$lib/dom";
   import { onDestroy, onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { InboxDevice, ReplaceCandidate, GroupEntry } from "$lib/api/types";
@@ -130,7 +131,7 @@
 
   $effect(() => {
     if (!acceptTarget && !replaceTarget) return;
-    dialogOpener = document.activeElement as HTMLElement | null;
+    dialogOpener = deepActiveElement();
     // The dialog's DOM is inserted by the {#if} this effect depends on;
     // queue past the current microtask so Svelte has committed it.
     queueMicrotask(() =>
@@ -168,7 +169,7 @@
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
+      const active = deepActiveElement();
       const atEdge = e.shiftKey ? active === first : active === last;
       const outside = !els.includes(active as HTMLElement);
       if (atEdge || outside) {
