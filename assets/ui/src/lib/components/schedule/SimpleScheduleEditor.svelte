@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
   import type {
     ClimateSchedule,
     SimpleScheduleEntry,
@@ -191,7 +192,7 @@
     // requestAnimationFrame so the (now expanded) row has a layout
     // before we scroll it.
     requestAnimationFrame(() => {
-      const el = document.getElementById(`schedule-slot-${slotNo}`);
+      const el = host().root().getElementById(`schedule-slot-${slotNo}`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deepActiveElement } from "$lib/dom";
   // Create / edit a heating group (GR02+). Type picker → grouped member picker
   // → name + "operate only via group" toggle. Backed by the CCU jpages proxy
   // through the REST API; the create path is fire-and-poll on the daemon side,
@@ -52,7 +53,7 @@
   }
 
   $effect(() => {
-    previouslyFocused = document.activeElement as HTMLElement | null;
+    previouslyFocused = deepActiveElement();
     // The dialog's DOM is already mounted by the time this effect runs;
     // queue past the current microtask so any pending Svelte DOM commit
     // finishes first.
@@ -73,7 +74,7 @@
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
+      const active = deepActiveElement();
       const atEdge = e.shiftKey ? active === first : active === last;
       const outside = !els.includes(active as HTMLElement);
       if (atEdge || outside) {

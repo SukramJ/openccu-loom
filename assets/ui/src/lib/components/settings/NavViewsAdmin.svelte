@@ -71,6 +71,8 @@
       // Sub-tab keys use underscores where the surface id uses hyphens.
       return `device.subtab.${id.slice("device.configure.".length).replace(/-/g, "_")}`;
     }
+    // The header actions are no tab; they name themselves.
+    if (id === "device.actions") return "device.lifecycle_actions";
     if (id.startsWith("device.")) return `device.toptab.${id.slice(7)}`;
     return id;
   }

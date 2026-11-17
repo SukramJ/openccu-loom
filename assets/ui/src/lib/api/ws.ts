@@ -432,3 +432,65 @@ export function connectEvents(): EventStream {
     latencyMs: () => lastLatencyMs,
   };
 }
+
+/**
+ * The opener of a relayed event source: delivers each raw frame of the
+ * daemon's event stream as it arrived on the wire and returns the function
+ * that closes the source.
+ */
+export type FrameSource = (onFrame: (raw: unknown) => void) => () => void;
+
+/**
+ * An EventStream over frames a host relays instead of a socket this client
+ * owns — the web component inside Home Assistant, where the integration
+ * holds the daemon connection (ADR 0089). The relay answers the heartbeat
+ * and resumes after a reconnect itself, so this side neither pongs nor
+ * carries a cursor and reports no latency; it interprets the same frames
+ * the socket path does: the resync signal and the events.
+ *
+ * Without a source the stream stays "closed" and delivers nothing; the
+ * editor then shows what it loaded and what its own writes return.
+ */
+export function streamFromFrames(source: FrameSource | null): EventStream {
+  const handlers = new Set<(ev: EventEnvelope) => void>();
+  const stateHandlers = new Set<(s: "connecting" | "open" | "closed") => void>();
+  const resyncHandlers = new Set<() => void>();
+  let current: "connecting" | "open" | "closed" = source ? "open" : "closed";
+  const close = source
+    ? source((raw) => {
+        if (asControlPing(raw)) return;
+        if (isResyncSignal(raw)) {
+          for (const h of resyncHandlers) h();
+          return;
+        }
+        const env = normalizeEvent(raw);
+        if (!env) return;
+        for (const h of handlers) h(env);
+      })
+    : () => {};
+  return {
+    onMessage(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    onStateChange(handler) {
+      stateHandlers.add(handler);
+      return () => stateHandlers.delete(handler);
+    },
+    onResync(handler) {
+      resyncHandlers.add(handler);
+      return () => resyncHandlers.delete(handler);
+    },
+    onLatency() {
+      return () => {};
+    },
+    close() {
+      if (current === "closed") return;
+      close();
+      current = "closed";
+      for (const h of stateHandlers) h(current);
+    },
+    state: () => current,
+    latencyMs: () => null,
+  };
+}

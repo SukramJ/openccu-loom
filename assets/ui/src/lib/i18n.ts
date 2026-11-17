@@ -2350,6 +2350,8 @@ const EN: Catalog = {
     "Weekly climate and switching programs.",
   "surface.desc.device.history":
     "The change log of this device and the choice of which measurements are recorded.",
+  "surface.desc.device.actions":
+    "Firmware update, configuration restore and repair, radio test, definition export and removal of this device.",
 
   "groups.central_label": "Central",
   "groups.created": "Created.",
@@ -3174,6 +3176,7 @@ const EN: Catalog = {
   "device.toptab.configure": "Configure",
   "device.toptab.history": "History",
   "device.toptab.projection": "Projection",
+  "device.lifecycle_actions": "Device actions",
   "projection.intro": "Where this device appears: one row per channel entity and parameter, one column per plane. Open a row for the name it has there, or for the rule that leaves it out.",
   "projection.empty": "No projection",
   "projection.empty.description": "This daemon answers for no plane.",
@@ -6582,6 +6585,8 @@ const DE: Catalog = {
     "Wochenprogramme für Heizung und Schaltvorgänge.",
   "surface.desc.device.history":
     "Das Änderungsprotokoll dieses Geräts und die Auswahl, welche Messwerte aufgezeichnet werden.",
+  "surface.desc.device.actions":
+    "Firmware-Update, Wiederherstellen und Reparieren der Konfiguration, Funktest, Definitions-Export und Entfernen dieses Geräts.",
 
   "groups.central_label": "Zentrale",
   "groups.created": "Erstellt.",
@@ -7407,6 +7412,7 @@ const DE: Catalog = {
   "device.toptab.configure": "Konfigurieren",
   "device.toptab.history": "Verlauf",
   "device.toptab.projection": "Projektion",
+  "device.lifecycle_actions": "Geräteaktionen",
   "projection.intro": "Wo dieses Gerät erscheint: eine Zeile je Kanal-Entität und Parameter, eine Spalte je Ebene. Eine Zeile aufklappen zeigt den Namen dort oder die Regel, die sie auslässt.",
   "projection.empty": "Keine Projektion",
   "projection.empty.description": "Dieser Daemon antwortet für keine Ebene.",

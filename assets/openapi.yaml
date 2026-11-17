@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.4.0
+  version: 16.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6829,6 +6829,32 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /ui/editor-component:
+    get:
+      operationId: getEditorComponent
+      summary: Where the device editor's web component is, and what it calls
+      description: |
+        The device editor ships as a web component next to the SPA
+        (ADR 0088, ADR 0089). An embedding integration reads this manifest,
+        fetches the module from `module_url` (its file name carries the
+        content hash, it is served without a session and cached
+        immutably), serves it from its own origin, and relays only REST
+        calls whose path lies under one of `routes`. A prefix covers itself
+        and every path below it.
+
+        A build without the component bundle answers 404.
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EditorComponentManifest" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /ui/surfaces:
     get:
       operationId: getUISurfaces
@@ -13452,6 +13478,21 @@ components:
         the directly-exposed port. A box API token and a daemon login
         inside the shell frame read as `direct`.
 
+    EditorComponentManifest:
+      type: object
+      required: [module_url, hash, routes]
+      properties:
+        module_url:
+          type: string
+          description: Daemon path of the module; the file name carries the hash.
+          example: /app/component/editor-3f9a.js
+        hash:
+          type: string
+          description: Hex SHA-256 of the module's bytes.
+        routes:
+          type: array
+          description: Path prefixes below /api/v1 the editor calls.
+          items: { type: string }
     SurfacesResponse:
       type: object
       required:

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
   // "Geräte-/Kanalparameter" — one page for a device's configuration, laid
   // out like the CCU WebUI's config/ic_deviceparameters.cgi: the device
   // parameters first, then every channel as its own block ("Ch. n"), and
@@ -92,7 +93,7 @@
     if (!ch) return;
     // Only the route drives this effect; the open state it writes must not.
     untrack(() => setOpen(ch.address, true));
-    queueMicrotask(() => document.getElementById(blockId(ch.address))?.scrollIntoView({ block: "start" }));
+    queueMicrotask(() => host().root().getElementById(blockId(ch.address))?.scrollIntoView({ block: "start" }));
   });
 
   function setOpen(address: string, value: boolean) {
@@ -250,7 +251,7 @@
               href={`#${blockId(deviceBlocks[0].address)}`}
               onclick={(e) => {
                 e.preventDefault();
-                document.getElementById(blockId(deviceBlocks[0].address))?.scrollIntoView({ block: "start" });
+                host().root().getElementById(blockId(deviceBlocks[0].address))?.scrollIntoView({ block: "start" });
               }}>{t("device.params.device")}</a
             >
           </li>
@@ -263,7 +264,7 @@
               onclick={(e) => {
                 e.preventDefault();
                 setOpen(ch.address, true);
-                document.getElementById(blockId(ch.address))?.scrollIntoView({ block: "start" });
+                host().root().getElementById(blockId(ch.address))?.scrollIntoView({ block: "start" });
               }}
             >
               <span class="font-mono text-xs">{ch.number}</span>

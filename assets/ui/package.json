@@ -7,7 +7,7 @@
   "description": "Svelte 5 SPA for OpenCCU-Loom — data-driven CCU config UI",
   "scripts": {
     "dev": "NODE_OPTIONS=--disable-warning=DEP0205 vite",
-    "build": "NODE_OPTIONS=--disable-warning=DEP0205 vite build",
+    "build": "NODE_OPTIONS=--disable-warning=DEP0205 vite build && NODE_OPTIONS=--disable-warning=DEP0205 vite build -c vite.component.config.ts",
     "preview": "NODE_OPTIONS=--disable-warning=DEP0205 vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "typecheck": "tsc --noEmit",

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deepActiveElement } from "$lib/dom";
   import { t } from "$lib/i18n";
   import Button from "./Button.svelte";
   import Switch from "./Switch.svelte";
@@ -25,7 +26,7 @@
 
   $effect(() => {
     if (pending) {
-      previouslyFocused = document.activeElement as HTMLElement | null;
+      previouslyFocused = deepActiveElement();
       // The dialog's DOM is inserted by the {#if} block that guards this
       // effect's dependency, so it exists once this runs; queue past the
       // current microtask to let Svelte finish committing it either way.
@@ -51,7 +52,7 @@
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
+      const active = deepActiveElement();
       const atEdge = e.shiftKey ? active === first : active === last;
       const outside = !els.includes(active as HTMLElement);
       if (atEdge || outside) {

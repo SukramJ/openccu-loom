@@ -1,4 +1,4 @@
-// User preferences persisted in localStorage. Pre-populated from
+// User preferences persisted in the host's storage (localStorage in the SPA). Pre-populated from
 // navigator.language / prefers-color-scheme on first load so users
 // immediately see something sensible. The store is a Svelte 5 rune
 // object so callers can read e.g. `prefs.locale` / `prefs.theme` and
@@ -9,6 +9,7 @@
 // the operator's own choice is kept apart in `own` and is the only thing
 // ever persisted, so a direct tab keeps the own setting.
 
+import { host } from "$lib/host/host";
 import { isEmbedded, resolveSkin } from "$lib/theme/ha-bridge";
 import {
   adoptShellLook,
@@ -54,7 +55,7 @@ function detectLocale(): "de" | "en" {
 
 function load(): Prefs {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = host().storage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<Prefs>;
       const locale =
@@ -102,7 +103,7 @@ const own: Pick<Prefs, "locale" | "theme"> = { locale: "en", theme: "system" };
 
 function persist(p: Prefs): void {
   try {
-    localStorage.setItem(
+    host().storage.setItem(
       KEY,
       JSON.stringify({ ...p, locale: own.locale, theme: own.theme }),
     );
@@ -117,11 +118,11 @@ const initial = load();
 // then dropped so the two can never disagree again.
 const LEGACY_PANEL_EXPERT_KEY = "openccu-loom.expert_mode";
 try {
-  if (localStorage.getItem(LEGACY_PANEL_EXPERT_KEY) === "1") {
+  if (host().storage.getItem(LEGACY_PANEL_EXPERT_KEY) === "1") {
     initial.expertMode = true;
     persist(initial);
   }
-  localStorage.removeItem(LEGACY_PANEL_EXPERT_KEY);
+  host().storage.removeItem(LEGACY_PANEL_EXPERT_KEY);
 } catch {
   // storage may be disabled; the in-memory value stands.
 }

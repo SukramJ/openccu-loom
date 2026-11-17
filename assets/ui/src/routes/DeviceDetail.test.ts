@@ -62,6 +62,8 @@ vi.mock("$lib/api/client", async () => {
     ApiError: actual.ApiError,
     friendlyError: actual.friendlyError,
     api: {
+      // The page loads the daemon's capabilities itself (infoStore.ensure).
+      info: () => Promise.resolve({ capabilities: [] }),
       getDevice: (...args: unknown[]) => mockGetDevice(...args),
       getDeviceSchedule: (...args: unknown[]) => mockGetDeviceSchedule(...args),
       getPreference: (...args: unknown[]) => mockGetPreference(...args),

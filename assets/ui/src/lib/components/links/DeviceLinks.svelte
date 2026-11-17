@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { host } from "$lib/host/host";
   // A device's direct links: the fleet-wide LinkTable narrowed to the links
   // this device takes part in — the CCU WebUI's "Direkte" button on a
   // device row, which opens its link list filtered to that device. Editing
@@ -69,7 +70,7 @@
       <Button
         type="button"
         size="sm"
-        onclick={() => (location.hash = newLinkHref({ device: deviceAddress }))}
+        onclick={() => host().navigate(newLinkHref({ device: deviceAddress }))}
       >
         <Icon name="mdi:plus" size={16} />
         {t("links.new")}

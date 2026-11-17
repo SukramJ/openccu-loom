@@ -651,6 +651,14 @@ func (fakeDeviceProjector) ProjectDevice(context.Context, string, string) (proje
 	return projection.Device{}, false, nil
 }
 
+// fakeEditorComponent stands in for the embedded component bundle, which
+// a contract-test binary does not carry.
+type fakeEditorComponent struct{}
+
+func (fakeEditorComponent) Manifest() hmapi.EditorComponentManifest {
+	return hmapi.EditorComponentManifest{ModuleURL: "/app/component/editor-00.js", Hash: "00", Routes: []string{"/devices"}}
+}
+
 func fullyWiredRouterDeps() rest.Deps {
 	authDeps := &handlers.AuthDeps{
 		Users:    auth.NewMemoryUserStore(),
@@ -714,6 +722,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		SysvarRefresh:           fakeSysvarRefreshService{},
 		Interfaces:              fakeInterfaceIndex{},
 		ConfigAdmin:             fakeConfigAdminService{},
+		EditorComponent:         fakeEditorComponent{},
 		UserAdmin:               fakeUserAdminService{},
 		TokenAdmin:              fakeTokenAdminService{},
 		CentralAdmin:            fakeCentralAdminService{},

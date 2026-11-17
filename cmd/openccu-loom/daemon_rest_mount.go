@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -404,10 +405,11 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// produces a file-watcher event, so without this the only way to
 		// make a north.mqtt edit real was to restart or to know about
 		// POST /admin/mqtt/reload.
-		SectionApplier: newSectionApplier(mqttReload, logger),
-		OIDC:           buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:     ui.SPAHandler(),
-		Bootstrap:      d.bootstrap,
+		SectionApplier:  newSectionApplier(mqttReload, logger),
+		OIDC:            buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:      ui.SPAHandler(),
+		EditorComponent: editorComponent(logger),
+		Bootstrap:       d.bootstrap,
 		Setup: &handlers.SetupService{
 			Users: d.sqUsers,
 			// The live-adopt decorator, not the raw store: the wizard's CCU
@@ -925,4 +927,19 @@ func (a *mcpAlarmAdapter) Disarm(ctx context.Context, zoneID string) error {
 func (a *mcpAlarmAdapter) ResetMotion(ctx context.Context, zoneID string) (reset, failed int) {
 	res := a.svc.Engine().ResetTriggeredMotion(ctx, zoneID, "", alarmSourceMCP)
 	return res.Reset, res.Failed
+}
+
+// editorComponent loads the device editor's web-component bundle from the
+// embedded SPA. A build without it (a development binary whose SPA was not
+// compiled) serves no manifest; the interface stays nil so the handler
+// sees the absence instead of a nil pointer inside a non-nil interface.
+func editorComponent(logger *slog.Logger) handlers.EditorComponentSource {
+	comp, err := ui.LoadEditorComponent()
+	if err != nil {
+		if !errors.Is(err, ui.ErrEditorComponentNotBuilt) {
+			logger.Error("ui.editor_component.unreadable", slog.String("err", err.Error()))
+		}
+		return nil
+	}
+	return comp
 }

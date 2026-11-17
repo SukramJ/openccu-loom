@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Editor component test host</title>
+    <style>
+      body { margin: 0; font-family: serif; background: #fafafa; }
+    </style>
+  </head>
+  <body>
+    <!--
+      A page that is not the SPA shell, standing in for Home Assistant's
+      panel: the element sits inside a second shadow root (Home Assistant
+      nests its panels), and its transport is the host page's own code.
+      Every call the element hands the transport is recorded, so a spec can
+      check what the editor asked for.
+    -->
+    <script type="module">
+      import "../../../src/component/main.ts";
+
+      const params = new URLSearchParams(location.search);
+      window.__transportCalls = [];
+      window.__navigations = [];
+
+      const el = document.createElement("loom-device-editor");
+      el.transport = {
+        async request({ method, path, query, headers, body }) {
+          window.__transportCalls.push(`${method} ${path}`);
+          const qs = new URLSearchParams(query).toString();
+          // The marker tells a spec this request came through the
+          // transport; an /api request without it was the element's own.
+          const res = await fetch(`/api/v1${path}${qs ? `?${qs}` : ""}`, {
+            method,
+            headers: { ...headers, "X-Test-Host-Transport": "1" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          });
+          const text = await res.text();
+          let decoded;
+          try {
+            decoded = text ? JSON.parse(text) : undefined;
+          } catch {
+            decoded = text;
+          }
+          return { status: res.status, body: decoded };
+        },
+      };
+      el.address = params.get("address") ?? "";
+      el.locale = params.get("locale") ?? "en";
+      el.dark = params.get("dark") === "1";
+      el.addEventListener("loom-navigate", (e) => window.__navigations.push(e.detail.route));
+
+      const outer = document.createElement("div");
+      outer.id = "ha-panel";
+      document.body.append(outer);
+      outer.attachShadow({ mode: "open" }).append(el);
+    </script>
+  </body>
+</html>

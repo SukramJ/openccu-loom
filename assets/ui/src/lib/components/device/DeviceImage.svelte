@@ -6,7 +6,7 @@
   route answers 404 for a device it has no picture for.
 -->
 <script lang="ts">
-  import { apiBase } from "$lib/api/base";
+  import { host } from "$lib/host/host";
   import { deviceTypeIcon } from "$lib/device-icon";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { t } from "$lib/i18n";
@@ -25,9 +25,11 @@
   let failedFor = $state<string | null>(null);
   const failed = $derived(failedFor === address);
 
-  // apiBase() carries the Ingress prefix; an absolute "/api/v1/…" URL
-  // would bypass the Home Assistant Ingress proxy.
-  const src = $derived(`${apiBase()}/devices/${encodeURIComponent(address)}/icon`);
+  // The host resolves the URL: the page host carries the Ingress prefix (an
+  // absolute "/api/v1/…" URL would bypass the Home Assistant Ingress proxy),
+  // and a host that cannot give the browser a daemon URL yields null, which
+  // shows the glyph.
+  const src = $derived(host().resourceUrl(`/devices/${encodeURIComponent(address)}/icon`));
   const glyph = $derived(deviceTypeIcon({ model, product_group: productGroup }));
   const label = $derived(t("device.image_alt", { model }));
 </script>
@@ -37,7 +39,7 @@
   data-testid="device-image"
   data-state={failed ? "fallback" : "image"}
 >
-  {#if failed}
+  {#if failed || !src}
     <Icon
       name={glyph}
       size={32}

@@ -5,6 +5,7 @@ package ui
 
 import (
 	"embed"
+	"errors"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -35,6 +36,13 @@ func SPAHandler() http.Handler {
 		panic(err)
 	}
 	server := http.FileServer(http.FS(sub))
+	// The editor component is optional in a development build; a bundle
+	// that is present but unreadable is the same build-time mistake as a
+	// bad embed directive.
+	component, err := loadEditorComponent(sub)
+	if err != nil && !errors.Is(err, ErrEditorComponentNotBuilt) {
+		panic(err)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Any request that doesn't resolve to a file falls back to
 		// the SPA's index.html — that is what makes client-side
@@ -49,6 +57,9 @@ func SPAHandler() http.Handler {
 			// deploy is picked up immediately however the entry point is
 			// addressed.
 			serveIndex(sub, w, r)
+			return
+		}
+		if component != nil && component.serveModule(w, r, path) {
 			return
 		}
 		f, err := sub.Open(path)
