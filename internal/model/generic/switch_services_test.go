@@ -236,3 +236,50 @@ func TestSwitchTurnOnWithTimerRollsBackOptimisticOnPutParamsetError(t *testing.T
 		t.Fatalf("value must revert to last confirmed false, got %v", v)
 	}
 }
+
+// recordingSwitchParamsetWriter records every put_paramset so a test can read
+// what reached the wire.
+type recordingSwitchParamsetWriter struct {
+	puts []map[string]any
+}
+
+func (w *recordingSwitchParamsetWriter) SetValue(_ context.Context, _ string, _ hmenum.Parameter, _ any, _ hmenum.CommandPriority) error {
+	return nil
+}
+
+func (w *recordingSwitchParamsetWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority) error {
+	w.puts = append(w.puts, values)
+	return nil
+}
+
+// TestSwitchTimedTurnOnReachesASwitchThatIsAlreadyOn pins that a staged
+// on-time still goes out when the switch already reports on: TurnOn sends
+// ON_TIME and STATE=true together instead of dropping STATE as "no state
+// change", which is what left a timed switch-on of an already-on generic
+// switch without effect.
+func TestSwitchTimedTurnOnReachesASwitchThatIsAlreadyOn(t *testing.T) {
+	t.Parallel()
+	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
+		hmenum.OperationsRead|hmenum.OperationsWrite))
+	w := &recordingSwitchParamsetWriter{}
+	s.Writer = w
+	s.OnEvent(true)
+	s.SetTimerOnTime(10 * time.Second)
+
+	if err := s.TurnOn(context.Background(), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("TurnOn: %v", err)
+	}
+	if len(w.puts) != 1 {
+		t.Fatalf("put_paramset calls: got %d, want 1", len(w.puts))
+	}
+	put := w.puts[0]
+	if v, ok := put[string(hmenum.ParameterOnTime)].(float64); !ok || v != 10 {
+		t.Errorf("ON_TIME: got %#v, want 10", put[string(hmenum.ParameterOnTime)])
+	}
+	if v, ok := put[string(hmenum.ParameterState)].(bool); !ok || !v {
+		t.Errorf("STATE: got %#v, want true", put[string(hmenum.ParameterState)])
+	}
+	if _, pending := s.TimerOnTime(); pending {
+		t.Error("the staged on-time must be consumed by TurnOn")
+	}
+}

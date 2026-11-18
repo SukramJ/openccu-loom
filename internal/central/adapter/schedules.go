@@ -1194,7 +1194,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 // device, not of this call — see [findProfilePointer]. HmIP thermostats
 // take a 1-based ACTIVE_PROFILE integer in the climate channel's VALUES
 // paramset; classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1)
-// take a WEEK_PROGRAM_POINTER ENUM label in the *device-root* MASTER
+// take a 0-based WEEK_PROGRAM_POINTER index in the *device-root* MASTER
 // paramset and declare no ACTIVE_PROFILE at all, so the unconditional
 // VALUES write this used to do was rejected by rfd with "Unknown
 // paramset" (-3) and the operator's profile switch never landed.

@@ -4,6 +4,7 @@
 package parameter_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/parameter"
@@ -120,5 +121,42 @@ func TestEnumLabelKeepsItsNarrowReading(t *testing.T) {
 	}
 	if label, ok := parameter.EnumLabelFromWire(desc, "2"); !ok || label != "C" {
 		t.Fatalf("EnumLabelFromWire(desc, \"2\") = (%q, %v), want (\"C\", true)", label, ok)
+	}
+}
+
+// TestEnumValueIsIndexReadsTheBoundsDomain pins which ENUM descriptors are
+// written by index: an integer MIN, and a numeric-string MIN that is not a
+// VALUE_LIST entry (the HM-CC-VG-1 heating group's WEEK_PROGRAM_POINTER,
+// MIN "0"). A label MIN, a numeric string that is itself a label, a float,
+// a missing VALUE_LIST and a non-ENUM type are all label- or non-ENUM-shaped.
+func TestEnumValueIsIndexReadsTheBoundsDomain(t *testing.T) {
+	t.Parallel()
+
+	labels := []string{"WEEK PROGRAM 1", "WEEK PROGRAM 2", "WEEK PROGRAM 3"}
+	cases := []struct {
+		name   string
+		typ    hmenum.ParameterType
+		min    string
+		values []string
+		want   bool
+	}{
+		{"integer MIN", hmenum.ParameterTypeEnum, `0`, labels, true},
+		{"numeric-string MIN (HM-CC-VG-1)", hmenum.ParameterTypeEnum, `"0"`, labels, true},
+		{"label MIN", hmenum.ParameterTypeEnum, `"WEEK PROGRAM 1"`, labels, false},
+		{"numeric-string MIN that is a label", hmenum.ParameterTypeEnum, `"0"`, []string{"0", "1", "2"}, false},
+		{"negative numeric string", hmenum.ParameterTypeEnum, `"-1"`, labels, false},
+		{"float MIN", hmenum.ParameterTypeEnum, `0.0`, labels, false},
+		{"no MIN", hmenum.ParameterTypeEnum, ``, labels, false},
+		{"no VALUE_LIST", hmenum.ParameterTypeEnum, `0`, nil, false},
+		{"INTEGER type", hmenum.ParameterTypeInteger, `0`, labels, false},
+	}
+	for _, tc := range cases {
+		desc := hmproto.ParameterData{Type: tc.typ, ValueList: tc.values}
+		if tc.min != "" {
+			desc.Min = json.RawMessage(tc.min)
+		}
+		if got := parameter.EnumValueIsIndex(desc); got != tc.want {
+			t.Errorf("%s: EnumValueIsIndex = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }

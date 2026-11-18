@@ -167,19 +167,18 @@ func TestSetProfileWeekProgramIPMapsToActiveProfile(t *testing.T) {
 	}
 }
 
-// TestSetProfileWeekProgramRFMapsToEnumLabel verifies that on KindRF the
-// week-program profile writes WEEK_PROGRAM_POINTER with the CCU's
-// ENUM-string label ("WEEK PROGRAM N", 1-based).
-func TestSetProfileWeekProgramRFMapsToEnumLabel(t *testing.T) {
+// TestSetProfileWeekProgramRFWritesThePointerIndex verifies that on KindRF
+// the week-program profile writes WEEK_PROGRAM_POINTER as its 0-based index.
+func TestSetProfileWeekProgramRFWritesThePointerIndex(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		profile   Profile
-		wantLabel string
+		profile Profile
+		wantIdx int32
 	}{
-		{ProfileWeekProgram1, "WEEK PROGRAM 1"},
-		{ProfileWeekProgram2, "WEEK PROGRAM 2"},
-		{ProfileWeekProgram3, "WEEK PROGRAM 3"},
+		{ProfileWeekProgram1, 0},
+		{ProfileWeekProgram2, 1},
+		{ProfileWeekProgram3, 2},
 	}
 	for _, tc := range cases {
 		w := &stubWriter{}
@@ -192,9 +191,9 @@ func TestSetProfileWeekProgramRFMapsToEnumLabel(t *testing.T) {
 			t.Errorf("profile=%v: param=%v, want WEEK_PROGRAM_POINTER", tc.profile, got.param)
 			continue
 		}
-		s, ok := got.value.(string)
-		if !ok || s != tc.wantLabel {
-			t.Errorf("profile=%v: value=%#v, want %q", tc.profile, got.value, tc.wantLabel)
+		v, ok := got.value.(int32)
+		if !ok || v != tc.wantIdx {
+			t.Errorf("profile=%v: value=%#v, want int32(%d)", tc.profile, got.value, tc.wantIdx)
 		}
 	}
 }
