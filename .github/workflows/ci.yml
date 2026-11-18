@@ -545,9 +545,12 @@ jobs:
           cache-dependency-path: assets/ui/package-lock.json
       - name: install dependencies
         run: npm ci
-      # JS supply-chain gate, mirroring govulncheck on the Go side.
+      # JS supply-chain gate, mirroring govulncheck on the Go side. It audits
+      # what the SPA bundle ships (the runtime dependencies); build and test
+      # tooling (vite, vitest) runs only on our own inputs, and an advisory
+      # there without a patched release would otherwise block every PR.
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
       # The generated API types are derived from assets/openapi.yaml, and
       # nothing forced them to stay in step: they had silently drifted a
       # whole feature behind, so the SPA compiled against types that no
