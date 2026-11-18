@@ -26,6 +26,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Selecting a week program on a heating group no longer breaks its
+  settings page in the CCU WebUI.** The climate profile switch and the
+  schedule page wrote the classic RF week-program pointer as its label
+  ("WEEK PROGRAM 2"). The HM-CC-VG-1 heating group declares that pointer
+  with numeric-string bounds, and the label left its settings page in the
+  CCU WebUI broken until a reboot. The pointer now goes out as its index
+  wherever the parameter's bounds are indices — integers, or numeric
+  strings that are not themselves list entries — which rfd accepts for
+  every RF thermostat as well; the same rule now decides the wire form of
+  every ENUM write (aiohomematic 2026.11.6, SukramJ/homematicip_local#1379).
 - **A device page whose overview a profile hides opens on the next tab.**
   With "Overview" hidden in the operator's profile, the device page still
   showed the overview's content under a tab strip that no longer offered

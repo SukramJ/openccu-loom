@@ -4,8 +4,12 @@
 package parameter
 
 import (
+	"bytes"
+	"encoding/json"
+	"slices"
 	"strconv"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -61,6 +65,54 @@ func enumIndex(raw any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// EnumValueIsIndex reports whether an ENUM parameter is written by its
+// 0-based VALUE_LIST index rather than by its label, decided from the
+// descriptor's MIN.
+//
+// rfd describes every option type with integer bounds
+// (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp:96-112, MIN 0 and
+// MAX len-1), so an integer MIN marks an index-based ENUM. The HM-CC-VG-1
+// heating group carries the same bounds as numeric strings (MIN "0", MAX "2"
+// on WEEK_PROGRAM_POINTER); those are indices too, as long as the string is
+// not itself a VALUE_LIST entry. A MIN that is a label marks the label-based
+// ENUMs of the HmIP family. Writing a label to the heating group breaks its
+// settings page in the CCU WebUI until a reboot.
+func EnumValueIsIndex(desc hmproto.ParameterData) bool {
+	if desc.Type != hmenum.ParameterTypeEnum || len(desc.ValueList) == 0 {
+		return false
+	}
+	raw := bytes.TrimSpace(desc.Min)
+	if len(raw) == 0 {
+		return false
+	}
+	if raw[0] == '"' {
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil || !isDigits(s) {
+			return false
+		}
+		return !slices.Contains(desc.ValueList, s)
+	}
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err != nil {
+		return false
+	}
+	_, err := n.Int64()
+	return err == nil
+}
+
+// isDigits reports whether s is a non-empty run of ASCII digits.
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // EnumLabelFromWire resolves an ENUM value as a transport delivers it,

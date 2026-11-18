@@ -308,11 +308,10 @@ func TestClimateSetProfileIPMapsToActiveProfile(t *testing.T) {
 	}
 }
 
-// TestClimateSetProfileRFMapsToEnumLabel pins the contract that `SetProfile`
-// on KindRF writes the CCU's ENUM-string label (`"WEEK PROGRAM N"`, 1-based)
-// to `WEEK_PROGRAM_POINTER`. HM-CC-RT-DN and the rest of the RF thermostat
-// family use this ENUM shape.
-func TestClimateSetProfileRFMapsToEnumLabel(t *testing.T) {
+// TestClimateSetProfileRFWritesThePointerIndex pins that `SetProfile` on
+// KindRF writes `WEEK_PROGRAM_POINTER` as its 0-based index when no pointer
+// data point is materialised — the form rfd accepts for every option type.
+func TestClimateSetProfileRFWritesThePointerIndex(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "x", KindRF, w, custom.ClimateCapabilities{SupportsProfile: true})
 	if err := r.climate.SetProfile(context.Background(), ProfileWeekProgram3, hmenum.CommandPriorityHigh); err != nil {
@@ -322,8 +321,8 @@ func TestClimateSetProfileRFMapsToEnumLabel(t *testing.T) {
 	if got.param != hmenum.ParameterWeekProgramPointer {
 		t.Fatalf("last param=%v want WEEK_PROGRAM_POINTER", got.param)
 	}
-	if s, ok := got.value.(string); !ok || s != "WEEK PROGRAM 3" {
-		t.Fatalf("last value=%#v want \"WEEK PROGRAM 3\"", got.value)
+	if v, ok := got.value.(int32); !ok || v != 2 {
+		t.Fatalf("last value=%#v want int32(2)", got.value)
 	}
 }
 

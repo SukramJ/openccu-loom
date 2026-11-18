@@ -21,7 +21,7 @@
           "address": "RFTHR0001",
           "paramset_key": "MASTER",
           "put_values": {
-            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 1"
+            "WEEK_PROGRAM_POINTER": 0
           }
         }
       ]
@@ -43,7 +43,7 @@
           "address": "RFTHR0001",
           "paramset_key": "MASTER",
           "put_values": {
-            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 2"
+            "WEEK_PROGRAM_POINTER": 1
           }
         }
       ]
@@ -65,7 +65,7 @@
           "address": "RFTHR0001",
           "paramset_key": "MASTER",
           "put_values": {
-            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 3"
+            "WEEK_PROGRAM_POINTER": 2
           }
         }
       ]

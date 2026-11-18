@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/optimistic"
+	paramdesc "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -1987,8 +1988,10 @@ func (d *DataPoint[T]) UnconfirmedValue() (T, bool) {
 // sent as integer indices (HM devices) rather than string values (HmIP
 // devices).
 //
-// Computed at construction time from the descriptor: true when TYPE == ENUM,
-// a VALUE_LIST is declared, and MIN is an integer.
+// Computed at construction time from the descriptor by
+// [paramdesc.EnumValueIsIndex]: true when TYPE == ENUM, a VALUE_LIST is
+// declared, and MIN is an index — an integer, or a numeric string that is
+// not itself a VALUE_LIST entry.
 func (d *DataPoint[T]) EnumValueIsIndex() bool {
 	return d.enumValueIsIndex
 }
@@ -2009,8 +2012,11 @@ func (d *DataPoint[T]) EnumValueIsIndex() bool {
 // classified by the Go type of each decoded bound; the module has since moved
 // to a newer release and the counts were not re-taken): 38144 ENUM parameters
 // declare a VALUE_LIST, 9186 declare all three bounds as integers, 28958
-// declare all three as strings, none mix the two. [enumValueIsIndex] carries
-// that classification, taken from MIN.
+// declare all three as strings, none mix the two. A string bound is not
+// always a label: the HM-CC-VG-1 heating group declares WEEK_PROGRAM_POINTER
+// with the numeric strings "0" and "2", which are indices.
+// [enumValueIsIndex] carries the classification, taken from MIN by
+// [paramdesc.EnumValueIsIndex].
 //
 // The reference implementation resolves a label-typed write the same way
 // (select.py:42-47, action_select.py:48-53, action.py:35-38, over the flag
@@ -2032,34 +2038,10 @@ func (d *DataPoint[T]) IgnoreOnInitialLoad() bool {
 // ─── package-level helpers ───────────────────────────────────────────────────
 
 // enumValueIsIndexFromDescriptor computes the `_enum_value_is_index` flag
-// from the descriptor.
-//
-// self._enum_value_is_index = ( self._type == ParameterType.ENUM and
-// self._values is not None and isinstance(raw_min, int) )
-//
-// "raw_min is int" maps to the descriptor's Min being a JSON integer (not a
-// JSON string). We parse Min as a number; if it parses as an integer (no
-// decimal point), the flag is true.
+// from the descriptor through the one rule every ENUM writer shares,
+// [paramdesc.EnumValueIsIndex].
 func enumValueIsIndexFromDescriptor(desc hmproto.ParameterData) bool {
-	if desc.Type != hmenum.ParameterTypeEnum {
-		return false
-	}
-	if len(desc.ValueList) == 0 {
-		return false
-	}
-	// Try to parse Min as a plain integer (no ".").
-	_, ok := parseFloat(desc.Min)
-	if !ok {
-		return false
-	}
-	// Distinguish "123" (int-like) from "123.0" (float-like) by checking
-	// for a decimal point in the raw bytes.
-	for _, b := range desc.Min {
-		if b == '.' || b == 'e' || b == 'E' {
-			return false // float literal → string-based enum
-		}
-	}
-	return true
+	return paramdesc.EnumValueIsIndex(desc)
 }
 
 // DetectStatusParameter returns the name of the paired status parameter for

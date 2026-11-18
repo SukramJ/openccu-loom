@@ -396,12 +396,13 @@ def _gen_climate_rf_set_profile() -> None:
     on the device root (real device: HM-TC-IT-WM-W-EU VCU0000341/MASTER holds
     WEEK_PROGRAM_POINTER and TEMPERATURE_OFFSET, never a VALUES paramset). Because
     @bind_collector groups by (channel, paramset), the VALUES pair and the MASTER
-    pointer flush as separate PutParamset calls.
+    pointer flush as separate PutParamset calls. The pointer goes out as its
+    0-based index (CustomDpRfThermostat.set_profile since 2026.11.6).
     """
     profiles = [
-        ("WeekProgram1", True, False, "WEEK PROGRAM 1"),
-        ("WeekProgram2", True, False, "WEEK PROGRAM 2"),
-        ("WeekProgram3", True, False, "WEEK PROGRAM 3"),
+        ("WeekProgram1", True, False, 0),
+        ("WeekProgram2", True, False, 1),
+        ("WeekProgram3", True, False, 2),
     ]
     inputs = []
     for label, auto_mode, boost_mode, week_prog in profiles:

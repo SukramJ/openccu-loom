@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -111,18 +112,23 @@ func (p profilePointer) profileCount() int {
 // pointer's own descriptor declares.
 //
 // ACTIVE_PROFILE is a 1-based INTEGER, so it takes idx+1. For
-// WEEK_PROGRAM_POINTER the descriptor decides: an option type
-// (TYPE=ENUM) is written by its case-sensitive label "WEEK PROGRAM N"
-// — the shape the custom-DP climate path already sends and the shape the
-// reference sends — while the INTEGER form a few HmIPW models declare
-// takes the raw 0-based ordinal. The type is read from the descriptor
-// rather than assumed, so neither family gets the other's shape.
+// WEEK_PROGRAM_POINTER the descriptor decides, by the same rule the
+// custom-DP climate path applies: only an ENUM whose bounds are labels is
+// written by its case-sensitive label "WEEK PROGRAM N"; an index-bounded
+// ENUM ([parameter.EnumValueIsIndex] — the classic RF thermostats and the
+// HM-CC-VG-1 heating group, whose bounds are numeric strings) and the
+// INTEGER form a few HmIPW models declare take the raw 0-based ordinal.
+// The label breaks the heating group's settings page in the CCU WebUI,
+// while rfd takes the ordinal for every option type.
 func (p profilePointer) wireValue(idx int) any {
 	if p.parameter == hmenum.ParameterActiveProfile {
 		return idx + 1
 	}
-	if p.dataPoint != nil && p.dataPoint.ParameterData().Type == hmenum.ParameterTypeEnum {
-		return fmt.Sprintf("WEEK PROGRAM %d", idx+1)
+	if p.dataPoint != nil {
+		desc := p.dataPoint.ParameterData()
+		if desc.Type == hmenum.ParameterTypeEnum && !parameter.EnumValueIsIndex(desc) {
+			return fmt.Sprintf("WEEK PROGRAM %d", idx+1)
+		}
 	}
 	return idx
 }

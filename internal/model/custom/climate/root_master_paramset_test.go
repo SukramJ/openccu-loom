@@ -295,8 +295,8 @@ func TestSetProfileRFWritesPointerToRootMaster(t *testing.T) {
 	if masterPut.address != root.Address {
 		t.Errorf("MASTER put address=%q, want device-root %q", masterPut.address, root.Address)
 	}
-	if v, ok := masterPut.values[string(hmenum.ParameterWeekProgramPointer)]; !ok || v != "WEEK PROGRAM 2" {
-		t.Errorf("MASTER put WEEK_PROGRAM_POINTER=%v, want \"WEEK PROGRAM 2\"", masterPut.values)
+	if v, ok := masterPut.values[string(hmenum.ParameterWeekProgramPointer)]; !ok || v != int32(1) {
+		t.Errorf("MASTER put WEEK_PROGRAM_POINTER=%v, want int32(1)", masterPut.values)
 	}
 }
 
@@ -327,5 +327,61 @@ func TestSubscribeWeekProgramPointerRootMaster(t *testing.T) {
 	p, pOK := c.Profile()
 	if !pOK || p != ProfileWeekProgram2 {
 		t.Fatalf("Profile() = (%v, %v), want (week_program_2, true) — pointer on root MASTER was not observed", p, pOK)
+	}
+}
+
+// TestSetProfileRFWritesTheEnumPointerAsIndex pins that SetProfile writes an
+// ENUM-typed WEEK_PROGRAM_POINTER by its 0-based index whenever the
+// descriptor's bounds are indices — including the HM-CC-VG-1 heating group,
+// whose description carries them as numeric strings (MIN "0", MAX "2"; the
+// simulator's HM-CC-VG-1 INT0000001/MASTER). Writing the "WEEK PROGRAM n"
+// label to the heating group breaks its settings page in the CCU WebUI until
+// a reboot. A label-bounded ENUM keeps the label.
+func TestSetProfileRFWritesTheEnumPointerAsIndex(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max string
+		want     any
+	}{
+		{name: "string bounds (HM-CC-VG-1)", min: `"0"`, max: `"2"`, want: int32(1)},
+		{name: "integer bounds (HM-TC-IT-WM-W-EU)", min: `0`, max: `2`, want: int32(1)},
+		{name: "label bounds", min: `"WEEK PROGRAM 1"`, max: `"WEEK PROGRAM 3"`, want: "WEEK PROGRAM 2"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &recordingParamsetWriter{}
+			climateCh, root := newClassicRFDevice(t, "INT0000001", "INT0000001:1", w)
+			root.PutMaster(generic.NewSelect(generic.Spec{
+				Key: hmtypes.DataPointKey{
+					ChannelAddress: root.Address,
+					ParamsetKey:    hmenum.ParamsetKeyMaster,
+					Parameter:      string(hmenum.ParameterWeekProgramPointer),
+				},
+				Descriptor: hmproto.ParameterData{
+					Type:       hmenum.ParameterTypeEnum,
+					Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+					Min:        json.RawMessage(tc.min),
+					Max:        json.RawMessage(tc.max),
+					ValueList:  []string{"WEEK PROGRAM 1", "WEEK PROGRAM 2", "WEEK PROGRAM 3"},
+				},
+			}))
+			c := New(Config{Channel: climateCh, Writer: w, Kind: KindRF, Capabilities: custom.ClimateCapabilities{SupportsProfile: true}})
+			if err := c.SetProfile(context.Background(), ProfileWeekProgram2, hmenum.CommandPriorityHigh); err != nil {
+				t.Fatalf("SetProfile: %v", err)
+			}
+			var got any
+			found := false
+			for _, p := range w.putsSnapshot() {
+				if v, ok := p.values[string(hmenum.ParameterWeekProgramPointer)]; ok {
+					got, found = v, true
+				}
+			}
+			if !found {
+				t.Fatal("no put carried WEEK_PROGRAM_POINTER")
+			}
+			if got != tc.want {
+				t.Fatalf("WEEK_PROGRAM_POINTER=%#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }

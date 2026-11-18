@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	paramdesc "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -1107,11 +1108,11 @@ func (c *Climate) SetMode(ctx context.Context, m Mode, priority hmenum.CommandPr
 // `_dp_active_profile.send_value(profile_idx)` at climate.py:849.
 //
 // - **KindRF** (HM-CC-RT-DN / HM-TC-IT-WM-W-EU / …): write
-// `WEEK_PROGRAM_POINTER` (TYPE=ENUM) using the case-sensitive
-// string label `"WEEK PROGRAM N"` (1-based) — the RF thermostat
-// exposes the schedule pointer as an ENUM with explicit value
-// list. `_dp_week_program_pointer.send_value(POINTERS_TO_NAMES[idx])`
-// at climate.py:606.
+// `WEEK_PROGRAM_POINTER` (TYPE=ENUM) by its 0-based index, unless
+// the descriptor's bounds are labels — see
+// [weekProgramPointerWireValue].
+// `_dp_week_program_pointer.send_value(value=profile_idx)` at
+// climate.py:630.
 //
 // Sending the wrong shape (e.g. WEEK_PROGRAM_POINTER on an IP
 // thermostat that only carries ACTIVE_PROFILE) triggers XML-RPC
@@ -1197,16 +1198,20 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 		if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, modeParams, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
 		}
-		value := profilePointerEnumLabel(idx)
-		address, paramset := c.masterConfigWriteTarget(resolveWeekProgramPointer(c.channelRef, c.Kind))
+		pointer := resolveWeekProgramPointer(c.channelRef, c.Kind)
+		address, paramset := c.masterConfigWriteTarget(pointer)
 		if err := custom.PutParamsetForce(custom.EnsureContext(ctx), c.writer, address, paramset, map[hmenum.Parameter]any{
-			hmenum.ParameterWeekProgramPointer: value,
+			hmenum.ParameterWeekProgramPointer: weekProgramPointerWireValue(pointer, idx),
 		}, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
 		}
 	default:
-		// KindSimpleRF: WEEK_PROGRAM_POINTER ENUM label.
-		value := profilePointerEnumLabel(idx)
+		// KindSimpleRF: WEEK_PROGRAM_POINTER on the climate channel.
+		var pointer device.ParameterDataPoint
+		if c.channelRef != nil {
+			pointer = c.channelRef.Parameter(hmenum.ParameterWeekProgramPointer)
+		}
+		value := weekProgramPointerWireValue(pointer, idx)
 		if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterWeekProgramPointer, value, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
 		}
@@ -1275,10 +1280,24 @@ func (c *Climate) recordProfile(p Profile) {
 	c.hasProfile = true
 }
 
-// profilePointerEnumLabel maps a 0-based week-program index to the CCU's
-// expected ENUM label for `WEEK_PROGRAM_POINTER`.
-func profilePointerEnumLabel(idx int32) string {
-	return fmt.Sprintf("WEEK PROGRAM %d", idx+1)
+// weekProgramPointerWireValue renders the 0-based week-program index `idx`
+// in the shape the pointer's descriptor declares: the "WEEK PROGRAM n" label
+// only for an ENUM whose bounds are labels, the index for everything else —
+// an index-bounded ENUM ([paramdesc.EnumValueIsIndex]), the INTEGER pointer
+// of the HmIPW models, and a pointer not yet materialised on the model.
+//
+// The index is the form every RF pointer accepts: rfd takes an integer for an
+// option type as it is (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp:72-94),
+// while the HM-CC-VG-1 heating group, whose bounds are numeric strings, is
+// left with a broken settings page in the CCU WebUI by the label.
+func weekProgramPointerWireValue(pointer device.ParameterDataPoint, idx int32) any {
+	if pointer != nil {
+		desc := pointer.ParameterData()
+		if desc.Type == hmenum.ParameterTypeEnum && !paramdesc.EnumValueIsIndex(desc) {
+			return fmt.Sprintf("WEEK PROGRAM %d", idx+1)
+		}
+	}
+	return idx
 }
 
 // EnableBoost activates BOOST_MODE.

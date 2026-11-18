@@ -119,8 +119,8 @@ func registryWithRootPointerDevice(t *testing.T, deviceAddress string) (
 
 // TestSetActiveProfileWritesTheRFPointerToTheDeviceRootMaster pins that a
 // profile switch on a classic RF wall thermostat lands on the parameter
-// the device actually declares: WEEK_PROGRAM_POINTER as an ENUM label in
-// the device-root MASTER paramset, not ACTIVE_PROFILE in VALUES, which
+// the device actually declares: WEEK_PROGRAM_POINTER, an index-bounded
+// ENUM written by its 0-based index, in the device-root MASTER paramset, not ACTIVE_PROFILE in VALUES, which
 // rfd rejects with "Unknown paramset" (-3).
 func TestSetActiveProfileWritesTheRFPointerToTheDeviceRootMaster(t *testing.T) {
 	t.Parallel()
@@ -145,8 +145,8 @@ func TestSetActiveProfileWritesTheRFPointerToTheDeviceRootMaster(t *testing.T) {
 	if got.paramset != hmenum.ParamsetKeyMaster {
 		t.Errorf("paramset: got %q, want MASTER", got.paramset)
 	}
-	if v := got.values[string(hmenum.ParameterWeekProgramPointer)]; v != "WEEK PROGRAM 2" {
-		t.Errorf("WEEK_PROGRAM_POINTER: got %#v, want %q", v, "WEEK PROGRAM 2")
+	if v := got.values[string(hmenum.ParameterWeekProgramPointer)]; v != 1 {
+		t.Errorf("WEEK_PROGRAM_POINTER: got %#v, want 1", v)
 	}
 }
 
