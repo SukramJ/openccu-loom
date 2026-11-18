@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, fireEvent } from "@testing-library/svelte";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, waitFor, fireEvent, cleanup } from "@testing-library/svelte";
 
 const mockListCentrals = vi.fn();
 const mockUpdateCentral = vi.fn();
@@ -427,5 +427,28 @@ describe("CentralsAdmin — a stored openccu-lite central whose host answers as 
     } finally {
       unmount();
     }
+  });
+});
+
+// `#/settings?tab=ccus&lite_move=<central>` reaches CentralsAdmin as the
+// `liteMove` prop; the guided move of that central opens on arrival.
+describe("CentralsAdmin — the guided move named by the address", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListCentrals.mockResolvedValue([{ ...liteRow }]);
+  });
+  // The dialog renders into the document, so a render left from the case
+  // before would answer the absence check.
+  afterEach(() => cleanup());
+
+  it("opens the move dialog for the named central", async () => {
+    const { findByTestId } = render(CentralsAdmin, { props: { liteMove: "box" } });
+    expect(await findByTestId("lite-move-dialog")).toBeInTheDocument();
+  });
+
+  it("opens no dialog without a named central", async () => {
+    const { queryByTestId } = render(CentralsAdmin);
+    await waitFor(() => expect(mockListCentrals).toHaveBeenCalled());
+    expect(queryByTestId("lite-move-dialog")).toBeNull();
   });
 });

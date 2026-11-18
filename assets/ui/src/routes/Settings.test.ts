@@ -70,7 +70,9 @@ vi.mock("$lib/components/settings/SectionEditor.svelte", () => ({ default: () =>
 vi.mock("$lib/components/settings/UsersAdmin.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/settings/TokensAdmin.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/settings/ChangePasswordCard.svelte", () => ({ default: () => {} }));
-vi.mock("$lib/components/settings/CentralsAdmin.svelte", () => ({ default: () => {} }));
+// Records its props: the CCU tab hands `liteMove` on from the address.
+const { mockCentralsAdmin } = vi.hoisted(() => ({ mockCentralsAdmin: vi.fn() }));
+vi.mock("$lib/components/settings/CentralsAdmin.svelte", () => ({ default: mockCentralsAdmin }));
 vi.mock("$lib/components/settings/RoomsFunctionsAdmin.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/settings/TlsCertCard.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/settings/SystemUpdatePanel.svelte", () => ({ default: () => {} }));
@@ -305,5 +307,16 @@ describe("Settings — callback tab scope note for openccu-lite centrals", () =>
     // Give the tab a render pass after the schema load settles.
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText(/settings\.callback\.lite_/)).toBeNull();
+  });
+});
+
+// `#/settings?tab=ccus&lite_move=<central>`: the CCU tab hands the central
+// on, so CentralsAdmin opens its guided move to openccu-lite.
+describe("Settings — the guided move named by the address", () => {
+  it("hands liteMove to the CCU tab", async () => {
+    render(Settings, { props: { tab: "ccus", liteMove: "box" } });
+    await waitFor(() => expect(mockCentralsAdmin).toHaveBeenCalled());
+    const props = mockCentralsAdmin.mock.calls.at(-1)?.[1] as { liteMove?: string };
+    expect(props.liteMove).toBe("box");
   });
 });
