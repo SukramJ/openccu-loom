@@ -354,3 +354,17 @@ export function isKnownLandingRoute(route: string): boolean {
     isAdmin: true,
   });
 }
+
+/**
+ * The query of `#/settings?…`: `tab` selects the tab, `lite_move` names a
+ * central whose guided move to openccu-lite opens on arrival (the address
+ * the user documentation gives). An absent parameter is undefined, so the
+ * bare `#/settings` lands on General.
+ */
+export function settingsQuery(query: string): { tab?: string; liteMove?: string } {
+  const params = new URLSearchParams(query);
+  return {
+    tab: params.get("tab") ?? undefined,
+    liteMove: params.get("lite_move") ?? undefined,
+  };
+}

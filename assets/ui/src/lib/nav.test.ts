@@ -12,6 +12,7 @@ import {
   landingTargets,
   navClusters,
   navSurfaceID,
+  settingsQuery,
 } from "./nav";
 import surfacesFixture from "../../tests/e2e/fixtures/ui-surfaces.json";
 
@@ -182,5 +183,21 @@ describe("nav — gates as the registry declares them", () => {
     expect(hrefs).toContain("#/inbox");
     // Control: the registry's per-central gates still apply on that fleet.
     expect(hrefs).not.toContain("#/programs");
+  });
+});
+
+// The address the user documentation gives for the guided move:
+// `#/settings?tab=ccus&lite_move=<central>`.
+describe("settingsQuery", () => {
+  it("reads the tab and the central to move", () => {
+    expect(settingsQuery("tab=ccus&lite_move=wohnung%20ost")).toEqual({ tab: "ccus", liteMove: "wohnung ost" });
+  });
+
+  it("leaves both undefined for the bare settings address", () => {
+    expect(settingsQuery("")).toEqual({ tab: undefined, liteMove: undefined });
+  });
+
+  it("opens no move when only the tab is named", () => {
+    expect(settingsQuery("tab=ccus").liteMove).toBeUndefined();
   });
 });

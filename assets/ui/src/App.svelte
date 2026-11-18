@@ -67,7 +67,7 @@
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
-  import { foldedRouteTarget, navSurfaceID } from "$lib/nav";
+  import { foldedRouteTarget, navSurfaceID, settingsQuery } from "$lib/nav";
 
   // Minimal hash-based router. The Go handler serves the SPA under
   // /app/ and rewrites unknown paths to index.html, so client-side
@@ -330,15 +330,7 @@
     if (path === "/diagnostics") return { kind: "diagnostics" };
     if (path === "/fleet") return { kind: "fleet" };
     if (path === "/logs") return { kind: "logs" };
-    if (rawPath === "/settings") {
-      // `lite_move` opens the guided move of that central to openccu-lite.
-      const params = new URLSearchParams(query);
-      return {
-        kind: "settings",
-        tab: params.get("tab") ?? undefined,
-        liteMove: params.get("lite_move") ?? undefined,
-      };
-    }
+    if (rawPath === "/settings") return { kind: "settings", ...settingsQuery(query) };
     if (path === "/inbox") return { kind: "inbox" };
     if (path === "/firmware") return { kind: "firmware" };
     if (path === "/signal") return { kind: "signal" };
