@@ -2675,13 +2675,16 @@ Go path: `internal/model/custom/light/color.go::ColorLight`, `internal/model/cus
 
 ---
 
-### A2-BD09 — the signal light's switch-on: three edges where `FixedColorLight` differs from `CustomDpIpFixedColorLight.turn_on`
+### A2-BD09 — the signal light's switch-on: where `FixedColorLight` differs from `CustomDpIpFixedColorLight.turn_on`
 
-The effect list (COLOR_BEHAVIOUR without DO_NOT_CARE / OFF / OLD_VALUE, `model/custom/light.py:99-103`, `:804-812`) and the COLOR / COLOR_BEHAVIOUR rules of a switch-on (`:785-801`, `_NO_COLOR` `:93-97`) are ported as they are (#1127). Three edges are not:
+The effect list (COLOR_BEHAVIOUR without DO_NOT_CARE / OFF / OLD_VALUE, `model/custom/light.py:99-103`, `:804-812`) and the COLOR / COLOR_BEHAVIOUR rules of a switch-on (`:785-801`, `_NO_COLOR` `:93-97`) are ported as they are (#1127). These edges are not:
 
 - **A value outside the device's value list is left out of the bundle.** The reference's select raises on it and sends nothing (`model/generic/select.py:42-53`); here the switch-on still goes out with LEVEL, only without that parameter. No fixture reaches it — WHITE and ON are in every signal light's list (HmIP-BSL, HmIPW-WRC6) — so it only decides what a hypothetical device without them gets: light rather than a refused command.
 - **An effect Home Assistant names that the light does not offer is an error.** The reference ignores it (`:793-798`). Here it is routed to `set_effect`, which refuses it after the switch-on, because an attribute a command carries and the light cannot apply is reported, not dropped — the rule of `Light.applyHALightAttributes`.
 - **On a light that already burns at the commanded level, a new colour or effect is written alone.** The reference's state-change check counts a different effect as a change and resends the whole bundle with LEVEL (`:393-398`, `:786`); here the switch-on is skipped and the colour or effect goes out as its own write. A value equal to the current one is suppressed in both.
+
+- **COLOR travels with every switch-on bundle.** The reference writes COLOR only for a commanded colour or a colour in `_NO_COLOR` (`:788-792`). Measured on the developer's HmIP-WRC6-230 (`00536409A5E82D:18`, 2026-11-20, raw `putParamset` VALUES through the daemon, values read back from the CCU): `{LEVEL: 1}` kept COLOR=GREEN; `{LEVEL: 1, COLOR_BEHAVIOUR: ON}` turned COLOR to BLACK — the LED is on and shows nothing. So the bundle carries the current COLOR when it carries nothing else.
+- **A brightness switch-on does not send the timer sentinel.** The reference resets the on-time timer on every `turn_on` (`:424-425`), here only the plain switch-on does (unchanged). Measured on the same channel: the daemon's plain switch-on bundle `{LEVEL: 1, COLOR: WHITE, COLOR_BEHAVIOUR: ON, DURATION_VALUE: 111600, DURATION_UNIT: H}` left LEVEL at 0, the same bundle without the two DURATION parameters switched the light on and kept it on. Extending the sentinel to the brightness path would carry that failure there; the plain path is a separate open defect.
 
 Go path: `internal/model/custom/light/color.go::FixedColorLight.switchOnAttributes`, `internal/model/custom/light/payload.go::FixedColorLight.withSwitchOnAttributes`.
 

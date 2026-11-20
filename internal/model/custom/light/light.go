@@ -583,14 +583,8 @@ func (l *Light) SetLevel(ctx context.Context, level float64, priority hmenum.Com
 	}
 	target := custom.NewBrightness(level).Level()
 	if turnOn && l.switchOnParams != nil && l.Writer != nil {
-		// A switch-on that carries more than LEVEL goes out as one bundle,
-		// and cancels a running timer the way a plain TurnOn does.
-		cfg := OnConfig{Brightness: &target}
-		if l.resetsOnTimeOnTurnOn && l.hasOnTimeUnit {
-			notUsed := time.Duration(custom.TimerNotUsed * float64(time.Second))
-			cfg.OnTime = &notUsed
-		}
-		return l.TurnOnWith(ctx, cfg, priority)
+		// A switch-on that carries more than LEVEL goes out as one bundle.
+		return l.TurnOnWith(ctx, OnConfig{Brightness: &target}, priority)
 	}
 	l.recordLastSent(target)
 	if err := l.Set(custom.EnsureContext(ctx), target, priority); err != nil {

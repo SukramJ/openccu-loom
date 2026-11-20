@@ -36,9 +36,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   as the effect dropdown of the light tile, and written by `set_effect`. A
   light without `COLOR_BEHAVIOUR` no longer advertises effects at all. A
   switch-on now writes `COLOR` and `COLOR_BEHAVIOUR` with `LEVEL` in one
-  command, as aiohomematic does: `WHITE` when the colour shows nothing
-  (`BLACK`), `ON` when the behaviour is no effect, and the colour and effect
-  of the command itself when it carries them.
+  command, as aiohomematic does: `WHITE` when the colour is `BLACK`, `ON`
+  when the behaviour is no effect, the colour and effect of the command
+  itself when it carries them, and otherwise the current ones — an
+  HmIP-WRC6-230 resets a colour the command leaves out to `BLACK`.
 - **The HBW-LC-RGBWW-IN6-DR colour dimmers have their colour again.** Their
   `COLOR` lives on channels 15 / 16, declared by the device's own
   registration, and that declaration never reached the light: it was built

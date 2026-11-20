@@ -300,7 +300,9 @@ func TestSignalLightTurnOnShowsLight(t *testing.T) {
 }
 
 // TestSignalLightTurnOnKeepsTheSetColourAndEffect: a colour that shows
-// something is left alone, and an effect that runs is written again.
+// something and an effect that runs are written again. COLOR has to travel
+// with COLOR_BEHAVIOUR: an HmIP-WRC6-230 resets a COLOR a put_paramset
+// leaves out to BLACK (measured on channel 18).
 func TestSignalLightTurnOnKeepsTheSetColourAndEffect(t *testing.T) {
 	t.Parallel()
 	w := &signalWriter{}
@@ -313,8 +315,8 @@ func TestSignalLightTurnOnKeepsTheSetColourAndEffect(t *testing.T) {
 		t.Fatalf("set_level: %v", err)
 	}
 	put := lastPut(t, w)
-	if _, has := put.values["COLOR"]; has {
-		t.Errorf("bundle rewrites COLOR = %v, want it untouched", put.values["COLOR"])
+	if put.values["COLOR"] != "RED" {
+		t.Errorf("bundle COLOR = %v, want the current RED carried along", put.values["COLOR"])
 	}
 	if put.values["COLOR_BEHAVIOUR"] != "BLINKING_FAST" {
 		t.Errorf("bundle COLOR_BEHAVIOUR = %v, want BLINKING_FAST", put.values["COLOR_BEHAVIOUR"])
@@ -370,24 +372,6 @@ func TestSignalLightEffectOnABurningLight(t *testing.T) {
 	}
 	if sets := w.setsOf(hmenum.ParameterColorBehaviour); len(sets) != 1 {
 		t.Errorf("COLOR_BEHAVIOUR written again although FLASH_SLOW already runs: %+v", sets)
-	}
-}
-
-// TestSignalLightBrightnessSwitchOnResetsTheTimer: a switch-on at a given
-// brightness cancels a running device-side timer like a plain switch-on
-// does, as the reference turn_on resets it on every call.
-func TestSignalLightBrightnessSwitchOnResetsTheTimer(t *testing.T) {
-	t.Parallel()
-	w := &signalWriter{}
-	l := newSignalLight(t, w, true)
-	l.OnLevel(0)
-
-	if err := l.Invoke(context.Background(), "set_level", map[string]any{"state": "ON", "brightness": 128}, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("set_level: %v", err)
-	}
-	put := lastPut(t, w)
-	if _, has := put.values["DURATION_VALUE"]; !has {
-		t.Errorf("bundle = %v, want the DURATION timer reset", put.values)
 	}
 }
 

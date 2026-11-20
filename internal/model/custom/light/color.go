@@ -630,7 +630,12 @@ func withSwitchOn(ctx context.Context, so *fixedColorSwitchOn) context.Context {
 // the reference CustomDpIpFixedColorLight.turn_on (model/custom/light.py):
 //
 //   - COLOR: the commanded colour; otherwise WHITE when the current one is
-//     in [noVisibleColor]; otherwise nothing.
+//     in [noVisibleColor]; otherwise the current one again. The reference
+//     leaves COLOR out in that last case. Here it travels with every
+//     bundle, because a signal light resets a COLOR that a put_paramset
+//     leaves out: measured on an HmIP-WRC6-230 (channel 18), LEVEL plus
+//     COLOR_BEHAVIOUR without COLOR turned GREEN into BLACK, while LEVEL
+//     alone kept it (notes/parity/by_design.md, A2-BD09).
 //   - COLOR_BEHAVIOUR: the commanded effect; otherwise ON when the current
 //     behaviour is not an effect (unobserved included); otherwise the
 //     current one again.
@@ -648,8 +653,11 @@ func (l *FixedColorLight) switchOnAttributes(ctx context.Context) map[hmenum.Par
 		var label string
 		if so != nil && so.color != nil {
 			label = fixedColorNames[*so.color]
-		} else if current, ok := l.color.Label(); ok && slices.Contains(noVisibleColor, current) {
-			label = fixedColorNames[FixedColorWhite]
+		} else if current, ok := l.color.Label(); ok {
+			label = current
+			if slices.Contains(noVisibleColor, current) {
+				label = fixedColorNames[FixedColorWhite]
+			}
 		}
 		if v, ok := enumWire(l.color, label); ok {
 			out[hmenum.ParameterColor] = v
