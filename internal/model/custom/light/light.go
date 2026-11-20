@@ -328,10 +328,10 @@ func (l *Light) Category() hmenum.DataPointCategory {
 	return l.Float.Category()
 }
 
-// SetGroupLevel binds an optional group-channel LEVEL data point. The value
-// of this DP is used by [GroupBrightness] and [GroupBrightnessPct] to expose
-// the aggregated group brightness to north-bound consumers. Pass nil to
-// clear.
+// SetGroupLevel binds an optional group-channel LEVEL data point. The
+// light's effective level reads it (see [Light.effectiveLevel]);
+// [GroupBrightness] and [GroupBrightnessPct] expose it as well, though no
+// production code calls them. Pass nil to clear.
 func (l *Light) SetGroupLevel(dp custom.GroupLevelDataPoint) {
 	l.mu.Lock()
 	l.groupLevel = dp
@@ -847,7 +847,7 @@ func (l *Light) BrightnessPct() (pct int, observed bool) {
 // seconds; signal lights and RGBW dimmers (HmIP-BSL, -RGBW, -DRG-DALI)
 // carry the value/unit pair DURATION_VALUE + DURATION_UNIT, exactly like
 // RAMP_TIME_VALUE/RAMP_TIME_UNIT. Mirrors the profile's
-// FieldOnTimeValue/FieldOnTimeUnit mapping (generated_profile_configs.go),
+// FieldOnTimeValue/FieldOnTimeUnit mapping (profile_configs.go),
 // read here directly off the wire so the probe works regardless of which
 // profile registered the channel.
 func resolveOnTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Parameter) {

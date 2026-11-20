@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.106.0] - 2026-11-20
+
 ### Added
 
 - **The device editor as a web component.** The daemon now ships the

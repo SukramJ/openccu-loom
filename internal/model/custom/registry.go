@@ -142,10 +142,10 @@ type Profile struct {
 	// ProfileConfig. nil means no extended config.
 	Extended *ExtendedDeviceConfig
 
-	// Config is the channel-group schema produced by the profile generator
-	// ( Phase A.2, profile_schema.go). When non-nil the Materializer
-	// prefers this over the legacy Channels list. Constructor injection is
-	// deferred to WX-D.12.
+	// Config is the channel-group schema (profile_schema.go; the catalogue
+	// is maintained by hand, ADR 0063). When non-nil the Materializer
+	// prefers this over the legacy Channels list. Constructors are
+	// registered per profile name through [Registry.MustRegisterConstructor].
 	Config *ProfileConfig
 }
 
