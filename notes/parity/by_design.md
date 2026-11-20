@@ -2675,6 +2675,18 @@ Go path: `internal/model/custom/light/color.go::ColorLight`, `internal/model/cus
 
 ---
 
+### A2-BD09 — the signal light's switch-on: three edges where `FixedColorLight` differs from `CustomDpIpFixedColorLight.turn_on`
+
+The effect list (COLOR_BEHAVIOUR without DO_NOT_CARE / OFF / OLD_VALUE, `model/custom/light.py:99-103`, `:804-812`) and the COLOR / COLOR_BEHAVIOUR rules of a switch-on (`:785-801`, `_NO_COLOR` `:93-97`) are ported as they are (#1127). Three edges are not:
+
+- **A value outside the device's value list is left out of the bundle.** The reference's select raises on it and sends nothing (`model/generic/select.py:42-53`); here the switch-on still goes out with LEVEL, only without that parameter. No fixture reaches it — WHITE and ON are in every signal light's list (HmIP-BSL, HmIPW-WRC6) — so it only decides what a hypothetical device without them gets: light rather than a refused command.
+- **An effect Home Assistant names that the light does not offer is an error.** The reference ignores it (`:793-798`). Here it is routed to `set_effect`, which refuses it after the switch-on, because an attribute a command carries and the light cannot apply is reported, not dropped — the rule of `Light.applyHALightAttributes`.
+- **On a light that already burns at the commanded level, a new colour or effect is written alone.** The reference's state-change check counts a different effect as a change and resends the whole bundle with LEVEL (`:393-398`, `:786`); here the switch-on is skipped and the colour or effect goes out as its own write. A value equal to the current one is suppressed in both.
+
+Go path: `internal/model/custom/light/color.go::FixedColorLight.switchOnAttributes`, `internal/model/custom/light/payload.go::FixedColorLight.withSwitchOnAttributes`.
+
+---
+
 ### A4-BD01 — `InFlightTracker` lives on `ValueWriter`, not on `InterfaceClient`
 
 The reference implementation attaches `_in_flight_commands` to `InterfaceClient` and reads it as a fallback in `data_point.unconfirmed_last_value_send`. Go's `InFlightTracker` (`internal/client/reliability/in_flight_tracker.go`) lives on `ValueWriter` (`internal/client/value_writer.go:60`) and is used in the callback handler as an echo-suppress filter rather than as a reader fallback.

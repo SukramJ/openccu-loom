@@ -34,6 +34,12 @@ var customFieldsNeverFilled = map[string]string{
 		"colour temperature through the white-point level instead — ColorTempLight.colorLevel, which " +
 		"the fleet does fill. The HmIP path is embedded inside DRGDaliLight, and this walk inspects " +
 		"only a custom data point's own fields, not those of a struct it embeds.",
+	"light.ColorLight.hue": "HUE / SATURATION exist only on the HmIP colour families, whose " +
+		"lights are RGBWLight values that embed ColorLight. The fleet attaches a bare ColorLight " +
+		"only for the HBW-LC-RGBWW-IN6-DR colour dimmers (RfDimmer_Color_Fixed), which carry a " +
+		"COLOR integer instead — ColorLight.colorIndex, which the fleet does fill.",
+	"light.ColorLight.saturation": "See light.ColorLight.hue: the bare ColorLight of the fleet is the " +
+		"HBW-LC-RGBWW-IN6-DR colour dimmer, whose colour is ColorLight.colorIndex.",
 }
 
 // customFieldsWithAKnownDefect registers a field the fleet proves is nil

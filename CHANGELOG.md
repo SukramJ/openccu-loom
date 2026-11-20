@@ -26,6 +26,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Signal lights offer their effects, and switching one on shows light.**
+  The fixed-colour signal lights (for example HmIP-BSL and
+  HmIP-WRC6-230) advertised effects but published no effect list and refused
+  `set_effect` with `400 Unknown operation` (#1127). Their effects are now
+  the `COLOR_BEHAVIOUR` values without `OFF`, `OLD_VALUE` and `DO_NOT_CARE`:
+  published as `effects` in the data point's config and `effect` in its
+  state, offered as `effect_list` in the Home Assistant MQTT discovery and
+  as the effect dropdown of the light tile, and written by `set_effect`. A
+  light without `COLOR_BEHAVIOUR` no longer advertises effects at all. A
+  switch-on now writes `COLOR` and `COLOR_BEHAVIOUR` with `LEVEL` in one
+  command, as aiohomematic does: `WHITE` when the colour shows nothing
+  (`BLACK`), `ON` when the behaviour is no effect, and the colour and effect
+  of the command itself when it carries them.
+- **The HBW-LC-RGBWW-IN6-DR colour dimmers have their colour again.** Their
+  `COLOR` lives on channels 15 / 16, declared by the device's own
+  registration, and that declaration never reached the light: it was built
+  as a fixed-colour signal light without a colour. Device-specific
+  fixed-channel fields now reach every constructor, and the two dimmers are
+  colour dimmers over their `COLOR` integer, as in aiohomematic.
 - **Selecting a week program on a heating group no longer breaks its
   settings page in the CCU WebUI.** The climate profile switch and the
   schedule page wrote the classic RF week-program pointer as its label

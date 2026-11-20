@@ -697,65 +697,6 @@ func TestFixedColorLightSetColorMissingDP(t *testing.T) {
 	}
 }
 
-// TestTurnOnFixedColorFullBundle verifies TurnOnFixedColor sends a full bundle.
-func TestTurnOnFixedColorFullBundle(t *testing.T) {
-	w := &putWriter{}
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "X0001"})
-	ch := d.AddChannel("X:1", 1, "FCL", hmenum.ParamsetKeyValues)
-	putWritableFloat(ch, "X:1", hmenum.ParameterLevel, w)
-	putWritableSelect(ch, "X:1", hmenum.ParameterColor, w, fixedColorValueList)
-	l := NewFixedColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{Dimmable: true}})
-
-	dur := 10 * time.Second
-	br := 0.5
-	if err := l.TurnOnFixedColor(context.Background(), FixedColorOnConfig{
-		Color:          FixedColorGreen,
-		HasColor:       true,
-		ColorBehaviour: "ON",
-		Duration:       &dur,
-		Brightness:     &br,
-	}, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("TurnOnFixedColor error: %v", err)
-	}
-	if len(w.puts) == 0 {
-		t.Fatal("expected at least one put_paramset")
-	}
-	params := w.puts[len(w.puts)-1]
-	// TurnOnFixedColor sends the string label "GREEN" for FixedColorGreen.
-	if params[string(hmenum.ParameterColor)] != "GREEN" {
-		t.Errorf("COLOR=%v, want GREEN", params[string(hmenum.ParameterColor)])
-	}
-	if params[string(hmenum.ParameterColorBehaviour)] != "ON" {
-		t.Errorf("COLOR_BEHAVIOUR=%v, want ON", params[string(hmenum.ParameterColorBehaviour)])
-	}
-	if params[string(hmenum.ParameterLevel)].(float64) != 0.5 {
-		t.Errorf("LEVEL=%v, want 0.5", params[string(hmenum.ParameterLevel)])
-	}
-}
-
-// TestTurnOnFixedColorNoBehaviourDefault verifies that HasColor=true with
-// empty ColorBehaviour defaults to "ON".
-func TestTurnOnFixedColorNoBehaviourDefault(t *testing.T) {
-	w := &putWriter{}
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "X0001"})
-	ch := d.AddChannel("X:1", 1, "FCL", hmenum.ParamsetKeyValues)
-	putWritableFloat(ch, "X:1", hmenum.ParameterLevel, w)
-	putWritableSelect(ch, "X:1", hmenum.ParameterColor, w, fixedColorValueList)
-	l := NewFixedColorLight(Config{Channel: ch, Writer: w})
-	if err := l.TurnOnFixedColor(context.Background(), FixedColorOnConfig{
-		Color:    FixedColorRed,
-		HasColor: true,
-	}, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("TurnOnFixedColor: %v", err)
-	}
-	if len(w.puts) == 0 {
-		t.Fatal("expected put_paramset")
-	}
-	if got := w.puts[0][string(hmenum.ParameterColorBehaviour)]; got != "ON" {
-		t.Errorf("COLOR_BEHAVIOUR=%v, want ON (default)", got)
-	}
-}
-
 // ─── EffectLight: uncovered branches ────────────────────────────────────────
 
 // TestEffectLightNamePostfix verifies the "effect" postfix.

@@ -18,7 +18,7 @@ package light
 // - "IPSimpleFixedColorLight" → FixedColorLight (wireless variant)
 // - "IPRGBW" → RGBWLight (HmIP-RGBW / LSC / DRDI3)
 // - "RfDimmer_Color" → ColorLight (HSV RF dimmer)
-// - "RfDimmer_Color_Fixed" → FixedColorLight (fixed-colour RF)
+// - "RfDimmer_Color_Fixed" → ColorLight (RF dimmer, COLOR integer on a fixed channel)
 // - "RfDimmer_Color_Temp" → ColorTempLight (colour-temp RF)
 // - "IPSoundPlayerLed" → SoundPlayerLED (HmIP-MP3P channel 6 LED strip)
 //
@@ -67,8 +67,11 @@ func init() {
 	// The PROGRAM parameter carries 7 effect presets; EffectLight surfaces them.
 	r.MustRegisterConstructor(hmenum.DeviceProfile("RfDimmer_Color"), newEffectLightConstructor)
 
-	// RF dimmer with fixed colour (HM-LC-RGBW-WM / …).
-	r.MustRegisterConstructor(hmenum.DeviceProfile("RfDimmer_Color_Fixed"), newFixedColorConstructor)
+	// RF dimmer whose colour is a COLOR integer on a fixed channel
+	// (HBW-LC-RGBWW-IN6-DR: dimmers 13 / 14, COLOR on 15 / 16). The COLOR
+	// it carries is an INTEGER, not the enum of the HmIP signal lights, so
+	// it is a ColorLight like RfDimmer_Color, without the PROGRAM effects.
+	r.MustRegisterConstructor(hmenum.DeviceProfile("RfDimmer_Color_Fixed"), newColorDimmerConstructor)
 
 	// RF dimmer with colour temperature (HM-LC-DW-WM / …).
 	r.MustRegisterConstructor(hmenum.DeviceProfile("RfDimmer_Color_Temp"), newColorTempConstructor)
@@ -245,14 +248,13 @@ func newDaliConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupCo
 }
 
 // newFixedColorConstructor builds a FixedColorLight (enum-valued COLOR
-// parameter). Used by IPFixedColorLight, IPSimpleFixedColorLightWired,
-// and RfDimmer_Color_Fixed.
+// parameter). Used by IPFixedColorLight, IPSimpleFixedColorLightWired and
+// IPSimpleFixedColorLight. SupportsEffects is not set here: the light
+// derives it from the COLOR_BEHAVIOUR value list it finds on the channel
+// (see [NewFixedColorLight]).
 func newFixedColorConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	// The reference CustomDpIpFixedColorLight declares a COLOR_BEHAVIOUR effect
-	// field, so its has_effects resolves true (the effect list is the
-	// COLOR_BEHAVIOUR value list).
 	fcl := NewFixedColorLight(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}, rebased),
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true}, rebased),
 	)
 	applyGroupLevel(fcl.Light, ch, rebased)
 	fcl.bindChannelColor(ch, rebased)
@@ -287,6 +289,19 @@ func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannel
 	)
 	applyGroupLevel(el.Light, ch, rebased)
 	return el, nil
+}
+
+// newColorDimmerConstructor builds a ColorLight for an RF dimmer whose
+// colour is a single COLOR integer on another channel and which carries no
+// effect program. The channel comes from the profile's COLOR field, which
+// for the HBW-LC-RGBWW-IN6-DR is a device-specific fixed-channel field.
+func newColorDimmerConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	cl := newColorLightOn(
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true}, rebased),
+		colorChannel(ch, rebased),
+	)
+	applyGroupLevel(cl.Light, ch, rebased)
+	return cl, nil
 }
 
 // newColorTempConstructor builds a ColorTempLight for RF dimmers with
@@ -362,20 +377,17 @@ func programChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig
 // looks at its own channel finds no colour axis at all — while the
 // discovery payload still advertises the hs colour mode and every colour
 // command comes back as "channel missing HUE or SATURATION".
+//
+// The field may sit in the schema's channel fields (RfDimmer_Color, one
+// channel above) or in a registration's fixed-channel fields
+// (RfDimmer_Color_Fixed, an absolute channel); [custom.ResolveFieldSlot]
+// walks both in a deterministic order.
 func colorChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) *device.Channel {
-	for chNo, fields := range rebased.ChannelFields {
-		fv, ok := fields[hmenum.FieldColor]
-		if !ok {
-			continue
-		}
-		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterColor {
-			continue
-		}
-		if sibling := ch.Sibling(chNo); sibling != nil {
-			return sibling
-		}
+	target, param, ok := custom.ResolveFieldSlot(ch, rebased, hmenum.FieldColor)
+	if !ok || param != hmenum.ParameterColor {
+		return nil
 	}
-	return nil
+	return target
 }
 
 // whitePointChannel resolves the channel the profile maps COLOR_LEVEL

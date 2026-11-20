@@ -113,6 +113,9 @@ type FixedColorLightState struct {
 	ColorMode  string   `json:"color_mode,omitempty"`
 	Color      *ColorHS `json:"color,omitempty"`
 	FixedColor string   `json:"fixed_color,omitempty"`
+	// Effect is the current COLOR_BEHAVIOUR label when it is one of the
+	// light's effects.
+	Effect string `json:"effect,omitempty"`
 }
 
 // EffectLightState adds the current effect label.
