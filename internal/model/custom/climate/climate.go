@@ -399,7 +399,7 @@ func (c *Climate) StateUncertain() bool { return c.aggregate().StateUncertain() 
 func (c *Climate) IsStatusValid() bool { return c.aggregate().IsStatusValid() }
 
 // SubDataPointKeys returns the wire identifiers of every wire-level
-// slot. Used by REST diagnostic endpoints.
+// slot. The event bridge walks them (internal/central/adapter/eventbridge.go).
 func (c *Climate) SubDataPointKeys() []hmtypes.DataPointKey {
 	return c.aggregate().SubDataPointKeys()
 }
@@ -2505,7 +2505,8 @@ func (c *Climate) IsStateChange(temperature *float64, mode *Mode, profile *Profi
 // valve/switch peer channels so that heating activity can be inferred from
 // them.
 //
-// In the Go model, the materializer calls this after a device's LINK paramset
+// In the Go model, the adapter's link-peer refresh calls this
+// (internal/central/adapter/climate_link_peer_refresh.go) after a device's LINK paramset
 // changes — it passes the set of peer channels; the Climate unsubscribes from
 // previous peers, then subscribes to LEVEL / STATE on the new set. Each valid
 // peer channel that exposes LEVEL (valve-style) or STATE (switch-style)

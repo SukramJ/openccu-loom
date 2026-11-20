@@ -17,7 +17,7 @@ package light
 // - "IPSimpleFixedColorLightWired" → FixedColorLight (wired variant)
 // - "IPSimpleFixedColorLight" → FixedColorLight (wireless variant)
 // - "IPRGBW" → RGBWLight (HmIP-RGBW / LSC / DRDI3)
-// - "RfDimmer_Color" → ColorLight (HSV RF dimmer)
+// - "RfDimmer_Color" → EffectLight (RF colour dimmer with PROGRAM effects)
 // - "RfDimmer_Color_Fixed" → ColorLight (RF dimmer, COLOR integer on a fixed channel)
 // - "RfDimmer_Color_Temp" → ColorTempLight (colour-temp RF)
 // - "IPSoundPlayerLed" → SoundPlayerLED (HmIP-MP3P channel 6 LED strip)

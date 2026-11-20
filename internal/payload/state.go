@@ -4,7 +4,7 @@
 package payload
 
 // This file holds the typed [StatePayload] structs every Source
-// implementation returns from [Source.StatePayload]. The structs
+// implementation returns from [Source.State]. The structs
 // mirror the historic `map[string]any` shapes the source-pipeline
 // already produced — JSON marshalling yields the same wire bytes —
 // but the fields are now compile-time-checked.
@@ -362,10 +362,11 @@ type HubState struct {
 
 // --- Unit + InterfaceClient (top-level services) -------------
 
-// CentralState is the live runtime status of the central. The
-// state-machine bucket and the registered-device count are the two
-// metrics northbound adapters consume — health page, connectivity
-// badge, REST /info endpoint.
+// CentralState is the live runtime status of the central: the
+// state-machine bucket and the registered-device count. The central
+// returns it to satisfy the Source contract; no adapter reads it — the
+// health page, the connectivity badges and REST /info build their own
+// projection from the registry and the health tracker.
 type CentralState struct {
 	State       string `json:"state,omitempty"`
 	DeviceCount int    `json:"device_count,omitempty"`

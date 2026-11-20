@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.106.0
+
+- **Version follows OpenCCU-Loom 0.106.0**, which adds effects for
+  signal lights and an installation id in the daemon's network
+  announcement; see the OpenCCU-Loom changelog. The proxy itself is
+  unchanged.
+
 # 0.105.0
 
 - **Reach OpenCCU-Loom on an openccu-lite box without port 8119.** Point

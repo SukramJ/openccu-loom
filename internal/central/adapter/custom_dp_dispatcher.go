@@ -42,14 +42,15 @@ import (
 //
 // Type resolution order in [dispatch]:
 //  1. Light subtypes (most-specific first: RGBWLight, EffectLight,
-//     ColorTempLight, FixedColorLight, ColorLight, then plain Light).
-//  2. Climate.
-//  3. Cover subtypes (Blind before Cover).
-//  4. Lock.
-//  5. Siren.
-//  6. TextDisplay.
+//     ColorTempLight, DRGDaliLight, FixedColorLight, SoundPlayerLED,
+//     ColorLight, then plain Light).
+//  2. Climate, then a type that carries one.
+//  3. Cover subtypes (Blind, Garage, then Cover).
+//  4. Lock, then a type that carries one.
+//  5. Siren, then a type that carries one.
+//  6. TextDisplay, then a type that carries one.
 //  7. Valve subtypes (Modulating, Irrigation).
-//  8. Switch.
+//  8. Switch, then AccessPermission.
 type CustomDPDispatcher struct {
 	registry *central.Registry
 	audit    audit.Recorder

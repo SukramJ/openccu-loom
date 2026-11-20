@@ -1308,8 +1308,7 @@ func (d *DataPoint[T]) PendingSends() int {
 // InjectSyntheticValue injects a value into the data point as if it
 // had arrived via a CCU event, forcing the sensor surface to update
 // even if the data point itself is write-only or has no real CCU
-// source. Used by calculated/derived sensors that read auxiliary
-// parameters not normally surfaced.
+// source. No production code calls it.
 //
 // Naming note: the method was formerly called ForceToSensor, which
 // clashed confusingly with the Python reference implementation's
@@ -1380,7 +1379,7 @@ func (d *DataPoint[T]) StateUncertain() bool {
 //
 // A true return means the unit advertised to north-bound adapters is the
 // overridden/cleaned value, not whatever the CCU descriptor says verbatim.
-// Used by diagnostic endpoints to surface the unit-cleanup decision.
+// No production code reads it; no endpoint surfaces the decision.
 func (d *DataPoint[T]) IsUnitFixed() bool {
 	return d.Descriptor.Unit != d.Unit()
 }
@@ -2067,7 +2066,7 @@ func DetectStatusParameter(parameter string, paramset map[string]struct{}) (stri
 // DataPointType returns the consumer-facing functional type for this data
 // point.
 //
-// return DATA_POINT_TYPE_CATEGORIES.get(self.category)
+// return _CATEGORY_TO_DATA_POINT_TYPE.get(self._category)
 //
 // When the Kind is unknown or has no canonical type mapping the empty string
 // is returned.

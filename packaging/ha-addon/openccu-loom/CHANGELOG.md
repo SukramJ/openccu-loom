@@ -1,5 +1,22 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.106.0
+
+- **Signal lights offer their effects.** HmIP-BSL, HmIP-WRC6-230 and the
+  other fixed-colour signal lights list their blinking, flashing and
+  billowing modes as effects and take them; a switch-on carries colour
+  and effect in one command and keeps the colour that is set.
+- **A signal light switches on again on a plain switch-on.** It used to
+  stay dark when switched on without a brightness.
+- **The HBW-LC-RGBWW-IN6-DR colour dimmers have their colour again.**
+- **A second daemon serving the same CCU is no longer mistaken for this
+  one.** Every installation announces its own id; a daemon listening on
+  localhost only no longer announces itself on the network.
+- **The device editor is available as a web component** for the Home
+  Assistant integration's panel.
+- **Selecting a week program on a heating group no longer breaks its
+  settings page in the CCU WebUI.**
+
 ## 0.105.0
 
 - **Home Assistant entities survive a restart of a central.** A restart
