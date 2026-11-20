@@ -425,7 +425,23 @@ func (d *CustomDPDispatcher) dispatchFixedColorLight(
 		}
 		fc := light.HSToFixedColor(hue, sat)
 		return l.SetColor(ctx, fc, prio)
-	case "set_color_temperature", "set_effect":
+	case "set_effect":
+		// A signal light's effect is its COLOR_BEHAVIOUR. The model owns
+		// the vocabulary and registers set_effect only when the channel
+		// offers one, so the operation exists exactly where it means
+		// something. "label" is the spelling of the other set_* operations
+		// here; "effect" is the service method's own argument.
+		if !slices.Contains(l.ServiceMethodNames(), op) {
+			return fmt.Errorf("%w: FixedColorLight %s offers no effects", hmapi.ErrUnknownOperation, l.Address())
+		}
+		args := p
+		if label, ok := p["label"]; ok {
+			if _, hasEffect := p["effect"]; !hasEffect {
+				args = map[string]any{"effect": label}
+			}
+		}
+		return wrapServiceErr(l.Invoke(ctx, op, args, prio))
+	case "set_color_temperature":
 		return fmt.Errorf("%w: operation %q not supported by FixedColorLight", hmapi.ErrUnknownOperation, op)
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)

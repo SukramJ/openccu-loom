@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -297,18 +298,22 @@ func (l *Light) setLevelFor(ctx context.Context, level float64, onFor *time.Dura
 	return l.SetLevel(ctx, level, priority)
 }
 
+// applyTurnOn is the `turn_on` service method: a switch-on at the
+// remembered level, bounded by the optional `seconds`.
+func (l *Light) applyTurnOn(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+	onFor, err := boundedOnTime(params)
+	if err != nil {
+		return err
+	}
+	return l.turnOnFor(ctx, onFor, priority)
+}
+
 // registerLightServices registers the base light service methods (turn_on,
 // turn_off, set_level) onto the ServiceRegistry inherited from
 // *generic.Float. turn_on and set_level take an optional `seconds` that
 // bounds the switch-on in the same write.
 func (l *Light) registerLightServices() {
-	l.RegisterService("turn_on", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
-		onFor, err := boundedOnTime(params)
-		if err != nil {
-			return err
-		}
-		return l.turnOnFor(ctx, onFor, priority)
-	})
+	l.RegisterService("turn_on", l.applyTurnOn)
 	l.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return l.TurnOff(ctx, priority)
 	})
@@ -572,7 +577,139 @@ func (l *FixedColorLight) State() payload.StatePayload {
 	if name, ok := l.ColorName(); ok {
 		out.FixedColor = name
 	}
+	if label, ok := l.Effect(); ok {
+		out.Effect = label
+	}
 	return out
+}
+
+// Config returns the static FixedColorLight descriptor: the light's
+// capabilities plus, on a signal light, the COLOR_BEHAVIOUR effect list.
+func (l *FixedColorLight) Config() payload.ConfigPayload {
+	if l == nil {
+		return nil
+	}
+	effects := l.Effects()
+	if len(effects) == 0 {
+		return l.Light.Config()
+	}
+	base, _ := l.Light.Config().(*payload.LightConfig)
+	if base == nil {
+		base = &payload.LightConfig{}
+	}
+	return &payload.EffectLightConfig{LightConfig: *base, Effects: effects}
+}
+
+// registerSignalLightServices adds what a signal light has beyond the
+// colour slot: set_effect over its COLOR_BEHAVIOUR vocabulary, and a
+// turn_on / set_level that carry a commanded colour and effect into the
+// switch-on bundle (see [FixedColorLight.withSwitchOnAttributes]).
+//
+// OverrideService for the two inherited names: the whole embedded chain
+// shares one ServiceRegistry, so registering them again would panic.
+func (l *FixedColorLight) registerSignalLightServices() {
+	if len(l.effects) > 0 {
+		l.RegisterServiceWithArg("set_effect", "effect", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+			label, err := l.effectParam(params)
+			if err != nil {
+				return err
+			}
+			return l.SetEffect(ctx, label, priority)
+		})
+	}
+	l.OverrideService("turn_on", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		return l.withSwitchOnAttributes(ctx, params, priority, l.applyTurnOn)
+	})
+	l.OverrideService("set_level", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		return l.withSwitchOnAttributes(ctx, params, priority, l.applyHASetLevel)
+	})
+}
+
+// effectParam reads the `effect` argument of set_effect. Home Assistant
+// picks an effect by label, the bare-scalar MQTT form arrives as a numeric
+// string, and REST / SPA callers may pass the index into
+// [FixedColorLight.Effects]; all three resolve to a label here.
+func (l *FixedColorLight) effectParam(params map[string]any) (string, error) {
+	raw, ok := params["effect"]
+	if !ok {
+		return "", fmt.Errorf("%w: missing %q", payload.ErrServiceInvalidParam, "effect")
+	}
+	if label, isStr := raw.(string); isStr {
+		if slices.Contains(l.effects, label) {
+			return label, nil
+		}
+		if _, err := strconv.ParseInt(label, 10, 32); err != nil {
+			return "", fmt.Errorf("%w: fixedcolor: unknown effect %q", payload.ErrServiceInvalidParam, label)
+		}
+	}
+	idx, err := payload.ParamInt32(params, "effect")
+	if err != nil {
+		return "", err
+	}
+	if idx < 0 || int(idx) >= len(l.effects) {
+		return "", fmt.Errorf("%w: fixedcolor: effect index %d out of range [0, %d)", payload.ErrServiceInvalidParam, idx, len(l.effects))
+	}
+	return l.effects[idx], nil
+}
+
+// withSwitchOnAttributes runs a switch-on service method (`inner`) with the
+// command's `color` and `effect` moved into the switch-on bundle, so LEVEL,
+// COLOR and COLOR_BEHAVIOUR reach the device in one put_paramset rather
+// than as a switch-on followed by a colour or effect change.
+//
+// A command that switches nothing on — the light already burns at that
+// level, so the switch-on is skipped — still means its colour and effect,
+// which are then written on their own. A switch-off drops them.
+func (l *FixedColorLight) withSwitchOnAttributes(
+	ctx context.Context, params map[string]any, priority hmenum.CommandPriority,
+	inner func(context.Context, map[string]any, hmenum.CommandPriority) error,
+) error {
+	so := &fixedColorSwitchOn{}
+	if label, ok := params["effect"].(string); ok && slices.Contains(l.effects, label) {
+		so.effect = label
+	}
+	if l.color != nil {
+		if c, ok := params["color"]; ok {
+			if hue, sat, valid := haColorHS(c); valid {
+				fc := HSToFixedColor(hue, sat)
+				so.color = &fc
+			}
+		}
+	}
+	if so.effect == "" && so.color == nil {
+		return inner(ctx, params, priority)
+	}
+	rest := maps.Clone(params)
+	if so.effect != "" {
+		delete(rest, "effect")
+	}
+	if so.color != nil {
+		delete(rest, "color")
+	}
+	if err := inner(withSwitchOn(ctx, so), rest, priority); err != nil {
+		return err
+	}
+	if so.consumed {
+		return nil
+	}
+	if on, _ := l.commandedIsOn(); !on {
+		return nil
+	}
+	// A value that is already set is not written again, as the reference's
+	// state-change check suppresses it.
+	if so.color != nil {
+		if current, ok := l.Color(); !ok || current != *so.color {
+			if err := l.SetColor(ctx, *so.color, priority); err != nil {
+				return err
+			}
+		}
+	}
+	if so.effect != "" {
+		if current, ok := l.CurrentColorBehaviour(); !ok || current != so.effect {
+			return l.SetEffect(ctx, so.effect, priority)
+		}
+	}
+	return nil
 }
 
 // registerFixedColorLightServices registers the fixed-color operation
@@ -1020,6 +1157,10 @@ func (l *FixedColorLight) HADiscoveryEntity() hamodel.Entity {
 	entity := baseLightEntity(l.Light.HADiscoveryEntity())
 	fields := entity.fields()
 	fields.SupportedColorModes = []string{"hs"}
+	if effects := l.Effects(); len(effects) > 0 {
+		fields.Effect = new(true)
+		fields.EffectList = effects
+	}
 	entity.Fields = fields
 	return entity
 }
@@ -1124,6 +1265,20 @@ func rgbwModeName(m RGBWMode) string {
 		return "tunable_white"
 	}
 	return "unknown"
+}
+
+// LocalisableSelections implements [payload.LocalisableSelections]: the
+// effect list of a signal light is the VALUE_LIST of COLOR_BEHAVIOUR, and
+// Home Assistant returns the operator's pick as `effect`.
+func (l *FixedColorLight) LocalisableSelections() []payload.LocalisableSelection {
+	if l == nil || len(l.effects) == 0 {
+		return nil
+	}
+	return []payload.LocalisableSelection{{
+		BodyKey:   "effect_list",
+		ArgKey:    "effect",
+		Parameter: string(hmenum.ParameterColorBehaviour),
+	}}
 }
 
 // LocalisableSelections implements [payload.LocalisableSelections]: the

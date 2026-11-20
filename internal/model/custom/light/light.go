@@ -139,6 +139,14 @@ type Light struct {
 	// then off), so the default is false and only LEVEL is sent.
 	resetsOnTimeOnTurnOn bool
 
+	// switchOnParams, when set, returns the parameters a subtype writes
+	// beside LEVEL on every switch-on, in the same put_paramset. Every
+	// parameter it returns lives on the LEVEL channel. The fixed-colour
+	// signal lights use it to make sure a switch-on carries a visible
+	// COLOR and COLOR_BEHAVIOUR (see [FixedColorLight]); nil for every
+	// other light, whose switch-on writes LEVEL alone.
+	switchOnParams func(ctx context.Context) map[hmenum.Parameter]any
+
 	unsubLevel func()
 }
 
@@ -574,6 +582,10 @@ func (l *Light) SetLevel(ctx context.Context, level float64, priority hmenum.Com
 		return errors.New("light: SET level: channel has no LEVEL data point")
 	}
 	target := custom.NewBrightness(level).Level()
+	if turnOn && l.switchOnParams != nil && l.Writer != nil {
+		// A switch-on that carries more than LEVEL goes out as one bundle.
+		return l.TurnOnWith(ctx, OnConfig{Brightness: &target}, priority)
+	}
 	l.recordLastSent(target)
 	if err := l.Set(custom.EnsureContext(ctx), target, priority); err != nil {
 		l.clearLastSent()
@@ -761,6 +773,13 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 		// families, RAMP_TIME_VALUE/RAMP_TIME_UNIT on the HmIP value/unit
 		// families (see resolveRampTimeParams).
 		l.stageRampTimeParam(params, *cfg.RampTime)
+	}
+	if l.switchOnParams != nil && level > 0 {
+		for p, v := range l.switchOnParams(ctx) {
+			if _, taken := params[p]; !taken {
+				params[p] = v
+			}
+		}
 	}
 	l.recordLastSent(level)
 	if err = custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority); err != nil {

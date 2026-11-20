@@ -158,7 +158,7 @@ type SoundPlayerLED struct {
 
 // NewSoundPlayerLED constructs the LED light.
 func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
-	fc := NewFixedColorLight(cfg)
+	fc := newFixedColorCore(cfg)
 	led := &SoundPlayerLED{FixedColorLight: fc}
 	if cfg.Channel != nil {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterOnTimeList1); dp != nil {

@@ -17,6 +17,7 @@ package custom
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -151,11 +152,38 @@ type Profile struct {
 // Rebase applies a group_no offset to the embedded ProfileConfig and
 // returns the absolute-channel-numbered schema the Materializer consumes.
 // Returns the zero RebasedChannelGroupConfig when Config is nil.
+//
+// The registration's own [ExtendedDeviceConfig.FixedChannelFields] are
+// merged into the result's FixedChannelFields, after the schema's, so on a
+// channel and field both name the registration's mapping wins. Without the
+// merge a field
+// that only one model carries on an extra channel (the HBW-LC-RGBWW-IN6-DR
+// keeps COLOR on channels 15 / 16, beside its dimmers on 13 / 14) never
+// reaches the constructor, and the data point is built without it.
 func (p Profile) Rebase(groupNo int) RebasedChannelGroupConfig {
 	if p.Config == nil {
 		return RebasedChannelGroupConfig{}
 	}
-	return RebaseChannelGroup(*p.Config, groupNo)
+	rebased := RebaseChannelGroup(*p.Config, groupNo)
+	if p.Extended == nil || len(p.Extended.FixedChannelFields) == 0 {
+		return rebased
+	}
+	merged := make(map[int]map[hmenum.Field]FieldValue, len(rebased.FixedChannelFields)+len(p.Extended.FixedChannelFields))
+	for chNo, fields := range rebased.FixedChannelFields {
+		merged[chNo] = maps.Clone(fields)
+	}
+	for chNo, fields := range p.Extended.FixedChannelFields {
+		target := merged[chNo]
+		if target == nil {
+			target = make(map[hmenum.Field]FieldValue, len(fields))
+			merged[chNo] = target
+		}
+		for field, param := range fields {
+			target[field] = Bare(param)
+		}
+	}
+	rebased.FixedChannelFields = merged
+	return rebased
 }
 
 // registryKey is the composite key: a device model can carry more than

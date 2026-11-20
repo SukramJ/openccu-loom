@@ -85,7 +85,24 @@
   // comparing it, and to its caption before showing it.
   const colorToken = $derived(colorDP ? enumValueToken(colorDP) : undefined);
   const colorCaption = $derived(colorDP ? enumValueLabel(colorDP) : undefined);
-  const effectOptions = $derived<string[]>(effectDP?.value_list ?? []);
+  // The effects the light offers come from the daemon's config block when it
+  // publishes them: a signal light's COLOR_BEHAVIOUR list carries OFF and
+  // the OLD_VALUE / DO_NOT_CARE sentinels, which are no effect and which
+  // set_effect refuses. The raw value list is the fallback for a light that
+  // publishes none.
+  const configEffects = $derived.by<string[] | undefined>(() => {
+    const raw = cdp.config?.effects;
+    return Array.isArray(raw) && raw.every((e) => typeof e === "string") ? raw : undefined;
+  });
+  const effectOptions = $derived<string[]>(configEffects ?? effectDP?.value_list ?? []);
+  // A writable ENUM is published as its index into the descriptor's value
+  // list, which is not the index into a filtered effect list — resolve it to
+  // its label first.
+  const effectValue = $derived<string | number | undefined>(
+    typeof effectDP?.value === "number"
+      ? (effectDP.value_list?.[effectDP.value] ?? undefined)
+      : (effectDP?.value as string | undefined),
+  );
 
   const observed = $derived(levelDP?.observed ?? false);
   const isOn = $derived(level > 0);
@@ -263,7 +280,7 @@
       {/if}
       {#if hasEffects && effectDP && effectOptions.length > 0}
         <ControlEnumSelect
-          value={effectDP.value as string | number | undefined}
+          value={effectValue}
           options={effectOptions}
           disabled={!effectDP.operations.write}
           label={t("cdp.light.effect")}

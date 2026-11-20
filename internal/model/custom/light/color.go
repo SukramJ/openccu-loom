@@ -8,12 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"time"
+	"slices"
 
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -498,10 +499,57 @@ type FixedColorLight struct {
 	// a raw-index Sensor[int32]; the label comes from
 	// [custom.EnumLabelValue] on read.
 	channelColor *generic.Sensor[int32]
+
+	// effects is the selectable COLOR_BEHAVIOUR vocabulary: the channel's
+	// value list without the entries that select no light pattern (see
+	// [colorBehaviourNoEffect]). Empty when the channel carries no
+	// COLOR_BEHAVIOUR, or when the light is built as the plain colour slot
+	// another type embeds ([newFixedColorCore]).
+	effects []string
 }
 
-// NewFixedColorLight constructs a FixedColorLight.
+// colorBehaviourNoEffect are the COLOR_BEHAVIOUR values that are not
+// offered as effects. Mirrors _EXCLUDE_FROM_COLOR_BEHAVIOUR
+// (model/custom/light.py).
+var colorBehaviourNoEffect = []string{
+	string(ColorBehaviourDoNotCare),
+	string(ColorBehaviourOff),
+	string(ColorBehaviourOldValue),
+}
+
+// noVisibleColor are the COLOR values a switch-on replaces with WHITE.
+// Mirrors _NO_COLOR (model/custom/light.py).
+var noVisibleColor = []string{"BLACK", "DO_NOT_CARE", "OLD_VALUE"}
+
+// NewFixedColorLight constructs a FixedColorLight: an HmIP signal light
+// whose COLOR is an enum slot and whose COLOR_BEHAVIOUR (steady, blinking,
+// flashing, …) is offered as its effect list. This is the port of the
+// reference CustomDpIpFixedColorLight (model/custom/light.py):
+//
+//   - the effect list is the COLOR_BEHAVIOUR value list without
+//     [colorBehaviourNoEffect], and SupportsEffects follows from it rather
+//     than being declared, so a channel without COLOR_BEHAVIOUR advertises
+//     no effect it cannot carry;
+//   - every switch-on writes COLOR and COLOR_BEHAVIOUR beside LEVEL in one
+//     put_paramset: WHITE for a colour in [noVisibleColor] and ON for a
+//     behaviour that is no effect, else the values that are set (see
+//     [FixedColorLight.switchOnAttributes]).
 func NewFixedColorLight(cfg Config) *FixedColorLight {
+	fc := newFixedColorCore(cfg)
+	fc.effects = colorBehaviourEffects(fc.colorBehaviour)
+	fc.Capabilities.SupportsEffects = len(fc.effects) > 0
+	fc.switchOnParams = fc.switchOnAttributes
+	if fc.Float != nil {
+		fc.registerSignalLightServices()
+	}
+	return fc
+}
+
+// newFixedColorCore builds the colour slot alone: COLOR, COLOR_BEHAVIOUR and
+// set_color, without the signal light's effects and switch-on attributes. The
+// HmIP-MP3P status LED embeds it and writes its own switch-on bundle (see
+// [SoundPlayerLED]).
+func newFixedColorCore(cfg Config) *FixedColorLight {
 	fc := &FixedColorLight{
 		Light:          New(cfg),
 		color:          custom.SelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColor, hmenum.ParameterColor)),
@@ -514,6 +562,137 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 		fc.registerFixedColorLightServices()
 	}
 	return fc
+}
+
+// colorBehaviourEffects returns the COLOR_BEHAVIOUR value list without the
+// entries that select no light pattern, in the device's own order.
+func colorBehaviourEffects(dp *generic.Select) []string {
+	if dp == nil {
+		return nil
+	}
+	var out []string
+	for _, v := range dp.Descriptor.ValueList {
+		if !slices.Contains(colorBehaviourNoEffect, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// Effects returns the selectable COLOR_BEHAVIOUR labels, or nil when the
+// light offers none.
+func (l *FixedColorLight) Effects() []string {
+	if l == nil || len(l.effects) == 0 {
+		return nil
+	}
+	return slices.Clone(l.effects)
+}
+
+// Effect returns the current COLOR_BEHAVIOUR label when it is one of
+// [FixedColorLight.Effects]; ("", false) otherwise — a behaviour that is
+// no effect (OFF, OLD_VALUE, DO_NOT_CARE) is not reported as one.
+func (l *FixedColorLight) Effect() (string, bool) {
+	label, ok := l.CurrentColorBehaviour()
+	if !ok || !slices.Contains(l.effects, label) {
+		return "", false
+	}
+	return label, true
+}
+
+// SetEffect writes COLOR_BEHAVIOUR to one of [FixedColorLight.Effects].
+func (l *FixedColorLight) SetEffect(ctx context.Context, label string, priority hmenum.CommandPriority) error {
+	if !slices.Contains(l.effects, label) {
+		return fmt.Errorf("%w: fixedcolor: unknown effect %q", payload.ErrServiceInvalidParam, label)
+	}
+	return l.SetColorBehaviour(ctx, ColorBehaviour(label), priority)
+}
+
+// fixedColorSwitchOn carries the colour and effect a command names, from
+// the service method that parsed them to the switch-on that writes them.
+// It travels in the command's context, not on the light, so a concurrent
+// command on another plane can neither consume nor inherit it.
+type fixedColorSwitchOn struct {
+	color    *FixedColor
+	effect   string
+	consumed bool
+}
+
+type fixedColorSwitchOnKey struct{}
+
+// withSwitchOn returns ctx carrying the colour and effect for the next
+// switch-on bundle.
+func withSwitchOn(ctx context.Context, so *fixedColorSwitchOn) context.Context {
+	return context.WithValue(custom.EnsureContext(ctx), fixedColorSwitchOnKey{}, so)
+}
+
+// switchOnAttributes is the [Light.switchOnParams] hook of a signal light:
+// the COLOR and COLOR_BEHAVIOUR a switch-on writes beside LEVEL. Mirrors
+// the reference CustomDpIpFixedColorLight.turn_on (model/custom/light.py):
+//
+//   - COLOR: the commanded colour; otherwise WHITE when the current one is
+//     in [noVisibleColor]; otherwise the current one again. The reference
+//     leaves COLOR out in that last case. Here it travels with every
+//     bundle, because a signal light resets a COLOR that a put_paramset
+//     leaves out: measured on an HmIP-WRC6-230 (channel 18), LEVEL plus
+//     COLOR_BEHAVIOUR without COLOR turned GREEN into BLACK, while LEVEL
+//     alone kept it (notes/parity/by_design.md, A2-BD09).
+//   - COLOR_BEHAVIOUR: the commanded effect; otherwise ON when the current
+//     behaviour is not an effect (unobserved included); otherwise the
+//     current one again.
+//
+// A parameter that lives on another channel than LEVEL is left out, because
+// it cannot travel in the same put_paramset.
+func (l *FixedColorLight) switchOnAttributes(ctx context.Context) map[hmenum.Parameter]any {
+	so, _ := ctx.Value(fixedColorSwitchOnKey{}).(*fixedColorSwitchOn)
+	if so != nil {
+		so.consumed = true
+	}
+	addr := l.DataPointKey().ChannelAddress
+	out := make(map[hmenum.Parameter]any, 2)
+	if l.color != nil && l.color.DataPointKey().ChannelAddress == addr {
+		var label string
+		if so != nil && so.color != nil {
+			label = fixedColorNames[*so.color]
+		} else if current, ok := l.color.Label(); ok {
+			label = current
+			if slices.Contains(noVisibleColor, current) {
+				label = fixedColorNames[FixedColorWhite]
+			}
+		}
+		if v, ok := enumWire(l.color, label); ok {
+			out[hmenum.ParameterColor] = v
+		}
+	}
+	if len(l.effects) > 0 && l.colorBehaviour.DataPointKey().ChannelAddress == addr {
+		var label string
+		switch current, ok := l.colorBehaviour.Label(); {
+		case so != nil && so.effect != "":
+			label = so.effect
+		case !ok || !slices.Contains(l.effects, current):
+			label = string(ColorBehaviourOn)
+		default:
+			label = current
+		}
+		if v, ok := enumWire(l.colorBehaviour, label); ok {
+			out[hmenum.ParameterColorBehaviour] = v
+		}
+	}
+	return out
+}
+
+// enumWire returns the wire value for `label` of an enum data point, in the
+// form its descriptor declares (see [generic.DataPoint.EnumWireValue]). A
+// label outside the value list yields false: sent anyway, it would fault the
+// whole put_paramset and the light would not come on at all.
+func enumWire(dp *generic.Select, label string) (any, bool) {
+	if label == "" {
+		return nil, false
+	}
+	idx := slices.Index(dp.Descriptor.ValueList, label)
+	if idx < 0 {
+		return nil, false
+	}
+	return dp.EnumWireValue(label, int32(idx)), true //nolint:gosec // a VALUE_LIST index is bounded by the list length
 }
 
 // bindChannelColor resolves the profile's `channel_color` field onto the
@@ -806,74 +985,4 @@ func FixedColorToHS(c FixedColor) (hue int32, saturation float64) {
 		return 300, 100
 	}
 	return 0, 0
-}
-
-// FixedColorOnConfig bundles the optional parameters
-// [FixedColorLight.TurnOnFixedColor] understands.
-type FixedColorOnConfig struct {
-	Color          FixedColor
-	HasColor       bool
-	ColorBehaviour string         // "ON", "BLINKING_LONG", "BLINKING_SHORT", …
-	Duration       *time.Duration // optional ON_TIME_UNIT/VALUE timer
-	Brightness     *float64       // optional LEVEL override (default LastLevel())
-}
-
-// TurnOnFixedColor sends the full COLOR + COLOR_BEHAVIOUR + ON_TIME_* +
-// LEVEL bundle as one atomic put_paramset. HmIP-BSL expects ON_TIME_VALUE /
-// ON_TIME_UNIT (not DURATION_*) for its timer channel.
-//
-// Falls back to per-parameter SetValue when the writer has no PutParamset
-// support. The address used is the embedded LEVEL data point's channel
-// address.
-//
-// A [generic.CallParameterCollector] is attached to ctx for
-// forward-compatible batching.
-func (l *FixedColorLight) TurnOnFixedColor(ctx context.Context, cfg FixedColorOnConfig, priority hmenum.CommandPriority) error {
-	if l.Float == nil {
-		return errors.New("fixedcolor: channel missing LEVEL")
-	}
-	addr := l.DataPointKey().ChannelAddress
-	w := l.Writer
-	if w == nil {
-		return errors.New("fixedcolor: no writer configured")
-	}
-	level := l.turnOnLevel()
-	if cfg.Brightness != nil {
-		level = *cfg.Brightness
-	}
-	params := map[hmenum.Parameter]any{
-		hmenum.ParameterLevel: level,
-	}
-	if cfg.HasColor {
-		if name, ok := fixedColorNames[cfg.Color]; ok {
-			params[hmenum.ParameterColor] = name
-		} else {
-			params[hmenum.ParameterColor] = fixedColorNames[FixedColorWhite]
-		}
-	}
-	// COLOR_BEHAVIOUR fallback: when the caller leaves the field empty but a
-	// colour has been set, the CCU expects "ON" so the LED actually lights up
-	// rather than waiting for a behaviour (BLINKING_*, BILLOW_*) selection.
-	if cfg.ColorBehaviour == "" && cfg.HasColor {
-		params[hmenum.ParameterColorBehaviour] = "ON"
-	} else if cfg.ColorBehaviour != "" {
-		params[hmenum.ParameterColorBehaviour] = cfg.ColorBehaviour
-	}
-	if cfg.Duration != nil {
-		v, u := custom.EncodeTimerDuration(*cfg.Duration)
-		params[hmenum.ParameterOnTimeUnit] = u
-		params[hmenum.ParameterOnTimeValue] = v
-	}
-	ctx = custom.EnsureContext(ctx)
-	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
-	ctx = generic.ContextWithCollector(ctx, coll)
-	l.recordLastSent(level)
-	err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority)
-	// Anything staged on the collector only reaches the wire in the
-	// flush, so its error is part of this command's result.
-	if err = generic.FlushCollector(ctx, coll, err); err != nil {
-		l.clearLastSent()
-		return err
-	}
-	return nil
 }

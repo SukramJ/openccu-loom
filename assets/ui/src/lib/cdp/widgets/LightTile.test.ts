@@ -119,3 +119,75 @@ describe("LightTile — fixed-colour palette", () => {
     await waitFor(() => expect(screen.getByText("100 %")).toBeTruthy());
   });
 });
+
+// HmIPW-WRC6 COLOR_BEHAVIOUR descriptor order (godevccu
+// paramset_descriptions/HmIPW-WRC6.json, channel :7).
+const COLOR_BEHAVIOUR_ORDER = [
+  "OFF",
+  "ON",
+  "BLINKING_SLOW",
+  "BLINKING_MIDDLE",
+  "BLINKING_FAST",
+  "FLASH_SLOW",
+  "FLASH_MIDDLE",
+  "FLASH_FAST",
+  "BILLOW_SLOW",
+  "BILLOW_MIDDLE",
+  "BILLOW_FAST",
+  "OLD_VALUE",
+  "DO_NOT_CARE",
+];
+const SIGNAL_EFFECTS = COLOR_BEHAVIOUR_ORDER.filter(
+  (e) => !["OFF", "OLD_VALUE", "DO_NOT_CARE"].includes(e),
+);
+
+function signalLightCdp(): CustomDPSummary {
+  return {
+    name: "light",
+    kind: "light_fixed_color",
+    channel_no: 7,
+    capabilities: { color: true, effects: true },
+    config: { effects: SIGNAL_EFFECTS },
+  } as unknown as CustomDPSummary;
+}
+
+function signalDataPoints(behaviourIndex: number): DataPointSummary[] {
+  return [
+    ...dataPoints(),
+    {
+      parameter: "COLOR_BEHAVIOUR",
+      type: "ENUM",
+      value: behaviourIndex,
+      observed: true,
+      value_list: COLOR_BEHAVIOUR_ORDER,
+      operations: { read: true, write: true, event: true },
+    },
+  ] as unknown as DataPointSummary[];
+}
+
+describe("LightTile — signal-light effects", () => {
+  it("offers the daemon's effect list, not the raw COLOR_BEHAVIOUR list", async () => {
+    mockListDataPoints.mockResolvedValue(signalDataPoints(2));
+    render(LightTile, { props: { address: ADDRESS, cdp: signalLightCdp() } });
+
+    const select = (await screen.findByLabelText("cdp.light.effect")) as HTMLSelectElement;
+    const offered = Array.from(select.options).map((o) => o.value);
+    expect(offered).toEqual(SIGNAL_EFFECTS);
+    // The observed index 2 is BLINKING_SLOW in the descriptor's list.
+    expect(select.value).toBe("BLINKING_SLOW");
+  });
+
+  it("sends the picked effect by label", async () => {
+    mockListDataPoints.mockResolvedValue(signalDataPoints(1));
+    render(LightTile, { props: { address: ADDRESS, cdp: signalLightCdp() } });
+
+    const select = (await screen.findByLabelText("cdp.light.effect")) as HTMLSelectElement;
+    await fireEvent.change(select, { target: { value: "FLASH_FAST" } });
+
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith(ADDRESS, "light", "set_effect", {
+        label: "FLASH_FAST",
+      }),
+    );
+  });
+});
