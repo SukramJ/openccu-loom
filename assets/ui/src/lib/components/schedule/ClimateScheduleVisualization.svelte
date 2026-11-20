@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ClimatePeriod, ClimateProfile } from "$lib/api/types";
   import { t } from "$lib/i18n";
+  import { rebaseClimateWeekday } from "./climateRebase";
 
   // Vertical 24h temperature grid — one column per weekday with the
   // periods stacked top-to-bottom and coloured by HA's climate state
@@ -175,7 +176,8 @@
   // reactive dependency on `profile` is explicit.
   const dayBlocks = $derived.by(() => {
     return weekdays.map((day) => {
-      const wd = profile?.weekdays?.[day];
+      const raw = profile?.weekdays?.[day];
+      const wd = raw ? rebaseClimateWeekday(raw) : undefined;
       const base = wd?.base_temperature ?? 19;
       return {
         day,

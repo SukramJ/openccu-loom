@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A heating week profile with a long comfort phase no longer shows the
+  setback hours highlighted.** The daemon names the temperature that runs
+  longest the day's base, so a day of 06:00–20:00 at 21 °C over 19.5 °C
+  arrived with 21 °C as base and the night hours as periods — the weekday
+  grid coloured the night and the editor listed it. The Config UI and the
+  editor component now show each day with its lowest temperature as base
+  and every warmer stretch as a period, as the Home Assistant frontend
+  does. The schedule on the device was always correct; the REST, WebSocket
+  and MQTT output is unchanged, and saving accepts either form (#1133).
+
 ## [0.106.0] - 2026-11-20
 
 ### Added

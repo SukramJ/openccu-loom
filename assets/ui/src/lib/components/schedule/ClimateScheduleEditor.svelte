@@ -11,6 +11,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ClimateScheduleVisualization from "./ClimateScheduleVisualization.svelte";
+  import { rebaseClimateSchedule } from "./climateRebase";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
 
@@ -56,10 +57,13 @@
     loadError = null;
     notSupported = false;
     try {
-      const s =
+      // Both copies take the display form (lowest temperature as base), so
+      // the dirty diff compares like with like.
+      const s = rebaseClimateSchedule(
         channelNo === undefined
           ? await api.getDeviceSchedule(address)
-          : await api.getSchedule(address, channelNo);
+          : await api.getSchedule(address, channelNo),
+      );
       serverSchedule = deepClone(s);
       schedule = deepClone(s);
       if (!s.profiles) s.profiles = {};
