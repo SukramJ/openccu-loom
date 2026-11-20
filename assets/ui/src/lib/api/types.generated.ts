@@ -6660,6 +6660,21 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             /**
+             * @description Identity of this installation: created once on the first start
+             *     and kept in the daemon's database, so it survives restarts,
+             *     updates and a backup restored on new hardware. Two daemons
+             *     serving the same CCU have different ids — that, not the CCU
+             *     serial, is what tells them apart. The same value is announced
+             *     over mDNS as the TXT key `id` (ADR 0058). Absent when the daemon
+             *     runs without its database.
+             *
+             *     Not a secret and no proof of identity: anyone on the network can
+             *     read and repeat it. A client must not send credentials to a new
+             *     address because an announcement carries a known id.
+             * @example 0123456789abcdef0123456789abcdef
+             */
+            instance_id?: string;
+            /**
              * @description Externally-reachable address of this daemon's Config UI,
              *     derived from `north.rest.public_url` with the SPA mount
              *     appended. Empty when no public URL is configured.

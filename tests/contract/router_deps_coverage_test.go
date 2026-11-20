@@ -67,6 +67,7 @@ var routerDepsLeftNil = map[string]string{
 	"HealthExtras":                "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"HealthGauges":                "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"Idempotent":                  "a boolean that gates a middleware: false skips it, and there is no facade and no route to answer for",
+	"InstanceID":                  "passed by value into the info handler; it is a parameter, not a collaborator whose absence stops a feature",
 	"KnownCentrals":               "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"Labels":                      "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"Logger":                      "a value NewRouter substitutes a default for when it is unset, so nil is a configuration choice rather than a missing collaborator",

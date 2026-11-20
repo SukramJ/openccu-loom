@@ -45,3 +45,34 @@ the flow cost real.
   record.
 - The HA integration can dedup/select per CCU at discovery time; its
   flow change lives in that repository.
+
+## Amendment (2026-11-20) — the serial names the CCU, not the daemon
+
+A second daemon serving the same CCU — a test build started on a laptop
+against the production CCU — announced the same `ccus` value as the
+production daemon. The HA integration had read "a configured serial at a
+new address" as "my daemon moved" and rewrote its production config entry
+to the test daemon (#1131, SukramJ/homematicip_local#1386). The serial
+answers "is this CCU set up?"; it cannot answer "is this my daemon?".
+
+4. Every installation has an **instance id**: 32 lower-case hex digits
+   from a cryptographic random source, created on the first start and
+   kept in the database (`instance_identity`), so it survives restarts,
+   updates and a backup restored on new hardware. The TXT bundle carries
+   it as `id=<instance id>`; `GET /api/v1/info` serves it as
+   `instance_id`. Without a database there is no id, and the key is left
+   out — an id that changed on every start would name nothing.
+5. The id is **public and proves nothing**. Anyone on the LAN can read
+   and repeat it, so a client uses it to tell daemons apart, never as a
+   reason to send credentials somewhere. Following a daemon to a new
+   address is a decision the operator confirms.
+6. A daemon whose REST listener is bound to loopback only does not
+   announce itself: nobody on the network can reach it, and the
+   announcement would only send clients to an address that refuses them.
+
+Better than before: a client can distinguish "moved" from "another
+daemon" at discovery time, and the record no longer advertises
+unreachable endpoints. Against the comparison targets this amendment
+makes no claim; their discovery records were not examined for it. The
+split is right: the daemon states facts about itself (id, served CCUs);
+whether to follow is the client's decision, made with the operator.

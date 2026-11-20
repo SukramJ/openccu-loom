@@ -166,3 +166,41 @@ func TestMDNSTXTSelfDescription(t *testing.T) {
 		}
 	}
 }
+
+// TestMDNSTXTAnnouncesTheInstanceID: the installation identity travels as
+// `id`, and the key is left out when the daemon has none (no database).
+func TestMDNSTXTAnnouncesTheInstanceID(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	const id = "0123456789abcdef0123456789abcdef"
+
+	got, ok := txtValue(mdnsTXT(cfg, mdnsSelf{kind: deployment.Standalone, instanceID: id}, 1, nil), "id")
+	if !ok || got != id {
+		t.Errorf("id = %q (present %v), want %q", got, ok, id)
+	}
+	if v, ok := txtValue(mdnsTXT(cfg, mdnsSelf{kind: deployment.Standalone}, 1, nil), "id"); ok {
+		t.Errorf("id = %q announced without an instance id", v)
+	}
+}
+
+// TestListenIsLoopbackOnly: a listener nobody on the network can reach is
+// not announced; an all-interfaces or LAN listener is.
+func TestListenIsLoopbackOnly(t *testing.T) {
+	t.Parallel()
+	for addr, want := range map[string]bool{
+		"127.0.0.1:18119":  true,
+		"127.1.2.3:8119":   true,
+		"[::1]:8119":       true,
+		"localhost:8119":   true,
+		":8119":            false,
+		"0.0.0.0:8119":     false,
+		"[::]:8119":        false,
+		"172.18.4.29:8119": false,
+		"loom.local:8119":  false,
+		"not-an-address":   false,
+	} {
+		if got := listenIsLoopbackOnly(addr); got != want {
+			t.Errorf("listenIsLoopbackOnly(%q) = %v, want %v", addr, got, want)
+		}
+	}
+}

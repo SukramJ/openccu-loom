@@ -78,10 +78,13 @@ receiving systems accordingly.
   API version, TLS flag, the number of systems and the last digits of
   their serials, where the daemon runs (`deploy`: add-on on an
   openccu-lite box, add-on on a CCU, Home Assistant add-on, standalone)
-  and which login paths it accepts (`auth`) — so Home Assistant and
-  other zeroconf clients find it and offer only the setup that fits.
+  and which login paths it accepts (`auth`), plus a random id of the
+  installation (`id`, created once and kept in the database) — so Home
+  Assistant and other zeroconf clients find it, tell it from another
+  daemon serving the same system, and offer only the setup that fits.
   `GET /api/v1/info` answers the same without a login. Multicast only;
-  nothing leaves the LAN.
+  nothing leaves the LAN. A daemon whose REST listener is bound to
+  loopback only does not announce itself.
 - **SSDP search** (`north.discovery.ssdp`, default on): an `M-SEARCH`
   multicast probe every 60 seconds to find CCUs on the LAN for the
   adopt-a-central UI. The probe carries no data about the daemon beyond

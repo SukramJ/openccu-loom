@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.5.0
+  version: 16.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9633,6 +9633,22 @@ components:
         deployment: { $ref: "#/components/schemas/Deployment" }
         uptime: { type: string }
         started_at: { type: string, format: date-time }
+        instance_id:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+          description: |
+            Identity of this installation: created once on the first start
+            and kept in the daemon's database, so it survives restarts,
+            updates and a backup restored on new hardware. Two daemons
+            serving the same CCU have different ids — that, not the CCU
+            serial, is what tells them apart. The same value is announced
+            over mDNS as the TXT key `id` (ADR 0058). Absent when the daemon
+            runs without its database.
+
+            Not a secret and no proof of identity: anyone on the network can
+            read and repeat it. A client must not send credentials to a new
+            address because an announcement carries a known id.
+          example: 0123456789abcdef0123456789abcdef
         config_ui_url:
           type: string
           description: |

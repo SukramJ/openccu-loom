@@ -937,6 +937,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
 	// stop defer.
 	restMountTeardown := mountRESTServer(ctx, cfg, logger, northBridges, restMountDeps{
+		instanceID:             resolveInstanceID(ctx, auditDB, logger),
 		reg:                    reg,
 		healthTracker:          healthTracker,
 		bootstrap:              bootstrapRouter,
