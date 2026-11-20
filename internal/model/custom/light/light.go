@@ -109,15 +109,6 @@ type Light struct {
 	pendingOn   *time.Duration // deferred ON_TIME for next TurnOn
 	pendingRamp *time.Duration // deferred RAMP_TIME for next TurnOn
 
-	// hasOnTimeUnit is true when the channel's on-time timer resolves to a
-	// value/unit pair (DURATION_VALUE + DURATION_UNIT — see
-	// [resolveOnTimeParams]; no device carries the literal ON_TIME_UNIT wire
-	// name), meaning the device interprets the reset as a timed shutdown. When
-	// true, TurnOn without an explicit on-time sends the
-	// [custom.TimerNotUsed] sentinel to cancel any previously running timer
-	// rather than leaving the old value active.
-	hasOnTimeUnit bool
-
 	// onTimeValueParam / onTimeUnitParam are the wire parameter(s)
 	// [Light.SetOnTime] writes, resolved once at construction from the
 	// channel's own paramset. See [resolveOnTimeParams].
@@ -129,15 +120,6 @@ type Light struct {
 	// channel's own paramset. See [resolveRampTimeParams].
 	rampTimeValueParam hmenum.Parameter
 	rampTimeUnitParam  hmenum.Parameter
-
-	// resetsOnTimeOnTurnOn gates whether a plain TurnOn (no explicit
-	// on-time/timer) emits the [custom.TimerNotUsed] sentinel on a channel
-	// that carries
-	// ON_TIME_UNIT. Only signal lights (FixedColorLight) require this reset.
-	// For HmIP-RGBW / HmIP-DRG-DALI the device interprets the sentinel duration
-	// on a plain turn_on and switches off again immediately (briefly flashes,
-	// then off), so the default is false and only LEVEL is sent.
-	resetsOnTimeOnTurnOn bool
 
 	// switchOnParams, when set, returns the parameters a subtype writes
 	// beside LEVEL on every switch-on, in the same put_paramset. Every
@@ -159,11 +141,9 @@ func New(cfg Config) *Light {
 	level := custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel))
 	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
 	rampTimeValueParam, rampTimeUnitParam := resolveRampTimeParams(cfg.Channel)
-	hasOnTimeUnit := onTimeUnitParam != ""
 	l := &Light{
 		Float:                level,
 		Capabilities:         cfg.Capabilities,
-		hasOnTimeUnit:        hasOnTimeUnit,
 		onTimeValueParam:     onTimeValueParam,
 		onTimeUnitParam:      onTimeUnitParam,
 		rampTimeValueParam:   rampTimeValueParam,
@@ -613,22 +593,14 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 		if !l.IsStateChangeFull(StateChangeArgsFull{TurnOn: true}) {
 			return nil
 		}
-		// Signal lights with ON_TIME_UNIT send ON_TIME=TimerNotUsed to cancel any
-		// previously active timer. Without this, the old on-time remains active
-		// after a plain TurnOn and the light switches itself off unexpectedly.
-		// Other lights (RGBW/DALI) must not — the device reads the sentinel as a
-		// shutdown duration and turns off again right away.
-		if l.resetsOnTimeOnTurnOn && l.hasOnTimeUnit && l.Writer != nil {
-			notUsed := time.Duration(custom.TimerNotUsed * float64(time.Second))
-			b := l.turnOnLevel()
-			onCfg := OnConfig{
-				OnTime:     &notUsed,
-				Brightness: &b,
-				Writer:     l.Writer,
-				Address:    l.DataPointKey().ChannelAddress,
-			}
-			return l.TurnOnWith(ctx, onCfg, priority)
-		}
+		// A plain switch-on carries no timer. The timer-not-used sentinel on a
+		// DURATION_VALUE / DURATION_UNIT pair (111600, H) does not cancel a
+		// timer, it keeps the light off: measured on an HmIP-WRC6-230 signal
+		// channel, the same bundle switched on without the pair and stayed
+		// off with it, and HmIP-RGBW / HmIP-DRG-DALI flash and go off the same
+		// way. A LEVEL write alone ends a running timer — measured on that
+		// channel too — and is what the CCU's own controls send for signal
+		// lights (notes/parity/by_design.md, A2-BD10).
 		return l.SetLevel(ctx, l.turnOnLevel(), priority)
 	}
 	cfg := OnConfig{}

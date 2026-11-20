@@ -26,6 +26,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A signal light switches on again on a plain switch-on.** `turn_on` — and
+  Home Assistant's `light.turn_on` without a brightness — sent the
+  "timer not used" value (`DURATION_VALUE=111600`, `DURATION_UNIT=H`) with
+  the switch-on, and an HmIP-WRC6-230 kept its LED off on it (#1129). A
+  plain switch-on now sends `LEVEL` alone, as the CCU's own controls do;
+  measured on the same channel, that also ends a timer still running.
+
 - **Signal lights offer their effects, and switching one on shows light.**
   The fixed-colour signal lights (for example HmIP-BSL and
   HmIP-WRC6-230) advertised effects but published no effect list and refused

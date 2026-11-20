@@ -29,8 +29,7 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 	putWritableFloat(ch, address, hmenum.ParameterSaturation, w)
 	putWritableInteger(ch, address, hmenum.ParameterColorTemperature, w)
 	// DURATION_VALUE/DURATION_UNIT are present on the channel so
-	// resolveOnTimeParams (and hasOnTimeUnit, derived from it) resolve
-	// true inside New().
+	// resolveOnTimeParams resolves the value/unit timer pair inside New().
 	putWritableFloat(ch, address, hmenum.ParameterDurationValue, w)
 	putWritableInteger(ch, address, hmenum.ParameterDurationUnit, w)
 	r := NewRGBWLight(Config{
@@ -44,8 +43,7 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 // newFixedColorLightRigWithOnTimeUnit builds a FixedColorLight on a channel
 // that carries DURATION_VALUE/DURATION_UNIT, matching the real HmIP-BSL
 // signal-light channel (godevccu paramset_descriptions/HmIP-BSL.json,
-// channel :8). FixedColorLight sets resetsOnTimeOnTurnOn=true, so plain
-// TurnOn on this rig must emit the TimerNotUsed sentinel via put_paramset.
+// channel :8).
 func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *FixedColorLight {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SIG0001"})
@@ -54,8 +52,8 @@ func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWri
 	putWritableSelect(ch, address, hmenum.ParameterColor, w, []string{
 		"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE",
 	})
-	// DURATION_VALUE/DURATION_UNIT presence makes hasOnTimeUnit=true via
-	// resolveOnTimeParams, exactly as it does on a real HmIP-BSL channel.
+	// DURATION_VALUE/DURATION_UNIT presence makes resolveOnTimeParams resolve
+	// the value/unit timer pair, exactly as it does on a real HmIP-BSL channel.
 	putWritableFloat(ch, address, hmenum.ParameterDurationValue, w)
 	putWritableInteger(ch, address, hmenum.ParameterDurationUnit, w)
 	fc := NewFixedColorLight(Config{
@@ -70,9 +68,8 @@ func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWri
 // explicit on-time / timer) on a channel that carries ON_TIME_UNIT emits only
 // a LEVEL write and does not send any put_paramset containing ON_TIME or
 // DURATION parameters. This is the regression guard for bug #3210: before the
-// fix, resetsOnTimeOnTurnOn was unintentionally true for RGBW lights, causing
-// the TimerNotUsed sentinel to be included in every plain TurnOn and making the
-// device switch off again immediately.
+// fix, RGBW lights included the TimerNotUsed sentinel in every plain TurnOn,
+// which made the device switch off again immediately.
 func TestRGBWLightPlainTurnOnDoesNotSendOnTime(t *testing.T) {
 	w := &putWriter{}
 	r := newRGBWLightRigWithOnTimeUnit(t, "RGBW0002:1", w)
@@ -100,55 +97,27 @@ func TestRGBWLightPlainTurnOnDoesNotSendOnTime(t *testing.T) {
 	}
 }
 
-// TestFixedColorLightPlainTurnOnSendsNotUsedSentinel verifies that a plain
-// TurnOn on a FixedColorLight (signal light) cancels any timer still running,
-// so the light does not switch itself off when the previous on-time expires.
-//
-// The cancel rides the on-time shape the channel actually describes. A signal
-// light's timer is the DURATION_VALUE/DURATION_UNIT pair, and the encoder maps
-// the seconds-valued sentinel onto (111600, H) precisely so the device can tell
-// "timer disabled" from a real duration. Writing a bare ON_TIME here instead —
-// which is what the paramset builder used to hard-code — is a parameter such a
-// channel does not describe, and the CCU faults the whole call, so the light
-// never comes on at all.
-func TestFixedColorLightPlainTurnOnSendsNotUsedSentinel(t *testing.T) {
+// TestFixedColorLightPlainTurnOnSendsNoTimer pins a plain switch-on of a
+// signal light to LEVEL without a timer. The timer-not-used sentinel on the
+// DURATION pair (111600, H) kept an HmIP-WRC6-230 signal channel off, while a
+// LEVEL write alone switched it on and also ended a timer still running
+// (notes/parity/by_design.md, A2-BD10).
+func TestFixedColorLightPlainTurnOnSendsNoTimer(t *testing.T) {
 	w := &putWriter{}
 	fc := newFixedColorLightRigWithOnTimeUnit(t, "SIG0001:1", w)
 
 	if err := fc.TurnOn(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("TurnOn returned unexpected error: %v", err)
 	}
-
-	// Exactly one atomic put_paramset must have been dispatched.
-	if len(w.puts) != 1 {
-		t.Fatalf("plain TurnOn on FixedColorLight with ON_TIME_UNIT produced %d put_paramset call(s), want 1",
-			len(w.puts))
+	for _, put := range w.puts {
+		for _, p := range []hmenum.Parameter{hmenum.ParameterOnTime, hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit} {
+			if v, has := put[string(p)]; has {
+				t.Errorf("plain switch-on sends %s=%v; payload: %v", p, v, put)
+			}
+		}
 	}
-
-	got := w.puts[0]
-
-	// The cancel must ride the pair this channel describes, never a bare
-	// ON_TIME the CCU would reject.
-	if _, wrongShape := got[string(hmenum.ParameterOnTime)]; wrongShape {
-		t.Errorf("put_paramset carries ON_TIME on a channel whose timer is the "+
-			"DURATION pair; the CCU faults the whole call. payload: %v", got)
-	}
-	// The expectation is written out rather than derived from
-	// custom.EncodeTimerDuration: deriving it from the encoder under test
-	// would make the assertion agree with any encoding the encoder happens
-	// to produce. 111600 s stays 111600 in the hours slot (ordinal 2).
-	const wantValue, wantUnit = int32(111600), int32(2)
-	if got[string(hmenum.ParameterDurationValue)] != wantValue {
-		t.Errorf("DURATION_VALUE=%v, want the disabled-timer sentinel %v; payload: %v",
-			got[string(hmenum.ParameterDurationValue)], wantValue, got)
-	}
-	if got[string(hmenum.ParameterDurationUnit)] != wantUnit {
-		t.Errorf("DURATION_UNIT=%v, want %v; payload: %v",
-			got[string(hmenum.ParameterDurationUnit)], wantUnit, got)
-	}
-
-	// LEVEL must also be present in the same bundle.
-	if _, hasLevel := got[string(hmenum.ParameterLevel)]; !hasLevel {
-		t.Errorf("put_paramset missing LEVEL; payload: %v", got)
+	levelInPut := len(w.puts) > 0 && w.puts[len(w.puts)-1][string(hmenum.ParameterLevel)] != nil
+	if !levelInPut && w.last != 1.0 {
+		t.Errorf("plain switch-on wrote no LEVEL (puts %v, last SetValue %v)", w.puts, w.last)
 	}
 }
