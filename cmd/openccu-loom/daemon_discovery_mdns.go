@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/deployment"
 	discoverymdns "github.com/SukramJ/openccu-loom/internal/north/discovery/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // Daemon discovery over mDNS: the service that lets a client find this
@@ -78,6 +81,10 @@ type mdnsSelf struct {
 	kind       deployment.Kind
 	tls        bool
 	loginPaths []string
+	// instanceID is this installation's identity, announced as `id` so a
+	// client can tell this daemon from another serving the same CCU
+	// (ADR 0058). Empty without a database; the key is then left out.
+	instanceID string
 }
 
 // mdnsTXTVersion versions the record's key set (RFC 6763 section 6.7).
@@ -108,7 +115,41 @@ func mdnsTXT(cfg *config.Config, self mdnsSelf, centralCount int, ccuSerials []s
 	if v := mdnsCCUsValue(ccuSerials); v != "" {
 		txt = append(txt, "ccus="+v)
 	}
+	if self.instanceID != "" {
+		txt = append(txt, "id="+self.instanceID)
+	}
 	return txt
+}
+
+// resolveInstanceID returns this installation's identity, served on /info
+// and announced over mDNS (ADR 0058). Without the database there is none to
+// keep, and an id that changed on every start would name nothing — so it
+// stays empty, as it does when the read fails.
+func resolveInstanceID(ctx context.Context, db *sql.DB, logger *slog.Logger) string {
+	if db == nil {
+		return ""
+	}
+	id, err := sqlitestore.InstanceID(ctx, db)
+	if err != nil {
+		logger.Warn("instance_identity.unavailable", slog.String("err", err.Error()))
+		return ""
+	}
+	return id
+}
+
+// listenIsLoopbackOnly reports whether the REST listen address binds a
+// loopback address only (127.0.0.0/8, ::1, "localhost"). An empty host
+// (":8119") binds every interface and is not loopback-only.
+func listenIsLoopbackOnly(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil || host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // mdnsCCUsValue joins the resolved serial suffixes sorted and

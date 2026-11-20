@@ -18,7 +18,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "16.5.0"
+const APIVersion = "16.6.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -155,6 +155,14 @@ type InfoResponse struct {
 	Deployment DeploymentInfo `json:"deployment"`
 	Uptime     string         `json:"uptime"`
 	StartedAt  string         `json:"started_at"`
+	// InstanceID names this installation: created once on the first start
+	// and kept in the database, so it survives restarts, updates and a
+	// backup restored on new hardware. Two daemons serving the same CCU
+	// have different ids, which is what a client tells them apart by — the
+	// CCU serial cannot. The same value is announced over mDNS as `id`.
+	// Empty when the daemon runs without its database. Not a secret and no
+	// proof of identity: anyone on the network can copy it.
+	InstanceID string `json:"instance_id,omitempty"`
 	// ConfigUIURL is the externally-reachable address of this daemon's
 	// Config UI, derived from `north.rest.public_url`. Empty when no
 	// public URL is configured.
@@ -235,7 +243,7 @@ type CapabilityDetector interface {
 // passing nil emits only the always-on capabilities. A zero deployment is
 // served as standalone — the kind that claims no hosting system — so a
 // router assembled without one still answers a valid body.
-func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string, dep DeploymentInfo) http.HandlerFunc {
+func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string, dep DeploymentInfo, instanceID string) http.HandlerFunc {
 	if dep.Kind == "" {
 		dep.Kind = string(deployment.Standalone)
 	}
@@ -248,6 +256,7 @@ func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string, 
 			Deployment:   dep,
 			Uptime:       time.Since(startedAt).Truncate(time.Second).String(),
 			StartedAt:    startedAt.UTC().Format(time.RFC3339),
+			InstanceID:   instanceID,
 			ConfigUIURL:  configUIURL,
 			APIVersion:   APIVersion,
 			SchemaDigest: SchemaDigest,

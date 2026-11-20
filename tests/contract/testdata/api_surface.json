@@ -1,5 +1,5 @@
 {
- "api_version": "16.5.0",
+ "api_version": "16.6.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1592,6 +1592,7 @@
    "commit:string",
    "config_ui_url:string",
    "deployment:$ref:Deployment",
+   "instance_id:string",
    "schema_digest:string",
    "started_at:string",
    "uptime:string",

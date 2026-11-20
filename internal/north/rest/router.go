@@ -238,6 +238,9 @@ type Deps struct {
 	// Deployment is the daemon's resolved deployment, served on /info
 	// (ADR 0081).
 	Deployment handlers.DeploymentInfo
+	// InstanceID is this installation's identity, served on /info and
+	// announced over mDNS (ADR 0058). Empty without a database.
+	InstanceID string
 	// RestartPending backs GET /system/restart-pending — whether a saved
 	// restart-required config change is staged but not yet active.
 	RestartPending handlers.RestartPendingProvider
@@ -730,7 +733,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		if d.OpenAPIValidator != nil {
 			r.Use(d.OpenAPIValidator.Middleware())
 		}
-		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities, d.ConfigUIURL, d.Deployment))
+		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities, d.ConfigUIURL, d.Deployment, d.InstanceID))
 		r.Get("/health", handlers.Health(d.Health))
 
 		// Auth endpoints stay outside the AuthRequire group — a logged-

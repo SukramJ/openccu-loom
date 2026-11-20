@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
+	discoverymdns "github.com/SukramJ/openccu-loom/internal/north/discovery/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/measurements"
@@ -50,8 +51,11 @@ import (
 // REST phase out keeps the composition root's statement count under the funlen
 // budget.
 type restMountDeps struct {
-	reg    *central.Registry
-	matter matterWiring
+	reg *central.Registry
+	// instanceID is this installation's identity (sqlite.InstanceID),
+	// served on /info and announced over mDNS. Empty without a database.
+	instanceID string
+	matter     matterWiring
 	// measurementsProjection is the forwarder's side of a device's
 	// projection, from the southbound phase that wires the forwarder.
 	measurementsProjection *measurements.ProjectionPlane
@@ -384,6 +388,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// in daemon.go, so the two can never name different addresses.
 		ConfigUIURL:       cfg.North.REST.ConfigUIURL(),
 		Deployment:        deploymentInfo(deploymentKind()),
+		InstanceID:        d.instanceID,
 		RestartPending:    restartState,
 		ConfigChanges:     restartState,
 		UserAdmin:         d.userSvc,
@@ -583,9 +588,24 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 				d.healthTracker.Record(mdnsHealthComponent, health.Sample{Healthy: healthy, Note: note})
 			}
 		}
-		self := mdnsSelf{kind: deploymentKind(), tls: tlsReloader != nil, loginPaths: handlers.LoginPaths(deps.Capabilities)}
-		adv, err := startMDNSAdvertiser(ctx, cfg, self, d.reg, logger)
+		self := mdnsSelf{kind: deploymentKind(), tls: tlsReloader != nil, loginPaths: handlers.LoginPaths(deps.Capabilities), instanceID: d.instanceID}
+		var (
+			adv discoverymdns.Advertiser
+			err error
+		)
+		loopbackOnly := listenIsLoopbackOnly(cfg.North.REST.Listen)
+		if !loopbackOnly {
+			adv, err = startMDNSAdvertiser(ctx, cfg, self, d.reg, logger)
+		}
 		switch {
+		case loopbackOnly:
+			// Nobody on the network can reach a loopback listener, so an
+			// announcement would only send clients to an address that
+			// refuses them — or, for a client that follows a CCU serial,
+			// away from the daemon that does serve it.
+			logger.Info("discovery.mdns.skipped", slog.String("reason", "rest listener bound to loopback only"),
+				slog.String("listen", cfg.North.REST.Listen))
+			recordMDNS(true, "not announced: the REST listener is bound to loopback only")
 		case err != nil:
 			logger.Warn("discovery.mdns.start_failed", slog.String("err", err.Error()))
 			recordMDNS(false, "advertiser start failed: "+err.Error())

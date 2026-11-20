@@ -20,7 +20,7 @@ func TestInfo_HappyPath(t *testing.T) {
 	startedAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(startedAt, nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(startedAt, nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -53,7 +53,7 @@ func TestInfoServesTheConfigUIURL(t *testing.T) {
 			t.Parallel()
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
-			Info(time.Now(), nil, tc.in, DeploymentInfo{}).ServeHTTP(w, req)
+			Info(time.Now(), nil, tc.in, DeploymentInfo{}, "").ServeHTTP(w, req)
 
 			var body InfoResponse
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -71,7 +71,7 @@ func TestInfo_StartedAtIsRFC3339(t *testing.T) {
 	startedAt := time.Date(2026, 4, 27, 8, 30, 0, 0, time.UTC)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(startedAt, nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(startedAt, nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
@@ -84,7 +84,7 @@ func TestInfo_ContentTypeIsJSON(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	ct := w.Header().Get("Content-Type")
 	if ct == "" {
@@ -123,7 +123,7 @@ func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -152,7 +152,7 @@ func TestInfo_ConditionalCapabilities(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), fakeCapDetector{mqtt: true, matter: true, oidc: false}, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), fakeCapDetector{mqtt: true, matter: true, oidc: false}, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -179,7 +179,7 @@ func TestInfo_AlarmCapability(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), fakeCapDetector{alarm: true}, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), fakeCapDetector{alarm: true}, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -194,7 +194,7 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -211,7 +211,7 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 func TestInfo_AddonBuild(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -230,7 +230,7 @@ func TestInfo_AddonBuild(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w = httptest.NewRecorder()
-	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}, "").ServeHTTP(w, req)
 
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -257,7 +257,7 @@ func TestInfo_ServesTheDeployment(t *testing.T) {
 	for _, tc := range cases {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/info", http.NoBody)
-		Info(time.Now(), nil, "", tc.in).ServeHTTP(w, req)
+		Info(time.Now(), nil, "", tc.in, "").ServeHTTP(w, req)
 
 		var body struct {
 			Deployment map[string]any `json:"deployment"`
@@ -307,5 +307,26 @@ func TestLoginPathsAndAuthCapabilitiesAreOneSet(t *testing.T) {
 	}
 	if got := LoginPaths(none); len(got) != 0 {
 		t.Errorf("no path on: LoginPaths = %v", got)
+	}
+}
+
+// TestInfoServesTheInstanceID: the installation's identity is on /info when
+// the daemon has one, and absent when it runs without its database.
+func TestInfoServesTheInstanceID(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		id      string
+		present bool
+	}{{"0123456789abcdef0123456789abcdef", true}, {"", false}} {
+		w := httptest.NewRecorder()
+		Info(time.Now(), nil, "", DeploymentInfo{}, tc.id).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/info", http.NoBody))
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		got, has := body["instance_id"]
+		if has != tc.present || (tc.present && got != tc.id) {
+			t.Errorf("instance_id = %v (present %v), want %q (present %v)", got, has, tc.id, tc.present)
+		}
 	}
 }

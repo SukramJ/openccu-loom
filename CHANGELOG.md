@@ -26,6 +26,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A second daemon serving the same CCU no longer looks like this one.**
+  The mDNS record named the CCUs a daemon serves, but not the daemon, so
+  a client could not tell "this daemon moved" from "another daemon for
+  the same CCU" — the Home Assistant integration re-pointed a production
+  setup at a test daemon that way (#1131). Every installation now has a
+  random instance id, created once and kept in the database: announced
+  over mDNS as `id` and served as `instance_id` on `GET /api/v1/info`
+  (REST API 16.6.0). The id tells daemons apart; it is public and proves
+  nothing, so a client must not send credentials on its strength alone
+  (ADR 0058). A daemon whose REST listener is bound to loopback only no
+  longer announces itself on the network.
+
 - **A signal light switches on again on a plain switch-on.** `turn_on` — and
   Home Assistant's `light.turn_on` without a brightness — sent the
   "timer not used" value (`DURATION_VALUE=111600`, `DURATION_UNIT=H`) with
