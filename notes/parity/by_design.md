@@ -2684,9 +2684,32 @@ The effect list (COLOR_BEHAVIOUR without DO_NOT_CARE / OFF / OLD_VALUE, `model/c
 - **On a light that already burns at the commanded level, a new colour or effect is written alone.** The reference's state-change check counts a different effect as a change and resends the whole bundle with LEVEL (`:393-398`, `:786`); here the switch-on is skipped and the colour or effect goes out as its own write. A value equal to the current one is suppressed in both.
 
 - **COLOR travels with every switch-on bundle.** The reference writes COLOR only for a commanded colour or a colour in `_NO_COLOR` (`:788-792`). Measured on the developer's HmIP-WRC6-230 (`00536409A5E82D:18`, 2026-11-20, raw `putParamset` VALUES through the daemon, values read back from the CCU): `{LEVEL: 1}` kept COLOR=GREEN; `{LEVEL: 1, COLOR_BEHAVIOUR: ON}` turned COLOR to BLACK — the LED is on and shows nothing. So the bundle carries the current COLOR when it carries nothing else.
-- **A brightness switch-on does not send the timer sentinel.** The reference resets the on-time timer on every `turn_on` (`:424-425`), here only the plain switch-on does (unchanged). Measured on the same channel: the daemon's plain switch-on bundle `{LEVEL: 1, COLOR: WHITE, COLOR_BEHAVIOUR: ON, DURATION_VALUE: 111600, DURATION_UNIT: H}` left LEVEL at 0, the same bundle without the two DURATION parameters switched the light on and kept it on. Extending the sentinel to the brightness path would carry that failure there; the plain path is a separate open defect.
+- **No switch-on sends the timer sentinel** — see A2-BD10.
 
 Go path: `internal/model/custom/light/color.go::FixedColorLight.switchOnAttributes`, `internal/model/custom/light/payload.go::FixedColorLight.withSwitchOnAttributes`.
+
+---
+
+### A2-BD10 — a signal light's plain switch-on sends LEVEL without the timer-not-used sentinel
+
+The reference resets the on-time timer on every `turn_on` of a signal light: `_resets_on_time_on_turn_on` on `CustomDpIpFixedColorLight` sends `_NOT_USED` (111600 s), which `recalc_unit_timer` encodes as `DURATION_VALUE=111600, DURATION_UNIT=H` (`model/custom/light.py:228-232`, `:424-425`; `model/custom/mixins.py:299-330`). Its stated purpose is to cancel a timer still running, so the light does not switch itself off when the previous on-time expires. The same sentinel already made HmIP-RGBW / HmIP-DRG-DALI switch off again at once, which is why the reference limited it to signal lights (its changelog, 2026.6.0, #3210 there).
+
+Here no plain switch-on sends it (#1129). Measured on the developer's HmIP-WRC6-230 (`00536409A5E82D:18`, `OPTICAL_SIGNAL_RECEIVER`, 2026-11-20; `putParamset` VALUES, values read back from the CCU over JSON-RPC):
+
+| Sent | CCU afterwards |
+|---|---|
+| `{LEVEL: 1, COLOR: WHITE, COLOR_BEHAVIOUR: ON, DURATION_VALUE: 111600, DURATION_UNIT: H}` | LEVEL 0 — the light does not come on |
+| the same without the two DURATION parameters | LEVEL 1, stays on |
+| `{LEVEL: 1, DURATION_VALUE: 15, DURATION_UNIT: S}` alone (control) | LEVEL 0 after 14–17 s |
+| the same, then `{LEVEL: 1}` 3 s later | LEVEL 1 for 30 s and longer — the LEVEL write ended the timer |
+
+The channel describes `DURATION_VALUE` as `INTEGER 0..16343` (read live), so 111600 lies outside its range; whether the value or the unit is what the device reads as "off" was not separated, and the fix does not depend on it. The CCU's own WebUI switches both signal-light channel types with LEVEL alone — `iseButtonsDimmer` over the LEVEL data point for `OPTICAL_SIGNAL_RECEIVER` (`www/rega/esp/controls/opticalsignalreceiver.fn`, OpenCCU-Base) and for the `DIMMER` channel with COLOR / COLOR_BEHAVIOUR of the HmIP-BSL (`www/rega/esp/controls/dimmer.fn`). In the CCU firmware 111600 occurs only as the maximum of the classic RF link times (`*_ONDELAY_TIME` / `*_OFFDELAY_TIME`, `firmware/rftypes/*.xml`), not on an HmIP `DURATION` pair.
+
+Through the daemon after the change, on the same channel: a plain `turn_on` switched it on (LEVEL 1, COLOR kept). A plain `turn_on` sent 3 s after a `turn_on` with `seconds: 15` did not end that timer — the light was already on, so the state-change check skipped the command and nothing was written. That check preceded the sentinel before the change as well (and is the reference's `is_state_change` too), so the sentinel never reached this case; ending a running timer by a plain switch-on of a burning light is open.
+
+Not measured: an HmIP-BSL on the hardware, and the ramp paths (`TurnOnWith` with a ramp and no on-time, `TurnOffWithRamp`), which still send the sentinel beside RAMP_TIME.
+
+Go path: `internal/model/custom/light/light.go::Light.TurnOn`.
 
 ---
 
