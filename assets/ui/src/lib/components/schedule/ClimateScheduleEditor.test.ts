@@ -142,3 +142,40 @@ describe("ClimateScheduleEditor — active-profile switch", () => {
     expect(mockToastError.mock.calls[0][0]).toBe("climate.set_active_failed");
   });
 });
+
+describe("ClimateScheduleEditor — display base", () => {
+  // 06:00–20:00 at 21 °C over 19.5 °C arrives with 21 °C as the daemon's
+  // base; the editor shows 19.5 °C as base and the comfort phase as period.
+  it("shows the lowest temperature as base and stays clean after load", async () => {
+    mockGetDeviceSchedule.mockResolvedValue({
+      ...baseSchedule(),
+      profiles: {
+        P1: {
+          weekdays: {
+            MONDAY: {
+              base_temperature: 21,
+              periods: [
+                { start_time: "00:00", end_time: "06:00", temperature: 19.5 },
+                { start_time: "20:00", end_time: "24:00", temperature: 19.5 },
+              ],
+            },
+          },
+        },
+      },
+    } as ClimateSchedule);
+
+    const { container } = render(ClimateScheduleEditor, { props: { address: ADDRESS } });
+    let monday: HTMLElement | null = null;
+    await waitFor(() => {
+      monday = container.querySelector<HTMLElement>("#climate-day-MONDAY");
+      expect(monday).not.toBeNull();
+    });
+    const numbers = Array.from(
+      monday!.querySelectorAll<HTMLInputElement>('input[type="number"]'),
+    );
+    const times = Array.from(monday!.querySelectorAll<HTMLInputElement>('input[type="time"]'));
+    expect(numbers.map((i) => Number(i.value))).toEqual([19.5, 21]);
+    expect(times.map((i) => i.value)).toEqual(["06:00", "20:00"]);
+    expect(findButton(container, "common.save")?.disabled).toBe(true);
+  });
+});
