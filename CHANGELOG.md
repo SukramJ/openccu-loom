@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **HmIP devices keep reporting their state on OpenCCU 3.89.14.** The CCU
+  hands events to the daemon in batches (`system.multicall`), and the daemon
+  answered each `event` in a batch with `nil`. The HmIP server's XML-RPC
+  parser cannot read a `nil` followed by another entry ("Unknown type:
+  data"), and since HMIPServer 1.5.2 three such failures in a row remove the
+  daemon's registration. With OpenCCU 3.89.14.20261121 every HmIP event
+  therefore stopped arriving a moment after each connect: switching from the
+  Config UI or Home Assistant reached the device, but its new state never
+  came back, and the daemon re-registered every three minutes. A batched
+  call without a result now answers `true`, as the Python reference does.
+
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs
   longest the day's base, so a day of 06:00–20:00 at 21 °C over 19.5 °C
