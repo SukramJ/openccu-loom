@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.106.1
+
+- **Version follows OpenCCU-Loom 0.106.1**, which keeps HmIP devices
+  reporting their state on OpenCCU 3.89.14 and notices a lost CCU
+  interface sooner; see the OpenCCU-Loom changelog. The proxy itself is
+  unchanged.
+
 # 0.106.0
 
 - **Version follows OpenCCU-Loom 0.106.0**, which adds effects for

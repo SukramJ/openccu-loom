@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.106.1
+
+- **HmIP devices keep reporting their state on OpenCCU 3.89.14.** Since
+  that CCU update, switching worked but the new state never came back and
+  the connection to HmIP was re-established every three minutes.
+- **A finished background firmware download no longer cuts off HmIP.**
+  Devices that are ready for a firmware update now show it right away.
+- **A lost connection to a CCU interface is noticed within about
+  45 seconds** instead of three minutes, and re-established at once.
+- **Uploading a backup for restore reaches the CCU again,** and a refused
+  upload is reported instead of shown as done.
+- **A column filter in a table that matches nothing can be cleared
+  again,** e.g. a model filter in the device list.
+- **A heating week profile with a long comfort phase no longer shows the
+  night hours highlighted.**
+
 ## 0.106.0
 
 - **Signal lights offer their effects.** HmIP-BSL, HmIP-WRC6-230 and the

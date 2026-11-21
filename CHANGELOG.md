@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.106.1] - 2026-11-22
 
 ### Fixed
 
@@ -35,7 +35,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while nothing arrived. The daemon now uses the same two steps as the
   WebUI and checks both answers. As before, the upload is the first of the
   firmware's three restore steps; the restore itself is not run.
-
 - **The daemon notices within about 45 seconds instead of three minutes
   that a CCU interface stopped delivering events.** When the CCU drops the
   daemon's callback registration it keeps answering every request, so the
@@ -44,7 +43,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   answered by a PONG event on the same callback path; three PONGs missing in
   a row now count the interface as lost, and the daemon re-registers at
   once. The three-minute window stays as the fallback.
-
 - **A column filter that matches nothing can be cleared again.** A table
   whose column filters left no row replaced itself, filter row included,
   with the empty notice, so the filter could not be taken back — and since
@@ -52,7 +50,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the device list a model filter hit this in every interface table without
   that model. The table now keeps its header and filter row and shows the
   notice below them (#1136).
-
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs
   longest the day's base, so a day of 06:00–20:00 at 21 °C over 19.5 °C
