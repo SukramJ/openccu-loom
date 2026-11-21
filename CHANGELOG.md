@@ -18,6 +18,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Config UI or Home Assistant reached the device, but its new state never
   came back, and the daemon re-registered every three minutes. A batched
   call without a result now answers `true`, as the Python reference does.
+- **A finished background firmware delivery no longer disconnects HmIP.**
+  The HmIP server announces it by calling `firmwareUpdateStatusChanged` once
+  per device, and the daemon did not know that callback: each call was
+  answered with a fault, and since HMIPServer 1.5.2 three faults in a row
+  remove the daemon's registration, so a batch of three or more devices cut
+  off every HmIP event. The callback is now answered, and one refresh per
+  batch brings the devices' firmware state up to date, so "update ready"
+  shows without waiting for the next scheduled firmware check.
 
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs

@@ -85,6 +85,9 @@ func (h *capturingHandlers) UpdateDevice(context.Context, string, string, int) e
 func (h *capturingHandlers) ReplaceDevice(context.Context, string, string, string) error { return nil }
 
 func (h *capturingHandlers) ReaddedDevice(context.Context, string, []string) error { return nil }
+func (h *capturingHandlers) FirmwareUpdateStatusChanged(context.Context, string, string, int) error {
+	return nil
+}
 
 func (h *capturingHandlers) Error(context.Context, string, int, string) error { return nil }
 

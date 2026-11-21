@@ -36,6 +36,12 @@ type Handlers interface {
 	// ReaddedDevice signals a device that was removed and is now back.
 	ReaddedDevice(ctx context.Context, interfaceID string, addresses []string) error
 
+	// FirmwareUpdateStatusChanged is the HmIP server's notification that the
+	// firmware-update state of a device moved (sent once per device when a
+	// background firmware delivery finishes). status is the server's state
+	// code, passed through for logging.
+	FirmwareUpdateStatusChanged(ctx context.Context, interfaceID, address string, status int) error
+
 	// ListDevices is the CCU's request for our current device list.
 	ListDevices(ctx context.Context, interfaceID string) (xmlrpc.ArrayValue, error)
 

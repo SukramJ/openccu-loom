@@ -97,7 +97,10 @@ func (r *pushRecorder) DeleteDevices(context.Context, string, []string) error   
 func (r *pushRecorder) UpdateDevice(context.Context, string, string, int) error     { return nil }
 func (r *pushRecorder) ReplaceDevice(context.Context, string, string, string) error { return nil }
 func (r *pushRecorder) ReaddedDevice(context.Context, string, []string) error       { return nil }
-func (r *pushRecorder) Error(context.Context, string, int, string) error            { return nil }
+func (r *pushRecorder) FirmwareUpdateStatusChanged(context.Context, string, string, int) error {
+	return nil
+}
+func (r *pushRecorder) Error(context.Context, string, int, string) error { return nil }
 
 func (r *pushRecorder) ListDevices(context.Context, string) (xmlrpc.ArrayValue, error) {
 	// The daemon's real handler answers empty so the peer re-announces

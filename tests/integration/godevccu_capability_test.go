@@ -578,6 +578,10 @@ func (h *recordingHandlers) ReplaceDevice(_ context.Context, interfaceID, oldAdd
 	return nil
 }
 
+func (h *recordingHandlers) FirmwareUpdateStatusChanged(context.Context, string, string, int) error {
+	return nil
+}
+
 func (h *recordingHandlers) ReaddedDevice(_ context.Context, interfaceID string, addresses []string) error {
 	h.readded <- readdedDeviceArgs{interfaceID: interfaceID, addresses: addresses}
 	return nil

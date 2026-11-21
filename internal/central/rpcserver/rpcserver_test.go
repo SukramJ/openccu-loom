@@ -34,6 +34,10 @@ func (s *stubHandlers) DeleteDevices(context.Context, string, []string) error   
 func (s *stubHandlers) UpdateDevice(context.Context, string, string, int) error     { return nil }
 func (s *stubHandlers) ReplaceDevice(context.Context, string, string, string) error { return nil }
 func (s *stubHandlers) ReaddedDevice(context.Context, string, []string) error       { return nil }
+func (s *stubHandlers) FirmwareUpdateStatusChanged(context.Context, string, string, int) error {
+	return nil
+}
+
 func (s *stubHandlers) ListDevices(context.Context, string) (xmlrpc.ArrayValue, error) {
 	return xmlrpc.ArrayValue{xmlrpc.StringValue("stub")}, nil
 }

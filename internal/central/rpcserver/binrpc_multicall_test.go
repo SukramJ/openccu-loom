@@ -64,6 +64,10 @@ func (h *binrpcRecordingHandlers) ReplaceDevice(context.Context, string, string,
 
 func (h *binrpcRecordingHandlers) ReaddedDevice(context.Context, string, []string) error { return nil }
 
+func (h *binrpcRecordingHandlers) FirmwareUpdateStatusChanged(context.Context, string, string, int) error {
+	return nil
+}
+
 func (h *binrpcRecordingHandlers) Error(context.Context, string, int, string) error { return nil }
 
 func (h *binrpcRecordingHandlers) ListDevices(context.Context, string) (xmlrpc.ArrayValue, error) {
