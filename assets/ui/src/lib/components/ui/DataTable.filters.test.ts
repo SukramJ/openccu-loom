@@ -112,6 +112,34 @@ describe("DataTable — column filters", () => {
     expect(bodyRowText(container)).toHaveLength(3);
   });
 
+  // The filter row is the only way to take a filter back. If a filter that
+  // matches nothing swapped the table for the bare empty state, the control
+  // would go with it and the operator could not clear it (#1136).
+  it("keeps the filter row when a filter matches nothing, so it can be cleared", async () => {
+    const { container, getByLabelText, getByText } = render(DataTable, { props: props() });
+    await fireEvent.input(getByLabelText("datatable.filter_by:Name"), {
+      target: { value: "no-such-row" },
+    });
+    expect(getByText("Nothing here")).toBeTruthy();
+    const input = getByLabelText("datatable.filter_by:Name");
+    await fireEvent.input(input, { target: { value: "" } });
+    expect(bodyRowText(container)).toHaveLength(3);
+  });
+
+  // A persisted filter that matches nothing on the next visit — e.g. a model
+  // filter set in one interface's table of the device list — must still show
+  // its control, or the table stays empty for good.
+  it("shows the filter row for a persisted filter that matches nothing", () => {
+    localStorage.setItem(
+      "datatable:filters-stuck",
+      JSON.stringify({ filters: { name: "no-such-row" } }),
+    );
+    const { getByLabelText } = render(DataTable, {
+      props: props({ persistKey: "filters-stuck" }),
+    });
+    expect((getByLabelText("datatable.filter_by:Name") as HTMLInputElement).value).toBe("no-such-row");
+  });
+
   // A filter that vanishes on reload is worse than none: the table then shows
   // a subset with nothing on screen saying why.
   it("persists filters under persistKey and restores them", async () => {

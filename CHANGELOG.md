@@ -45,6 +45,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a row now count the interface as lost, and the daemon re-registers at
   once. The three-minute window stays as the fallback.
 
+- **A column filter that matches nothing can be cleared again.** A table
+  whose column filters left no row replaced itself, filter row included,
+  with the empty notice, so the filter could not be taken back — and since
+  filters are remembered, the table stayed empty on the next visit too. In
+  the device list a model filter hit this in every interface table without
+  that model. The table now keeps its header and filter row and shows the
+  notice below them (#1136).
+
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs
   longest the day's base, so a day of 06:00–20:00 at 21 °C over 19.5 °C

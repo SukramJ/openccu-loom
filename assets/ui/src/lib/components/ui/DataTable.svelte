@@ -210,6 +210,11 @@
 
   const anyFilterable = $derived(columnFilters && columns.some((c) => filterKindOf(c)));
 
+  // A table narrowed to nothing by its own column filters keeps its header:
+  // the filter row is the only place to take a filter back, and a persisted
+  // filter would otherwise leave the table empty for good.
+  const filtersActive = $derived(anyFilterable && Object.keys(filters).length > 0);
+
   function setFilter(key: string, value: string) {
     // Drop an emptied filter rather than storing "" — it keeps the persisted
     // object small and makes "is anything filtered" a simple key count.
@@ -309,7 +314,7 @@
   </div>
 {/if}
 
-{#if processed.length === 0}
+{#if processed.length === 0 && !filtersActive}
   <EmptyState message={emptyMessage} description={emptyDescription} icon={emptyIcon} />
 {:else}
   <div class="overflow-x-auto">
@@ -443,7 +448,15 @@
         {/if}
       {/snippet}
 
-      {#if groups}
+      {#if processed.length === 0}
+        <tbody>
+          <tr>
+            <td colspan={spanAll} class="px-3 py-2">
+              <EmptyState message={emptyMessage} description={emptyDescription} icon={emptyIcon} />
+            </td>
+          </tr>
+        </tbody>
+      {:else if groups}
         <!-- One <tbody> per group: a section header spanning the full width,
              then that section's rows. -->
         {#each groups as group (group.key)}
