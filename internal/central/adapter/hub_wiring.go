@@ -837,9 +837,10 @@ func jsonrpcEndpoint(cc config.CentralConfig) string {
 
 // ccuBaseURLFor returns the CCU's base URL (scheme + host + port,
 // no path). Used by the JSON-RPC endpoint helper and by the backup
-// restorer's `/config/cp_security.cgi` POST. cc.JSONRPCPort wins
-// over the per-scheme default when set; tests against an in-process CCU
-// simulator and non-standard reverse-proxy deployments rely on that override.
+// restorer's `/config/fileupload.ccc` and `/config/cp_security.cgi` POSTs.
+// cc.JSONRPCPort wins over the per-scheme default when set; tests against an
+// in-process CCU simulator and non-standard reverse-proxy deployments rely on
+// that override.
 func ccuBaseURLFor(cc config.CentralConfig) string {
 	scheme := "http"
 	port := hmenum.DefaultJSONRPCPort

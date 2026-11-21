@@ -26,6 +26,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   off every HmIP event. The callback is now answered, and one refresh per
   batch brings the devices' firmware state up to date, so "update ready"
   shows without waiting for the next scheduled firmware check.
+- **Uploading a backup for restore reaches the CCU again, and a refused
+  upload is reported.** OpenCCU's WebUI takes a restore archive in two
+  steps: `fileupload.ccc` stores the upload and `cp_security.cgi` then takes
+  over the stored file; `cp_security.cgi` accepts no upload of its own. The
+  daemon still posted the archive straight to `cp_security.cgi`, which
+  discarded it and answered HTTP 200, so the upload was reported as done
+  while nothing arrived. The daemon now uses the same two steps as the
+  WebUI and checks both answers. As before, the upload is the first of the
+  firmware's three restore steps; the restore itself is not run.
 
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs
