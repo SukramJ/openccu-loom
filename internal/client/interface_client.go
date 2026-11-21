@@ -315,6 +315,15 @@ type InterfaceClient struct {
 	// in by [RecordConnectivityProbe]. Reset to zero by any successful probe
 	// and by every transition into CONNECTED.
 	connectivityErrors atomic.Int64
+
+	// pongMu guards the missed-PONG bookkeeping behind
+	// [missedPongThreshold]. unansweredPing is the token of the newest
+	// tracked keepalive ping whose PONG has not arrived ("" when it has, or
+	// when none went out); missedPongs counts consecutive pings that were
+	// superseded by the next one while still unanswered.
+	pongMu         sync.Mutex
+	unansweredPing string
+	missedPongs    int
 }
 
 // New constructs a client, filling in defaults for any nil reliability
@@ -586,8 +595,49 @@ func (c *InterfaceClient) RecordPing(id string) { c.cfg.PingPong.RecordPing(id) 
 
 // RecordPong returns whether id matched an outstanding ping and the
 // round-trip time for matched pairs (zero for unmatched).
+//
+// A matched PONG — also the late one of an older ping — proves the CCU still
+// delivers to our callback registration, so it clears the missed-PONG count
+// [IsCallbackAlive] judges by.
 func (c *InterfaceClient) RecordPong(id string) (matched bool, rtt time.Duration) {
-	return c.cfg.PingPong.RecordPong(id)
+	matched, rtt = c.cfg.PingPong.RecordPong(id)
+	if matched {
+		c.pongMu.Lock()
+		c.missedPongs = 0
+		if id == c.unansweredPing {
+			c.unansweredPing = ""
+		}
+		c.pongMu.Unlock()
+	}
+	return matched, rtt
+}
+
+// notePingOnWire records that a tracked keepalive ping is about to reach the
+// CCU. The previous tracked ping, still unanswered when this one goes out,
+// had a full keepalive interval for its PONG and counts as missed.
+func (c *InterfaceClient) notePingOnWire(token string) {
+	c.pongMu.Lock()
+	if c.unansweredPing != "" {
+		c.missedPongs++
+	}
+	c.unansweredPing = token
+	c.pongMu.Unlock()
+}
+
+// resetMissedPongs forgets every PONG the client was still waiting for.
+func (c *InterfaceClient) resetMissedPongs() {
+	c.pongMu.Lock()
+	c.missedPongs = 0
+	c.unansweredPing = ""
+	c.pongMu.Unlock()
+}
+
+// missedPongCount returns the number of consecutive keepalive pings whose
+// PONG never arrived.
+func (c *InterfaceClient) missedPongCount() int {
+	c.pongMu.Lock()
+	defer c.pongMu.Unlock()
+	return c.missedPongs
 }
 
 // SweepPingPong drains expired pending / unknown entries.
@@ -780,9 +830,20 @@ func ParsePingCallerID(callerID string) (prefix, token string, ok bool) {
 }
 
 // callbackFreshness is the window during which a recent inbound callback
-// counts as "alive". 15s scheduler tick × 12 = 180s of headroom before a
-// silent interface is treated as broken.
+// counts as "alive". 15s scheduler tick × 12 = 180s of headroom. It is the
+// fallback bound: on a backend with ping/pong the missed-PONG count
+// ([missedPongThreshold]) notices a CCU that stopped delivering callbacks
+// much sooner, because the keepalive PONG is owed on every tick while device
+// events may legitimately pause for minutes.
 const callbackFreshness = 180 * time.Second
+
+// missedPongThreshold is how many consecutive keepalive pings may go
+// unanswered by their PONG before the interface counts as dead. A CCU that
+// silently dropped our callback registration still answers ping on the RPC
+// channel, so only the missing PONG shows it. At the 15s keepalive cadence
+// three misses notice that in about 45s instead of the 180s freshness
+// window, and still tolerate two late or lost PONGs in a row.
+const missedPongThreshold = 3
 
 // NotifyCallback stamps the last-callback timestamp. Called from the
 // central's callback handler on every inbound event so
@@ -801,8 +862,9 @@ func (c *InterfaceClient) LastCallbackAt() time.Time {
 	return c.lastCallbackAt
 }
 
-// IsCallbackAlive reports whether the central has received an inbound event
-// from this interface within [callbackFreshness].
+// IsCallbackAlive reports whether the CCU still delivers callbacks to this
+// interface: its keepalive PONGs arrive, and an inbound event was received
+// within [callbackFreshness].
 //
 // Order of checks (gating before the freshness window matters — without
 // these guards a freshly initialised client or a reconnect in progress
@@ -812,6 +874,8 @@ func (c *InterfaceClient) LastCallbackAt() time.Time {
 //     freshness window below, because its keepalive PONG is what refreshes
 //     the timestamp.
 //   - Client state FAILED or RECONNECTING: false (no reliable signal).
+//   - [missedPongThreshold] consecutive keepalive PONGs missing: false. The
+//     CCU answers ping but no longer calls us back — a dropped registration.
 //   - No callback observed yet (zero timestamp): true (the silence window
 //     starts only after the first event has been seen, otherwise every
 //     scheduler tick during init would trip ConnectionLost).
@@ -825,6 +889,9 @@ func (c *InterfaceClient) IsCallbackAlive() bool {
 		return false
 	default:
 		// All other states: proceed to check the callback timestamp below.
+	}
+	if c.missedPongCount() >= missedPongThreshold {
+		return false
 	}
 	c.callbackMu.Lock()
 	last := c.lastCallbackAt
@@ -1033,8 +1100,14 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 		// entry first — but a probe the breaker sheds never reaches the wire,
 		// and a token recorded for it can only expire into a pending-TTL
 		// mismatch that degrades interface health for a ping nobody sent.
+		// A ping the connection-issue gate leaves untracked can never be
+		// matched, so it owes no PONG to the missed-PONG count either.
 		if token != "" {
+			tracked := !c.cfg.PingPong.HasConnectionIssue()
 			c.RecordPing(token)
+			if tracked {
+				c.notePingOnWire(token)
+			}
 		}
 		_, callErr = c.cfg.Caller.Call(ctx, probeMethod, []any{callerID})
 		return callErr
@@ -1310,9 +1383,10 @@ func (c *InterfaceClient) Model() string {
 // ([InterfaceClient.Reconnect]) once the CCU connection for this
 // interface has been restored. It clears the PingPong cache so the dead
 // session's pending pings do not count as mismatches against the newly
-// established one.
+// established one, nor as missed PONGs against its liveness.
 func (c *InterfaceClient) OnSystemStatusRestored() {
 	c.cfg.PingPong.Clear()
+	c.resetMissedPongs()
 	c.cfg.Logger.Debug(
 		"ping-pong cache cleared on connection restored",
 		slog.String("central", c.cfg.CentralName),

@@ -528,10 +528,14 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// callback channel, CUxD over BIN-RPC included (verified
 					// against a live CUxD; go-hmccu pings it the same way).
 					// The keepalive is what keeps the callback-liveness
-					// timestamp fresh on a quiet interface, so exempting one
-					// interface from the ping does not spare it the freshness
-					// verdict — it only guarantees the verdict goes negative
-					// after callbackFreshness, permanently.
+					// timestamp fresh on a quiet interface, and its PONG is
+					// what notices a CCU that answers ping but stopped calling
+					// us back: three consecutive missed PONGs turn
+					// IsCallbackAlive false within about three ticks, while
+					// the freshness window stays the slower fallback.
+					// Exempting one interface from the ping does not spare it
+					// the freshness verdict — it only guarantees the verdict
+					// goes negative after callbackFreshness, permanently.
 					// Drain expired ping-pong entries before the probe
 					// adds another one. Nothing else called Sweep, so a
 					// long outage parked the pending set near its cap:

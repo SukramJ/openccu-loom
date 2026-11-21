@@ -36,6 +36,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   WebUI and checks both answers. As before, the upload is the first of the
   firmware's three restore steps; the restore itself is not run.
 
+- **The daemon notices within about 45 seconds instead of three minutes
+  that a CCU interface stopped delivering events.** When the CCU drops the
+  daemon's callback registration it keeps answering every request, so the
+  daemon only noticed after three minutes without any event, and devices sat
+  silent until then. The keepalive ping the daemon sends every 15 seconds is
+  answered by a PONG event on the same callback path; three PONGs missing in
+  a row now count the interface as lost, and the daemon re-registers at
+  once. The three-minute window stays as the fallback.
+
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs
   longest the day's base, so a day of 06:00–20:00 at 21 °C over 19.5 °C
