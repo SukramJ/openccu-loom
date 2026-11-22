@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A central that drops an interface frees that interface's Matter
+  endpoint numbers.** When an edit of a running central removed an
+  interface (the move to openccu-lite drops CUxD), the Matter bridge kept
+  the endpoint numbers of that interface's devices in the central's
+  partition for good, although those devices cannot come back. The
+  restart now hands them to the Matter bridge, which frees them at its
+  next sync. The devices of the kept interfaces keep their numbers as
+  before. (#1152)
+
 ## [0.106.2] - 2026-11-22
 
 ### Fixed
