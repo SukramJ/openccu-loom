@@ -5,6 +5,10 @@ package valve_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,13 +63,41 @@ func newWSMValveWithUnitList(t *testing.T, w custom.Writer, unitList []string) *
 	return ch
 }
 
+// wsmFixturePath is the VALUES paramset description of an HmIP-WSM
+// WATER_SWITCH_VIRTUAL_RECEIVER channel, read from a live CCU over JSON-RPC
+// (Interface.getParamsetDescription) and kept verbatim.
+const wsmFixturePath = "../../../../notes/parity/fixtures/hmip-wsm-water-switch-values.json"
+
+// wsmDurationUnits reads DURATION_UNIT's VALUE_LIST from the captured HmIP-WSM
+// description. JSON-RPC carries it as one space-separated string.
+func wsmDurationUnits(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile(wsmFixturePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", wsmFixturePath, err)
+	}
+	var desc []struct {
+		ID        string `json:"ID"`
+		Type      string `json:"TYPE"`
+		ValueList string `json:"VALUE_LIST"`
+	}
+	if err := json.Unmarshal(raw, &desc); err != nil {
+		t.Fatalf("decode %s: %v", wsmFixturePath, err)
+	}
+	for _, p := range desc {
+		if p.ID == string(hmenum.ParameterDurationUnit) && p.Type == "ENUM" {
+			return strings.Fields(p.ValueList)
+		}
+	}
+	t.Fatalf("%s carries no ENUM DURATION_UNIT", wsmFixturePath)
+	return nil
+}
+
 // TestIrrigationOpenEncodesByTheChannelsUnitList drives Irrigation.Open
-// through the real registry. The HmIP-WSM's own DURATION_UNIT VALUE_LIST is
-// not captured in this repository or in godevccu, so the cases do not claim
-// one: they pin that the valve hands whatever list its channel declares to
-// the encoder — 10MS where the list carries it, whole seconds rounded
-// half-up and never below one step where it does not, and the seconds unit
-// where the channel declares no list at all.
+// through the real registry: the valve hands the list its channel declares to
+// the encoder — 10MS on the HmIP-WSM, whose captured DURATION_UNIT carries it,
+// whole seconds rounded half-up and never below one step on a list without
+// it, and the seconds unit where the channel declares no list at all.
 func TestIrrigationOpenEncodesByTheChannelsUnitList(t *testing.T) {
 	t.Parallel()
 	const (
@@ -79,12 +111,12 @@ func TestIrrigationOpenEncodesByTheChannelsUnitList(t *testing.T) {
 		wantUnit  int32
 	}{
 		{
-			name: "list with 10MS",
+			name: "the HmIP-WSM's captured list",
 			channel: func(t *testing.T, w custom.Writer) *device.Channel {
 				t.Helper()
-				return newWSMValveWithUnitList(t, w, []string{"S", "M", "H", "10MS"})
+				return newWSMValveWithUnitList(t, w, wsmDurationUnits(t))
 			},
-			wantValue: 50, wantUnit: 3, // "10MS" is the fourth entry of that list
+			wantValue: 50, wantUnit: int32(slices.Index(wsmDurationUnits(t), "10MS")), //nolint:gosec // a four-entry list
 		},
 		{
 			name: "list without 10MS",

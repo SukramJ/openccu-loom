@@ -27,8 +27,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   seconds with the fraction cut off, so a 500 ms ramp arrived as a zero
   count and 1.5 s as 1 s. Durations that are not a whole second now go out
   in hundredths of a second (`10MS`) on every channel whose own unit list
-  offers it — the HmIP dimmers, RGBW and LED actuators and the MP3P sound
-  player. Every other channel gets the nearest whole step, never less than
+  offers it — the HmIP dimmers, RGBW and LED actuators, the MP3P sound
+  player and the HmIP-WSM irrigation valve. Every other channel gets the nearest whole step, never less than
   one. Whole seconds are sent as before. Longer durations are rounded to the
   nearest minute or hour instead of cut off, so 16373 s is 273 minutes, not
   272. A device or client reporting a timer in `10MS` now reads back as
