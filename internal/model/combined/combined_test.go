@@ -193,27 +193,6 @@ func TestHSColorOnUpdateFiresOnChange(t *testing.T) {
 
 // --- Timer ---
 
-func TestTimerRecalcUnitThresholds(t *testing.T) {
-	cases := []struct {
-		seconds  float64
-		wantVal  float64
-		wantUnit hmenum.TimerUnit
-	}{
-		{30, 30, hmenum.TimerUnitSeconds},
-		{16343, 16343, hmenum.TimerUnitSeconds},
-		// DURATION_VALUE is an INTEGER count: the promoted value truncates
-		// toward zero rather than carrying 272.4 onto the wire.
-		{16344, 272, hmenum.TimerUnitMinutes},
-		{3600 * 1000, 1000, hmenum.TimerUnitHours}, // huge → hours
-	}
-	for _, c := range cases {
-		v, u := RecalcUnit(c.seconds)
-		if v != c.wantVal || u != c.wantUnit {
-			t.Errorf("%vs → (%v, %v), want (%v, %v)", c.seconds, v, u, c.wantVal, c.wantUnit)
-		}
-	}
-}
-
 func TestTimerSetDurationSendsUnitAndValue(t *testing.T) {
 	w := &stubWriter{}
 	tm := NewTimer("HmIP:3", w, hmenum.ParameterOnTimeValue, hmenum.ParameterOnTimeUnit)
@@ -435,8 +414,10 @@ func TestTimerSetDuration(t *testing.T) {
 	}
 }
 
-// TestToSeconds covers all timer unit branches.
-func TestToSeconds(t *testing.T) {
+// TestTimerOnComponentsDecodesEveryUnit covers each unit branch of the read
+// half on a timer whose unit parameter declares no list, including a 10MS
+// report, and keeps an ordinal no list names as a count of seconds.
+func TestTimerOnComponentsDecodesEveryUnit(t *testing.T) {
 	tests := []struct {
 		unit    hmenum.TimerUnit
 		value   float64
@@ -445,31 +426,15 @@ func TestToSeconds(t *testing.T) {
 		{hmenum.TimerUnitSeconds, 10, 10},
 		{hmenum.TimerUnitMinutes, 2, 120},
 		{hmenum.TimerUnitHours, 1, 3600},
-		{hmenum.TimerUnit(99), 5, 5}, // unknown unit → passthrough
+		{hmenum.TimerUnit10ms, 50, 0.5},
+		{hmenum.TimerUnit(99), 5, 5},
 	}
 	for _, tt := range tests {
-		got := toSeconds(tt.value, tt.unit)
-		if got != tt.seconds {
-			t.Errorf("toSeconds(%v, %v) = %v, want %v", tt.value, tt.unit, got, tt.seconds)
+		tm := NewTimer("x", &stubWriter{}, hmenum.ParameterOnTimeValue, hmenum.ParameterOnTimeUnit)
+		tm.OnComponents(tt.value, tt.unit)
+		if got, _ := tm.ValueSeconds(); got != tt.seconds {
+			t.Errorf("OnComponents(%v, %v) = %vs, want %vs", tt.value, tt.unit, got, tt.seconds)
 		}
-	}
-}
-
-// TestRecalcUnitNegative verifies negative input is clamped to 0.
-func TestRecalcUnitNegative(t *testing.T) {
-	v, u := RecalcUnit(-1)
-	if v != 0 || u != hmenum.TimerUnitSeconds {
-		t.Errorf("RecalcUnit(-1) = (%v, %v), want (0, Seconds)", v, u)
-	}
-}
-
-// TestRecalcUnitHours verifies very large values are expressed as hours.
-func TestRecalcUnitHours(t *testing.T) {
-	// 16344 * 60 = 980640 seconds → exceeds minute threshold → hours.
-	input := float64(16344*60 + 1)
-	_, u := RecalcUnit(input)
-	if u != hmenum.TimerUnitHours {
-		t.Errorf("RecalcUnit(%v): expected hmenum.TimerUnitHours, got %v", input, u)
 	}
 }
 

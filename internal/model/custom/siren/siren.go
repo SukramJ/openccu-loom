@@ -68,6 +68,11 @@ type Siren struct {
 	// channel carries both wire parameters; nil otherwise.
 	duration *combined.Timer
 
+	// durationUnits is what DURATION_UNIT's VALUE_LIST declares, read once
+	// at construction: the units a duration may be encoded in on this
+	// channel, and their wire ordinals.
+	durationUnits custom.DurationUnits
+
 	// availableTones / availableLights are the labels exposed by the underlying
 	// SELECTION DPs' VALUE_LIST. Captured at construction time and read by
 	// [AvailableTones] / [AvailableLights].
@@ -136,6 +141,7 @@ func New(cfg Config) *Siren {
 		// Channel.AttachCalculatedDataPoint so the channel's
 		// SubscribingDataPoint hook wires the OnAnyUpdate listeners onto
 		// the two wire DPs.
+		s.durationUnits = custom.DurationUnitsOf(cfg.Channel, hmenum.ParameterDurationUnit)
 		if cfg.Channel.Parameter(hmenum.ParameterDurationValue) != nil &&
 			cfg.Channel.Parameter(hmenum.ParameterDurationUnit) != nil &&
 			cfg.Writer != nil {
@@ -341,13 +347,13 @@ func (s *Siren) TurnOn(ctx context.Context, cfg OnConfig, priority hmenum.Comman
 	params := make(map[hmenum.Parameter]any, 5)
 	if s.Capabilities.SupportsDuration {
 		if cfg.Duration > 0 {
-			value, unit := custom.EncodeTimerDuration(cfg.Duration)
+			value, unit := s.durationUnits.Encode(cfg.Duration)
 			params[hmenum.ParameterDurationUnit] = unit
 			params[hmenum.ParameterDurationValue] = value
 		} else if s.duration != nil {
 			// Send duration default so the device uses its declared on-time rather
 			// than inheriting whatever was set by the previous command.
-			dv, du := custom.EncodeTimerDuration(s.duration.DefaultDuration())
+			dv, du := s.durationUnits.Encode(s.duration.DefaultDuration())
 			params[hmenum.ParameterDurationUnit] = du
 			params[hmenum.ParameterDurationValue] = dv
 		}
@@ -435,7 +441,7 @@ func (s *Siren) TurnOff(ctx context.Context, priority hmenum.CommandPriority) (e
 		params[hmenum.ParameterOpticalAlarmSelection] = v
 	}
 	if s.Capabilities.SupportsDuration && s.duration != nil {
-		dv, du := custom.EncodeTimerDuration(s.duration.DefaultDuration())
+		dv, du := s.durationUnits.Encode(s.duration.DefaultDuration())
 		params[hmenum.ParameterDurationUnit] = du
 		params[hmenum.ParameterDurationValue] = dv
 	}

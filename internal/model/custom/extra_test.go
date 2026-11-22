@@ -345,39 +345,6 @@ func TestEnsureContextNonNil(t *testing.T) {
 	}
 }
 
-// --- EncodeTimerDuration tests ---
-
-// TestEncodeTimerDurationUnits exercises seconds/minutes/hours promotion.
-func TestEncodeTimerDurationUnits(t *testing.T) {
-	// Within seconds bucket.
-	v, u := EncodeTimerDuration(60 * time.Second)
-	if u != 0 {
-		t.Errorf("60s: expected unit=0 (seconds), got %d", u)
-	}
-	if v != 60 {
-		t.Errorf("60s: expected value=60, got %d", v)
-	}
-
-	// Crosses into minutes bucket.
-	v, u = EncodeTimerDuration(16344 * time.Second)
-	if u != 1 {
-		t.Errorf("16344s: expected unit=1 (minutes), got %d", u)
-	}
-	_ = v
-
-	// Zero duration.
-	v, u = EncodeTimerDuration(0)
-	if v != 0 || u != 0 {
-		t.Errorf("0s: expected (0,0), got (%d,%d)", v, u)
-	}
-
-	// Negative duration.
-	v, u = EncodeTimerDuration(-1 * time.Second)
-	if v != 0 || u != 0 {
-		t.Errorf("-1s: expected (0,0), got (%d,%d)", v, u)
-	}
-}
-
 // --- Registry: Clear, GetAllExtendedConfigs, IsMultiChannelDevice, MustRegisterAll ---
 
 // TestRegistryClear verifies Clear resets the registry.

@@ -315,7 +315,7 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 	// Anything staged on the collector only reaches the wire in the
 	// flush, so its error is part of this command's result.
 	return generic.FlushCollector(ctx, coll,
-		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, withSoundLEDOnTime(map[hmenum.Parameter]any{
+		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, l.withSoundLEDOnTime(map[hmenum.Parameter]any{
 			hmenum.ParameterLevel: 0.0,
 			hmenum.ParameterColor: fixedColorNames[FixedColorBlack],
 		}, 0), priority))
@@ -326,20 +326,21 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 // for the on-time and RAMP_TIME_VALUE/RAMP_TIME_UNIT for the ramp
 // (CustomDpSoundPlayerLed in light.py binds the same four fields). Both
 // are always sent, even at 0 — a zero resets a timer still running on
-// the device, while a missing key leaves it active.
-func withSoundLEDTimers(params map[hmenum.Parameter]any, onTimeSecs, rampTimeSecs float64) map[hmenum.Parameter]any {
-	rampValue, rampUnit := custom.EncodeTimerDuration(time.Duration(rampTimeSecs * float64(time.Second)))
+// the device, while a missing key leaves it active. Each pair is encoded
+// in the units its own unit parameter declares.
+func (l *SoundPlayerLED) withSoundLEDTimers(params map[hmenum.Parameter]any, onTimeSecs, rampTimeSecs float64) map[hmenum.Parameter]any {
+	rampValue, rampUnit := l.rampTimeUnits.Encode(secondsDuration(rampTimeSecs))
 	params[hmenum.ParameterRampTimeValue] = rampValue
 	params[hmenum.ParameterRampTimeUnit] = rampUnit
-	return withSoundLEDOnTime(params, onTimeSecs)
+	return l.withSoundLEDOnTime(params, onTimeSecs)
 }
 
 // withSoundLEDOnTime stages only the on-time pair. TurnOff sends it with
 // LEVEL=0 and COLOR=BLACK and nothing else — the shape the reference's
 // turn_off (light.py CustomDpSoundPlayerLed) puts on the wire; a ramp on
 // the way off is not part of it.
-func withSoundLEDOnTime(params map[hmenum.Parameter]any, onTimeSecs float64) map[hmenum.Parameter]any {
-	onValue, onUnit := custom.EncodeTimerDuration(time.Duration(onTimeSecs * float64(time.Second)))
+func (l *SoundPlayerLED) withSoundLEDOnTime(params map[hmenum.Parameter]any, onTimeSecs float64) map[hmenum.Parameter]any {
+	onValue, onUnit := l.onTimeUnits.Encode(secondsDuration(onTimeSecs))
 	params[hmenum.ParameterDurationValue] = onValue
 	params[hmenum.ParameterDurationUnit] = onUnit
 	return params
@@ -408,7 +409,7 @@ func (l *SoundPlayerLED) TurnOn(ctx context.Context, cfg LedOnConfig, w custom.W
 	}
 
 	colorLabel := fixedColorNames[color]
-	params := withSoundLEDTimers(map[hmenum.Parameter]any{
+	params := l.withSoundLEDTimers(map[hmenum.Parameter]any{
 		hmenum.ParameterLevel:       brightness,
 		hmenum.ParameterColor:       colorLabel,
 		hmenum.ParameterOnTimeList1: flashValue,
@@ -460,4 +461,12 @@ func (l *SoundPlayerLED) Flash(ctx context.Context, c FixedColor, onTimeIdx, rep
 		return fmt.Errorf("soundplayer-led: REPETITIONS: %w", err)
 	}
 	return l.SetColor(ctx, c, priority)
+}
+
+// secondsDuration converts the LED's seconds-valued timer fields to a
+// duration, rounded to the nearest nanosecond rather than truncated: 1.005 s
+// is 1004999999.9999999 ns as a float product, and truncated it would sit just
+// below the half step the 10MS unit rounds up at.
+func secondsDuration(secs float64) time.Duration {
+	return time.Duration(math.Round(secs * float64(time.Second)))
 }
