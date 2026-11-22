@@ -376,13 +376,18 @@ func TestCCUAddonRCScriptReplacesAPidfileItCannotWrite(t *testing.T) {
 // archive. The script passes a backup directory only when this process can
 // write it, and otherwise leaves the daemon on its own default. The negative
 // control is a writable directory, which is passed.
+//
+// The fallback is the intended state of a confined add-on, not a missing
+// target, so the log names the directory the archives stay in together with
+// the one that was refused, in one line. "No CCU backup target found" is
+// reserved for a system that reports none; on a box it read as a fault.
 func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root writes into a read-only-permission directory; the check needs an unprivileged user")
 	}
 
-	backupDirSeen := func(t *testing.T, target string) string {
+	backupDirSeen := func(t *testing.T, target string) (dir, log string) {
 		t.Helper()
 		e := newRCScriptEnv(t, false)
 		if err := os.WriteFile(e.cronBackupPath, []byte(target+"\n"), 0o644); err != nil {
@@ -397,12 +402,14 @@ func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the fake daemon did not record its backup directory: %v", err)
 		}
-		return strings.TrimSpace(string(b))
+		return strings.TrimSpace(string(b)), e.logged(t)
 	}
 
 	writable := filepath.Join(t.TempDir(), "backup")
-	if got := backupDirSeen(t, writable); got != writable {
+	if got, log := backupDirSeen(t, writable); got != writable {
 		t.Fatalf("a writable backup directory reached the daemon as %q, want %q", got, writable)
+	} else if !strings.Contains(log, "CCU archives go to "+writable) {
+		t.Fatalf("a writable backup directory was not logged as the target:\n%s", log)
 	}
 
 	readOnly := t.TempDir()
@@ -410,8 +417,22 @@ func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 		t.Fatalf("chmod: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o755) })
-	if got := backupDirSeen(t, filepath.Join(readOnly, "backup")); got != "<unset>" {
+	refused := filepath.Join(readOnly, "backup")
+	got, log := backupDirSeen(t, refused)
+	if got != "<unset>" {
 		t.Fatalf("a backup directory the add-on cannot create reached the daemon as %q, want it unset", got)
+	}
+	if strings.Contains(log, "No CCU backup target found") {
+		t.Fatalf("a refused backup directory was logged as no target at all:\n%s", log)
+	}
+	var line string
+	for l := range strings.SplitSeq(log, "\n") {
+		if strings.Contains(l, "/var/backups") {
+			line = l
+		}
+	}
+	if !strings.Contains(line, "CCU archives stay in ") || !strings.Contains(line, refused+" is not writable") {
+		t.Fatalf("the fallback is not logged as one line naming where the archives stay and the refused %s:\n%s", refused, log)
 	}
 }
 

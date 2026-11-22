@@ -24,6 +24,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   counts only incidents of interfaces the central is configured with, and
   incidents of the central itself. The incidents stay in the incident
   history. (#1146)
+- **On openccu-lite the add-on's log no longer reports a missing backup
+  target.** A confined add-on cannot write the box's backup directory, so
+  its downloaded archives stay in its own `var/backups`, which the box's
+  nightly backup leaves out. The start logged this as "not writable" and
+  "No CCU backup target found", which read as a fault. It now logs one line
+  that names where the archives stay and why. Where they are stored is
+  unchanged; the add-on still asks for no access to the box's backup
+  directory or USB sticks, which hold the box's radio keys. (#1147)
 
 ## [0.106.1] - 2026-11-22
 

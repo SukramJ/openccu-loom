@@ -129,7 +129,10 @@ own_pid() {
 # rule but does not: on an OVA it is its own mount, and both tar runs pass
 # --one-file-system, so they stop at its boundary. Falling through to the
 # empty string leaves the daemon on its default, which still carries the
-# .nobackup marker those tar runs honour — degraded, not broken.
+# .nobackup marker those tar runs honour — degraded, not broken. On
+# openccu-lite that default is where a confined add-on's archives belong:
+# its nightly backup tars with --exclude-tag=.nobackup as well, and the
+# unit grants the add-on no shared backup directory (see dir_writable).
 resolve_backup_dir() {
   if [ -s "${CRON_BACKUP_PATH_FILE}" ]; then
     head -n1 "${CRON_BACKUP_PATH_FILE}"
@@ -198,10 +201,13 @@ start() {
   # what the SPA tells them a directory change needs anyway.
   BACKUP_DIR=$(resolve_backup_dir)
   if [ -n "${BACKUP_DIR}" ] && ! dir_writable "${BACKUP_DIR}"; then
-    logger -t ${ADDON_ID} -p user.info "${BACKUP_DIR} is not writable here"
-    BACKUP_DIR=""
-  fi
-  if [ -n "${BACKUP_DIR}" ]; then
+    # A confined add-on on openccu-lite lands here on every start: the box
+    # keeps its own backups (Backup page, its USB targets) and grants an
+    # add-on neither its archive directories nor the sticks that hold them,
+    # which carry the radio keys. Staying in the add-on's own tree is the
+    # intended state there, so it is reported as one line, not as a fault.
+    logger -t ${ADDON_ID} -p user.info "CCU archives stay in ${ADDON_DIR}/var/backups (excluded from system backups by .nobackup): ${BACKUP_DIR} is not writable for this add-on"
+  elif [ -n "${BACKUP_DIR}" ]; then
     export OPENCCU_LOOM_BACKUP_DIR=${BACKUP_DIR}
     logger -t ${ADDON_ID} -p user.info "CCU archives go to ${BACKUP_DIR}"
   else
