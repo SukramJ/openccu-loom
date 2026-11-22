@@ -543,6 +543,23 @@ contract from the tool's output.
 (`../home-assistant-matter-bridge/`) is a supplementary read for end-to-end
 bridge composition, never a gold standard.
 
+### Citing the CCU firmware
+
+Cite only what a reader can check from the outside. For the open parts of the
+firmware that is `path:line` in `../OpenCCU-Base/` (rfd, hs485d, libhsscomm,
+the device XMLs, the WebUI, `etc/config_templates/`). For the HmIP server,
+whose code is closed, it is the behaviour: the paramset description (model,
+channel, paramset; `../godevccu/internal/embed/data/paramset_descriptions/`
+or a read-only capture under `notes/parity/fixtures/`), an observed wire fault
+or log line, or a test in this repo that pins it. Never its internal class or
+method names, offsets or disassembler output — not in comments, docs, notes,
+CHANGELOG, pull requests or issues. "HMIPServer" as the name of the service
+is fine. A fact whose only source is the server's internals is stated as its
+behaviour; the fact stays, the class reference goes. Guards:
+`TestNoClosedFirmwareInternalsInGoComments` and `TestNoClosedFirmwareInternalsInMarkdown`.
+The reasoning is in
+[`notes/contributor/engineering-rules.md`](./notes/contributor/engineering-rules.md#citing-closed-firmware).
+
 ---
 
 ## Implementation Policy

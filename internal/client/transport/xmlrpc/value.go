@@ -105,9 +105,8 @@ func (IntValue) Kind() Kind { return KindInt }
 // src/libXmlRpc/src/XmlRpcValue.cpp:260 — and serialises the CCU's own
 // integers as <i4> in XmlRpcValue::intToXml (:517), so a peer that rejected
 // <i4> could not read the CCU either. The Tcl surface accepts both prefixes
-// (src/tclrpc/tclrpc.cpp:111), and the HmIP legacy parser
-// (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcParser#parseValue)
-// puts "i4" and "int" in one switch case.
+// (src/tclrpc/tclrpc.cpp:111), and the HmIP server's legacy XML-RPC
+// interface reads "i4" and "int" alike.
 //
 // Fault -5 is not involved: rfd raises it as "Unknown parameter"
 // (src/rfd/RFChannel.cpp:128), a parameter-identity failure, and ReGaHss is
@@ -153,10 +152,9 @@ func (DoubleValue) Kind() Kind { return KindDouble }
 // MarshalXML implements xml.Marshaler. Forces at least one fractional digit
 // so a whole number still reads as a double on the wire. No CCU-side
 // validator can require this: libXmlRpc converts the literal with strtod
-// (OpenCCU-Base src/libXmlRpc/src/XmlRpcValue.cpp:577) and the HmIP legacy
-// parser with Double.parseDouble
-// (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcParser#parseValue),
-// both of which discard the text before any putParamset type check runs, so
+// (OpenCCU-Base src/libXmlRpc/src/XmlRpcValue.cpp:577) and the HmIP server's
+// legacy XML-RPC interface parses it to a number as well, both discarding
+// the text before any putParamset type check runs, so
 // "1" and "1.0" are indistinguishable downstream. The earlier claim that
 // "<double>1</double>" draws fault -5 is contradicted there; -5 in rfd means
 // "Unknown parameter" (src/rfd/RFChannel.cpp:128).

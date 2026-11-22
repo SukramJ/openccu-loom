@@ -32,8 +32,7 @@ func TestText_Set_NotWritable(t *testing.T) {
 // the value's type (libhsscomm HSSLogicalTypeString::GetDescription sets
 // MIN and MAX to "", ::EnforceConstraints returns
 // `val->getType()==TypeString`). HmIP publishes a character class or a
-// maximum lexical value, forwarded verbatim into the description
-// (HMIPServer de.eq3.cbcs.legacy.communicator.DeviceUtil#addDesriptionOfParameter).
+// maximum lexical value as MAX, verbatim in its paramset descriptions.
 //
 // The four tests this replaces drove MAX values of 15, 64 and "128" — a
 // length, which is the reading under test. A fixture that supplies the

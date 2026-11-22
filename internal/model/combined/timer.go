@@ -24,11 +24,11 @@ import (
 const ParameterDuration hmenum.Parameter = "DURATION"
 
 // timerValueMaxPerUnit is DURATION_VALUE's maximum as an INTEGER count in
-// whichever unit DURATION_UNIT names — not a number of seconds. The CCU
-// declares it once, in the single factory every DURATION_VALUE-bearing channel
-// goes through: LogicalType.INTEGER, default 0, min 0, max 16343, paired with
-// a DURATION_UNIT ENUM over {S, M, H} (HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createDurationValueParameter).
+// whichever unit DURATION_UNIT names — not a number of seconds. The HmIP
+// paramset descriptions declare it alike on every channel that carries it
+// (all 94 occurrences in the descriptor corpus): INTEGER, default 0, min 0,
+// max 16343, paired with a DURATION_UNIT ENUM that starts S, M, H (some
+// channels add 10MS after H).
 //
 // It is therefore also the threshold at which the encoder promotes to the next
 // coarser unit — a count above it has no representation in the current one.

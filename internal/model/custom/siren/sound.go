@@ -26,15 +26,12 @@ import (
 // a lower bound silently drops the parameter for every file above it, and the
 // player then repeats whatever was selected before.
 //
-// 252 is the firmware's own count, not a rounded one. HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.SoundFile declares
-// INTERNAL_SOUNDFILE, then SOUNDFILE_001 through SOUNDFILE_252, then
-// RANDOM_SOUNDFILE, OLD_VALUE and DO_NOT_CARE — 256 members. HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.
-// GeneralStateParameterFactory#createSoundFileParameter builds SOUNDFILE as
-// an ENUM over the unmodified SoundFile.getNames(), so a device carrying the
-// parameter gets the whole list; the HmIP-MP3P's own paramset description
-// confirms it with a 256-entry VALUE_LIST on channels :1 and :2.
+// 252 is the firmware's own count, not a rounded one. The SOUNDFILE
+// VALUE_LIST is INTERNAL_SOUNDFILE, then SOUNDFILE_001 through
+// SOUNDFILE_252, then RANDOM_SOUNDFILE, OLD_VALUE and DO_NOT_CARE — 256
+// entries, and a device carrying the parameter gets the whole list: the
+// HmIP-MP3P's own paramset description declares exactly that on channels
+// :1 and :2 (../godevccu/internal/embed/data/paramset_descriptions/HmIP-MP3P.json).
 const (
 	minSoundfileIndex = 1
 	maxSoundfileIndex = 252
@@ -309,9 +306,8 @@ func ConvertPlayRepetitionsIndex(index int, availableRep []string) (string, erro
 	default:
 		return "", fmt.Errorf("siren: ConvertPlayRepetitionsIndex: index must be -1 (infinite), 0 (none), or 1-%d, got %d", maxRepetitionsIndex, index)
 	}
-	// The firmware puts INFINITE_REPETITIONS in the last slot of every list
-	// it builds (HMIPServer de.eq3.cbcs.devicedescription.channelspecification.
-	// Repetitions#getNames sets names[size-1]), so the last slot is not a
+	// The firmware puts INFINITE_REPETITIONS in the last slot of every
+	// REPETITIONS list (see custom.RepetitionsInfinite), so the last slot is not a
 	// repeat count. A finite index reaching it — or past the end — is out of
 	// range for this device.
 	if slot >= len(availableRep)-1 {

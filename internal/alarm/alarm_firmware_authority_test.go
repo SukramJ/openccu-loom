@@ -201,10 +201,8 @@ func alarmFwDetailsContain(details map[string]any, key string, want int) bool {
 // TestAlarmFwResetActionExistsOnlyForTheTwoDeclaredStateParameters pins
 // resetParameterFor to the firmware's own pair set.
 //
-// The HmIP server registers exactly two stop-shaped state parameters,
-// RESET_MOTION and RESET_PRESENCE (HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.StateParameterFactory,
-// both through #createStop), and the descriptor corpus shows the co-location
+// The HmIP server declares exactly two RESET_* state parameters,
+// RESET_MOTION and RESET_PRESENCE, and the descriptor corpus shows the co-location
 // is strict: every channel declaring RESET_MOTION declares MOTION, every
 // channel declaring RESET_PRESENCE declares PRESENCE_DETECTION_STATE, never
 // the cross pairing, and no third RESET_* parameter exists anywhere in it.
@@ -300,11 +298,9 @@ func TestAlarmFwClassicMotionDetectorIsNotResettable(t *testing.T) {
 // intrusion candidate reaches the picker with the vocabulary the device
 // declares.
 //
-// The HmIP firmware builds these as enumerations, not booleans: HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory
-// #createStateWindowOpenClosed uses {CLOSED, OPEN} and
-// #createStateWindowOpenTiltedClosed uses {CLOSED, TILTED, OPEN}. The corpus
-// agrees: SHUTTER_CONTACT STATE is ENUM {CLOSED, OPEN} on the five HmIP
+// The HmIP firmware declares these as enumerations, not booleans, and the
+// paramset descriptions in the corpus show it: SHUTTER_CONTACT STATE is ENUM
+// {CLOSED, OPEN} on the five HmIP
 // contacts and BOOL only on the eight classic ones; ROTARY_HANDLE_TRANSCEIVER
 // and ROTARY_HANDLE_SENSOR STATE are ENUM {CLOSED, TILTED, OPEN}.
 //
@@ -341,11 +337,9 @@ func TestAlarmFwIntrusionCandidateCarriesTheDeclaredEnumValueList(t *testing.T) 
 // --- c011: the default activation rule on an enumeration ---
 
 // alarmFwSmokeStatusValueList is SMOKE_DETECTOR_ALARM_STATUS as the firmware
-// declares it: HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.SmokeDetectorAlarmStatus
-// declares IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM, SECONDARY_ALARM in that
-// order and #getNames() fills the array in ordinal order; both HmIP-SWSD and
-// HmIP-SWSD-2 carry exactly that VALUE_LIST in the descriptor corpus.
+// declares it: IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM, SECONDARY_ALARM, in
+// that order — both HmIP-SWSD and HmIP-SWSD-2 carry exactly that VALUE_LIST in
+// the descriptor corpus.
 var alarmFwSmokeStatusValueList = []string{"IDLE_OFF", "PRIMARY_ALARM", "INTRUSION_ALARM", "SECONDARY_ALARM"}
 
 // TestAlarmFwSmokeStatusNeedsActiveValuesToRejectTheSirenCommand pins why the

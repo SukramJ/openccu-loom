@@ -42,8 +42,9 @@ type CommandTrackerConfig struct {
 	// What the firmware does bound is the synchronous case, and 60 s covers
 	// it with room: per-frame BidCos wait times are 1500 / 4500 / 12500 ms
 	// (src/rfd/BidcosFrameWaitTime.h) and the HmIP legacy call budget is
-	// Legacy.ResponseTimeout, default 25 s
-	// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.LegacyServiceHandler).
+	// Legacy.ResponseTimeout, 20 s in the shipped configuration
+	// (../OpenCCU-Base/etc/config_templates/crRFD.conf:16) and 25 s when the
+	// key is unset.
 	// [TestHmCliCommandTrackerTTLCoversSynchronousBudgets] pins that margin.
 	//
 	// The daemon's OWN retry waits do not compete with this TTL either,

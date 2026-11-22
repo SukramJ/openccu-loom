@@ -1540,20 +1540,18 @@ func (c *Climate) SetBoost(ctx context.Context, on bool, priority hmenum.Command
 func (c *Climate) setIPMode(ctx context.Context, m Mode, priority hmenum.CommandPriority) error {
 	// HmIP thermostats (HmIP-BWTH / -eTRV / -STH / -WTH / …) change mode
 	// through the write-only `CONTROL_MODE` parameter (declared WRITE, range
-	// 0..3, default 0 — HMIPServer de.eq3.cbcs.devicedescription.
-	// channelspecification.stateparameter.ClimateStateParameterFactory#
-	// createControlModeParameter), not through `SET_POINT_MODE`, which the
-	// firmware *reports* the active mode through.
+	// 0..3, default 0 in every HmIP thermostat's paramset description in the
+	// descriptor corpus), not through `SET_POINT_MODE`, which the firmware
+	// *reports* the active mode through.
 	//
-	// Writing SET_POINT_MODE does not get the mode changed, but the reason
-	// depends on the channel's binding and only one half is sourced here.
-	// ClimateStateParameterFactory registers two SET_POINT_MODE variants: a
-	// READ|EVENT one, for which the parameter really is read-only, and a
-	// writable one (the HmIP-eTRV-B-2 R4M declares OPERATIONS 7). On a channel
-	// bound to the writable variant the block is elsewhere — the legacy
-	// setValue guard requires SET_POINT_MODE together with
-	// SET_POINT_TEMPERATURE, so a bare write is dropped without a fault (see
-	// [custom.PutParamsetForce]). Which variant a given channel type binds is
+	// Writing SET_POINT_MODE does not get the mode changed, for one of two
+	// reasons. The HmIP server declares SET_POINT_MODE read-only
+	// (READ|EVENT) on some channel types and writable on others; every
+	// occurrence in the descriptor corpus is the writable one (OPERATIONS 7,
+	// e.g. the HmIP-eTRV-B-2 R4M). On a writable channel the block is
+	// elsewhere — the legacy setValue guard requires SET_POINT_MODE together
+	// with SET_POINT_TEMPERATURE, so a bare write is dropped without a fault
+	// (see [custom.PutParamsetForce]). Which channel types are read-only is
 	// unverified, so neither reason is stated as the general one; what holds
 	// for both is that the device stays on the mode it derived from the
 	// control flow (CONTROL_MODE / BOOST_MODE / WEEK_PROGRAM_POINTER).

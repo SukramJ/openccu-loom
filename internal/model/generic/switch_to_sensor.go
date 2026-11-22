@@ -14,12 +14,9 @@ import (
 // derived, read-only surface even though the CCU advertises it writable.
 //
 // The premise is exact, and it is the descriptor that is misleading rather
-// than us. The eTRV climate channel declares LEVEL without a subtype, which
-// binds the read/write/event factory, so the legacy descriptor really does
-// carry OPERATIONS = READ|WRITE|EVENT = 7 (HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.ChannelTypeReader#getParameterMapKeyFromNode,
-// …stateparameter.GeneralStateParameterFactory#createLevel,
-// de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#addDesriptionOfParameter).
+// than us. The legacy descriptor of the eTRV climate channel really does
+// carry LEVEL with OPERATIONS = READ|WRITE|EVENT = 7 — every HmIP-eTRV
+// model's channel 1 in the descriptor corpus declares it so.
 // The read/write direction is settled by the CCU's own operator surface
 // instead: heating_control.fn renders LEVEL as a bare `<span>…%</span>`
 // percentage readout and never writes it
@@ -38,11 +35,10 @@ import (
 //
 // Scope. Only radiator-thermostat channel-type versions declare LEVEL at
 // all — the wall-thermostat versions declare none — so the rule is not too
-// wide; and "HmIP-HEATING" is verbatim the heating group's virtual device
-// type (HMIPServer
-// de.eq3.ccu.groupdevice.hmip.service.internal.HmIPGroupDefinitionProvider),
-// whose thermostat channel merges the TRV channel-1 state description and
-// therefore inherits LEVEL. Whether the family reaches wider than the
+// wide; and the heating group's device type "HmIP-HEATING" declares the same
+// LEVEL on channel 1
+// (../godevccu/internal/embed/data/paramset_descriptions/HmIP-HEATING.json),
+// so it needs the same demotion. Whether the family reaches wider than the
 // "HmIP-eTRV" prefix is UNVERIFIED: the CCU's paramset-id mapping lists an
 // OEM label ("Thermostat AA") against the eTRV paramset, but that mapping
 // keys label lookup, not the channel type, so it does not establish that

@@ -36,15 +36,14 @@ func NewText(cfg Spec) *Text {
 // string and check only that the value is a string at all
 // (libhsscomm HSSLogicalTypeString::GetDescription sets MIN and MAX to
 // "", and ::EnforceConstraints returns `val->getType()==TypeString`).
-// HmIP publishes a character class instead — the parameter factories
-// pass shapes like "[0x20-0x7E]{16}" or a maximum lexical value
-// ("2255_12_31 23:55") straight into the description
-// (HMIPServer de.eq3.cbcs.legacy.communicator.DeviceUtil#addDesriptionOfParameter).
+// HmIP publishes a character class instead — shapes like
+// "[0x20-0x7E]{16}" or a maximum lexical value ("2255_12_31 23:55") appear
+// verbatim as MAX in its paramset descriptions.
 //
 // So the code that read MAX as a length could only ever parse one of
 // those to zero, which is why the branch it guarded had never fired. The
-// real byte budget is the converter's own constructor argument and is
-// never published; an over-long value is truncated device-side rather
+// real byte budget lives inside the HmIP server and is never published; an
+// over-long value is truncated device-side rather
 // than refused. Capping here would need a number no descriptor carries.
 func (t *Text) Set(ctx context.Context, v string, priority hmenum.CommandPriority) error {
 	if !t.IsWritable() {

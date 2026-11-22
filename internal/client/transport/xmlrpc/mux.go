@@ -57,9 +57,8 @@ func (m *Mux) Handle(method string, fn MethodHandler) {
 // (OpenCCU-Base src/libhsscomm/HSSManager.cpp:132), and
 // XmlRpcClient::parseResponse only sets a boolean — no CCU path reads a
 // fault code back from a callback. What the fault struct must carry is an
-// integer faultCode member: the HmIP server's XmlRpcParser casts it to
-// Integer while parsing, so an absent or non-integer code throws on its
-// side.
+// integer faultCode member: the HmIP server fails to parse a fault whose
+// faultCode is absent or not an integer.
 func (m *Mux) HandleFallback(fn MethodHandler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

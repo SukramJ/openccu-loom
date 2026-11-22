@@ -59,10 +59,8 @@ const (
 	// DutyCycleForUpdate reports that the image does not fit in the remaining
 	// airtime allowance (src/rfd/BidcosInterfaceConcentrator.cpp:1045 — an
 	// instantaneous byte-budget comparison, no time dimension). No value write
-	// produces it, and the HmIP legacy surface has no -8 at all — its fault
-	// mapping (HMIPServer
-	// de.eq3.cbcs.legacy.bidcos.rpc.internal.NotificationUtil#getRpcRemoteException)
-	// produces -1, -2, -5 and -10 only. So on a real
+	// produces it, and the HmIP legacy surface has no -8 at all — its
+	// faults are -1, -2, -5 and -10 only. So on a real
 	// CCU this delay is reachable only from a firmware update.
 	//
 	// The 40 s is carried over from the Python reference implementation
@@ -78,15 +76,14 @@ const (
 	//
 	// -10 ("Transmission is pending.") exists only on the HmIP side; rfd and
 	// hs485d never emit it. It is raised behind a reachability test rather
-	// than a timer — DeviceSubcommandHandler#handleSetConfigCommand persists
-	// the configuration as pending and answers TRANSMISSION_PENDING when
-	// `device.isReachable()` is false — so on putParamset MASTER the command
-	// is already queued at the CCU and waiting cannot change the answer;
-	// #handleSetValueCommand does not produce it at all. Where it does mean
-	// something transient is deleteDevice and the link operations, whose
-	// mapping collapses AP_BUSY / STACK_BUSY / RESPONSE_NAK / TIMEOUT into the
-	// same -10 (NotificationUtil#createDeleteDeviceRpcRemoteException); a
-	// short retry is defensible there, which is why the delay stays.
+	// than a timer — on putParamset MASTER to an unreachable device the HmIP
+	// server stores the configuration as pending and answers
+	// TRANSMISSION_PENDING — so the command is already queued at the CCU and
+	// waiting cannot change the answer; setValue does not produce it at all.
+	// Where it does mean something transient is deleteDevice and the link
+	// operations, for which the HmIP server answers -10 on several busy and
+	// timeout conditions alike; a short retry is defensible there, which is
+	// why the delay stays.
 	//
 	// The 5 s is likewise a witness value from the Python reference
 	// implementation (`const.py`, command_retry_transmission_pending_delay).

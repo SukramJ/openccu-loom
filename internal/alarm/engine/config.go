@@ -239,10 +239,9 @@ type SensorConfig struct {
 	//
 	// The load-bearing case is SMOKE_DETECTOR_ALARM_STATUS, whose value
 	// list is [IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM,
-	// SECONDARY_ALARM] — that order verbatim from the firmware's own
-	// enum (HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.SmokeDetectorAlarmStatus,
-	// whose #getNames() fills the VALUE_LIST in ordinal order). Under the
+	// SECONDARY_ALARM] — that order verbatim from the paramset
+	// description both HmIP-SWSD and HmIP-SWSD-2 carry (see
+	// pkg/hmenum/smoke_alarm_status.go). Under the
 	// default rule INTRUSION_ALARM counts as a smoke detection, while it
 	// means the installation drove that detector as a siren for a
 	// burglary — the alarm system reading back its own output as an
@@ -252,11 +251,9 @@ type SensorConfig struct {
 	// on different authority:
 	//
 	// The positional half is firmware. The integer an ENUM delivers on
-	// the legacy XML-RPC surface IS its index in the declared VALUE_LIST:
-	// the description's list and the wire ordinal come from one
-	// getEnumStrings() array (HMIPServer
-	// de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#createParameterDescription
-	// and #convertParameterValue), and the shipped configuration turns
+	// the legacy XML-RPC surface IS its index in the declared VALUE_LIST —
+	// the HmIP server builds the description's list and the wire ordinal
+	// from the same value set — and the shipped configuration turns
 	// that substitution on
 	// (../OpenCCU-Base/etc/config_templates/crRFD.conf:47,
 	// Legacy.Parameter.ReplaceEnumValueWithOrdinal=true). Note the

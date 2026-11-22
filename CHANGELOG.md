@@ -6875,7 +6875,7 @@ defect.
   5 s. A device declares 16 entries and skips three of ours — there is no
   `600MS`, no `800MS`, no `900MS` and no `4S` — while continuing past 5 s with
   `7S`, `10S`, `20S`, `40S` and `60S`
-  (`GeneralStateParameterFactory#createOnTimeListParameter`). Requests in
+  (the VALUE_LIST of `ON_TIME_LIST_1` in its paramset description). Requests in
   551-650, 751-850, 851-950 and 3501-4500 ms produced a label the device does
   not declare, which the CCU's enum conversion rejects — failing the whole
   atomic turn-on `put_paramset`, not just the duration. And because everything

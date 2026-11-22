@@ -72,10 +72,10 @@ var ErrInvalidInterval = errors.New("textdisplay: invalid interval value")
 // DISPLAY_DATA_STRING {MAX "[0x20-0x7E]{16}"}.
 //
 // Neither number generalises, which is why they are not fleet-wide rules:
-// HMIPServer de.eq3.cbcs.devicedescription.channelspecification.stateparameter.
-// GeneralStateParameterFactory registers DISPLAY_DATA_ID in three variants —
+// the HmIP server declares DISPLAY_DATA_ID with three different ranges —
 // (1,2), (1,5) and (0,7) — and DISPLAY_DATA_STRING with four different
-// max-value patterns. A profile serving a second display model must read the
+// max-value patterns, depending on the device. A profile serving a second
+// display model must read the
 // bounds from that device's descriptor rather than reuse these.
 //
 // Two things the declaration says that these constants do not carry. Its MAX
@@ -84,8 +84,8 @@ var ErrInvalidInterval = errors.New("textdisplay: invalid interval value")
 // alphabet 0x20..0x7E, while [Row.Validate] counts bytes — the two coincide
 // inside that alphabet, so a UTF-8 row outside it is measured by a rule the
 // device did not state. What the device does with an over-long row is
-// unverified: the converter bound to this parameter does not truncate, and no
-// length check was found on the legacy put_paramset path.
+// unverified: no truncation and no length check on the HmIP server's
+// put_paramset path is known.
 const (
 	maxDisplayID = 5
 

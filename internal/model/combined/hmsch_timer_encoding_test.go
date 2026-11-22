@@ -101,8 +101,9 @@ func TestHmSchTimerWritesAnIntegerDurationValue(t *testing.T) {
 // TestHmSchTimerMaxIsAReachableSecondsCeiling pins what [Timer.Max] means.
 //
 // 16343 is DURATION_VALUE's per-unit INTEGER maximum — the count, paired with
-// DURATION_UNIT ∈ {S, M, H} — not a number of seconds (HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createDurationValueParameter).
+// a DURATION_UNIT ENUM that starts S, M, H — not a number of seconds: every HmIP
+// paramset description in the descriptor corpus that declares DURATION_VALUE
+// declares MAX 16343.
 // Publishing it as a maximum in seconds capped the data point at 4 h 32 min.
 //
 // The ceiling is derived here rather than restated: the largest count at the

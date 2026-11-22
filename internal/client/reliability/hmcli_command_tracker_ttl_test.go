@@ -10,10 +10,11 @@ import (
 )
 
 // hmCliHmIPLegacyResponseBudget is the CCU's own ceiling on a synchronous
-// legacy call: Legacy.ResponseTimeout, default 25 s
-// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.LegacyServiceHandler). It is the
-// largest firmware-stated synchronous budget the optimistic tracker has to
-// outlive; the BidCos per-frame waits are smaller (1500 / 4500 / 12500 ms,
+// legacy call: Legacy.ResponseTimeout, 25 s when the key is unset — the
+// larger of that default and the 20 s the shipped configuration sets
+// (../OpenCCU-Base/etc/config_templates/crRFD.conf:16). It is the largest
+// firmware-stated synchronous budget the optimistic tracker has to outlive;
+// the BidCos per-frame waits are smaller (1500 / 4500 / 12500 ms,
 // OpenCCU-Base src/rfd/BidcosFrameWaitTime.h).
 const hmCliHmIPLegacyResponseBudget = 25 * time.Second
 

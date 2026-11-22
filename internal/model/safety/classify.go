@@ -152,24 +152,22 @@ var dutyCycleAliases = map[hmenum.Parameter]struct{}{
 // [byChannelAndParameter] today, so all of them are belt-and-braces.
 var excludedParameters = map[hmenum.Parameter]struct{}{
 	// REPORTED — the siren's own feedback that it is sounding/flashing.
-	// Registered through HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createReadEventBooleanParameter,
-	// i.e. read+event, never written.
+	// Read+event, never written: its paramset description declares
+	// OPERATIONS = READ|EVENT.
 	hmenum.ParameterAcousticAlarmActive: {},
 	"OPTICAL_ALARM_ACTIVE":              {},
-	// WRITTEN — the siren's command half, write-only per HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createAcousticAlarmSelectionParameter
-	// and #createOpticalAlarmSelectionParameter.
+	// WRITTEN — the siren's command half, write-only per its paramset
+	// description (OPERATIONS = WRITE).
 	hmenum.ParameterAcousticAlarmSelection: {},
 	"OPTICAL_ALARM_SELECTION":              {},
 	// WRITTEN — the command half of the smoke-detector chain: writing it
 	// makes every detector in the group sound, which is an output, not a
-	// detection. Write-only per HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createSmokeDetectorCommandParameter.
+	// detection. Write-only per its paramset description (OPERATIONS =
+	// WRITE).
 	hmenum.ParameterSmokeDetectorCommand: {},
 	// REPORTED — a fallback mode an actuator enters on command loss; the
-	// technical class covers the real cause. Read+event per HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.StateParameterFactory#createReadEventBooleanIntegerParameter.
+	// technical class covers the real cause. Read+event per its paramset
+	// description (OPERATIONS = READ|EVENT).
 	// Note it belongs to neither family this block is organised around:
 	// it is declared on the underfloor-heating actuator channels
 	// (CLIMATECONTROL_FLOOR_TRANSCEIVER / _PUMP_TRANSCEIVER /

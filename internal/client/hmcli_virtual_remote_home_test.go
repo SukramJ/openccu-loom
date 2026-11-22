@@ -23,10 +23,10 @@ import (
 //
 // Firmware source for the addresses, so a reader does not have to trust the
 // list: OpenCCU-Base src/rfd/RFCentral.cpp:36-37 (`serial="BidCoS-RF"`),
-// src/hs485d/HS485Central.cpp:36-37 (`serial="BidCoS-Wir"`), and on the HmIP
-// side HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.VirtualRemoteControl,
-// whose address is DEVICE_ID_BASE "HmIP-RCV-" plus an instance counter that
-// starts at 1 — hence "HmIP-RCV-1" for the single handler a CCU builds.
+// src/hs485d/HS485Central.cpp:36-37 (`serial="BidCoS-Wir"`); on the HmIP
+// side the HmIP server's legacy virtual remote takes the address "HmIP-RCV-"
+// plus an instance counter that starts at 1 — hence "HmIP-RCV-1" for the
+// single one a CCU builds.
 var hmCliVirtualRemoteAddressRoots = []string{"BidCoS-RF", "BidCoS-Wir", "HmIP-RCV-"}
 
 // TestHmCliClientHoldsNoVirtualRemoteAddressCopy pins the single-home rule for

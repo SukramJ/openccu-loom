@@ -38,10 +38,9 @@ type DiffResult struct {
 //     truncating binary-mantissa form. frexp normalises the mantissa into
 //     [0.5,1), so the error is bounded by 2^-29 ≈ 1.9e-9 relative — a
 //     constant relative step, not a growing one.
-//   - HmIP legacy XML-RPC does not quantise at all: the <double> element is
-//     written with Java's String.valueOf, the shortest round-trip form
-//     (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcSerializer;
-//     symbol-level citation, not re-measured against a local source tree).
+//   - HmIP legacy XML-RPC does not quantise at all: the HmIP server writes
+//     a <double> in the shortest decimal form that round-trips the value
+//     (not re-measured on the wire for this bound).
 //
 // The max(1, ...) denominator is why one epsilon covers all three: for
 // |v| <= 1 it degrades to an absolute 1e-6, which covers %f's 5e-7; for

@@ -461,10 +461,9 @@ var ignoreOnInitialLoadExact = map[Parameter]struct{}{
 // buys nothing.
 //
 // The parameters a getValue genuinely does put on air are on the other
-// transport and are absent here: the HmIP legacy handler serves every
+// transport and are absent here: the HmIP server answers getValue for every
 // key from its server-side device model except INSTALL_TEST and
-// CURRENT_ILLUMINATION, which ask the device and block for the answer
-// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#askValue).
+// CURRENT_ILLUMINATION, which ask the device and block for the answer.
 // Whether they belong in this set is unverified: no production code
 // reads this predicate today, so there is no boot path whose behaviour
 // would settle it. Wiring one is what would.

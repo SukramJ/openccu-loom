@@ -82,10 +82,8 @@ func (s *Switch) TurnOff(ctx context.Context, priority hmenum.CommandPriority) e
 // (../OpenCCU-Base/src/devicetypes/rftypes/rf_s_644.xml:274-279), and the
 // HmIP receivers declare `.Unit=s`
 // (../OpenCCU-Base/opt/HmIP/legacy-parameter-definition.config:271, :625,
-// :688, :691) with the
-// same tinyfloat converter (HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createOnTimeParameter,
-// max 8580000.0).
+// :688, :691) and encode it with the same tinyfloat scheme (their paramset
+// descriptions declare ON_TIME with MAX 8580000.0).
 //
 // Only the lower bound is clamped. The two stacks declare different
 // ceilings, and neither is readable from a single place at this layer, so

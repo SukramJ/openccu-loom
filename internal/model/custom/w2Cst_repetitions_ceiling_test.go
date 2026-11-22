@@ -14,21 +14,15 @@ import (
 // paramset — the paramset every writer in this repo stages the parameter
 // into. Sixteen entries, the numbered run stopping at REPETITIONS_014.
 //
-// Sourced twice, not from a convention:
-//
-//   - HMIPServer de.eq3.cbcs.devicedescription.channelspecification.
-//     stateparameter.GeneralStateParameterFactory#createRepetitionParameter
-//     builds the parameter over Repetitions.getNames(16), and
-//     ...channelspecification.Repetitions#getNames places NO_REPETITION at
-//     index 0, INFINITE_REPETITIONS at the last index and
-//     String.format("REPETITIONS_%03d", i) in between — so a 16-slot list
-//     ends at REPETITIONS_014.
-//   - Every device in the captured paramset-description corpus checked out
-//     beside this repo that declares the parameter agrees: HmIP-MP3P
-//     (channels :2, :6, :7, :8) and HmIP-WRCD (channel :3). Measured by
-//     walking every JSON file in that corpus and collecting the
-//     (len(VALUE_LIST), last REPETITIONS_* entry) pair of each VALUES-paramset
-//     REPETITIONS parameter: five occurrences, all (16, REPETITIONS_014).
+// Sourced from the devices, not from a convention: every device in the
+// captured paramset-description corpus checked out beside this repo that
+// declares the parameter agrees — HmIP-MP3P (channels :2, :6, :7, :8) and
+// HmIP-WRCD (channel :3). Measured by walking every JSON file in that corpus
+// and collecting the (len(VALUE_LIST), last REPETITIONS_* entry) pair of each
+// VALUES-paramset REPETITIONS parameter: five occurrences, all (16,
+// REPETITIONS_014). Each list puts NO_REPETITION at index 0,
+// INFINITE_REPETITIONS at the last index and the zero-padded
+// REPETITIONS_NNN run in between.
 //
 // The 256-slot list ending at REPETITIONS_254 exists only on the MASTER /
 // LINK profile-repetition config parameters (POWERUP_/SHORT_/LONG_

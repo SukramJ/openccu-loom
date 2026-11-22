@@ -21,8 +21,8 @@ import (
 // incoming label with `(int)i`
 // (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp:72-118;
 // ../OpenCCU-Base/src/devicetypes/rftypes/rf_tc_it_wm-w-eu.xml:381-401).
-// ACTIVE_PROFILE is an INTEGER with min 1, default 1
-// (HMIPServer de.eq3.cbcs.devicedescription.channelspecification.stateparameter.ClimateStateParameterFactory#createActiveProfileParameter).
+// ACTIVE_PROFILE is an INTEGER with min 1, default 1 (every HmIP paramset
+// description in the descriptor corpus that declares it).
 //
 // So the RF pointer reaches us as an int too, and "an int means 1-based" maps
 // the device's first week program onto P1's neighbour.

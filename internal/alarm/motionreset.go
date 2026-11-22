@@ -36,11 +36,10 @@ type motionResetter struct {
 // type instead of the parameter would silently skip every presence
 // detector.
 //
-// Both are registered as stop-shaped state parameters (HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.StateParameterFactory,
-// via #createStop — which also registers the unrelated STOP parameter, so
-// the pair is "the only two RESET_* parameters", not "the only two stops"),
-// and the descriptor corpus shows the pairing is
+// Both are declared exactly like the unrelated STOP parameter (TYPE ACTION,
+// OPERATIONS WRITE, in the descriptor corpus), so the pair is "the only two
+// RESET_* parameters", not "the only two parameters of that shape", and the
+// descriptor corpus shows the pairing is
 // strict: RESET_MOTION occurs only beside MOTION (on
 // MOTIONDETECTOR_TRANSCEIVER and MOTIONDETECTOR_VIRTUAL_TRANSCEIVER),
 // RESET_PRESENCE only beside PRESENCE_DETECTION_STATE (on
