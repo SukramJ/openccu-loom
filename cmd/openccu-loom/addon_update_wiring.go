@@ -131,9 +131,13 @@ func addonUpdateWSPayload(st addonupdate.Status) ws.AddonUpdateStatusPayload {
 		ReleaseURL:       st.ReleaseURL,
 		State:            string(st.State),
 		Error:            st.Error,
+		ErrorCode:        st.ErrorCode,
 	}
 	if !st.LastCheck.IsZero() {
 		payload.LastCheck = st.LastCheck.UTC().Format(time.RFC3339)
+	}
+	if !st.RetryAt.IsZero() {
+		payload.RetryAt = st.RetryAt.UTC().Format(time.RFC3339)
 	}
 	return payload
 }

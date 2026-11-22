@@ -160,6 +160,10 @@ type getAddonUpdateStatusOut struct {
 	InstallInProgress bool   `json:"install_in_progress"`
 	LastCheck         string `json:"last_check,omitempty"`
 	Error             string `json:"error,omitempty"`
+	// ErrorCode classifies the failure; "rate_limited" is GitHub's
+	// request limit, which clears by itself at RetryAt.
+	ErrorCode string `json:"error_code,omitempty"`
+	RetryAt   string `json:"retry_at,omitempty"`
 }
 
 // registerGetAddonUpdateStatus implements `get_addon_update_status`,
@@ -184,9 +188,13 @@ func registerGetAddonUpdateStatus(s *mcpsdk.Server, d Deps) {
 			State:             string(st.State),
 			InstallInProgress: st.State == addonupdate.StateDownloading || st.State == addonupdate.StateInstalling,
 			Error:             st.Error,
+			ErrorCode:         st.ErrorCode,
 		}
 		if !st.LastCheck.IsZero() {
 			out.LastCheck = rfc3339OrEmpty(st.LastCheck)
+		}
+		if !st.RetryAt.IsZero() {
+			out.RetryAt = rfc3339OrEmpty(st.RetryAt)
 		}
 		return nil, out, nil
 	})

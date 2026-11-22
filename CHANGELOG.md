@@ -16,6 +16,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   restart now hands them to the Matter bridge, which frees them at its
   next sync. The devices of the kept interfaces keep their numbers as
   before. (#1152)
+- **The add-on update check explains GitHub's request limit instead of
+  failing with "unexpected status 403".** GitHub limits unauthenticated
+  requests per network address, so several daemons behind one address
+  can use the limit up. The check now reports it as what it is, with
+  the time it clears by itself, in the Settings card in English and
+  German. Any other refusal still shows the daemon's detail. (#1153)
+
+### Changed
+
+- **REST API 16.7.0:** `AddonUpdateStatus` (`GET /system/addon-update`,
+  the `addon_update.state_changed` broadcast and the MCP tool
+  `get_addon_update_status`) gains `error_code` (`rate_limited`) and
+  `retry_at`. (#1153)
 
 ## [0.106.2] - 2026-11-22
 

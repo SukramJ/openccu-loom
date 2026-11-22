@@ -39,6 +39,10 @@ type AddonUpdateStatusResponse struct {
 	LastCheck        string `json:"last_check,omitempty"`
 	State            string `json:"state"`
 	Error            string `json:"error,omitempty"`
+	// ErrorCode classifies the failure; "rate_limited" is GitHub's
+	// request limit, which clears by itself at RetryAt.
+	ErrorCode string `json:"error_code,omitempty"`
+	RetryAt   string `json:"retry_at,omitempty"`
 }
 
 // addonUpdateStatusResponse converts the domain snapshot to the wire
@@ -54,9 +58,13 @@ func addonUpdateStatusResponse(s addonupdate.Status) AddonUpdateStatusResponse {
 		ReleaseURL:       s.ReleaseURL,
 		State:            string(s.State),
 		Error:            s.Error,
+		ErrorCode:        s.ErrorCode,
 	}
 	if !s.LastCheck.IsZero() {
 		resp.LastCheck = s.LastCheck.UTC().Format(time.RFC3339)
+	}
+	if !s.RetryAt.IsZero() {
+		resp.RetryAt = s.RetryAt.UTC().Format(time.RFC3339)
 	}
 	return resp
 }

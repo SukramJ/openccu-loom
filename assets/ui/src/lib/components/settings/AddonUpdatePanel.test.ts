@@ -214,6 +214,34 @@ describe("AddonUpdatePanel — failed state", () => {
       expect(screen.getByText(/checksum mismatch/)).toBeTruthy(),
     );
   });
+
+  it("explains GitHub's request limit instead of the raw status code", async () => {
+    mockGetAddonUpdateStatus.mockResolvedValue(
+      status({
+        state: "failed",
+        error: "addonupdate: GitHub's request limit is used up; the check works again after 2026-11-22T19:42:00Z",
+        error_code: "rate_limited",
+        retry_at: "2026-11-22T19:42:00Z",
+      }),
+    );
+    render(AddonUpdatePanel);
+
+    await waitFor(() =>
+      expect(screen.getByText(/addon_update\.error\.rate_limited_until/)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/addonupdate:/)).toBeNull();
+  });
+
+  it("explains the request limit without a time when GitHub named none", async () => {
+    mockGetAddonUpdateStatus.mockResolvedValue(
+      status({ state: "failed", error: "addonupdate: GitHub's request limit is used up", error_code: "rate_limited" }),
+    );
+    render(AddonUpdatePanel);
+
+    await waitFor(() =>
+      expect(screen.getByText(/addon_update\.error\.rate_limited(?!_until)/)).toBeTruthy(),
+    );
+  });
 });
 
 describe("AddonUpdatePanel — reconnect after install", () => {

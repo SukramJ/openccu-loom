@@ -29,6 +29,10 @@ type AddonUpdateStatusPayload struct {
 	LastCheck        string `json:"last_check,omitempty"`
 	State            string `json:"state"`
 	Error            string `json:"error,omitempty"`
+	// ErrorCode classifies the failure; "rate_limited" is GitHub's
+	// request limit, which clears by itself at RetryAt.
+	ErrorCode string `json:"error_code,omitempty"`
+	RetryAt   string `json:"retry_at,omitempty"`
 }
 
 // PublishAddonUpdateStateChanged emits the add-on self-updater's
