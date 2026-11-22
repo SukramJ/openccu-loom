@@ -3570,8 +3570,18 @@ a stored fractional ramp is shown in `10MS` again on opening the dialog
 invention. The same page does not offer `10MS` for the on-time: its `10MS`
 option for `DURATION_UNIT` is commented out (`:104`), although the devices'
 paramset descriptions declare `10MS` in `DURATION_UNIT` as well.
-Whether the devices honour a `DURATION` pair in `10MS` is to be confirmed on
-a live device.
+
+**Measured on a live HmIP-BSL dimmer channel (2026-11-22, wire captured
+between the daemon and the CCU).** `set_level {"state": "ON", "seconds":
+0.5}` went out as one `putParamset` with `DURATION_VALUE=50`,
+`DURATION_UNIT=3`, `LEVEL=1.0` and was accepted; the channel read `LEVEL`
+1 at +0.3 s and 0 at +3.0 s without a further command. The CCU reports the
+level late — a 3 s on-time still read 1 at +4.5 s — so the reading rules
+out a 50 s timer but does not resolve 0.5 s against 1 s. A ramp pair in
+`10MS` (`RAMP_TIME_VALUE=50`, `RAMP_TIME_UNIT=3`) sent with a 5 s on-time
+was accepted and the channel was off again at +8 s. The same ramp without
+the on-time pair is refused with `MISSING_NON_OPTIONAL_PARAMETER`, which is
+why the light paths always send the two together.
 
 **Guards.** `TestDurationUnitsRoundHalfUpToTheNearestStep`,
 `TestDurationUnitsUseTenMillisecondsWhereTheListOffersIt` and
@@ -3582,9 +3592,9 @@ a live device.
 family in `timer_unit_list_test.go` under `internal/model/combined/` and
 `internal/model/custom/{light,siren,valve}/`.
 
-**Retirement condition.** If the live check shows that a device rejects or
-misreads a `DURATION` pair in `10MS`, `10MS` is limited to the ramp pair and
-this entry says so.
+**Retirement condition.** If a device turns out to reject or misread a
+`DURATION` pair in `10MS`, `10MS` is limited to the ramp pair for that
+family and this entry says so.
 
 ## openccu-lite event stream — values are re-typed from the paramset description
 
