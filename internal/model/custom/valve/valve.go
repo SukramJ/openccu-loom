@@ -66,6 +66,11 @@ type Irrigation struct {
 	// DURATION_UNIT, so a timed open writes that pair instead of ON_TIME. A
 	// channel of an HmIP-WSM with firmware 1.4.12 has the pair and no ON_TIME.
 	durationTimer bool
+
+	// durationUnits is what the resolved DURATION_UNIT's VALUE_LIST
+	// declares: the units a timed open may be encoded in, and their wire
+	// ordinals.
+	durationUnits custom.DurationUnits
 }
 
 // NewIrrigation constructs an Irrigation valve that wraps the
@@ -84,22 +89,29 @@ func NewIrrigation(ch *device.Channel, group custom.RebasedChannelGroupConfig) *
 	if sw == nil {
 		return nil
 	}
+	durationTimer, durationUnits := carriesDurationTimer(ch, group)
 	v := &Irrigation{
 		Switch:        sw,
 		groupState:    custom.NewGroupState(),
-		durationTimer: carriesDurationTimer(ch, group),
+		durationTimer: durationTimer,
+		durationUnits: durationUnits,
 	}
 	v.registerIrrigationServices()
 	return v
 }
 
 // carriesDurationTimer reports whether the schema's duration slots resolve to
-// parameters that the device carries.
-func carriesDurationTimer(ch *device.Channel, group custom.RebasedChannelGroupConfig) bool {
+// parameters that the device carries, and the units the resolved unit
+// parameter declares.
+func carriesDurationTimer(ch *device.Channel, group custom.RebasedChannelGroupConfig) (bool, custom.DurationUnits) {
 	valueCh, valueParam := custom.ResolveSlotOr(ch, group, hmenum.FieldDurationValue, hmenum.ParameterDurationValue)
 	unitCh, unitParam := custom.ResolveSlotOr(ch, group, hmenum.FieldDurationUnit, hmenum.ParameterDurationUnit)
-	return valueCh != nil && unitCh != nil &&
+	carries := valueCh != nil && unitCh != nil &&
 		valueCh.Parameter(valueParam) != nil && unitCh.Parameter(unitParam) != nil
+	if !carries {
+		return false, custom.DurationUnits{}
+	}
+	return true, custom.DurationUnitsOf(unitCh, unitParam)
 }
 
 // GroupState returns the group-membership tracker.
@@ -197,7 +209,7 @@ func (v *Irrigation) stageDurationOpen(coll *generic.CallParameterCollector, dur
 	if !v.IsWritable() {
 		return generic.ErrNotWritable
 	}
-	value, unit := custom.EncodeTimerDuration(duration)
+	value, unit := v.durationUnits.Encode(duration)
 	addr := v.Key.ChannelAddress
 	if err := coll.AddParam(addr, v.Key.ParamsetKey, string(hmenum.ParameterDurationValue), value, 0); err != nil {
 		return fmt.Errorf("valve: stage DURATION_VALUE: %w", err)

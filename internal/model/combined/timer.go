@@ -32,7 +32,7 @@ const ParameterDuration hmenum.Parameter = "DURATION"
 //
 // It is therefore also the threshold at which the encoder promotes to the next
 // coarser unit — a count above it has no representation in the current one.
-// The promotion itself lives in [custom.EncodeTimerDuration]; this constant is
+// The promotion itself lives in [custom.DurationUnits.Encode]; this constant is
 // kept only to express the seconds ceiling in [Timer.Max], and
 // TestHmSchTimerMaxIsAReachableSecondsCeiling re-derives it from that encoder
 // rather than trusting the two copies to stay equal.
@@ -68,6 +68,11 @@ type Timer struct {
 	// was found. Exposed via [Default].
 	defaultSeconds float64
 	hasDefault     bool
+	// units is what the unit parameter's VALUE_LIST declares, captured at
+	// Subscribe time. Both directions go through it: the ordinal a write
+	// carries and the ordinal a report is read by are positions in the
+	// channel's own list.
+	units custom.DurationUnits
 }
 
 // NewTimer constructs a Timer.
@@ -132,6 +137,10 @@ func (t *Timer) Subscribe(ch *device.Channel) func() {
 	if valueDP == nil || unitDP == nil {
 		return nil
 	}
+	units := custom.DurationUnitsOf(ch, t.UnitParameter)
+	t.mu.Lock()
+	t.units = units
+	t.mu.Unlock()
 	// Capture the value parameter's default at subscribe time so Default()
 	// can return it. The default is stored as seconds using hmenum.TimerUnitSeconds.
 	if dp, ok := any(ch.Parameter(t.ValueParameter)).(timerDefaultProvider); ok {
@@ -209,7 +218,7 @@ func (t *Timer) Value() (time.Duration, bool) {
 	if !t.observed {
 		return 0, false
 	}
-	return time.Duration(t.seconds) * time.Second, true
+	return secondsToDuration(t.seconds), true
 }
 
 // DefaultDuration returns the default duration captured from the device's
@@ -239,10 +248,14 @@ func (t *Timer) ValueSeconds() (float64, bool) {
 }
 
 // OnComponents feeds a (rawValue, unit) pair from the wire. The
-// combined data point stores the computed seconds.
+// combined data point stores the computed seconds. An ordinal the channel's
+// list does not name is kept as a count of seconds.
 func (t *Timer) OnComponents(rawValue float64, unit hmenum.TimerUnit) {
-	seconds := toSeconds(rawValue, unit)
 	t.mu.Lock()
+	seconds, ok := t.units.Seconds(rawValue, int32(unit)) //nolint:gosec // a VALUE_LIST position
+	if !ok {
+		seconds = rawValue
+	}
 	prev := t.seconds
 	was := t.observed
 	t.seconds = seconds
@@ -254,17 +267,21 @@ func (t *Timer) OnComponents(rawValue float64, unit hmenum.TimerUnit) {
 	t.fire(prev, seconds)
 }
 
-// SetDuration writes the duration back to the device, auto-selecting
-// the unit. Durations longer than the value-parameter's representable
-// range switch from seconds → minutes → hours.
+// SetDuration writes the duration back to the device in the unit
+// [custom.DurationUnits.Encode] chooses from the channel's own list, and
+// records the duration that pair means — the rounded one the device runs,
+// not the requested one.
 //
 // The count goes on the wire as an int32: DURATION_VALUE is declared INTEGER,
 // and nothing between here and the transport coerces it — a float64 staged
 // here would be encoded as a <double> on a parameter the device declares as an
 // integer.
 func (t *Timer) SetDuration(ctx context.Context, d time.Duration, priority hmenum.CommandPriority) error {
-	seconds := d.Seconds()
-	value, unit := custom.EncodeTimerDuration(d)
+	t.mu.RLock()
+	units := t.units
+	t.mu.RUnlock()
+	value, unit := units.Encode(d)
+	seconds, _ := units.Seconds(float64(value), unit)
 
 	if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, unit, priority); err != nil {
 		return fmt.Errorf("timer: UNIT: %w", err)
@@ -362,7 +379,7 @@ func (t *Timer) SendDefault(
 	}
 	if t.UnitParameter != "" {
 		if v, ok := defaultFn(string(t.UnitParameter)); ok {
-			if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(v), priority); err != nil { //nolint:gosec // unit in 0..2; see #20
+			if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(v), priority); err != nil { //nolint:gosec // a VALUE_LIST position
 				return fmt.Errorf("timer send_default UNIT: %w", err)
 			}
 		}
@@ -375,31 +392,11 @@ func (t *Timer) SendDefault(
 	return nil
 }
 
-// RecalcUnit expresses a duration in seconds as the CCU's (DURATION_VALUE,
-// DURATION_UNIT) pair: the smallest unit whose count stays within
-// [timerValueMaxPerUnit], with the count truncated toward zero because
-// DURATION_VALUE is an INTEGER parameter.
-//
-// It is the same rule [custom.EncodeTimerDuration] applies on the service
-// path, and it delegates to it rather than restating it. The two used to be
-// separate implementations that agreed on the unit and disagreed on the value
-// — this one promoted in floating point and staged the fraction on the wire,
-// so 16373 s reached the device as 272.88 minutes here and as 272 minutes
-// there, for one requested duration. The sentinel [custom.TimerNotUsed] and
-// the negative case come from that encoder too.
-//
-// The returned value is a float64 only because the combined DP's seconds
-// domain is one; it always holds a whole count.
-//
-// loom:reachable:reason="no production caller: Timer.SetDuration calls custom.EncodeTimerDuration itself; kept as the seconds-domain form of that encoder and exercised by the package tests"
-func RecalcUnit(seconds float64) (float64, hmenum.TimerUnit) {
-	value, unit := custom.EncodeTimerDuration(secondsToDuration(seconds))
-	return float64(value), hmenum.TimerUnit(unit)
-}
-
-// secondsToDuration converts a seconds total to a [time.Duration], saturating
-// rather than wrapping: a nanosecond count past the int64 range would come
-// back as a negative duration and read as "no duration at all".
+// secondsToDuration converts a seconds total to a [time.Duration], rounded to
+// the nearest nanosecond so a 10MS count such as 163.43 s comes back exact,
+// and saturating rather than wrapping: a nanosecond count past the int64
+// range would come back as a negative duration and read as "no duration at
+// all".
 func secondsToDuration(seconds float64) time.Duration {
 	const maxSeconds = float64(math.MaxInt64) / float64(time.Second)
 	if seconds >= maxSeconds {
@@ -408,17 +405,5 @@ func secondsToDuration(seconds float64) time.Duration {
 	if seconds <= -maxSeconds {
 		return time.Duration(math.MinInt64)
 	}
-	return time.Duration(seconds * float64(time.Second))
-}
-
-func toSeconds(rawValue float64, unit hmenum.TimerUnit) float64 {
-	switch unit {
-	case hmenum.TimerUnitMinutes:
-		return rawValue * 60
-	case hmenum.TimerUnitHours:
-		return rawValue * 3600
-	case hmenum.TimerUnitSeconds:
-		return rawValue
-	}
-	return rawValue
+	return time.Duration(math.Round(seconds * float64(time.Second)))
 }

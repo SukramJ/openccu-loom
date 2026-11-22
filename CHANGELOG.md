@@ -22,6 +22,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   can use the limit up. The check now reports it as what it is, with
   the time it clears by itself, in the Settings card in English and
   German. Any other refusal still shows the daemon's detail. (#1153)
+- **Sub-second ramp and on-times reach the device.** A timer pair
+  (`RAMP_TIME_VALUE`/`_UNIT`, `DURATION_VALUE`/`_UNIT`) was always sent in
+  seconds with the fraction cut off, so a 500 ms ramp arrived as a zero
+  count and 1.5 s as 1 s. Durations that are not a whole second now go out
+  in hundredths of a second (`10MS`) on every channel whose own unit list
+  offers it — the HmIP dimmers, RGBW and LED actuators, the MP3P sound
+  player and the HmIP-WSM irrigation valve. Every other channel gets the nearest whole step, never less than
+  one. Whole seconds are sent as before. Longer durations are rounded to the
+  nearest minute or hour instead of cut off, so 16373 s is 273 minutes, not
+  272. A device or client reporting a timer in `10MS` now reads back as
+  that duration instead of a hundred times longer. (#1144)
 
 ### Changed
 

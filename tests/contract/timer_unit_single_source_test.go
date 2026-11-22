@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -30,8 +29,8 @@ const timerUnitDescriptorPath = "../../internal/model/custom/siren/testdata/hmip
 const timerUnitHome = "pkg/hmenum/timer.go"
 
 // timerUnitValueList reads DURATION_UNIT's VALUE_LIST from the captured
-// descriptor and returns label → ordinal.
-func timerUnitValueList(t *testing.T) map[string]int {
+// descriptor and returns it, with label → ordinal.
+func timerUnitValueList(t *testing.T) (valueList []string, ordinals map[string]int) {
 	t.Helper()
 	raw, err := os.ReadFile(timerUnitDescriptorPath)
 	if err != nil {
@@ -58,30 +57,25 @@ func timerUnitValueList(t *testing.T) map[string]int {
 	for i, label := range desc.ValueList {
 		out[label] = i
 	}
-	return out
+	return desc.ValueList, out
 }
 
-// TestTimerUnitOrdinalsComeFromTheDeviceValueList pins both timer encoders
+// TestTimerUnitOrdinalsComeFromTheDeviceValueList pins the timer encoder
 // against the device's own DURATION_UNIT VALUE_LIST.
 //
-// The CCU takes a duration as a (value, unit) pair, and two encoders in
-// this tree produce that pair for the same channel: custom.EncodeTimerDuration
-// on the service path and combined.RecalcUnit on the combined-write path. If
-// they disagree about which ordinal means minutes, one requested duration
-// reaches the device as sixty times another — with no wire error, because both
-// ordinals are valid ENUM positions.
+// The CCU takes a duration as a (value, unit) pair, and the unit is a position
+// in the parameter's VALUE_LIST. A wrong ordinal is not a wire error — every
+// position is a valid ENUM value — so one requested duration reaches the
+// device as sixty times another, or a hundredth of it.
 //
-// Neither side is compared against a literal or against the other. Both are
-// compared against the position of the label in the captured VALUE_LIST, so
-// the test still bites when both copies drift the same way, and the ordinals
-// in pkg/hmenum are checked against the same external source rather than
-// against themselves.
-//
-// The limit: "10MS" sits at ordinal 3 of that VALUE_LIST and neither encoder
-// can emit it, so this guard says nothing about sub-second durations.
+// Neither the encoder nor pkg/hmenum is compared against a literal. Both are
+// compared against the position of the label in the captured VALUE_LIST: the
+// encoder built from that list, the encoder of a channel that declares no
+// list (which falls back to the hmenum ordinals), and the decoder of each,
+// which has to read every ordinal back as the unit the list puts there.
 func TestTimerUnitOrdinalsComeFromTheDeviceValueList(t *testing.T) {
 	t.Parallel()
-	list := timerUnitValueList(t)
+	valueList, list := timerUnitValueList(t)
 
 	for _, c := range []struct {
 		label string
@@ -90,6 +84,7 @@ func TestTimerUnitOrdinalsComeFromTheDeviceValueList(t *testing.T) {
 		{"S", hmenum.TimerUnitSeconds},
 		{"M", hmenum.TimerUnitMinutes},
 		{"H", hmenum.TimerUnitHours},
+		{"10MS", hmenum.TimerUnit10ms},
 	} {
 		want, ok := list[c.label]
 		if !ok {
@@ -103,29 +98,49 @@ func TestTimerUnitOrdinalsComeFromTheDeviceValueList(t *testing.T) {
 		}
 	}
 
+	declared := custom.DurationUnitsFromList(valueList)
+	undeclared := custom.DurationUnits{}
 	for _, c := range []struct {
-		name  string
-		d     time.Duration
-		label string
+		name            string
+		d               time.Duration
+		label           string
+		undeclaredLabel string
 	}{
-		{"below the promotion threshold", 30 * time.Second, "S"},
-		{"at the promotion threshold", 16343 * time.Second, "S"},
-		{"one second past it", 16344 * time.Second, "M"},
-		{"past the minutes threshold", 1_000_000 * time.Second, "H"},
-		{"the disabled-timer sentinel", time.Duration(custom.TimerNotUsed) * time.Second, "H"},
+		{"a sub-second duration", 500 * time.Millisecond, "10MS", "S"},
+		{"below the promotion threshold", 30 * time.Second, "S", "S"},
+		{"at the promotion threshold", 16343 * time.Second, "S", "S"},
+		{"one second past it", 16344 * time.Second, "M", "M"},
+		{"past the minutes threshold", 1_000_000 * time.Second, "H", "H"},
+		{"the disabled-timer sentinel", time.Duration(custom.TimerNotUsed) * time.Second, "H", "H"},
 	} {
-		want := list[c.label]
-		_, encoded := custom.EncodeTimerDuration(c.d)
-		if int(encoded) != want {
-			t.Errorf("%s: custom.EncodeTimerDuration(%v) chose unit ordinal %d; "+
-				"the device's VALUE_LIST puts %q at %d",
-				c.name, c.d, encoded, c.label, want)
-		}
-		_, recalced := combined.RecalcUnit(c.d.Seconds())
-		if int(recalced) != want {
-			t.Errorf("%s: combined.RecalcUnit(%v) chose unit ordinal %d; "+
-				"the device's VALUE_LIST puts %q at %d",
-				c.name, c.d.Seconds(), int(recalced), c.label, want)
+		for _, e := range []struct {
+			units custom.DurationUnits
+			what  string
+			label string
+		}{
+			{declared, "the descriptor's list", c.label},
+			{undeclared, "no declared list", c.undeclaredLabel},
+		} {
+			want := list[e.label]
+			value, unit := e.units.Encode(c.d)
+			if int(unit) != want {
+				t.Errorf("%s with %s: Encode(%v) chose unit ordinal %d; "+
+					"the device's VALUE_LIST puts %q at %d",
+					c.name, e.what, c.d, unit, e.label, want)
+			}
+			seconds, ok := e.units.Seconds(float64(value), unit)
+			if !ok {
+				t.Errorf("%s with %s: Seconds(%d, %d) does not know the ordinal it encoded",
+					c.name, e.what, value, unit)
+			}
+			wantSeconds := map[string]float64{
+				"10MS": float64(value) / 100, "S": float64(value),
+				"M": float64(value) * 60, "H": float64(value) * 3600,
+			}[e.label]
+			if seconds != wantSeconds {
+				t.Errorf("%s with %s: (%d, %d) reads back as %vs; the list puts %q there",
+					c.name, e.what, value, unit, seconds, e.label)
+			}
 		}
 	}
 }
@@ -140,8 +155,8 @@ func TestTimerUnitOrdinalsComeFromTheDeviceValueList(t *testing.T) {
 // VALUE_LIST.
 //
 // The limit: this finds a redeclared *name*, not a re-spelled ordinal. A bare
-// 1 in an encoder escapes it, which is why the sibling test above drives both
-// encoders against the descriptor instead of trusting the names.
+// 1 in an encoder escapes it, which is why the sibling test above drives the
+// encoder and the decoder against the descriptor instead of trusting the names.
 func TestTimerUnitOrdinalsAreDeclaredOnlyInHmenum(t *testing.T) {
 	t.Parallel()
 	const root = "../.."

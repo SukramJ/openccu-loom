@@ -121,6 +121,12 @@ type Light struct {
 	rampTimeValueParam hmenum.Parameter
 	rampTimeUnitParam  hmenum.Parameter
 
+	// onTimeUnits / rampTimeUnits are what the two unit parameters'
+	// VALUE_LISTs declare, read once at construction: the units a timer may
+	// be encoded in on this channel, and their wire ordinals.
+	onTimeUnits   custom.DurationUnits
+	rampTimeUnits custom.DurationUnits
+
 	// switchOnParams, when set, returns the parameters a subtype writes
 	// beside LEVEL on every switch-on, in the same put_paramset. Every
 	// parameter it returns lives on the LEVEL channel. The fixed-colour
@@ -148,6 +154,8 @@ func New(cfg Config) *Light {
 		onTimeUnitParam:      onTimeUnitParam,
 		rampTimeValueParam:   rampTimeValueParam,
 		rampTimeUnitParam:    rampTimeUnitParam,
+		onTimeUnits:          custom.DurationUnitsOf(cfg.Channel, onTimeUnitParam),
+		rampTimeUnits:        custom.DurationUnitsOf(cfg.Channel, hmenum.ParameterRampTimeUnit),
 		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
 		hasRampStop:          cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterRampStop) != nil,
 	}
@@ -899,7 +907,7 @@ func (l *Light) SetOnTime(ctx context.Context, w custom.Writer, addr string, d t
 		}
 		return nil
 	}
-	value, unit := custom.EncodeTimerDuration(d)
+	value, unit := l.onTimeUnits.Encode(d)
 	if err := stageTimerPair(ctx, w, addr,
 		valueParam, value, l.onTimeUnitParam, unit, priority); err != nil {
 		return fmt.Errorf("light: ON_TIME: %w", err)
@@ -909,7 +917,7 @@ func (l *Light) SetOnTime(ctx context.Context, w custom.Writer, addr string, d t
 
 // SetRampTime sets the RAMP_TIME parameter on the light's channel.
 func (l *Light) SetRampTime(ctx context.Context, w custom.Writer, addr string, d time.Duration, priority hmenum.CommandPriority) error {
-	value, unit := custom.EncodeTimerDuration(d)
+	value, unit := l.rampTimeUnits.Encode(d)
 	if err := stageTimerPair(ctx, w, addr,
 		hmenum.ParameterRampTimeValue, value, hmenum.ParameterRampTimeUnit, unit, priority); err != nil {
 		return fmt.Errorf("light: RAMP_TIME: %w", err)
@@ -1090,7 +1098,7 @@ func (l *Light) stageRampTimeParam(params map[hmenum.Parameter]any, d time.Durat
 		params[l.rampTimeValueParam] = d.Seconds()
 		return
 	}
-	value, unit := custom.EncodeTimerDuration(d)
+	value, unit := l.rampTimeUnits.Encode(d)
 	params[l.rampTimeValueParam] = value
 	params[l.rampTimeUnitParam] = unit
 }
@@ -1110,7 +1118,7 @@ func (l *Light) stageOnTimeParam(params map[hmenum.Parameter]any, d time.Duratio
 		params[valueParam] = d.Seconds()
 		return
 	}
-	value, unit := custom.EncodeTimerDuration(d)
+	value, unit := l.onTimeUnits.Encode(d)
 	params[valueParam] = value
 	params[l.onTimeUnitParam] = unit
 }

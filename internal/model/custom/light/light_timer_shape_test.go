@@ -110,7 +110,7 @@ func TestLightTurnOnWithRampUsesRampTimePairOnValueUnitChannel(t *testing.T) {
 	params := w.puts[len(w.puts)-1]
 	assertNoBareTimerKeys(t, params)
 	assertTimerPair(t, params, hmenum.ParameterRampTimeValue, hmenum.ParameterRampTimeUnit, 3, int32(hmenum.TimerUnitSeconds))
-	sentinelValue, sentinelUnit := custom.EncodeTimerDuration(time.Duration(custom.TimerNotUsed * float64(time.Second)))
+	sentinelValue, sentinelUnit := custom.DurationUnitsOf(ch, hmenum.ParameterDurationUnit).Encode(time.Duration(custom.TimerNotUsed * float64(time.Second)))
 	assertTimerPair(t, params, hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit, sentinelValue, sentinelUnit)
 }
 
@@ -133,7 +133,7 @@ func TestLightTurnOffWithRampUsesRampTimePairOnValueUnitChannel(t *testing.T) {
 		t.Errorf("LEVEL=%v, want 0", params[string(hmenum.ParameterLevel)])
 	}
 	assertTimerPair(t, params, hmenum.ParameterRampTimeValue, hmenum.ParameterRampTimeUnit, 3, int32(hmenum.TimerUnitSeconds))
-	sentinelValue, sentinelUnit := custom.EncodeTimerDuration(time.Duration(custom.TimerNotUsed * float64(time.Second)))
+	sentinelValue, sentinelUnit := custom.DurationUnitsOf(ch, hmenum.ParameterDurationUnit).Encode(time.Duration(custom.TimerNotUsed * float64(time.Second)))
 	assertTimerPair(t, params, hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit, sentinelValue, sentinelUnit)
 }
 

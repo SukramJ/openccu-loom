@@ -171,7 +171,7 @@ func TestParityConvertSoundfileIndexValidRange(t *testing.T) {
 	}
 }
 
-// TestParityEncodeDurationUnits verifies EncodeTimerDuration units.
+// TestParityEncodeDurationUnits verifies the duration encoder on a channel without a declared unit list.
 // Mirrors test_ip_siren → duration unit encoding (seconds/minutes/hours).
 func TestParityEncodeDurationUnits(t *testing.T) {
 	t.Parallel()
@@ -192,7 +192,7 @@ func TestParityEncodeDurationUnits(t *testing.T) {
 		{0, 0, 0},
 	}
 	for _, c := range cases {
-		v, u := custom.EncodeTimerDuration(c.d)
+		v, u := custom.DurationUnits{}.Encode(c.d)
 		if v != c.wantV || u != c.wantUnit {
 			t.Errorf("%v → (%d, %d), want (%d, %d)", c.d, v, u, c.wantV, c.wantUnit)
 		}

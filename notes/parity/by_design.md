@@ -3530,41 +3530,71 @@ Our `AddLink` / `RemoveLink` are unaffected: they go over XML-RPC with
 positional arguments, where no parameter name exists to get wrong. That is
 also why link creation worked while renaming did not.
 
-### BD-Timer-PromotionTruncates — a promoted combined-timer duration is truncated toward zero, not rounded
+### BD-Timer-RoundsToNearestStep — a timer pair is rounded to the nearest step, in 10MS where the channel declares it
 
-**Decision.** `custom.EncodeTimerDuration`
-(`internal/model/custom/mixins.go`) promotes a duration past the 16343
-threshold by plain float division and then casts to `int32`, which truncates
-toward zero. `16373 s` becomes `(272, M)`, not `(273, M)`. This matches the
-CCU-side reference end to end and is deliberate.
+**Decision.** `custom.DurationUnits.Encode`
+(`internal/model/custom/duration_units.go`) expresses a duration in the
+finest unit whose count stays within `DURATION_VALUE`'s declared maximum of
+16343: `10MS` where the channel's own `*_UNIT` VALUE_LIST carries it and the
+duration is not a whole second, then `S`, `M`, `H`. The count is rounded
+half-up to the nearest step in every unit, and a positive duration is at
+least one step. `16373 s` is `(273, M)`, `500 ms` is `(50, 10MS)` on an
+HmIP-RGBW and `(1, S)` on an HmIP-ASIR-2. The ordinal is the label's position
+in the channel's list; a channel without a list falls back to the
+`hmenum.TimerUnit` ordinals and is never sent `10MS`. Owner decision of
+2026-11-22.
 
-**Why — where the reference truncates.** The promotion helper itself does not
-round; it returns a float:
+**Divergence from aiohomematic.** The reference truncates and never emits
+`10MS`:
 
-- `aiohomematic/aiohomematic/model/custom/mixins.py:305-332` —
-  `recalc_unit_timer` does `time /= 60` and returns `(float, unit)`.
+- `aiohomematic/aiohomematic/model/custom/mixins.py:302-332` —
+  `recalc_unit_timer` promotes S → M → H past `_TIME_UNIT_THRESHOLD = 16343`
+  with `time /= 60` and returns a float; it has no `10MS` branch.
+- `aiohomematic/aiohomematic/model/combined/timer.py:109-111` sends that
+  float through the INTEGER data point, whose
+  `aiohomematic/aiohomematic/model/generic/number.py:32-35` applies
+  `type_converter=int` (`:74`), which truncates toward zero.
 
-The fraction is lost one layer down, at the write boundary, because
-`DURATION_VALUE` is an INTEGER parameter and Python's `int()` on a float
-truncates toward zero:
+So a sub-second duration reaches the device as a zero count there, and a
+promoted duration loses up to one whole step.
 
-- `aiohomematic/aiohomematic/parameter_tools.py:298-299` —
-  `if param_type == ParameterType.INTEGER and isinstance(value, float): return int(value)`
-- `aiohomematic/aiohomematic/model/support.py:605` —
-  `if target_type == ParameterType.INTEGER: return int(float(value))`
+**Why.** A zero count turns a requested 500 ms ramp into no ramp, and a
+truncated promotion shortens a timer by up to 59 s or 59 min. In the CCU's
+own WebUI the operator picks the unit on save, with `10MS` as ordinal 3 for
+the ramp
+(`OpenCCU-Base/www/rega/pages/msg/setDimmerVirtualReceiverCombinedParam.htm:78-81`)
+and the ramp-off time (`:120`); an entered `10MS` count is converted to
+seconds as `val / 100` (`OpenCCU-Base/www/webui/webui.js:21556-21565`), and
+a stored fractional ramp is shown in `10MS` again on opening the dialog
+(`webui.js:21666-21669`). So the encoding is the device's, not an
+invention. The same page does not offer `10MS` for the on-time: its `10MS`
+option for `DURATION_UNIT` is commented out (`:104`), although the devices'
+paramset descriptions declare `10MS` in `DURATION_UNIT` as well.
 
-So the reference's two-stage float-then-truncate is observationally identical
-to this tree's single `int32(...)` cast, and the question "round or truncate?"
-is settled: truncate.
+**Measured on a live HmIP-BSL dimmer channel (2026-11-22, wire captured
+between the daemon and the CCU).** `set_level {"state": "ON", "seconds":
+0.5}` went out as one `putParamset` with `DURATION_VALUE=50`,
+`DURATION_UNIT=3`, `LEVEL=1.0` and was accepted; the channel read `LEVEL`
+1 at +0.3 s and 0 at +3.0 s without a further command. The CCU reports the
+level late — a 3 s on-time still read 1 at +4.5 s — so the reading rules
+out a 50 s timer but does not resolve 0.5 s against 1 s. A ramp pair in
+`10MS` (`RAMP_TIME_VALUE=50`, `RAMP_TIME_UNIT=3`) sent with a 5 s on-time
+was accepted and the channel was off again at +8 s. The same ramp without
+the on-time pair is refused with `MISSING_NON_OPTIONAL_PARAMETER`, which is
+why the light paths always send the two together.
 
-**Guard.** `TestEncodeTimerDurationTruncatesTowardZero`
-(`internal/model/custom/custom_test.go`) uses a duration whose promoted value
-has a fraction above `.5`, so rounding and truncation disagree — the existing
-`16344 s → 272.4 → (272, M)` case cannot tell them apart.
+**Guards.** `TestDurationUnitsRoundHalfUpToTheNearestStep`,
+`TestDurationUnitsUseTenMillisecondsWhereTheListOffersIt` and
+`TestDurationUnitsReadTheOrdinalsFromTheList`
+(`internal/model/custom/duration_units_test.go`);
+`TestTimerUnitOrdinalsComeFromTheDeviceValueList`
+(`tests/contract/timer_unit_single_source_test.go`); one pin per caller
+family in `timer_unit_list_test.go` under `internal/model/combined/` and
+`internal/model/custom/{light,siren,valve}/`.
 
-**Retirement condition.** If the reference ever rounds at the write boundary,
-or `DURATION_VALUE` stops being an INTEGER parameter, this entry and the guard
-go with it.
+**Retirement condition.** If a device turns out to reject or misread a
+`DURATION` pair in `10MS`, `10MS` is limited to the ramp pair for that
+family and this entry says so.
 
 ## openccu-lite event stream — values are re-typed from the paramset description
 

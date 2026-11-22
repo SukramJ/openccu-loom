@@ -14,16 +14,14 @@ package hmenum
 // description in
 // internal/model/custom/siren/testdata/hmip_mp3p_sound_receiver_values.json
 // declares DURATION_UNIT as ENUM with VALUE_LIST ["S", "M", "H", "10MS"],
-// which is where the three constants below get their numbers.
-// loom:reachable:reason="the ordinal type of the CCU DURATION_UNIT wire field: internal/model/custom/mixins.go converts TimerUnitSeconds/Minutes/Hours to int32 at four sites in the timer promotion, and internal/model/combined/timer.go carries it as toTimerUnit's return; a numeric type whose methods production never calls, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
+// which is where the four constants below get their numbers. A channel that
+// declares its own list is encoded and decoded by that list
+// (internal/model/custom DurationUnits); these constants serve a channel
+// whose unit parameter carries no list.
+// loom:reachable:reason="the ordinal type of the CCU DURATION_UNIT wire field: internal/model/custom/duration_units.go reads TimerUnitSeconds/Minutes/Hours/10ms as the ordinals of a channel without a declared list, and internal/model/combined/timer.go carries it as toTimerUnit's return; a numeric type whose methods production never calls, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type TimerUnit int
 
 // TimerUnit values, in DURATION_UNIT VALUE_LIST order.
-//
-// The list's fourth entry, "10MS" at ordinal 3, deliberately has no
-// constant. No encoder in this tree selects it, and every timer encoder
-// promotes upwards from seconds only, so a constant for it would offer a
-// unit that nothing here knows how to produce or read back.
 const (
 	// TimerUnitSeconds is VALUE_LIST entry "S" and the parameter's DEFAULT.
 	TimerUnitSeconds TimerUnit = 0
@@ -33,4 +31,9 @@ const (
 	// disabled-timer sentinel, which is written in the hours slot so it
 	// cannot collide with a real duration.
 	TimerUnitHours TimerUnit = 2
+	// TimerUnit10ms is VALUE_LIST entry "10MS": a count of hundredths of a
+	// second. Not every channel offers it — HmIP-ASIR-2 channel 3 declares
+	// DURATION_UNIT as ["S", "M", "H"] — so an encoder may choose it only
+	// where the channel's own list carries it.
+	TimerUnit10ms TimerUnit = 3
 )

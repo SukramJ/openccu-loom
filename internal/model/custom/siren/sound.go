@@ -108,6 +108,11 @@ type SoundPlayer struct {
 	direction    *generic.Sensor[int32] // DIRECTION (UP/DOWN; read-only ENUM, index sensor)
 	availableSF  []string
 	availableRep []string
+
+	// durationUnits / rampTimeUnits are what DURATION_UNIT's and
+	// RAMP_TIME_UNIT's VALUE_LISTs declare, read once at construction.
+	durationUnits custom.DurationUnits
+	rampTimeUnits custom.DurationUnits
 }
 
 // DataPointKey returns the composite identifier for this custom data
@@ -171,6 +176,8 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterRepetitions); dp != nil {
 			sp.availableRep = append([]string(nil), dp.ParameterData().ValueList...)
 		}
+		sp.durationUnits = custom.DurationUnitsOf(cfg.Channel, hmenum.ParameterDurationUnit)
+		sp.rampTimeUnits = custom.DurationUnitsOf(cfg.Channel, hmenum.ParameterRampTimeUnit)
 	}
 	sp.registerSoundPlayerServices()
 	return sp
@@ -404,12 +411,12 @@ func (sp *SoundPlayer) PlaySound(
 	// changes device behaviour. Mirrors the reference where on_time is only
 	// sent when _dp_on_time exists on the channel.
 	if cfg.Duration > 0 {
-		dv, du := custom.EncodeTimerDuration(cfg.Duration)
+		dv, du := sp.durationUnits.Encode(cfg.Duration)
 		params[hmenum.ParameterDurationUnit] = du
 		params[hmenum.ParameterDurationValue] = dv
 	}
 	if cfg.RampTime > 0 {
-		v, u := custom.EncodeTimerDuration(cfg.RampTime)
+		v, u := sp.rampTimeUnits.Encode(cfg.RampTime)
 		params[hmenum.ParameterRampTimeUnit] = u
 		params[hmenum.ParameterRampTimeValue] = v
 	}

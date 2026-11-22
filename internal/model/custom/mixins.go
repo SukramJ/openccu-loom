@@ -143,11 +143,11 @@ func PutParamsetForce(
 	return PutOrSet(ctx, w, address, paramset, values, priority)
 }
 
-// timeUnitThreshold is the maximum value in a given unit before the encoder
-// switches to the next coarser unit. The threshold is deliberately not 60 or
-// 3600: 61 seconds stays in the seconds bucket (value=61, unit=S) because 61
-// < 16343; only when the seconds value exceeds 16343 does the encoder promote
-// to minutes.
+// timeUnitThreshold is the largest count [DurationUnits.Encode] puts into
+// one unit before it moves to the next coarser one. The threshold is
+// deliberately not 60 or 3600: 61 seconds stays in the seconds bucket
+// (value=61, unit=S) because 61 < 16343; only a count above 16343 moves on,
+// from 10MS to S, from S to M and from M to H.
 //
 // The number is the device's own: DURATION_VALUE is declared INTEGER with
 // MIN 0 / MAX 16343 across the descriptor corpus. Promoting only once the
@@ -157,8 +157,9 @@ func PutParamsetForce(
 // DURATION_VALUE / DURATION_UNIT is a different encoding from the
 // (DURATION_BASE, DURATION_FACTOR) pair the schedule layer uses: its unit list
 // is {S, M, H} — {S, M, H, 10MS} on most devices — not the eight-step factor
-// table. The firmware's float_configtime rounding does not govern it, so the
-// rounding rule here still rests on the port.
+// table. The firmware's float_configtime rounding does not govern it; the
+// rounding rule is recorded in notes/parity/by_design.md, entry
+// BD-Timer-RoundsToNearestStep.
 const timeUnitThreshold = 16343
 
 // TimerNotUsed is the sentinel duration, in seconds, that marks a timer
@@ -234,60 +235,6 @@ func RepetitionsLabel(n int) (string, error) {
 	default:
 		return "", fmt.Errorf("repetitions must be -1 (infinite), 0 (none), or 1-%d, got %d", MaxRepetitions, n)
 	}
-}
-
-// EncodeTimerDuration maps a time.Duration onto the (value, unit) pair the
-// CCU's combined timers take. The unit is a [hmenum.TimerUnit] ordinal, handed
-// back as int32 because every caller stages it straight into a wire paramset.
-// Used by Light.SetOnTime / Light.SetRampTime, Siren.TurnOn duration,
-// Switch.TurnOn(on_time) etc.
-//
-// Threshold semantics : the encoder uses _TIME_UNIT_THRESHOLD = 16343 as the
-// bucket boundary, not 60 or 3600. So 61 s → (61, S), not (1, M). The
-// promotion chain is: if seconds > 16343 → convert to minutes; then if
-// minutes > 16343 → convert to hours. Exact sentinel 111600 s → (111600, H).
-//
-// Rounding : a promoted value is TRUNCATED toward zero, never rounded, so
-// 16373 s → (272, M) and not (273, M). That is reference-parity, not an
-// artefact of the int32 cast. The CCU-side reference promotes in floating
-// point (`recalc_unit_timer` divides and keeps the fraction) and only loses
-// the fraction at the write boundary, where a float staged onto an INTEGER
-// parameter goes through Python's `int()` — which truncates toward zero.
-// DURATION_VALUE is an INTEGER parameter, so every promoted duration takes
-// that path. The reference file/line citation is in
-// notes/parity/by_design.md, entry BD-Timer-PromotionTruncates.
-// Pinned by TestEncodeTimerDurationTruncatesTowardZero.
-func EncodeTimerDuration(d time.Duration) (value, unit int32) {
-	secs := d.Seconds()
-	const maxInt32 = float64(int64(^uint32(0) >> 1))
-	clamp := func(v float64) int32 {
-		if v > maxInt32 {
-			v = maxInt32
-		}
-		if v < 0 {
-			v = 0
-		}
-		return int32(v) //nolint:gosec // bounded above; see #20
-	}
-	if secs <= 0 {
-		return 0, int32(hmenum.TimerUnitSeconds)
-	}
-	// Special sentinel: TimerNotUsed → (111600, H) so the device
-	// distinguishes "timer disabled" from any real duration.
-	if secs == TimerNotUsed {
-		return clamp(secs), int32(hmenum.TimerUnitHours)
-	}
-	t := secs
-	u := int32(hmenum.TimerUnitSeconds)
-	if t > timeUnitThreshold {
-		t /= 60
-		u = int32(hmenum.TimerUnitMinutes)
-	}
-	if t > timeUnitThreshold {
-		t /= 60
-		u = int32(hmenum.TimerUnitHours)
-	}
-	return clamp(t), u
 }
 
 // NewLevelFloat returns the standard `*generic.Float` backing a

@@ -188,32 +188,6 @@ func TestSirenSharesAcousticInstanceWithChannel(t *testing.T) {
 	}
 }
 
-// TestEncodeDurationUnits verifies the threshold behaviour:
-// Python uses _TIME_UNIT_THRESHOLD = 16343, so values below that threshold
-// stay in the seconds bucket. 5 min (300 s) and 2 h (7200 s) are both below
-// 16343 and thus stay in S. Promotion only happens when the value exceeds
-// 16343 in the current unit.
-func TestEncodeDurationUnits(t *testing.T) {
-	cases := []struct {
-		d        time.Duration
-		wantV    int32
-		wantUnit int32
-	}{
-		{30 * time.Second, 30, 0}, // 30 s → (30, S)
-		{61 * time.Second, 61, 0}, // 61 s < 16343 → (61, S), NOT (1, M)
-		{5 * time.Minute, 300, 0}, // 300 s < 16343 → (300, S)
-		{2 * time.Hour, 7200, 0},  // 7200 s < 16343 → (7200, S)
-		{5 * time.Hour, 300, 1},   // 18000 s > 16343 → promote to M: 300 min < 16343 → (300, M)
-		{0, 0, 0},
-	}
-	for _, c := range cases {
-		v, u := custom.EncodeTimerDuration(c.d)
-		if v != c.wantV || u != c.wantUnit {
-			t.Errorf("%v → (%d, %d), want (%d, %d)", c.d, v, u, c.wantV, c.wantUnit)
-		}
-	}
-}
-
 // TestConvertPlayRepetitionsIndex verifies the -1/0/1..18 → label mapping.
 func TestConvertPlayRepetitionsIndex(t *testing.T) {
 	t.Parallel()
