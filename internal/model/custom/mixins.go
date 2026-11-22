@@ -94,11 +94,11 @@ func PutOrSet(
 //
 // The asymmetry that makes this worth having is unconditional, not a
 // firmware-variant lottery. On the CCU's HmIP legacy XML-RPC surface,
-// HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#setValue
-// guards its dispatch with #checkRequiredValues and returns false without
-// sending a frame or raising a fault when the guard rejects the write;
-// #putParameterSet has no such call and goes straight to the send. The guard
-// is a branch on the channel's ChannelType, so the outcome is a pure function
+// setValue checks that a set of required keys arrives together and, when
+// that guard rejects the write, returns false without sending a frame or
+// raising a fault; putParamset has no such check and goes straight to the
+// send. The guard
+// depends only on the channel type, so the outcome is a pure function
 // of (channel type, key set) — deterministic, and identical on every build of
 // that surface. A refused single-key setValue is the worst failure shape
 // there is: no error reaches the caller.
@@ -116,7 +116,7 @@ func PutOrSet(
 // to this repo's siren paths.
 //
 // CONTROL_MODE is not one of them: on HEATING_CLIMATECONTROL_TRANSCEIVER the
-// required set is {SET_POINT_TEMPERATURE} and the guard's predicate lets any
+// required set is {SET_POINT_TEMPERATURE} and the guard lets any
 // key outside the set through, so a bare setValue(CONTROL_MODE, 0) is
 // dispatched normally. Using this helper there is safe but not load-bearing.
 //
@@ -186,19 +186,17 @@ const TimerNotUsed = 111600.0
 // REPETITIONS parameter's VALUE_LIST, and MaxRepetitions is the highest count
 // that list has a slot for.
 //
-// All three come from the firmware, not from a convention. HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.Repetitions#getNames
-// builds the list as NO_REPETITION at index 0, INFINITE_REPETITIONS at the
-// last index and String.format("REPETITIONS_%03d", i) in between — the
-// zero-padded three-digit grammar RepetitionsLabel formats. HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.
-// GeneralStateParameterFactory#createRepetitionParameter builds the
-// VALUES-paramset REPETITIONS parameter over getNames(16), so the list has
-// sixteen slots and the numbered run stops at REPETITIONS_014.
+// All three come from the firmware's paramset descriptions, not from a
+// convention. Every REPETITIONS VALUE_LIST puts NO_REPETITION at index 0,
+// INFINITE_REPETITIONS at the last index and REPETITIONS_NNN in between —
+// the zero-padded three-digit grammar RepetitionsLabel formats. On the
+// VALUES paramset the list has sixteen slots, so the numbered run stops at
+// REPETITIONS_014 (every occurrence in the descriptor corpus; see
+// w2Cst_repetitions_ceiling_test.go).
 //
 // Sixteen, not more, is what every writer in this repo faces: all of them
 // stage REPETITIONS into the VALUES paramset. The 256-slot list ending at
-// REPETITIONS_254 that the same enum can produce belongs to the MASTER /
+// REPETITIONS_254 belongs to the MASTER /
 // LINK profile-repetition config parameters (POWERUP_/SHORT_/LONG_
 // PROFILE_REPETITIONS), which no path here writes.
 const (
@@ -222,7 +220,7 @@ const (
 //
 // A caller holding the concrete device's VALUE_LIST should still check
 // membership before writing, because a device may in principle advertise a
-// shorter list than the factory builds. TextDisplay.WriteWithSound does
+// shorter list than the sixteen slots above. TextDisplay.WriteWithSound does
 // exactly that; the sound-player LED does not, which is why the ceiling here
 // has to match the firmware's rather than sit above it.
 func RepetitionsLabel(n int) (string, error) {

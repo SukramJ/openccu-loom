@@ -278,11 +278,9 @@ func (r *Registry) SerialSuffix(name string) string {
 // serial is the compile-time literal at
 // ../OpenCCU-Base/src/rfd/RFCentral.cpp:37 (`serial="BidCoS-RF";`, with
 // `type="HM-RCV-50";` at :36) and is identical in every rfd build; an HmIP
-// group's legacy device address is built from a per-CCU group-id counter
-// (HMIPServer de.eq3.ccu.groupdevice.service.internal.GroupDeviceAddressHelper#getVirtualDeviceAddressFromGroup);
-// and the legacy virtual remote's id counter starts at 1 per instance
-// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.VirtualRemoteControl), so
-// HmIP-RCV-1 exists on every CCU. See interface_id.go for the same rule stated
+// group's legacy device address is built from a per-CCU group-id counter;
+// and the HmIP server's legacy virtual remote counts its id from 1 per
+// instance, so HmIP-RCV-1 exists on every CCU. See interface_id.go for the same rule stated
 // at the point where wire IDs are scoped, and internal/routingkey/uniqueid.go
 // for the virtual-remote roots it already special-cases.
 //

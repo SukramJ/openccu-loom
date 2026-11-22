@@ -236,8 +236,9 @@ table would force one policy.
 **Periodic refresh against the CCU after recovery.** Tried (Phase 3
 of the original 2026-05-22 implementation) and reverted after a
 live test showed it pushed the CCU duty-cycle over the legal limit.
-The HMIPServer-bytecode analysis later showed that
-`getParamset(MASTER)` itself is duty-cycle-neutral on warm CCU, but
+It later turned out that `getParamset(MASTER)` itself is
+duty-cycle-neutral on a warm CCU — the HmIP server answers it from its
+stored device configuration, without radio traffic — but
 the bulk read still adds CPU load and offers no clear benefit when
 the per-DP push events already carry the truth.
 

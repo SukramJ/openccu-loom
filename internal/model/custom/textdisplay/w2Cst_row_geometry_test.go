@@ -26,11 +26,10 @@ import (
 // DISPLAY_DATA_ID exactly once (MIN 1 / MAX 5) and DISPLAY_DATA_STRING
 // exactly once (MAX "[0x20-0x7E]{16}"), both on HmIP-WRCD.
 //
-// The firmware side agrees and explains why the numbers must stay
-// WRCD-scoped: HMIPServer de.eq3.cbcs.devicedescription.channelspecification.
-// stateparameter.GeneralStateParameterFactory registers DISPLAY_DATA_ID in
-// three variants — (1,2), (1,5) and (0,7) — and DISPLAY_DATA_STRING with four
-// different max-value patterns, so neither number is a fleet-wide constant.
+// The numbers must stay WRCD-scoped: the HmIP server declares DISPLAY_DATA_ID
+// with three different ranges — (1,2), (1,5) and (0,7) — and
+// DISPLAY_DATA_STRING with four different max-value patterns, depending on
+// the device, so neither number is a fleet-wide constant.
 const (
 	w2CstWRCDDisplayDataIDMin = 1
 	w2CstWRCDDisplayDataIDMax = 5

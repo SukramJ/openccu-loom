@@ -50,9 +50,8 @@ type SysvarWriter interface {
 //     RFManager::SetInstallMode overloads at RFManager.cpp:582-583 and
 //     :601-602). There is no lower bound; a duration of 0 does not become a
 //     default, it takes the else branch and turns install mode OFF.
-//   - HmIP-RF: HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.
-//     AccessPointUtil#setInclusionMode uses the value verbatim as the
-//     inclusion timer — no bound anywhere on that path.
+//   - HmIP-RF: the HmIP server uses the value verbatim as the inclusion
+//     timer and applies no bound.
 //   - BidCos-Wired: hs485d implements no setInstallMode at all.
 //   - CUxD, VirtualDevices, HmIP-Wired: unverified; no source read.
 //

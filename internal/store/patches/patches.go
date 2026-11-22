@@ -245,10 +245,9 @@ var (
 )
 
 // codeIDWireCeiling is the largest value the CODE_ID wire field can carry.
-// The HmIP server decodes the CODE_STATUS byte as CODE_STATE =
-// (valueData[0] & 0xFF) >> 5 and CODE_ID = valueData[0] & 0x1F
-// (HMIPServer de.eq3.cbcs.server.core.framehandling.HMIPApplicationHandler),
-// so the low five bits span 0..31 whatever the descriptor declares.
+// The HmIP server decodes the CODE_STATUS byte with CODE_STATE in the top
+// three bits and CODE_ID in the low five, so CODE_ID spans 0..31 whatever
+// the descriptor declares.
 const codeIDWireCeiling = 31
 
 // builtIns returns the factory-shipped patches.
@@ -302,13 +301,11 @@ func builtIns() []Patch {
 
 	// HM-CC-VG-1 virtual heating group, channel 1 SET_TEMPERATURE.
 	//
-	// What this patch repairs is the *type*, not the range. HMServer
-	// de.eq3.ccu.groupdevice.service.GroupDeviceHandler#createParamsetDescriptions
-	// copies the group parameter's min/max straight into the RpcStruct, and
-	// both accessors are String-typed on HMServer
-	// de.eq3.ccu.virtualdevice.service.internal.bidcos.BidCosVirtualChannelParameter
-	// — so MIN and MAX reach us as XML-RPC strings ("5.0") rather than
-	// doubles, and every consumer that expects a JSON number sees a string.
+	// What this patch repairs is the *type*, not the range. The CCU's
+	// virtual-device service copies the group parameter's min/max into the
+	// paramset description as strings, so MIN and MAX reach us as XML-RPC
+	// strings ("5.0") rather than doubles, and every consumer that expects a
+	// JSON number sees a string.
 	//
 	// Three rules, in order:
 	//
@@ -357,10 +354,9 @@ func builtIns() []Patch {
 	// HmIP-FWI fingerprint reader, MAINTENANCE channel CODE_ID.
 	//
 	// The CCU's MAX=21 is deliberate and device-specific: the HmIP server
-	// registers CODE_ID three times under distinct keys — generic (0, 30),
-	// keypad (1, 8), and the FWI variant (1, 21) — via HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createCodeId,
-	// and the CCU's own FWI maintenance control renders CODE_ID == 21 as
+	// declares CODE_ID with three ranges — generic (0, 30), keypad (1, 8),
+	// and the FWI variant (1, 21) — and the CCU's own FWI maintenance
+	// control renders CODE_ID == 21 as
 	// the bell button
 	// (../OpenCCU-Base/www/rega/esp/controls/maintenanceFWI.fn:82-84), i.e.
 	// 1..20 are the finger codes and 21 is the doorbell.
@@ -375,7 +371,7 @@ func builtIns() []Patch {
 	//
 	// What 31 *means* is unverified in those words. The firmware assigns
 	// it no meaning; its idle indicator is a different parameter,
-	// CODE_STATE = 0 (CodeState.IDLE), and the CCU's own control reads
+	// CODE_STATE = 0, and the CCU's own control reads
 	// CODE_ID only while CODE_STATE == 1. Reading "31 = no active code"
 	// out of the wire width is our convention, not the CCU's rule.
 	//

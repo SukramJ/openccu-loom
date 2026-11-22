@@ -247,6 +247,45 @@ If you need to discuss audit provenance, write it into the commit
 message body or a Markdown doc — both survive code churn far better
 than a comment that names a row in a deleted spreadsheet.
 
+### Citing closed firmware
+
+The HmIP server ships as a closed Java binary. The repository describes
+what it *does*, never how that was learned from its internals: no
+package, class or method names, no offsets, no disassembler output — in
+code comments, published docs, `notes/`, CHANGELOG, pull requests and
+issues alike. Everything in this repository is public, and a citation a
+reader cannot follow is no citation anyway.
+
+What replaces such a reference is provenance a reader can check:
+
+- **Paramset description** — TYPE, OPERATIONS, MIN / MAX / DEFAULT,
+  VALUE_LIST of a named model, channel and paramset. The captured corpus
+  in `../godevccu/internal/embed/data/paramset_descriptions/<model>.json`
+  covers several hundred models; a model it lacks gets a read-only
+  capture under `notes/parity/fixtures/` (no device names, see the
+  existing fixture's `_source` field for the shape).
+- **Observed wire fault or log line** — quoted verbatim, with the
+  call that produced it. A class name that appears *inside* a quoted log
+  line is part of the observation and may stay.
+- **A test in this repository** that pins the behaviour.
+- **Open firmware sources** — `path:line` under `../OpenCCU-Base/`
+  (rfd, hs485d, libhsscomm, device XMLs, WebUI, config templates).
+
+Where none of these exists, the comment states the behaviour ("the HmIP
+server withholds RSSI_PEER when the byte is 0x80") and keeps the
+constraint. Dropping the fact because its source cannot be named is the
+wrong fix: the next reader loses the reason the code is shaped that way.
+
+Guards: `TestNoClosedFirmwareInternalsInGoComments` rejects
+package-qualified names, the inventoried class names and the disassembly
+vocabulary in Go comments under `internal/`, `pkg/`, `cmd/` and `tests/`;
+`TestNoClosedFirmwareInternalsInMarkdown` does the same for every
+Markdown file and the JSON working files under `docs/` and `notes/`.
+Both live in `tests/contract/closed_firmware_citation_test.go`, with
+`TestClosedFirmwareRulesBite` measuring the patterns on both kinds of
+line. Git history keeps what was
+committed before the rule; it is not rewritten.
+
 
 ### Documents in markdown
 

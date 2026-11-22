@@ -501,8 +501,8 @@ func (dp *ProfileDataPoint) SetCurrentProfile(key string) error {
 // The parameter decides the base, because that is what the device declares:
 //
 //   - ACTIVE_PROFILE (HmIP) is INTEGER with min 1, default 1 — 1-based, so 1
-//     is P1 (HMIPServer
-//     de.eq3.cbcs.devicedescription.channelspecification.stateparameter.ClimateStateParameterFactory#createActiveProfileParameter).
+//     is P1 (every HmIP paramset description in the descriptor corpus that
+//     declares it).
 //   - WEEK_PROGRAM_POINTER (RF) is an option type whose description carries
 //     MIN=0, MAX=len(options)-1 and VALUE_LIST[i]=options[i]
 //     (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp:96-112, with

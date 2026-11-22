@@ -26,8 +26,7 @@ import (
 //     ../OpenCCU-Base/src/rfd/RFCommMessage.cpp:174 and in multimacd's
 //     SerialFrame/HmLegacyFrameBidcos/HmLegacyFrameBidcosRxTelegram.cpp:38-40
 //     and SerialFrame/LowLevelMacFrame/LowLevelMacFrameRxTelegram.cpp:52-54.
-//   - HmIP negates a SIGNED byte, so it publishes [-127, +128]:
-//     HMIPServer de.eq3.cbcs.server.core.vertx.IncomingHMIPFrameHandler#handleIncomingFrame.
+//   - HmIP negates a SIGNED byte, so it publishes [-127, +128].
 //
 // Bands, and what each rests on:
 //
@@ -38,11 +37,10 @@ import (
 //
 // Rejected, and why:
 //
-//   - ±128 is the raw byte 0x80, the CCU's own no-signal marker. HmIP tests
-//     it explicitly before publishing RSSI_PEER (HMIPServer
-//     de.eq3.cbcs.server.core.framehandling.HMIPApplicationHandler#handleStatusFrame,
-//     `(getRssiValue() & 0xFF) != 128`) and publishes RSSI_DEVICE with no such
-//     test, so the marker does reach us and has to be dropped here. That the
+//   - ±128 is the raw byte 0x80, the CCU's own no-signal marker. The HmIP
+//     server withholds RSSI_PEER when the byte is 0x80 but publishes
+//     RSSI_DEVICE without that test, so the marker does reach us and has to
+//     be dropped here. That the
 //     BidCoS sign of the same byte (-128) is a marker rather than a -128 dBm
 //     reading is UNVERIFIED — BidCoS's own "never measured" marker is
 //     INVALID_RSSI_VALUE = -0xffff (../OpenCCU-Base/src/rfd/BidcosFrame.h:214),

@@ -28,13 +28,11 @@ import (
 //   - HmIP, the only surface this hook runs on (it is gated by
 //     [hmenum.PushesConfigPendingFor]): getParamset(address, "MASTER") maps to
 //     a persistence load of the device's stored config file, never to an
-//     over-the-air read — that is a different command
-//     (HMIPServer de.eq3.cbcs.server.core.vertx.backendhandler.DeviceSubcommandHandler#handleGetConfigCommand
-//     versus #handleAskConfigCommand). On the ordinary write path the config
-//     file is saved by an earlier task of the same transaction than the one
-//     that emits the CONFIG_PENDING notification
-//     (de.eq3.cbcs.server.core.task.TransactionTaskFactory#createDeviceConfigurationTransaction),
-//     so the values are already on disk when we are told the flag cleared.
+//     over-the-air read — the HmIP server reads from the device only on a
+//     separate, explicit config query. On the ordinary write path it saves
+//     the config file before it emits the CONFIG_PENDING notification of the
+//     same transaction, so the values are already on disk when we are told
+//     the flag cleared.
 //   - BidCos, which this hook does not run on but which shows the same shape:
 //     rfd serves MASTER from memory and reads from the device only while the
 //     chunk was never read at all (`must_be_read`,

@@ -174,12 +174,10 @@ func sensorCandidateFor(model, channelType string, parameter hmenum.Parameter) (
 	// state carries no security classification of its own, so nothing
 	// upstream of this branch marks them.
 	//
-	// It is NOT a plain boolean. The HmIP firmware builds these states as
-	// enumerations — HMIPServer
-	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory
-	// #createStateWindowOpenClosed over {CLOSED, OPEN} and
-	// #createStateWindowOpenTiltedClosed over {CLOSED, TILTED, OPEN} — and
-	// the descriptors agree: SHUTTER_CONTACT STATE is an ENUM on the five
+	// It is NOT a plain boolean. The HmIP firmware declares these states
+	// as enumerations — {CLOSED, OPEN} for a window contact and {CLOSED,
+	// TILTED, OPEN} for a window handle — as the descriptors show:
+	// SHUTTER_CONTACT STATE is an ENUM on the five
 	// HmIP contacts and a BOOL only on the eight classic ones, while
 	// ROTARY_HANDLE_SENSOR and ROTARY_HANDLE_TRANSCEIVER STATE is
 	// {CLOSED, TILTED, OPEN} everywhere. That is why the candidate carries

@@ -78,9 +78,8 @@ func TestGenFwToBoolRejectsEmptyString(t *testing.T) {
 // `unsigned char`, ../OpenCCU-Base/src/libhsscomm/StructuredFrame.cpp:85),
 // likewise ../OpenCCU-Base/src/multimacd/SerialFrame/HmLegacyFrameBidcos/HmLegacyFrameBidcosRxTelegram.cpp:38-40
 // and .../LowLevelMacFrame/LowLevelMacFrameRxTelegram.cpp:52-54 — so byte
-// 127 arrives as -127 and byte 129 as -129. HmIP negates a SIGNED byte
-// (HMIPServer de.eq3.cbcs.server.core.vertx.IncomingHMIPFrameHandler#handleIncomingFrame),
-// so byte -127 arrives as +127 and byte -1 as +1.
+// 127 arrives as -127 and byte 129 as -129. The HmIP server negates a SIGNED
+// byte, so byte -127 arrives as +127 and byte -1 as +1.
 func TestGenFwFixRSSIAcceptsBoundaryReadings(t *testing.T) {
 	t.Parallel()
 

@@ -54,10 +54,8 @@ type ModelMasterEntry struct {
 // parameters, read from the recorded device-descriptor corpus; it is not a
 // firmware statement about which channels *should* be whitelisted — no source
 // carries our data-point policy. The firmware attaches
-// CHANNEL_OPERATION_MODE to a channel specification, never to a
-// (model, channel) pair: HMIPServer
-// de.eq3.cbcs.devicedescription.channelspecification.configparameter.GeneralConfigurationParameterFactory
-// registers it once per channel-specification subtype key, each with its own
+// CHANNEL_OPERATION_MODE to a channel type, never to a (model, channel)
+// pair: the HmIP server declares it per channel subtype, each with its own
 // value list. A per-model channel table therefore cannot be complete by
 // construction, and this one is knowingly incomplete: further models in the
 // descriptor corpus declare MASTER CHANNEL_OPERATION_MODE (HmIP-DLP, HmIP-ESI,
