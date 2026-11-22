@@ -32,6 +32,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that names where the archives stay and why. Where they are stored is
   unchanged; the add-on still asks for no access to the box's backup
   directory or USB sticks, which hold the box's radio keys. (#1147)
+- **On openccu-lite a confined add-on starts its daemon in `start`, not in
+  `init`.** The add-on's unit runs the service script's `init` right before
+  its `start`, and `init` already started the daemon. systemd then logged a
+  left-over process and `start` logged "Already running" at every start,
+  boot included. Inside the unit `init` now only prepares and `start` starts
+  the daemon. A classic CCU and an add-on the box runs as root behave as
+  before. (openccu-lite #23)
 
 ## [0.106.1] - 2026-11-22
 

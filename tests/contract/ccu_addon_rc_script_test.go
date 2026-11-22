@@ -218,10 +218,10 @@ func TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit(t *testing.T) {
 	t.Run("without monit the script starts the daemon again", func(t *testing.T) {
 		t.Parallel()
 		e := newRCScriptEnv(t, false)
-		e.run(t, "init")
+		e.run(t, "start")
 		first := e.waitStarts(t, 1, 5*time.Second)
 		if len(first) != 1 {
-			t.Fatalf("init started the daemon %d times, want 1", len(first))
+			t.Fatalf("start started the daemon %d times, want 1", len(first))
 		}
 		if err := syscall.Kill(first[0], syscall.SIGTERM); err != nil {
 			t.Fatalf("signal daemon: %v", err)
@@ -303,9 +303,9 @@ func TestCCUAddonRCScriptStopIgnoresAStalePidfile(t *testing.T) {
 	if err := os.WriteFile(e.pidfile(), []byte(strconv.Itoa(bystander.Process.Pid)+"\n"), 0o644); err != nil {
 		t.Fatalf("rewrite stale pidfile: %v", err)
 	}
-	e.run(t, "init")
+	e.run(t, "start")
 	if n := len(e.waitStarts(t, 1, 5*time.Second)); n != 1 {
-		t.Fatalf("init did not start the daemon over a stale pidfile (%d starts)", n)
+		t.Fatalf("start did not start the daemon over a stale pidfile (%d starts)", n)
 	}
 	e.run(t, "stop")
 }
@@ -313,33 +313,36 @@ func TestCCUAddonRCScriptStopIgnoresAStalePidfile(t *testing.T) {
 // TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit pins the install path on
 // openccu-lite: the installer runs the script as root in its own scope,
 // where a supervising loop would outlive the install and keep starting a
-// second daemon as root beside the unit's. Without monit the script starts
-// nothing there; the unit is where the daemon runs. The negative control is
-// the same call inside the unit, which does start it.
+// second daemon as root beside the unit's. A root add-on's `init` runs
+// outside its unit at boot as well. Without monit the script starts nothing
+// there, whichever action is called; the unit is where the daemon runs. The
+// negative control is the unit's own action, `start`, inside the unit,
+// which does start it.
 func TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit(t *testing.T) {
 	t.Parallel()
 
 	outside := newRCScriptEnvIn(t, false, rcScriptInstallCgroup)
 	outside.run(t, "init")
+	outside.run(t, "start")
 	if n := len(outside.waitStarts(t, 1, 3*time.Second)); n != 0 {
-		t.Fatalf("init in the installer's scope started the daemon %d times, want 0", n)
+		t.Fatalf("init and start in the installer's scope started the daemon %d times, want 0", n)
 	}
 	if _, err := os.Stat(outside.pidfile()); !os.IsNotExist(err) {
-		t.Fatalf("init in the installer's scope wrote a pidfile (stat err %v)", err)
+		t.Fatalf("init and start in the installer's scope wrote a pidfile (stat err %v)", err)
 	}
 	// A start that does not happen reports nothing it would have done: the
 	// backup target is resolved and logged only for a real start.
 	if log := outside.logged(t); strings.Contains(log, "archives") {
-		t.Fatalf("init in the installer's scope logged a backup target:\n%s", log)
+		t.Fatalf("init and start in the installer's scope logged a backup target:\n%s", log)
 	}
 
 	inside := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
-	inside.run(t, "init")
+	inside.run(t, "start")
 	if n := len(inside.waitStarts(t, 1, 5*time.Second)); n != 1 {
-		t.Fatalf("init inside the unit started the daemon %d times, want 1", n)
+		t.Fatalf("start inside the unit started the daemon %d times, want 1", n)
 	}
 	if log := inside.logged(t); !strings.Contains(log, "archives") {
-		t.Fatalf("init inside the unit logged no backup target:\n%s", log)
+		t.Fatalf("start inside the unit logged no backup target:\n%s", log)
 	}
 	inside.run(t, "stop")
 }
@@ -355,10 +358,10 @@ func TestCCUAddonRCScriptReplacesAPidfileItCannotWrite(t *testing.T) {
 	if err := os.WriteFile(e.pidfile(), []byte("1\n"), 0o444); err != nil {
 		t.Fatalf("write read-only pidfile: %v", err)
 	}
-	e.run(t, "init")
+	e.run(t, "start")
 	starts := e.waitStarts(t, 1, 5*time.Second)
 	if len(starts) != 1 {
-		t.Fatalf("init started the daemon %d times, want 1", len(starts))
+		t.Fatalf("start started the daemon %d times, want 1", len(starts))
 	}
 	loop, ok := e.pidfilePID()
 	if !ok || loop == 1 {
@@ -393,9 +396,9 @@ func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 		if err := os.WriteFile(e.cronBackupPath, []byte(target+"\n"), 0o644); err != nil {
 			t.Fatalf("write CronBackupPath: %v", err)
 		}
-		e.run(t, "init")
+		e.run(t, "start")
 		if n := len(e.waitStarts(t, 1, 5*time.Second)); n != 1 {
-			t.Fatalf("init started the daemon %d times, want 1", n)
+			t.Fatalf("start started the daemon %d times, want 1", n)
 		}
 		b, err := os.ReadFile(e.starts + ".backupdir")
 		e.run(t, "stop")
@@ -436,6 +439,51 @@ func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 	}
 }
 
+// TestCCUAddonRCScriptInitInsideTheUnitOnlyPrepares pins the order a
+// confined add-on's unit runs: `init` as an ExecStartPre, then `start` as
+// its ExecStart. A daemon started by `init` was still running when ExecStart
+// began, so systemd logged "Found left-over process" and `start` logged
+// "Already running" at every start, boot included. Inside the unit `init`
+// therefore starts nothing and `start` starts the daemon once. The negative
+// control is the same `init` under monit, a classic CCU's boot, where it
+// still starts the daemon.
+func TestCCUAddonRCScriptInitInsideTheUnitOnlyPrepares(t *testing.T) {
+	t.Parallel()
+
+	t.Run("init inside the unit starts nothing, start starts it once", func(t *testing.T) {
+		t.Parallel()
+		e := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
+		e.run(t, "init")
+		if n := len(e.waitStarts(t, 1, 3*time.Second)); n != 0 {
+			t.Fatalf("init inside the unit started the daemon %d times, want 0", n)
+		}
+		if _, err := os.Stat(e.pidfile()); !os.IsNotExist(err) {
+			t.Fatalf("init inside the unit wrote a pidfile (stat err %v)", err)
+		}
+		e.run(t, "start")
+		if n := len(e.waitStarts(t, 2, 5*time.Second)); n != 1 {
+			t.Fatalf("init followed by start made %d starts, want 1", n)
+		}
+		if log := e.logged(t); strings.Contains(log, "Already running") {
+			t.Fatalf("start found a daemon that init had started:\n%s", log)
+		}
+		e.run(t, "stop")
+	})
+
+	t.Run("with monit init starts the daemon", func(t *testing.T) {
+		t.Parallel()
+		if _, err := exec.LookPath("start-stop-daemon"); err != nil {
+			t.Skip("start-stop-daemon not installed")
+		}
+		e := newRCScriptEnv(t, true)
+		e.run(t, "init")
+		if n := len(e.waitStarts(t, 1, 5*time.Second)); n != 1 {
+			t.Fatalf("init under monit started the daemon %d times, want 1", n)
+		}
+		e.run(t, "stop")
+	})
+}
+
 // TestCCUAddonRCScriptStartsTheDaemonOnStart pins the action openccu-lite's
 // generated unit runs: its ExecStart is "<script> start". A box that could
 // not confine the add-on runs it as root, and for a root add-on nothing runs
@@ -444,10 +492,9 @@ func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
 // the only call that can bring the daemon up; answered with a usage hint it
 // left the unit "active" with no daemon and the box restarting it in a loop.
 //
-// A classic CCU runs `init` and later `start` over every rc.d script, and a
-// confined add-on's unit runs `init` right before its `start`, so the second
-// call has to find the daemon and leave it alone. The negative control is
-// the installer's scope, where `start` starts as little as `init` does.
+// A classic CCU runs `init` and later `start` over every rc.d script, so
+// with monit the second call has to find the daemon and leave it alone. The
+// negative control is the installer's scope, where `start` starts nothing.
 func TestCCUAddonRCScriptStartsTheDaemonOnStart(t *testing.T) {
 	t.Parallel()
 
@@ -462,17 +509,6 @@ func TestCCUAddonRCScriptStartsTheDaemonOnStart(t *testing.T) {
 		e.run(t, "init")
 		if n := len(e.waitStarts(t, 2, 3*time.Second)); n != 1 {
 			t.Fatalf("a second start and an init beside the running daemon made %d starts, want 1", n)
-		}
-		e.run(t, "stop")
-	})
-
-	t.Run("init then start is one daemon", func(t *testing.T) {
-		t.Parallel()
-		e := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
-		e.run(t, "init")
-		e.run(t, "start")
-		if n := len(e.waitStarts(t, 2, 3*time.Second)); n != 1 {
-			t.Fatalf("init followed by start made %d starts, want 1", n)
 		}
 		e.run(t, "stop")
 	})
