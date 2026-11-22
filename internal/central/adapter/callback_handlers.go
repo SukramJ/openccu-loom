@@ -82,7 +82,21 @@ type CallbackHandlers struct {
 	// the incoming reload is dropped with a debug log — the
 	// UnobservedSweep or the next CCU push will fill in the gap.
 	selfReloadSem chan struct{}
+
+	// firmwareStatusDebounce is how long a firmwareUpdateStatusChanged
+	// notification waits for the rest of its burst before the interface's
+	// descriptions are re-pulled; firmwareStatusPending marks the
+	// interfaces with a refresh already scheduled. Guarded by
+	// firmwareStatusMu.
+	firmwareStatusDebounce time.Duration
+	firmwareStatusMu       sync.Mutex
+	firmwareStatusPending  map[hmtypes.WireInterfaceID]bool
 }
+
+// defaultFirmwareStatusDebounce collects the HmIP server's back-to-back
+// firmwareUpdateStatusChanged calls — one per device of a finished
+// background delivery — into one refresh.
+const defaultFirmwareStatusDebounce = 2 * time.Second
 
 // selfReloadConcurrency is the maximum number of concurrent self-reload
 // goroutines per CallbackHandlers instance. Chosen large enough to absorb
@@ -102,6 +116,9 @@ func NewCallbackHandlers(u *central.Unit, logger *slog.Logger) *CallbackHandlers
 		ctx:           ctx,
 		cancel:        cancel,
 		selfReloadSem: make(chan struct{}, selfReloadConcurrency),
+
+		firmwareStatusDebounce: defaultFirmwareStatusDebounce,
+		firmwareStatusPending:  make(map[hmtypes.WireInterfaceID]bool),
 	}
 }
 
@@ -763,6 +780,70 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		}
 		h.reloadDeviceParamsets(bgCtx, b, iface, "callback.update_device", address)
 	})
+	return nil
+}
+
+// FirmwareUpdateStatusChanged handles the HmIP server's notification that
+// a device's firmware-update state moved — sent once per device when a
+// background firmware delivery finishes. It answers at once and schedules
+// one description refresh of the interface per burst, which brings every
+// device's FIRMWARE_UPDATE_STATE (and so the update entity) up to date.
+// Nothing is invalidated: the firmware is only ready, not installed, so the
+// paramset descriptions still hold.
+func (h *CallbackHandlers) FirmwareUpdateStatusChanged(_ context.Context, interfaceID, address string, status int) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
+	h.logger.Info("callback.firmware_update_status_changed",
+		slog.String("interface", interfaceID),
+		slog.String("address", address),
+		slog.Int("status", status))
+	if h.unit == nil || h.unit.Devices == nil || h.writer == nil {
+		return nil
+	}
+	iface := hmtypes.ParseWireInterfaceID(interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), iface)
+	if !ok {
+		h.logger.Warn("callback.firmware_update_status_changed.no_backend",
+			slog.String("interface", interfaceID))
+		return nil
+	}
+
+	h.firmwareStatusMu.Lock()
+	if h.firmwareStatusPending[iface] {
+		h.firmwareStatusMu.Unlock()
+		return nil
+	}
+	h.firmwareStatusPending[iface] = true
+	debounce := h.firmwareStatusDebounce
+	h.firmwareStatusMu.Unlock()
+
+	fetcher := &callbackDescFetcher{ops: b}
+	started := h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
+		timer := time.NewTimer(debounce)
+		defer timer.Stop()
+		select {
+		case <-h.ctx.Done():
+			return
+		case <-timer.C:
+		}
+		// Clear the mark before refreshing, so a notification arriving
+		// during the refresh schedules another one instead of being lost.
+		h.firmwareStatusMu.Lock()
+		delete(h.firmwareStatusPending, iface)
+		h.firmwareStatusMu.Unlock()
+
+		bgCtx, cancel := context.WithTimeout(h.ctx, deviceRefreshTimeout)
+		defer cancel()
+		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
+			h.logger.Warn("callback.firmware_update_status_changed.refresh_failed",
+				slog.String("interface", interfaceID),
+				slog.String("err", err.Error()))
+		}
+	})
+	if !started {
+		h.firmwareStatusMu.Lock()
+		delete(h.firmwareStatusPending, iface)
+		h.firmwareStatusMu.Unlock()
+	}
 	return nil
 }
 

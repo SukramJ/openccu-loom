@@ -4,10 +4,54 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.106.1] - 2026-11-22
 
 ### Fixed
 
+- **HmIP devices keep reporting their state on OpenCCU 3.89.14.** The CCU
+  hands events to the daemon in batches (`system.multicall`), and the daemon
+  answered each `event` in a batch with `nil`. The HmIP server's XML-RPC
+  parser cannot read a `nil` followed by another entry ("Unknown type:
+  data"), and since HMIPServer 1.5.2 three such failures in a row remove the
+  daemon's registration. With OpenCCU 3.89.14.20261121 every HmIP event
+  therefore stopped arriving a moment after each connect: switching from the
+  Config UI or Home Assistant reached the device, but its new state never
+  came back, and the daemon re-registered every three minutes. A batched
+  call without a result now answers `true`, as the Python reference does.
+- **A finished background firmware delivery no longer disconnects HmIP.**
+  The HmIP server announces it by calling `firmwareUpdateStatusChanged` once
+  per device, and the daemon did not know that callback: each call was
+  answered with a fault, and since HMIPServer 1.5.2 three faults in a row
+  remove the daemon's registration, so a batch of three or more devices cut
+  off every HmIP event. The callback is now answered, and one refresh per
+  batch brings the devices' firmware state up to date, so "update ready"
+  shows without waiting for the next scheduled firmware check.
+- **Uploading a backup for restore reaches the CCU again, and a refused
+  upload is reported.** OpenCCU's WebUI takes a restore archive in two
+  steps: `fileupload.ccc` stores the upload and `cp_security.cgi` then takes
+  over the stored file; `cp_security.cgi` accepts no upload of its own. The
+  daemon still posted the archive straight to `cp_security.cgi`, which
+  discarded it and answered HTTP 200, so the upload was reported as done
+  while nothing arrived. The daemon now uses the same two steps as the
+  WebUI and checks both answers. As before, the upload is the first of the
+  firmware's three restore steps; the restore itself is not run.
+- **The daemon notices within about a minute instead of three minutes
+  that a CCU interface stopped delivering events.** When the CCU drops the
+  daemon's callback registration it keeps answering every request, so the
+  daemon only noticed after three minutes without any event, and devices sat
+  silent until then. The keepalive ping the daemon sends every 15 seconds is
+  answered by a PONG event on the same callback path; three PONGs missing in
+  a row with no other callback arriving either now count the interface as
+  lost, and the daemon re-registers at once. A busy CCU that delays or
+  drops a PONG while still delivering events is not affected. The
+  three-minute window stays as the fallback.
+- **A column filter that matches nothing can be cleared again.** A table
+  whose column filters left no row replaced itself, filter row included,
+  with the empty notice, so the filter could not be taken back — and since
+  filters are remembered, the table stayed empty on the next visit too. In
+  the device list a model filter hit this in every interface table without
+  that model. The table now keeps its header and filter row and shows the
+  notice below them (#1136).
 - **A heating week profile with a long comfort phase no longer shows the
   setback hours highlighted.** The daemon names the temperature that runs
   longest the day's base, so a day of 06:00–20:00 at 21 °C over 19.5 °C

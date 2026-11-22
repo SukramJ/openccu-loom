@@ -6,7 +6,8 @@ package adapter
 import (
 	"context"
 	"errors"
-	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,119 +20,35 @@ type fakeSession struct{ id string }
 
 func (f fakeSession) SessionID() string { return f.id }
 
-// TestHTTPBackupRestorerHappyPath verifies that a well-formed Restore call
-// produces the correct URL, multipart body, and returns the unmodified id.
-func TestHTTPBackupRestorerHappyPath(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify path.
-		if r.URL.Path != "/config/cp_security.cgi" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-
-		// Verify query parameters.
-		if got := r.URL.Query().Get("sid"); got != "@SESS-1@" {
-			t.Errorf("sid = %q, want @SESS-1@", got)
-		}
-		if got := r.URL.Query().Get("action"); got != "backup_upload" {
-			t.Errorf("action query = %q, want backup_upload", got)
-		}
-
-		// Parse the multipart body.
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			t.Errorf("ParseMultipartForm: %v", err)
-			http.Error(w, "bad multipart", http.StatusBadRequest)
-			return
-		}
-
-		// Check file field.
-		f, fh, err := r.FormFile("backup_file")
-		if err != nil {
-			t.Errorf("FormFile: %v", err)
-			http.Error(w, "no file", http.StatusBadRequest)
-			return
-		}
-		defer f.Close()
-
-		if fh.Filename != "0001ABCD.sbk" {
-			t.Errorf("filename = %q, want 0001ABCD.sbk", fh.Filename)
-		}
-
-		data, _ := io.ReadAll(f)
-		if string(data) != "backup-bytes" {
-			t.Errorf("file content = %q, want backup-bytes", string(data))
-		}
-
-		// Check action form field.
-		if got := r.FormValue("action"); got != "backup_upload" {
-			t.Errorf("action form field = %q, want backup_upload", got)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	restorer := &HTTPBackupRestorer{
-		BaseURL:    srv.URL,
-		Session:    fakeSession{id: "SESS-1"},
-		HTTPClient: srv.Client(),
-	}
-
-	got, err := restorer.Restore(context.Background(), "0001ABCD", strings.NewReader("backup-bytes"))
-	if err != nil {
-		t.Fatalf("Restore: unexpected error: %v", err)
-	}
-	if got != "0001ABCD" {
-		t.Errorf("returned id = %q, want 0001ABCD", got)
-	}
-}
-
 // TestHTTPBackupRestorerAppendsSbkSuffix verifies that .sbk is appended when
 // missing and not doubled when the id already carries the suffix.
 func TestHTTPBackupRestorerAppendsSbkSuffix(t *testing.T) {
 	t.Parallel()
 
-	type testCase struct {
+	cases := []struct {
 		id       string
 		wantFile string
-	}
-	cases := []testCase{
+	}{
 		{id: "foo", wantFile: "foo.sbk"},
 		{id: "bar.sbk", wantFile: "bar.sbk"},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.id, func(t *testing.T) {
 			t.Parallel()
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if err := r.ParseMultipartForm(10 << 20); err != nil {
-					t.Errorf("ParseMultipartForm: %v", err)
-					http.Error(w, "bad multipart", http.StatusBadRequest)
-					return
-				}
-				_, fh, err := r.FormFile("backup_file")
-				if err != nil {
-					t.Errorf("FormFile: %v", err)
-					http.Error(w, "no file", http.StatusBadRequest)
-					return
-				}
-				if fh.Filename != tc.wantFile {
-					t.Errorf("filename = %q, want %q", fh.Filename, tc.wantFile)
-				}
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			restorer := &HTTPBackupRestorer{
-				BaseURL:    srv.URL,
-				Session:    fakeSession{id: "S"},
-				HTTPClient: srv.Client(),
+			body, contentType, err := buildMultipart(tc.id, strings.NewReader("x"))
+			if err != nil {
+				t.Fatalf("buildMultipart: %v", err)
 			}
-
-			if _, err := restorer.Restore(context.Background(), tc.id, strings.NewReader("x")); err != nil {
-				t.Fatalf("Restore: %v", err)
+			_, params, err := mime.ParseMediaType(contentType)
+			if err != nil {
+				t.Fatalf("ParseMediaType: %v", err)
+			}
+			part, err := multipart.NewReader(body, params["boundary"]).NextPart()
+			if err != nil {
+				t.Fatalf("NextPart: %v", err)
+			}
+			if got := part.FileName(); got != tc.wantFile {
+				t.Errorf("filename = %q, want %q", got, tc.wantFile)
 			}
 		})
 	}

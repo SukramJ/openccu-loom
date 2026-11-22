@@ -30,6 +30,9 @@ func (callbackStubHandlers) UpdateDevice(context.Context, string, string, int) e
 func (callbackStubHandlers) ReplaceDevice(context.Context, string, string, string) error { return nil }
 
 func (callbackStubHandlers) ReaddedDevice(context.Context, string, []string) error { return nil }
+func (callbackStubHandlers) FirmwareUpdateStatusChanged(context.Context, string, string, int) error {
+	return nil
+}
 
 func (callbackStubHandlers) ListDevices(context.Context, string) (xmlrpc.ArrayValue, error) {
 	return xmlrpc.ArrayValue{}, nil

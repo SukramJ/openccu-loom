@@ -447,6 +447,26 @@ func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen /
 		return xmlrpc.NilValue{}, nil
 	})
 
+	// firmwareUpdateStatusChanged is part of the HmIP server's client
+	// interface (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.IBackendApi). It
+	// must be registered: an unknown method answers a fault, and the server
+	// counts every fault toward evicting the callback client.
+	mux.Handle("firmwareUpdateStatusChanged", func(ctx context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
+		if len(params) != 3 {
+			return nil, fmt.Errorf("firmwareUpdateStatusChanged: want 3 params, got %d", len(params))
+		}
+		iface, _ := xmlrpc.AsString(params[0])
+		addr, _ := xmlrpc.AsString(params[1])
+		status, err := xmlrpc.AsInt(params[2])
+		if err != nil {
+			return nil, err
+		}
+		if err := h.FirmwareUpdateStatusChanged(ctx, iface, addr, status); err != nil {
+			return nil, err
+		}
+		return xmlrpc.NilValue{}, nil
+	})
+
 	// error(interface_id, error_code, msg) — CCU notifies us of a wire- level
 	// failure. The CCU does not expect a response payload; we always return Nil
 	// so the connection stays up even when our local handler fails.

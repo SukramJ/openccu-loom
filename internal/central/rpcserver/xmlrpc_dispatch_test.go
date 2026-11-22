@@ -50,6 +50,7 @@ type recordingHandlers struct {
 	updateDevice    atomic.Int32
 	replaceDevice   atomic.Int32
 	readdedDevice   atomic.Int32
+	firmwareStatus  atomic.Int32
 	listDeviceCalls atomic.Int32
 	errorCalls      atomic.Int32
 	lastErrorCode   atomic.Int32
@@ -82,6 +83,11 @@ func (r *recordingHandlers) ReplaceDevice(_ context.Context, _, _, _ string) err
 
 func (r *recordingHandlers) ReaddedDevice(_ context.Context, _ string, _ []string) error {
 	r.readdedDevice.Add(1)
+	return nil
+}
+
+func (r *recordingHandlers) FirmwareUpdateStatusChanged(_ context.Context, _, _ string, _ int) error {
+	r.firmwareStatus.Add(1)
 	return nil
 }
 
@@ -150,6 +156,29 @@ func TestXMLRPCUpdateDeviceDispatched(t *testing.T) {
 	}
 	if h.updateDevice.Load() != 1 {
 		t.Fatalf("updateDevice handler called %d times, want 1", h.updateDevice.Load())
+	}
+}
+
+// TestXMLRPCFirmwareUpdateStatusChangedDispatched pins that the HmIP
+// server's firmwareUpdateStatusChanged callback is answered without a
+// fault: it is part of the server's client interface, and since
+// HMIPServer 1.5.2 every fault counts toward evicting the callback client.
+func TestXMLRPCFirmwareUpdateStatusChangedDispatched(t *testing.T) {
+	t.Parallel()
+	h := &recordingHandlers{}
+	_, url := newTestXMLRPCServer(t, "main", h)
+	client, _ := xmlrpc.NewClient(xmlrpc.Config{URL: url})
+
+	_, err := client.Call(context.Background(), "firmwareUpdateStatusChanged", []xmlrpc.Value{
+		xmlrpc.StringValue("HmIP-RF"),
+		xmlrpc.StringValue("DEV001"),
+		xmlrpc.IntValue(1),
+	})
+	if err != nil {
+		t.Fatalf("firmwareUpdateStatusChanged: %v", err)
+	}
+	if h.firmwareStatus.Load() != 1 {
+		t.Fatalf("firmwareUpdateStatusChanged handler called %d times, want 1", h.firmwareStatus.Load())
 	}
 }
 

@@ -192,11 +192,10 @@ const (
 	defaultReconcileSlot         = 5 * time.Minute
 	defaultRefreshClientDataSlot = 5 * time.Minute
 
-	// DefaultCheckConnectionSlot mirrors
-	// cadence. Python uses 15 s (ScheduleTimerConfig.connection_checker_interval);
-	// we default to 120 s because openccu-loom already has BIN-RPC push events
-	// and the heartbeat job covers the 60 s window. 120 s keeps polling light
-	// while still catching a stale callback within two ticks.
+	// defaultCheckConnectionSlot is the check_connection job cadence. The
+	// per-interface connection probe (connectionCheckerInterval in
+	// internal/central/adapter) already pings every 15 s and carries the
+	// liveness verdict, so the job runs at half that rate.
 	// See divergence table above.
 	defaultCheckConnectionSlot = 30 * time.Second
 )
@@ -528,10 +527,15 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// callback channel, CUxD over BIN-RPC included (verified
 					// against a live CUxD; go-hmccu pings it the same way).
 					// The keepalive is what keeps the callback-liveness
-					// timestamp fresh on a quiet interface, so exempting one
-					// interface from the ping does not spare it the freshness
-					// verdict — it only guarantees the verdict goes negative
-					// after callbackFreshness, permanently.
+					// timestamp fresh on a quiet interface, and its PONG is
+					// what notices a CCU that answers ping but stopped calling
+					// us back: three consecutive missed PONGs — counted over
+					// this job's pings and the 15 s connection probe's alike —
+					// turn IsCallbackAlive false, while the freshness window
+					// stays the slower fallback.
+					// Exempting one interface from the ping does not spare it
+					// the freshness verdict — it only guarantees the verdict
+					// goes negative after callbackFreshness, permanently.
 					// Drain expired ping-pong entries before the probe
 					// adds another one. Nothing else called Sweep, so a
 					// long outage parked the pending set near its cap:
