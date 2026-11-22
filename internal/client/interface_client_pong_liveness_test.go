@@ -95,6 +95,29 @@ func TestIsCallbackAliveFalseAfterThreeMissedPongs(t *testing.T) {
 	}
 }
 
+// TestMissedPongsWithCallbacksArrivingStayAlive pins the other half of the
+// verdict. rfd and hs485d queue a PONG behind the client's event backlog and
+// drop the oldest entry of a full queue (OpenCCU-Base
+// src/libhsscomm/HSSXmlRpcEventDispatcher.cpp:39-70,
+// src/libelvutils/Actor.cpp:98-102), so a busy CCU can delay or lose PONGs
+// while it still delivers events. Only a CCU that delivers nothing at all has
+// dropped the registration; any callback since the first unanswered ping keeps
+// the interface alive.
+func TestMissedPongsWithCallbacksArrivingStayAlive(t *testing.T) {
+	t.Parallel()
+	h := newPongLivenessHarness(t, backends.KindCCU, nil)
+
+	h.ping(t)
+	h.c.NotifyCallback() // an event arrives after the first unanswered ping
+	for range 3 {
+		h.ping(t)
+	}
+	if !h.c.IsCallbackAlive() {
+		t.Fatal("IsCallbackAlive() = false after three missed PONGs although callbacks kept arriving; " +
+			"want true — a delayed or dropped PONG on a busy CCU is not a dropped registration")
+	}
+}
+
 // TestMatchedPongResetsMissedPongs: the PONG of the newest ping proves the
 // callback path works again, so the interface is alive and the next ping
 // starts counting from zero.

@@ -319,11 +319,15 @@ type InterfaceClient struct {
 	// pongMu guards the missed-PONG bookkeeping behind
 	// [missedPongThreshold]. unansweredPing is the token of the newest
 	// tracked keepalive ping whose PONG has not arrived ("" when it has, or
-	// when none went out); missedPongs counts consecutive pings that were
-	// superseded by the next one while still unanswered.
+	// when none went out) and unansweredAt the moment it went out;
+	// missedPongs counts consecutive pings that were superseded by the next
+	// one while still unanswered, and missedSince is when the first of them
+	// went out.
 	pongMu         sync.Mutex
 	unansweredPing string
+	unansweredAt   time.Time
 	missedPongs    int
+	missedSince    time.Time
 }
 
 // New constructs a client, filling in defaults for any nil reliability
@@ -604,6 +608,7 @@ func (c *InterfaceClient) RecordPong(id string) (matched bool, rtt time.Duration
 	if matched {
 		c.pongMu.Lock()
 		c.missedPongs = 0
+		c.missedSince = time.Time{}
 		if id == c.unansweredPing {
 			c.unansweredPing = ""
 		}
@@ -616,11 +621,16 @@ func (c *InterfaceClient) RecordPong(id string) (matched bool, rtt time.Duration
 // CCU. The previous tracked ping, still unanswered when this one goes out,
 // had a full keepalive interval for its PONG and counts as missed.
 func (c *InterfaceClient) notePingOnWire(token string) {
+	now := time.Now()
 	c.pongMu.Lock()
 	if c.unansweredPing != "" {
+		if c.missedPongs == 0 {
+			c.missedSince = c.unansweredAt
+		}
 		c.missedPongs++
 	}
 	c.unansweredPing = token
+	c.unansweredAt = now
 	c.pongMu.Unlock()
 }
 
@@ -628,16 +638,18 @@ func (c *InterfaceClient) notePingOnWire(token string) {
 func (c *InterfaceClient) resetMissedPongs() {
 	c.pongMu.Lock()
 	c.missedPongs = 0
+	c.missedSince = time.Time{}
 	c.unansweredPing = ""
+	c.unansweredAt = time.Time{}
 	c.pongMu.Unlock()
 }
 
-// missedPongCount returns the number of consecutive keepalive pings whose
-// PONG never arrived.
-func (c *InterfaceClient) missedPongCount() int {
+// missedPongStreak returns the number of consecutive keepalive pings whose
+// PONG never arrived and when the first of them went out.
+func (c *InterfaceClient) missedPongStreak() (int, time.Time) {
 	c.pongMu.Lock()
 	defer c.pongMu.Unlock()
-	return c.missedPongs
+	return c.missedPongs, c.missedSince
 }
 
 // SweepPingPong drains expired pending / unknown entries.
@@ -876,8 +888,15 @@ func (c *InterfaceClient) LastCallbackAt() time.Time {
 //     freshness window below, because its keepalive PONG is what refreshes
 //     the timestamp.
 //   - Client state FAILED or RECONNECTING: false (no reliable signal).
-//   - [missedPongThreshold] consecutive keepalive PONGs missing: false. The
-//     CCU answers ping but no longer calls us back — a dropped registration.
+//   - [missedPongThreshold] consecutive keepalive PONGs missing and no
+//     callback of any kind since the first of those pings went out: false.
+//     The CCU answers ping but no longer calls us back — a dropped
+//     registration. Missing PONGs alone do not decide it: rfd and hs485d
+//     queue the PONG behind the client's event backlog and drop the oldest
+//     entry of a full queue (OpenCCU-Base
+//     src/libhsscomm/HSSXmlRpcEventDispatcher.cpp:39-70,
+//     src/libelvutils/Actor.cpp:98-102), so a busy CCU can delay or lose a
+//     PONG while its events still arrive.
 //   - No callback observed yet (zero timestamp): true (the silence window
 //     starts only after the first event has been seen, otherwise every
 //     scheduler tick during init would trip ConnectionLost).
@@ -892,12 +911,13 @@ func (c *InterfaceClient) IsCallbackAlive() bool {
 	default:
 		// All other states: proceed to check the callback timestamp below.
 	}
-	if c.missedPongCount() >= missedPongThreshold {
-		return false
-	}
+	missed, missedSince := c.missedPongStreak()
 	c.callbackMu.Lock()
 	last := c.lastCallbackAt
 	c.callbackMu.Unlock()
+	if missed >= missedPongThreshold && !last.After(missedSince) {
+		return false
+	}
 	if last.IsZero() {
 		return true
 	}

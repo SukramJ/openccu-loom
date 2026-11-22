@@ -41,8 +41,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   daemon only noticed after three minutes without any event, and devices sat
   silent until then. The keepalive ping the daemon sends every 15 seconds is
   answered by a PONG event on the same callback path; three PONGs missing in
-  a row now count the interface as lost, and the daemon re-registers at
-  once. The three-minute window stays as the fallback.
+  a row with no other callback arriving either now count the interface as
+  lost, and the daemon re-registers at once. A busy CCU that delays or
+  drops a PONG while still delivering events is not affected. The
+  three-minute window stays as the fallback.
 - **A column filter that matches nothing can be cleared again.** A table
   whose column filters left no row replaced itself, filter row included,
   with the empty notice, so the filter could not be taken back — and since
