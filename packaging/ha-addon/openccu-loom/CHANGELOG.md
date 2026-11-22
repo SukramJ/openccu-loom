@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.106.2
+
+- **The CCU no longer logs a failed virtual-device update each time the
+  add-on connects.** The CCU's confirmation call for virtual devices is
+  now answered instead of refused.
+- **An interface a CCU no longer has stops showing an error warning.**
+  After an interface is removed from a CCU's settings, its old incidents
+  no longer keep an error on the warning list; they stay in the incident
+  history.
+
 ## 0.106.1
 
 - **HmIP devices keep reporting their state on OpenCCU 3.89.14.** Since
