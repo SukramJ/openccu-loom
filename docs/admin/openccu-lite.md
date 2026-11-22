@@ -286,7 +286,14 @@ from the box's Addons page. A few things differ from a CCU:
 - **Downloaded archives stay in the add-on's directory.** The box mounts
   `/usr/local` read-only for add-ons apart from their own directories, so
   archives land in the add-on's `var/backups` rather than
-  `/usr/local/sdcard/backup`.
+  `/usr/local/sdcard/backup`; the add-on's log says so at every start.
+  This is intended: the directory carries a `.nobackup` marker, so the
+  box's nightly backup leaves the archives out. The box's own backups,
+  including a USB stick as their target, are set up on the box's Backup
+  page. The add-on deliberately asks for no access to those targets — a
+  stick that holds the box's backups holds its radio keys. For copies off
+  the box, run OpenCCU-Loom on another host with a token that carries the
+  `backup` scope ([Backup & restore](backup.md#backing-up-and-restoring-an-openccu-lite-system)).
 - **Encrypted backups stay encrypted.** With backup encryption switched on
   the box serves `.sbk.age` archives. Loom stores and imports them
   unopened and hands them back to an openccu-lite box on restore, which
