@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -166,6 +167,9 @@ func (c *Checker) LatestRelease(ctx context.Context, includePrereleases bool) (R
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if rl := rateLimitError(resp, time.Now()); rl != nil {
+		return ReleaseInfo{}, rl
+	}
 	if resp.StatusCode != http.StatusOK {
 		return ReleaseInfo{}, fmt.Errorf("addonupdate: releases: unexpected status %d", resp.StatusCode)
 	}
@@ -180,6 +184,32 @@ func (c *Checker) LatestRelease(ctx context.Context, includePrereleases bool) (R
 		return ReleaseInfo{}, ErrNoRelease
 	}
 	return resolveAssets(body)
+}
+
+// rateLimitError reports a refusal for GitHub's request limit, or nil.
+// GitHub answers an exhausted limit with 403 or 429: the primary limit
+// sets x-ratelimit-remaining to "0" and x-ratelimit-reset to the reset in
+// UTC epoch seconds, a secondary limit may send retry-after in seconds
+// (https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+// A 403 with neither header cannot be told apart from a refusal of another
+// kind by its headers, so it stays generic.
+func rateLimitError(resp *http.Response, now time.Time) *RateLimitError {
+	if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusTooManyRequests {
+		return nil
+	}
+	if s := resp.Header.Get("Retry-After"); s != "" {
+		if secs, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && secs >= 0 {
+			return &RateLimitError{RetryAt: now.Add(time.Duration(secs) * time.Second)}
+		}
+	}
+	if strings.TrimSpace(resp.Header.Get("X-RateLimit-Remaining")) != "0" {
+		return nil
+	}
+	rl := &RateLimitError{}
+	if reset, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")), 10, 64); err == nil && reset > 0 {
+		rl.RetryAt = time.Unix(reset, 0).UTC()
+	}
+	return rl
 }
 
 // pickRelease returns the admitted release with the highest SemVer tag.

@@ -132,6 +132,15 @@ type centralOrchestrator struct {
 	// disabled. Only removeCentral calls it: a daemon shutdown stops every
 	// central too, and their numbers must survive it.
 	matterRetire func(ctx context.Context, centralName string) error
+	// matterForget queues a device whose Matter endpoint numbers the next
+	// sync frees. Set via [centralOrchestrator.setMatterDeviceForgetter]
+	// after the Matter runtime is stood up; nil while the bridge is
+	// disabled. Only a restart calls it, for the devices of an interface the
+	// new configuration drops: the teardown unsubscribes the Matter hook —
+	// whose lifecycle subscriber forgets a deleted device — before it evicts
+	// the model, so those removals reach no forget otherwise, and the
+	// restart keeps the partition their numbers are stored in.
+	matterForget func(centralName, address string)
 	// alarmHook subscribes an adopted central onto the alarm service's
 	// event routing and detaches it again by name. Set via
 	// [centralOrchestrator.setAlarmCentralHook]; zero while the alarm
@@ -406,6 +415,18 @@ func (o *centralOrchestrator) setMatterPartitionRetirer(retire func(ctx context.
 	}
 	o.mu.Lock()
 	o.matterRetire = retire
+	o.mu.Unlock()
+}
+
+// setMatterDeviceForgetter installs the Matter reconciler's forget of a
+// device. Nil-safe / idempotent, mirroring
+// [centralOrchestrator.setMatterPartitionRetirer].
+func (o *centralOrchestrator) setMatterDeviceForgetter(forget func(centralName, address string)) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.matterForget = forget
 	o.mu.Unlock()
 }
 
@@ -746,7 +767,8 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 // an interface the previous configuration had and cc no longer has — CUxD,
 // when a central moves to openccu-lite: its devices are removed as by a
 // removal ([evictModelForRestart]), so every per-device evictor deletes
-// their stored state, and its VALUES/MASTER cache rows go as a whole.
+// their stored state, its VALUES/MASTER cache rows go as a whole, and their
+// Matter endpoint numbers are freed ([purgeDroppedInterfaceState]).
 // Nothing can ever reach them again.
 //
 // When the adopt fails, nothing comes back under the name, so the domains
@@ -800,12 +822,23 @@ func (o *centralOrchestrator) releaseCentralDomains(name string) {
 }
 
 // purgeDroppedInterfaceState deletes what a restart leaves of the interfaces
-// prev configured and next does not: the Matter exposures of droppedDevices,
-// and the VALUES/MASTER cache rows of each such interface. The cache rows
-// are keyed by `<central>-<interface>`, so a retained interface keeps its
-// rows across the restart and a dropped one would otherwise keep them
-// forever — including rows of devices that were not in the model.
+// prev configured and next does not: the Matter exposures and endpoint
+// numbers of droppedDevices, and the VALUES/MASTER cache rows of each such
+// interface. The cache rows are keyed by `<central>-<interface>`, so a
+// retained interface keeps its rows across the restart and a dropped one
+// would otherwise keep them forever — including rows of devices that were
+// not in the model. The endpoint numbers are queued for the reconciler's
+// next sync, which the restarted central's readiness triggers: the restart
+// keeps the central's partition, so nothing else would release them.
 func (o *centralOrchestrator) purgeDroppedInterfaceState(ctx context.Context, prev, next config.CentralConfig, droppedDevices []string) {
+	o.mu.Lock()
+	forget := o.matterForget
+	o.mu.Unlock()
+	if forget != nil {
+		for _, addr := range droppedDevices {
+			forget(prev.Name, addr)
+		}
+	}
 	if o.matterExposureStore != nil {
 		for _, addr := range droppedDevices {
 			if err := o.matterExposureStore.DeleteForDevice(ctx, prev.Name, addr); err != nil {

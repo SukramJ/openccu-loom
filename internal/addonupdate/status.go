@@ -54,7 +54,19 @@ type Status struct {
 	State State
 	// Error carries the failure detail while State is StateFailed.
 	Error string
+	// ErrorCode classifies a failure a client can explain without
+	// parsing Error; empty for every failure without a code of its own.
+	// The only code is [ErrorCodeRateLimited].
+	ErrorCode string
+	// RetryAt is when a check can succeed again, set with
+	// [ErrorCodeRateLimited]; the zero value means unknown.
+	RetryAt time.Time
 }
+
+// ErrorCodeRateLimited marks a check GitHub refused because the request
+// limit of the daemon's address is used up — a limit that clears by
+// itself at RetryAt, not a fault.
+const ErrorCodeRateLimited = "rate_limited"
 
 // Sentinel errors the updater's Check/Install verbs return. REST
 // handlers map these to their documented HTTP status.
@@ -68,4 +80,24 @@ var (
 	// ErrNoUpdateAvailable is returned by Install when the last known
 	// check found no newer release.
 	ErrNoUpdateAvailable = errors.New("addonupdate: no update available")
+	// ErrRateLimited is returned by a check GitHub refused for its request
+	// limit; the error is a [*RateLimitError] carrying the retry time.
+	ErrRateLimited = errors.New("addonupdate: GitHub's request limit is used up")
 )
+
+// RateLimitError is a release check refused by GitHub's request limit.
+// The unauthenticated limit counts per public address, so daemons behind
+// one address share it. RetryAt is zero when GitHub named no time.
+type RateLimitError struct {
+	RetryAt time.Time
+}
+
+func (e *RateLimitError) Error() string {
+	if e.RetryAt.IsZero() {
+		return ErrRateLimited.Error()
+	}
+	return ErrRateLimited.Error() + "; the check works again after " + e.RetryAt.UTC().Format(time.RFC3339)
+}
+
+// Is makes errors.Is(err, ErrRateLimited) hold for every RateLimitError.
+func (e *RateLimitError) Is(target error) bool { return target == ErrRateLimited }

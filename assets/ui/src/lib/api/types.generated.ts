@@ -10681,7 +10681,18 @@ export interface components {
             state: "idle" | "checking" | "downloading" | "installing" | "failed";
             /** @description Failure detail while state is `failed`. */
             error?: string;
+            error_code?: components["schemas"]["AddonUpdateErrorCode"];
+            /**
+             * Format: date-time
+             * @description When a check can succeed again; set with `error_code` `rate_limited` when GitHub named a time.
+             */
+            retry_at?: string;
         };
+        /**
+         * @description Classifies a failed add-on update check a client can explain without parsing `error`; absent for every failure without a code of its own. `rate_limited`: GitHub refused the release check because the request limit of the daemon's address is used up. It clears by itself at `retry_at`; it is not a fault.
+         * @enum {string}
+         */
+        AddonUpdateErrorCode: "rate_limited";
         /** @description Operator-defined room grouping above CCU rooms (a floor, a shed, a terrace roof). Distinct from alarm zones. Rooms are (central, room) pairs; one area per room. */
         Area: {
             /** @description Server-generated on create; ignored in the create body. */

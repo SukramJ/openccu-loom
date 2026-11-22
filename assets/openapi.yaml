@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 16.6.0
+  version: 16.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -14760,6 +14760,23 @@ components:
         error:
           type: string
           description: Failure detail while state is `failed`.
+        error_code: { $ref: "#/components/schemas/AddonUpdateErrorCode" }
+        retry_at:
+          type: string
+          format: date-time
+          description: >-
+            When a check can succeed again; set with `error_code`
+            `rate_limited` when GitHub named a time.
+
+    AddonUpdateErrorCode:
+      type: string
+      enum: [rate_limited]
+      description: >-
+        Classifies a failed add-on update check a client can explain
+        without parsing `error`; absent for every failure without a code
+        of its own. `rate_limited`: GitHub refused the release check
+        because the request limit of the daemon's address is used up. It
+        clears by itself at `retry_at`; it is not a fault.
 
     Area:
       type: object

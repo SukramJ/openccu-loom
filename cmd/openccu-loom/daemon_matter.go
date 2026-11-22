@@ -601,6 +601,11 @@ type matterWiring struct {
 	// (matteradapter.Reconciler.Retire); the live-remove orchestrator
 	// calls it after the central's rows are purged.
 	retire func(ctx context.Context, centralName string) error
+	// forget queues a device whose endpoint numbers the next sync frees
+	// (matteradapter.Reconciler.QueueForget). The live-adopt orchestrator
+	// calls it for the devices of an interface a central restart drops:
+	// the per-central hook's own forget is unsubscribed by then.
+	forget func(centralName, address string)
 	// projection is the Matter side of a device's projection
 	// (GET /devices/{addr}/projection). Never nil: with the bridge
 	// switched off it answers that the plane is inactive.
@@ -921,6 +926,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	wiring.exposureStore = mids
 	wiring.projection = matteradapter.NewProjectionPlane(bundle.assembler, mids)
 	wiring.retire = bundle.retire
+	wiring.forget = bundle.forget
 
 	// Wire CCU device-availability → BridgedDeviceBasicInformation
 	// Reachable. WireDeviceAvailability (above) publishes a

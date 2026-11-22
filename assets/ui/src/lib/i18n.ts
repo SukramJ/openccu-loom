@@ -3958,6 +3958,10 @@ const EN: Catalog = {
   "addon_update.field.latest_version": "Latest version",
   "addon_update.field.last_check": "Last checked",
   "addon_update.toast.check_failed": "Update check failed",
+  "addon_update.error.rate_limited":
+    "GitHub's request limit for this network address is used up. The check works again later by itself; nothing is broken.",
+  "addon_update.error.rate_limited_until":
+    "GitHub's request limit for this network address is used up. The check works again after {time}; nothing is broken.",
   "addon_update.toast.install_trigger_failed": "Could not start the update",
   "addon_update.toast.failed": "Add-on update failed",
   "addon_update.toast.installed": "Add-on updated to {version}",
@@ -8176,6 +8180,10 @@ const DE: Catalog = {
   "addon_update.field.latest_version": "Neueste Version",
   "addon_update.field.last_check": "Zuletzt geprüft",
   "addon_update.toast.check_failed": "Update-Suche fehlgeschlagen",
+  "addon_update.error.rate_limited":
+    "Das Anfragelimit von GitHub für diese Netzwerkadresse ist ausgeschöpft. Die Update-Suche klappt später von selbst wieder; es ist nichts kaputt.",
+  "addon_update.error.rate_limited_until":
+    "Das Anfragelimit von GitHub für diese Netzwerkadresse ist ausgeschöpft. Die Update-Suche klappt ab {time} wieder; es ist nichts kaputt.",
   "addon_update.toast.install_trigger_failed":
     "Update konnte nicht gestartet werden",
   "addon_update.toast.failed": "Add-on-Update fehlgeschlagen",

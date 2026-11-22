@@ -13,6 +13,7 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
+  import type { AddonUpdateStatus } from "$lib/api/types";
 
   // CCU add-on self-update card (ADR 0057). Capability-gated end to end:
   // the whole card — not a disabled-looking stub — is absent unless the
@@ -152,7 +153,7 @@
         const s = addonUpdateStore.status;
         if (!s) return;
         if (s.state === "failed") {
-          toastStore.error(t("addon_update.toast.failed"), s.error ?? "");
+          toastStore.error(t("addon_update.toast.failed"), statusError(s));
         } else if (s.current_version !== pending) {
           toastStore.success(
             t("addon_update.toast.installed", { version: s.current_version }),
@@ -167,6 +168,18 @@
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US");
+  }
+
+  // statusError is the failure text of a status: GitHub's request limit
+  // is explained in the operator's language with the time it clears,
+  // every other failure keeps the daemon's detail.
+  function statusError(s: AddonUpdateStatus): string {
+    if (s.error_code === "rate_limited") {
+      return s.retry_at
+        ? t("addon_update.error.rate_limited_until", { time: formatDate(s.retry_at) })
+        : t("addon_update.error.rate_limited");
+    }
+    return s.error ?? "";
   }
 
   async function check() {
@@ -240,7 +253,7 @@
     {/if}
 
     {#if status && status.state === "failed" && status.error}
-      <ErrorState message={status.error} onRetry={() => void check()} />
+      <ErrorState message={statusError(status)} onRetry={() => void check()} />
     {/if}
 
     {#if isInstalling}

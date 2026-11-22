@@ -1,5 +1,5 @@
 {
- "api_version": "16.6.0",
+ "api_version": "16.7.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -341,13 +341,16 @@
    "receiver_address:string",
    "sender_address:string"
   ],
+  "AddonUpdateErrorCode": [],
   "AddonUpdateStatus": [
    "current_version:string",
    "error:string",
+   "error_code:$ref:AddonUpdateErrorCode",
    "last_check:string",
    "latest_prerelease:boolean",
    "latest_version:string",
    "release_url:string",
+   "retry_at:string",
    "state:string",
    "supported:boolean",
    "update_available:boolean"

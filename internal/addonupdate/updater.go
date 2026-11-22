@@ -5,6 +5,7 @@ package addonupdate
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -169,6 +170,8 @@ func (u *Updater) enterBusy(next State) bool {
 	}
 	u.status.State = next
 	u.status.Error = ""
+	u.status.ErrorCode = ""
+	u.status.RetryAt = time.Time{}
 	snap, fns := u.snapshotLocked()
 	u.mu.Unlock()
 	notify(fns, snap)
@@ -203,11 +206,20 @@ func notify(fns []func(Status), snap Status) {
 	}
 }
 
-// fail transitions to StateFailed with err's message.
+// fail transitions to StateFailed with err's message, and with a code and
+// a retry time when err is a refusal for GitHub's request limit.
 func (u *Updater) fail(err error) {
+	var rl *RateLimitError
+	limited := errors.As(err, &rl)
 	u.transition(func(s *Status) {
 		s.State = StateFailed
 		s.Error = err.Error()
+		s.ErrorCode = ""
+		s.RetryAt = time.Time{}
+		if limited {
+			s.ErrorCode = ErrorCodeRateLimited
+			s.RetryAt = rl.RetryAt
+		}
 	})
 }
 
@@ -243,6 +255,8 @@ func (u *Updater) Check(ctx context.Context) error {
 		s.LastCheck = now
 		s.UpdateAvailable = IsNewer(current, info.Version)
 		s.Error = ""
+		s.ErrorCode = ""
+		s.RetryAt = time.Time{}
 	})
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,8 +43,28 @@ type restartFixture struct {
 	visibility *sqlitestore.VisibilityUnIgnoreStore
 	exposures  *loomendpoint.Store
 	values     *sqlitestore.ValuesCacheStore
+	master     *sqlitestore.MasterValuesStore
 	exposure   loomendpoint.SourceKey
 	retired    []string
+
+	// forgotten records every device the Matter hook handed to forget, as
+	// "<central>/<address>". The hook's handlers run on the event bus.
+	forgetMu  sync.Mutex
+	forgotten []string
+}
+
+// forget is the Matter reconciler's QueueForget as the fixture sees it.
+func (f *restartFixture) forget(centralName, address string) {
+	f.forgetMu.Lock()
+	defer f.forgetMu.Unlock()
+	f.forgotten = append(f.forgotten, centralName+"/"+address)
+}
+
+// forgottenDevices returns a copy of what forget has recorded so far.
+func (f *restartFixture) forgottenDevices() []string {
+	f.forgetMu.Lock()
+	defer f.forgetMu.Unlock()
+	return slices.Clone(f.forgotten)
 }
 
 func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restartFixture {
@@ -57,6 +78,7 @@ func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restar
 		visibility: sqlitestore.NewVisibilityUnIgnoreStore(db),
 		exposures:  loomendpoint.New(db),
 		values:     sqlitestore.NewValuesCacheStore(db),
+		master:     sqlitestore.NewMasterValuesStore(db),
 	}
 	f.recording = measurements.NewRecordingOverrides(f.recStore, nil, nil)
 
@@ -66,6 +88,8 @@ func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restar
 	t.Cleanup(recEvictor.Stop)
 	valuesEvictor := adapter.WireValuesCacheEviction(f.reg, f.values, discardTestLogger())
 	t.Cleanup(valuesEvictor.Stop)
+	masterEvictor := adapter.WireMasterValuesEviction(f.reg, f.master, discardTestLogger())
+	t.Cleanup(masterEvictor.Stop)
 
 	f.orch = buildLiveTestOrchestrator(ctx, t, f.reg, &config.Config{})
 	f.orch.channelFlagsStore = f.flags
@@ -73,6 +97,13 @@ func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restar
 	f.orch.recordingStore = f.recStore
 	f.orch.recordingOverrides = f.recording
 	f.orch.valuesCacheStore = f.values
+	f.orch.masterValuesStore = f.master
+	// The Matter side as daemon.go installs it: the per-central hook and the
+	// orchestrator's own forget, both ending in the reconciler's forget,
+	// which the fixture records. The reassemble is a no-op; the hook
+	// subscribes nothing without one.
+	f.orch.setMatterCentralHook(newMatterCentralHook(func() {}, f.forget, nil))
+	f.orch.setMatterDeviceForgetter(f.forget)
 	f.orch.sbDeps.visibilityUnIgnoreStore = f.visibility
 	f.orch.setMatterExposureStore(f.exposures)
 	f.orch.setMatterPartitionRetirer(func(_ context.Context, name string) error {
@@ -89,8 +120,8 @@ func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restar
 
 // adoptAndSeed brings row up live, puts a device into its model and seeds the
 // operator state stored under its name: a channel flag, an un-ignore pattern,
-// a recording override, a Matter exposure, and a VALUES cache row per
-// configured interface.
+// a recording override, a Matter exposure, and a VALUES and a MASTER cache
+// row of the device's channel.
 func (f *restartFixture) adoptAndSeed(ctx context.Context, t *testing.T, row sqlitestore.CentralRow) {
 	t.Helper()
 	if err := f.admin.Put(ctx, row); err != nil {
@@ -129,6 +160,21 @@ func (f *restartFixture) adoptAndSeed(ctx context.Context, t *testing.T, row sql
 			t.Fatalf("seed values cache %s: %v", ifc.Name, err)
 		}
 	}
+	// Keyed by the device's interface id: the value the removal event carries
+	// and the MASTER evictor deletes by.
+	if err := f.master.SaveParameter(ctx, row.Name, d.InterfaceID, restartChannel, "POWERUP_JUMPTARGET", 1); err != nil {
+		t.Fatalf("seed MASTER cache: %v", err)
+	}
+}
+
+// masterFound reports whether the MASTER cache holds rows for channel.
+func (f *restartFixture) masterFound(ctx context.Context, t *testing.T, name, interfaceID, channel string) bool {
+	t.Helper()
+	_, found, err := f.master.LoadChannel(ctx, name, interfaceID, channel)
+	if err != nil {
+		t.Fatalf("MASTER LoadChannel(%s): %v", channel, err)
+	}
+	return found
 }
 
 // valuesRows counts the VALUES cache rows of one interface of the named central.
@@ -211,6 +257,12 @@ func TestLiveCentralAdminPutRestartKeepsTheCentralsStoredState(t *testing.T) {
 	if n := f.valuesRows(ctx, t, name, "CUxD"); n != 0 {
 		t.Errorf("values cache rows of the dropped interface = %d, want 0", n)
 	}
+	if !f.masterFound(ctx, t, name, name+"-HmIP-RF", restartChannel) {
+		t.Error("the restart evicted the kept device's MASTER cache rows; a teardown must leave them")
+	}
+	if got := f.forgottenDevices(); len(got) != 0 {
+		t.Errorf("the restart handed %v to the Matter forget; a kept device must keep its endpoint numbers", got)
+	}
 }
 
 // TestLiveCentralAdminPutRestartRemovesTheDevicesOfADroppedInterface pins
@@ -251,6 +303,9 @@ func TestLiveCentralAdminPutRestartRemovesTheDevicesOfADroppedInterface(t *testi
 	if err := f.exposures.UpsertExposure(ctx, loomendpoint.ExposureRecord{Key: cuxdExposure, Enabled: true, Actor: "test"}); err != nil {
 		t.Fatalf("seed Matter exposure: %v", err)
 	}
+	if err := f.master.SaveParameter(ctx, name, d.InterfaceID, cuxdChannel, "POWERUP_JUMPTARGET", 1); err != nil {
+		t.Fatalf("seed MASTER cache: %v", err)
+	}
 
 	edited := row
 	edited.SystemType = "openccu-lite"
@@ -284,6 +339,15 @@ func TestLiveCentralAdminPutRestartRemovesTheDevicesOfADroppedInterface(t *testi
 	}
 	if _, err := f.exposures.GetExposure(ctx, f.exposure); err != nil {
 		t.Errorf("the kept interface's device lost its Matter exposure: %v", err)
+	}
+	if f.masterFound(ctx, t, name, name+"-CUxD", cuxdChannel) {
+		t.Error("the dropped interface's device keeps its MASTER cache rows")
+	}
+	if !f.masterFound(ctx, t, name, name+"-HmIP-RF", restartChannel) {
+		t.Error("the kept interface's device lost its MASTER cache rows")
+	}
+	if got, want := f.forgottenDevices(), []string{name + "/" + cuxdDevice}; !slices.Equal(got, want) {
+		t.Errorf("Matter forget after the restart = %v, want %v: the dropped interface's device frees its endpoint numbers, the kept one keeps them", got, want)
 	}
 }
 
