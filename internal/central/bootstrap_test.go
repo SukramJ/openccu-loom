@@ -6,9 +6,11 @@ package central
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestBootstrapBuildsEveryCentral(t *testing.T) {
@@ -23,6 +25,30 @@ func TestBootstrapBuildsEveryCentral(t *testing.T) {
 	defer teardown()
 	if got := reg.Names(); len(got) != 2 || got[0] != "ccu-01" || got[1] != "ccu-02" {
 		t.Fatalf("names=%+v", got)
+	}
+}
+
+// TestBootstrapCarriesEveryCentralsConfiguredInterfaces pins the boot half of
+// the configured-interface set: a central configured in the file reports the
+// wire id of each of its interfaces, as the incident producers record them, so
+// an interface removed from the file before a daemon restart is gone from it.
+func TestBootstrapCarriesEveryCentralsConfiguredInterfaces(t *testing.T) {
+	cfg := &config.Config{Centrals: []config.CentralConfig{
+		{Name: "ccu-01", Host: "h1", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}, {Name: " CUxD "}}},
+		{Name: "ccu-02", Host: "h2", Interfaces: []config.InterfaceSpec{{Name: "BidCos-RF"}}},
+	}}
+	reg, teardown, err := (&Bootstrap{}).Build(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer teardown()
+	want := map[string]bool{
+		WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF):   true,
+		WireInterfaceID("ccu-01", hmenum.InterfaceCUxD):     true,
+		WireInterfaceID("ccu-02", hmenum.InterfaceBidCosRF): true,
+	}
+	if got := reg.ConfiguredInterfaceIDs(); !maps.Equal(got, want) {
+		t.Fatalf("ConfiguredInterfaceIDs = %v, want %v", got, want)
 	}
 }
 

@@ -61,12 +61,17 @@ type boxNoticeDeps struct {
 
 // newWarningsAggregator builds the operator warning list from every source
 // the daemon has at that point of the boot. The pairing feed joins later,
-// with the REST server ([warnings.Aggregator.WithPairing]).
+// with the REST server ([warnings.Aggregator.WithPairing]). ifaces is the
+// central registry: an incident of an interface no registered central is
+// configured with any more raises no warning.
 func newWarningsAggregator(
 	h warnings.HealthSource, inc warnings.IncidentSource, hubs warnings.HubSource,
-	silences warnings.SilenceStore, liteMoves *liteMoveLedger,
+	silences warnings.SilenceStore, liteMoves *liteMoveLedger, ifaces *central.Registry,
 ) *warnings.Aggregator {
 	a := warnings.New(h, inc, hubs, silences)
+	if ifaces != nil {
+		a.WithInterfaces(ifaces)
+	}
 	if liteMoves != nil {
 		a.WithLiteMoves(liteMoves)
 	}

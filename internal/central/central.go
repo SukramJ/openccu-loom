@@ -53,6 +53,12 @@ type Config struct {
 	// behind by older releases. See adapter.InitInterfaceID and ADR-0024.
 	InstanceName string
 
+	// Interfaces are the interfaces the operator configured for this
+	// central — the set its south-bound wiring brings up a client for, and
+	// so the set its interface-scoped incidents can come from. Build it
+	// with [ConfiguredInterfaces].
+	Interfaces []hmenum.Interface
+
 	// DB is the shared SQLite handle. May be nil for tests that run
 	// without persistence.
 	DB *sql.DB
@@ -468,6 +474,18 @@ func (u *Unit) ReloadRecorderFromPersistence(ctx context.Context) {
 
 // Name returns the central's identifier.
 func (u *Unit) Name() string { return u.cfg.Name }
+
+// ConfiguredInterfaceIDs returns the wire interface id ([WireInterfaceID]) of
+// every interface the central is configured with, whether or not its client
+// is up: a configured interface that fails to connect is still this
+// central's, and its failures still concern the operator.
+func (u *Unit) ConfiguredInterfaceIDs() []string {
+	out := make([]string, 0, len(u.cfg.Interfaces))
+	for _, iface := range u.cfg.Interfaces {
+		out = append(out, WireInterfaceID(u.cfg.Name, iface))
+	}
+	return out
+}
 
 // InstanceName returns the daemon-global instance identity carried in the
 // wire interface_id. Empty when unset, in which case the producer omits it

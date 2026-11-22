@@ -487,3 +487,72 @@ func TestRestartCentralWhoseReadoptFailsClosesItsSecurityFaults(t *testing.T) {
 		t.Errorf("faults the domain shows after a failed restart = %v, want none", ids)
 	}
 }
+
+// TestLiveCentralAdminPutRestartDropsTheWarningOfADroppedInterface pins that a
+// restart dropping an interface takes that interface's incidents off the
+// warning list the SPA and the box's Status page read, while the incidents
+// stay in the journal. The move of a central to openccu-lite drops CUxD this
+// way; before, its incidents kept an error warning up for a day.
+func TestLiveCentralAdminPutRestartDropsTheWarningOfADroppedInterface(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	f := newRestartFixture(ctx, t, "central_restart_incident_warning.db")
+
+	const name = "restart-incidents"
+	row := sqlitestore.CentralRow{
+		Name: name, Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}, {Name: "CUxD", Port: 1}},
+	}
+	f.adoptAndSeed(ctx, t, row)
+
+	store := sqlitestore.NewIncidentStore(openMigratedTestDB(t, "central_restart_incident_journal.db"))
+	// Seeded under the id the incident producers record with.
+	kept := central.WireInterfaceID(name, hmenum.InterfaceHmIPRF)
+	dropped := central.WireInterfaceID(name, hmenum.InterfaceCUxD)
+	for _, iface := range []string{kept, dropped} {
+		if _, err := store.Record(ctx, sqlitestore.Incident{
+			CentralName: name, InterfaceID: iface,
+			Type: hmenum.IncidentTypeCallbackTimeout, Severity: hmenum.IncidentSeverityError, Message: "test",
+		}); err != nil {
+			t.Fatalf("seed incident %s: %v", iface, err)
+		}
+	}
+	reader := adapter.NewIncidentsStoreReader(store, f.reg, discardTestLogger())
+	agg := newWarningsAggregator(nil, reader, nil, nil, nil, f.reg)
+	warningIDs := func() map[string]bool {
+		out := map[string]bool{}
+		for _, w := range agg.Active() {
+			out[w.ID] = true
+		}
+		return out
+	}
+	keptID, droppedID := "incident:"+name+"/"+kept, "incident:"+name+"/"+dropped
+	if got := warningIDs(); !got[keptID] || !got[droppedID] {
+		t.Fatalf("precondition: warnings before the restart = %v, want %s and %s", got, keptID, droppedID)
+	}
+
+	edited := row
+	edited.SystemType = "openccu-lite"
+	edited.Interfaces = []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}}
+	if err := f.admin.Put(ctx, edited); err != nil {
+		t.Fatalf("Put(edited): %v", err)
+	}
+	t.Cleanup(func() { _ = f.orch.removeCentral(context.Background(), name) })
+
+	got := warningIDs()
+	if got[droppedID] {
+		t.Errorf("the dropped interface still raises %s after the restart", droppedID)
+	}
+	if !got[keptID] {
+		t.Errorf("the kept interface lost its warning %s: warnings %v", keptID, got)
+	}
+	journal := 0
+	for _, inc := range reader.Incidents() {
+		if inc.InterfaceID == dropped {
+			journal++
+		}
+	}
+	if journal != 1 {
+		t.Errorf("journal rows of the dropped interface after the restart = %d, want 1 (history is kept)", journal)
+	}
+}

@@ -923,7 +923,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		silenceStore = sqlitestore.NewWarningSilenceStore(auditDB)
 	}
-	warningsSvc := newWarningsAggregator(healthAdapter, incidentsReader, hubAdapter, silenceStore, liteMoves)
+	warningsSvc := newWarningsAggregator(healthAdapter, incidentsReader, hubAdapter, silenceStore, liteMoves, reg)
 
 	// On an openccu-lite box the same list stands on the box's Status page
 	// as the add-on's notices (ADR 0090). nil everywhere else.

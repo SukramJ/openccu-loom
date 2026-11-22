@@ -4,9 +4,23 @@
 package central
 
 import (
+	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
+
+// ConfiguredInterfaces maps a central's configured interface list onto the
+// interfaces its south-bound wiring brings up, read the way that wiring reads
+// it (the name trimmed, as the CCU wiring does per interface spec).
+func ConfiguredInterfaces(specs []config.InterfaceSpec) []hmenum.Interface {
+	out := make([]hmenum.Interface, 0, len(specs))
+	for _, s := range specs {
+		out = append(out, hmenum.Interface(strings.TrimSpace(s.Name)))
+	}
+	return out
+}
 
 // WireInterfaceID returns the canonical, host-independent interface
 // identifier used EVERYWHERE inside the daemon: on

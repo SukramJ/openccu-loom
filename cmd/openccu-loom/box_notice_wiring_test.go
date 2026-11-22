@@ -65,7 +65,7 @@ func startBoxNoticeFixture(t *testing.T, cfg *config.Config) *boxNoticeFixture {
 	fx := &boxNoticeFixture{fake: fake, tracker: health.NewTracker(), reg: central.NewRegistry(), admin: newFakeCentralAdmin()}
 	fx.moves = newLiteMoveLedger(fx.admin)
 	fx.mirror = startBoxNotices(t.Context(), cfg, boxNoticeDeps{
-		warnings: newWarningsAggregator(trackerHealth{fx.tracker}, nil, nil, nil, fx.moves),
+		warnings: newWarningsAggregator(trackerHealth{fx.tracker}, nil, nil, nil, fx.moves, nil),
 		catalogs: catalogs, health: fx.tracker, reg: fx.reg, admin: fx.admin, liteMoves: fx.moves,
 	}, slog.New(slog.DiscardHandler))
 	t.Cleanup(fx.mirror.Stop)

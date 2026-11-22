@@ -547,6 +547,7 @@ func (o *centralOrchestrator) adoptCentralLocked(ctx context.Context, cc config.
 	unit, err := central.New(central.Config{
 		Name:         cc.Name,
 		InstanceName: o.instanceName,
+		Interfaces:   central.ConfiguredInterfaces(cc.Interfaces),
 		Logger:       logger,
 	})
 	if err != nil {
