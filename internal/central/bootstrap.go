@@ -52,6 +52,7 @@ func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, fun
 		unit, err := New(Config{
 			Name:         cc.Name,
 			InstanceName: instanceName,
+			Interfaces:   ConfiguredInterfaces(cc.Interfaces),
 			Logger:       logger.With(slog.String("central", cc.Name)),
 		})
 		if err != nil {

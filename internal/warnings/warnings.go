@@ -110,6 +110,15 @@ type LiteMoveSource interface {
 	PendingLiteMoves() []LiteMove
 }
 
+// InterfaceSource reports the wire interface id of every interface the
+// running centrals are configured with. An interface-scoped incident
+// whose interface is not in that set belongs to an interface the central
+// no longer has — dropped by an edit or by the move to openccu-lite — and
+// stays in the incident journal without raising a warning.
+type InterfaceSource interface {
+	ConfiguredInterfaceIDs() map[string]bool
+}
+
 // SilenceStore persists per-user silences. The production implementation
 // is sqlite.WarningSilenceStore.
 type SilenceStore interface {
@@ -129,6 +138,7 @@ type Aggregator struct {
 	hubs      HubSource
 	pairing   PairingSource
 	liteMoves LiteMoveSource
+	ifaces    InterfaceSource
 	silences  SilenceStore
 }
 
@@ -150,6 +160,15 @@ func (a *Aggregator) WithPairing(p PairingSource) *Aggregator {
 // central. A wither for the same reason as [Aggregator.WithPairing].
 func (a *Aggregator) WithLiteMoves(s LiteMoveSource) *Aggregator {
 	a.liteMoves = s
+	return a
+}
+
+// WithInterfaces adds the configured-interface feed that keeps incidents of
+// a dropped interface off the warning list. A wither for the same reason
+// as [Aggregator.WithPairing]. Without it every incident in the window
+// warns, whichever interface it names.
+func (a *Aggregator) WithInterfaces(s InterfaceSource) *Aggregator {
+	a.ifaces = s
 	return a
 }
 
@@ -177,42 +196,7 @@ func (a *Aggregator) Active() []Warning {
 		}
 	}
 
-	if a.incidents != nil {
-		// One warning per component with error-grade incidents inside the
-		// window; the newest timestamp wins the display.
-		type agg struct {
-			count int
-			last  time.Time
-		}
-		byComponent := map[string]*agg{}
-		incidents := a.incidents.Incidents()
-		for i := range incidents {
-			inc := &incidents[i]
-			sev := hmenum.IncidentSeverity(inc.Severity)
-			if sev != hmenum.IncidentSeverityError && sev != hmenum.IncidentSeverityCritical {
-				continue
-			}
-			if now.Sub(inc.When) > incidentWindow {
-				continue
-			}
-			e := byComponent[inc.Component]
-			if e == nil {
-				e = &agg{}
-				byComponent[inc.Component] = e
-			}
-			e.count++
-			if inc.When.After(e.last) {
-				e.last = inc.When
-			}
-		}
-		for component, e := range byComponent {
-			out = append(out, Warning{
-				ID: "incident:" + component, Severity: SeverityError,
-				MessageKey: "warnings.incidents",
-				Args:       map[string]string{"component": component, "count": strconv.Itoa(e.count)},
-			})
-		}
-	}
+	out = append(out, a.incidentWarnings(now)...)
 
 	if a.hubs != nil {
 		for _, nh := range a.hubs.Hubs() {
@@ -255,6 +239,59 @@ func (a *Aggregator) Active() []Warning {
 		}
 		return out[i].ID < out[j].ID
 	})
+	return out
+}
+
+// incidentWarnings is one warning per component with error-grade incidents
+// inside the window. An incident of an interface no central is configured
+// with any more is skipped when the interface feed is wired
+// ([Aggregator.WithInterfaces]).
+func (a *Aggregator) incidentWarnings(now time.Time) []Warning {
+	if a.incidents == nil {
+		return nil
+	}
+	var out []Warning
+	// One warning per component with error-grade incidents inside the
+	// window; the newest timestamp wins the display.
+	type agg struct {
+		count int
+		last  time.Time
+	}
+	byComponent := map[string]*agg{}
+	var configured map[string]bool
+	if a.ifaces != nil {
+		configured = a.ifaces.ConfiguredInterfaceIDs()
+	}
+	incidents := a.incidents.Incidents()
+	for i := range incidents {
+		inc := &incidents[i]
+		sev := hmenum.IncidentSeverity(inc.Severity)
+		if sev != hmenum.IncidentSeverityError && sev != hmenum.IncidentSeverityCritical {
+			continue
+		}
+		if now.Sub(inc.When) > incidentWindow {
+			continue
+		}
+		if configured != nil && inc.InterfaceID != "" && !configured[inc.InterfaceID] {
+			continue
+		}
+		e := byComponent[inc.Component]
+		if e == nil {
+			e = &agg{}
+			byComponent[inc.Component] = e
+		}
+		e.count++
+		if inc.When.After(e.last) {
+			e.last = inc.When
+		}
+	}
+	for component, e := range byComponent {
+		out = append(out, Warning{
+			ID: "incident:" + component, Severity: SeverityError,
+			MessageKey: "warnings.incidents",
+			Args:       map[string]string{"component": component, "count": strconv.Itoa(e.count)},
+		})
+	}
 	return out
 }
 

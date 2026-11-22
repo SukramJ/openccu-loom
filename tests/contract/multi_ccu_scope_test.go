@@ -656,9 +656,11 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 	// Methods that legitimately take no central name, each with the reason.
 	// Everything else on the registry must name its central.
 	allowedWithoutName := map[string]string{
-		"Names":              "returns all names — correct to not take a name param",
-		"List":               "returns all centrals — aggregation, not lookup",
-		"Len":                "counts the registry — no single central involved",
+		"Names": "returns all names — correct to not take a name param",
+		"List":  "returns all centrals — aggregation, not lookup",
+		"Len":   "counts the registry — no single central involved",
+		"ConfiguredInterfaceIDs": "aggregates every central's configured interfaces into one set — no single central involved; " +
+			"each wire interface id carries its central's name",
 		"StartAll":           "fans out to all centrals",
 		"StopAll":            "fans out to all centrals",
 		"Register":           "takes a *Unit, which carries its own Name()",

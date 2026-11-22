@@ -251,6 +251,43 @@ func TestLiteMoveSourceFeedsOneWarningPerCentral(t *testing.T) {
 	}
 }
 
+type fakeInterfaces map[string]bool
+
+func (f fakeInterfaces) ConfiguredInterfaceIDs() map[string]bool { return f }
+
+// TestIncidentOfAnInterfaceNoLongerConfiguredRaisesNoWarning: an incident
+// stays in the journal when its interface is dropped, but the warning list
+// describes what is wrong now, so only incidents of a configured interface,
+// and the central-level ones, still warn.
+func TestIncidentOfAnInterfaceNoLongerConfiguredRaisesNoWarning(t *testing.T) {
+	now := time.Now()
+	inc := fakeIncidents{incidents: []hmapi.Incident{
+		{When: now, Component: "kearney/kearney-CUxD", InterfaceID: "kearney-CUxD", Severity: "error"},
+		{When: now, Component: "kearney/kearney-HmIP-RF", InterfaceID: "kearney-HmIP-RF", Severity: "error"},
+		{When: now, Component: "kearney", Severity: "critical"},
+	}}
+	ids := func(ws []Warning) map[string]bool {
+		out := map[string]bool{}
+		for _, w := range ws {
+			out[w.ID] = true
+		}
+		return out
+	}
+
+	got := ids(New(nil, inc, nil, nil).WithInterfaces(fakeInterfaces{"kearney-HmIP-RF": true}).Active())
+	want := map[string]bool{"incident:kearney/kearney-HmIP-RF": true, "incident:kearney": true}
+	if !maps.Equal(got, want) {
+		t.Errorf("with CUxD dropped: warnings %v, want %v", got, want)
+	}
+
+	// Without the feed nothing is known about the configuration, and every
+	// incident in the window warns as before.
+	got = ids(New(nil, inc, nil, nil).Active())
+	if len(got) != 3 {
+		t.Errorf("without the interface feed: warnings %v, want all three", got)
+	}
+}
+
 func TestNilSourcesContributeNothing(t *testing.T) {
 	a := New(nil, nil, nil, nil)
 	if got := a.Active(); len(got) != 0 {

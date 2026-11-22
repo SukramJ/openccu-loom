@@ -335,6 +335,23 @@ func (r *Registry) List() []*Unit {
 	return out
 }
 
+// ConfiguredInterfaceIDs is the set of wire interface ids every registered
+// central is configured with ([Unit.ConfiguredInterfaceIDs]). A restart that
+// drops an interface registers a new unit without it, so the set follows the
+// configuration the centrals run on, not the one they booted with.
+func (r *Registry) ConfiguredInterfaceIDs() map[string]bool {
+	out := map[string]bool{}
+	if r == nil {
+		return out
+	}
+	for _, u := range r.List() {
+		for _, id := range u.ConfiguredInterfaceIDs() {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 // Unregister atomically removes the central with the given name and runs every
 // observer unwire attached to it, in reverse attach order. Returns true when an
 // entry was found and removed, false when the name was not registered.

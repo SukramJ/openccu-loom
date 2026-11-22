@@ -16,6 +16,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of the list and logged "Could not execute BackendUpdateDevicesCommand".
   The callback is now acknowledged. This path never removed the daemon's
   registration.
+- **An interface a central no longer has stops raising an error warning.**
+  When a central lost an interface (an edit of the central, or the move to
+  openccu-lite, which drops CUxD), that interface's incidents kept an error
+  on the warning list for up to 24 hours. On an openccu-lite box the add-on
+  also mirrored that error to the box's Status page. The warning list now
+  counts only incidents of interfaces the central is configured with, and
+  incidents of the central itself. The incidents stay in the incident
+  history. (#1146)
 
 ## [0.106.1] - 2026-11-22
 
