@@ -12,13 +12,11 @@ import (
 
 // TestMulticallAnswersAVoidSubCallWithTrue pins the wire shape of a
 // system.multicall response whose sub-calls return nothing — the CCU's
-// batched event delivery. The HmIP server's XML-RPC parser
-// (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcParser)
-// advances one tag too far after a <nil> value, so a <nil> inside the
-// result array makes it read the next element's <data> as a type tag and
-// fail with "Unknown type: data". Since HMIPServer 1.5.2 three such
-// failures in a row evict the callback client, which silences every HmIP
-// event. A void sub-call therefore answers true, never nil.
+// batched event delivery. The HmIP server cannot read a <nil> inside the
+// result array when another element follows; it fails with "Unknown type:
+// data". Since HMIPServer 1.5.2 three such failures in a row evict the
+// callback client, which silences every HmIP event. A void sub-call
+// therefore answers true, never nil.
 func TestMulticallAnswersAVoidSubCallWithTrue(t *testing.T) {
 	m := NewMux()
 	m.Handle("event", func(context.Context, []Value) (Value, error) {

@@ -447,10 +447,10 @@ func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen /
 		return xmlrpc.NilValue{}, nil
 	})
 
-	// firmwareUpdateStatusChanged is part of the HmIP server's client
-	// interface (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.IBackendApi). It
-	// must be registered: an unknown method answers a fault, and the server
-	// counts every fault toward evicting the callback client.
+	// firmwareUpdateStatusChanged is one of the callbacks the HmIP server
+	// sends to its registered clients. It must be registered: an unknown
+	// method answers a fault, and the server counts every fault toward
+	// evicting the callback client.
 	mux.Handle("firmwareUpdateStatusChanged", func(ctx context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
 		if len(params) != 3 {
 			return nil, fmt.Errorf("firmwareUpdateStatusChanged: want 3 params, got %d", len(params))
@@ -467,15 +467,14 @@ func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen /
 		return xmlrpc.NilValue{}, nil
 	})
 
-	// setReadyConfig(interface_id, address) is part of the HMIPServer
-	// virtual-device service's client interface
-	// (de.eq3.ccu.virtualdevice.service.internal.rega.IRegaClient). On
+	// setReadyConfig(interface_id, address) is one of the callbacks the HmIP
+	// server's virtual-device service sends to its registered clients. On
 	// registration, after newDevices, the service calls it once for every new
-	// device that has channels and discards the result; a fault aborts that
+	// device that has channels and does not use the result; a fault ends that
 	// loop for every device after it. The daemon keeps no per-device "config
 	// ready" state, so the call is only acknowledged. The answer is true
-	// rather than nil: the server's XML-RPC parser over-reads one tag after a
-	// <nil>, which breaks a nil followed by another value.
+	// rather than nil: the server cannot read a <nil> followed by another
+	// value.
 	mux.Handle("setReadyConfig", func(_ context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
 		if len(params) != 2 {
 			return nil, fmt.Errorf("setReadyConfig: want 2 params, got %d", len(params))
