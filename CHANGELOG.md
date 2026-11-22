@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The CCU's virtual-device service no longer logs a failed device update
+  each time the daemon registers.** When the daemon registers for
+  VirtualDevices, the HmIP server's virtual-device service announces the
+  devices and then calls `setReadyConfig` for each device that has channels. The daemon did not know that callback,
+  so the first call was answered with a fault, the service skipped the rest
+  of the list and logged "Could not execute BackendUpdateDevicesCommand".
+  The callback is now acknowledged. This path never removed the daemon's
+  registration.
+
 ## [0.106.1] - 2026-11-22
 
 ### Fixed

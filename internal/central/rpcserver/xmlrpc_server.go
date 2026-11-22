@@ -334,9 +334,9 @@ func routeFromPath(p string) (string, bool) {
 	return rest, true
 }
 
-// bindXMLRPCMethods wires the seven CCU callback methods into mux.
-// Every method extracts its positional arguments from the XML-RPC
-// params array and delegates to the central's [Handlers].
+// bindXMLRPCMethods wires the CCU callback methods into mux. Every method
+// extracts its positional arguments from the XML-RPC params array and
+// delegates to the central's [Handlers]; setReadyConfig is only acknowledged.
 func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen // wire/dispatch table over many attribute/opcode cases
 	mux.Handle("event", func(ctx context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
 		if len(params) != 4 {
@@ -465,6 +465,22 @@ func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen /
 			return nil, err
 		}
 		return xmlrpc.NilValue{}, nil
+	})
+
+	// setReadyConfig(interface_id, address) is part of the HMIPServer
+	// virtual-device service's client interface
+	// (de.eq3.ccu.virtualdevice.service.internal.rega.IRegaClient). On
+	// registration, after newDevices, the service calls it once for every new
+	// device that has channels and discards the result; a fault aborts that
+	// loop for every device after it. The daemon keeps no per-device "config
+	// ready" state, so the call is only acknowledged. The answer is true
+	// rather than nil: the server's XML-RPC parser over-reads one tag after a
+	// <nil>, which breaks a nil followed by another value.
+	mux.Handle("setReadyConfig", func(_ context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
+		if len(params) != 2 {
+			return nil, fmt.Errorf("setReadyConfig: want 2 params, got %d", len(params))
+		}
+		return xmlrpc.BoolValue(true), nil
 	})
 
 	// error(interface_id, error_code, msg) — CCU notifies us of a wire- level

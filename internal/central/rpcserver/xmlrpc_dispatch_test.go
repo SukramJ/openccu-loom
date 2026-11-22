@@ -182,6 +182,27 @@ func TestXMLRPCFirmwareUpdateStatusChangedDispatched(t *testing.T) {
 	}
 }
 
+// TestXMLRPCSetReadyConfigAnswered pins that the virtual-device service's
+// setReadyConfig callback is answered with a value, not a fault: the service
+// calls it once per new device after newDevices, and the first fault aborts
+// that loop for every device after it.
+func TestXMLRPCSetReadyConfigAnswered(t *testing.T) {
+	t.Parallel()
+	_, url := newTestXMLRPCServer(t, "main", &recordingHandlers{})
+	client, _ := xmlrpc.NewClient(xmlrpc.Config{URL: url})
+
+	got, err := client.Call(context.Background(), "setReadyConfig", []xmlrpc.Value{
+		xmlrpc.StringValue("main-VirtualDevices"),
+		xmlrpc.StringValue("INT0000001"),
+	})
+	if err != nil {
+		t.Fatalf("setReadyConfig: %v", err)
+	}
+	if b, ok := got.(xmlrpc.BoolValue); !ok || !bool(b) {
+		t.Fatalf("setReadyConfig answered %#v, want true", got)
+	}
+}
+
 func TestXMLRPCReplaceDeviceDispatched(t *testing.T) {
 	t.Parallel()
 	h := &recordingHandlers{}
