@@ -162,11 +162,9 @@ func (m *Mux) RegisterSystemMethods() {
 				continue
 			}
 			// A void sub-call (the CCU's batched `event` delivery) answers
-			// true, never nil. The HmIP server's parser
-			// (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcParser#parseValue)
-			// advances one tag past a <nil> value, so a <nil> followed by
-			// another array element fails with "Unknown type: data"; three
-			// such failures in a row evict the callback client.
+			// true, never nil. The HmIP server cannot read a <nil> followed
+			// by another array element and fails with "Unknown type: data";
+			// three such failures in a row evict the callback client.
 			if _, isNil := sub.(NilValue); isNil || sub == nil {
 				sub = BoolValue(true)
 			}
