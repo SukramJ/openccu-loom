@@ -54,12 +54,12 @@ jobs:
         # both binaries above, so call go test directly to avoid
         # the redundant compile.
         #
-        # 300 s, not 180 s: the suite measured 163 s on a developer
-        # machine, which left 9 % headroom — enough for a slower runner to
-        # turn an ordinary run into a timeout that reads like a hang. The
-        # budget exists to catch a genuinely stuck daemon, not to cap
-        # legitimate growth; each test carries its own deadline.
-        run: go test -tags=e2e -timeout=300s ./tests/e2e/...
+        # 480 s: the suite reached 280 s on the CI runner, and the
+        # missed-PONG liveness tests add about 90 s, one of them bound to
+        # the daemon's fixed 15 s connection probe. The budget exists to
+        # catch a genuinely stuck daemon, not to cap legitimate growth;
+        # each test carries its own deadline.
+        run: go test -tags=e2e -timeout=480s ./tests/e2e/...
 
       - name: dump daemon stdout on failure
         if: failure()
