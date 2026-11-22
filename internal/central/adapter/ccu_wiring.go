@@ -1052,8 +1052,9 @@ func wireInterface(
 				//     rega-startup window, or the daemon booted
 				//     while the CCU was down — without this the
 				//     daemon sits stale forever).
-				//  3. Silent callback channel (no inbound event
-				//     within callbackFreshness). IsCallbackAlive
+				//  3. Silent callback channel: three consecutive
+				//     keepalive PONGs missing, or no inbound event
+				//     within callbackFreshness. IsCallbackAlive
 				//     guards the post-init window so a freshly
 				//     initialised client cannot trip the check
 				//     before the first push event lands.
@@ -1066,7 +1067,11 @@ func wireInterface(
 				if probeUnit != nil && !probeUnit.IsSouthboundReady() {
 					tickCtx = hmlog.WithExpectedSlowness(probeCtx)
 				}
-				alive := probeIC.CheckConnectionAvailability(tickCtx, false)
+				// The ping carries a correlation token: this probe is the
+				// most frequent one, so its PONG is what the missed-PONG
+				// liveness verdict (signal 3) counts — a CCU that dropped our
+				// registration still answers the ping, only the PONG stays away.
+				alive := probeIC.CheckConnectionAvailability(tickCtx, true)
 				// Detection is not enough on its own: nothing else moves a
 				// CONNECTED client off that state while the CCU is silent,
 				// and the forced-availability propagation that clears the

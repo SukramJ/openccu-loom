@@ -35,7 +35,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while nothing arrived. The daemon now uses the same two steps as the
   WebUI and checks both answers. As before, the upload is the first of the
   firmware's three restore steps; the restore itself is not run.
-- **The daemon notices within about 45 seconds instead of three minutes
+- **The daemon notices within about a minute instead of three minutes
   that a CCU interface stopped delivering events.** When the CCU drops the
   daemon's callback registration it keeps answering every request, so the
   daemon only noticed after three minutes without any event, and devices sat

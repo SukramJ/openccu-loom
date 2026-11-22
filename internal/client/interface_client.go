@@ -840,9 +840,11 @@ const callbackFreshness = 180 * time.Second
 // missedPongThreshold is how many consecutive keepalive pings may go
 // unanswered by their PONG before the interface counts as dead. A CCU that
 // silently dropped our callback registration still answers ping on the RPC
-// channel, so only the missing PONG shows it. At the 15s keepalive cadence
-// three misses notice that in about 45s instead of the 180s freshness
-// window, and still tolerate two late or lost PONGs in a row.
+// channel, so only the missing PONG shows it. At the 15s connection-probe
+// cadence the third miss is counted three ticks after the first unanswered
+// ping, so a dropped registration is noticed in about a minute instead of
+// the 180s freshness window, and two late or lost PONGs in a row are still
+// tolerated.
 const missedPongThreshold = 3
 
 // NotifyCallback stamps the last-callback timestamp. Called from the

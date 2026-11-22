@@ -81,7 +81,8 @@ type Options struct {
 	// CheckConnectionInterval overrides the central's background
 	// check_connection job cadence. Zero uses the compiled-in default
 	// (30 s). A short value (e.g. 5 s) makes degraded-state detection
-	// faster in tests that exercise CCU disconnects.
+	// faster in tests that exercise CCU disconnects; a negative value
+	// disables the job.
 	CheckConnectionInterval time.Duration
 
 	// StartCCUNotReady boots godevccu in its "still warming up" state

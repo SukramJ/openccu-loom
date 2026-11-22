@@ -7,8 +7,8 @@
   the connection to HmIP was re-established every three minutes.
 - **A finished background firmware download no longer cuts off HmIP.**
   Devices that are ready for a firmware update now show it right away.
-- **A lost connection to a CCU interface is noticed within about
-  45 seconds** instead of three minutes, and re-established at once.
+- **A lost connection to a CCU interface is noticed within about a
+  minute** instead of three minutes, and re-established at once.
 - **Uploading a backup for restore reaches the CCU again,** and a refused
   upload is reported instead of shown as done.
 - **A column filter in a table that matches nothing can be cleared

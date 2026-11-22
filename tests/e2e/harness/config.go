@@ -43,7 +43,7 @@ type configInputs struct {
 	CCUJSONRPC int    // godevccu JSON-RPC port (CentralConfig.JSONRPCPort)
 	// CheckConnectionInterval overrides the central's check_connection job cadence.
 	// Zero uses the compiled-in default. Use a short value (e.g. 5 s) in tests
-	// that need fast degraded-state detection.
+	// that need fast degraded-state detection; a negative value disables the job.
 	CheckConnectionInterval time.Duration
 	// PublicURL sets north.rest.public_url. Empty omits the key, which is
 	// the default deployment.
@@ -224,7 +224,7 @@ func buildConfigYAML(in configInputs) string {
 		writeCCUCentral(&b, in)
 	}
 	fmt.Fprintf(&b, "    interfaces:\n      - HmIP-RF\n")
-	if in.CheckConnectionInterval > 0 {
+	if in.CheckConnectionInterval != 0 {
 		// Express as a Go duration string (e.g. "5s") so the yaml unmarshaller
 		// can decode it into time.Duration via the standard YAML duration codec.
 		fmt.Fprintf(&b, "    check_connection_interval: %s\n", in.CheckConnectionInterval.String())
