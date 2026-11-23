@@ -70,15 +70,15 @@ func TestNorthMatterCommissioning_OmittedPasscodeKeepsStoredValue(t *testing.T) 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			c := NorthMatterCommissioning{Passcode: 20202021, Salt: "seeded-salt"}
+			c := NorthMatterCommissioning{Passcode: 20202021, EphemeralWindow: true}
 			if err := strictDecode(t, tc.raw, &c); err != nil {
 				t.Fatalf("decode %q: %v", tc.raw, err)
 			}
 			if c.Passcode != tc.want {
 				t.Fatalf("Passcode = %d, want %d", c.Passcode, tc.want)
 			}
-			if c.Salt != "seeded-salt" {
-				t.Fatalf("Salt = %q, want the seeded value to survive", c.Salt)
+			if !c.EphemeralWindow {
+				t.Fatal("EphemeralWindow = false, want the seeded value to survive")
 			}
 		})
 	}

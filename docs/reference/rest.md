@@ -357,30 +357,30 @@ Live config section read / write / delete + schema introspection
 
 | Method | Path | Summary | Access |
 |---|---|---|---|
-| GET | `/node/compatibility` | The commissioned ecosystems and known incompatibilities. | viewer |
-| GET | `/node/endpoints` | The bridged endpoints a controller sees. | viewer |
-| GET | `/node/endpoints/{ep}` | One endpoint the node serves, with its attribute values (0.4.1). | viewer |
-| GET | `/node/endpoints/{ep}/events` | The events the node's event log holds for one endpoint (0.4.1). | viewer |
-| GET | `/node/events` | The pairing, session and discovery trace, newest first. | viewer |
-| GET | `/node/exposure` | Every item the host could expose. | viewer |
+| GET | `/node/compatibility` | The commissioned ecosystems and known incompatibilities. | admin |
+| GET | `/node/endpoints` | The bridged endpoints a controller sees. | admin |
+| GET | `/node/endpoints/{ep}` | One endpoint the node serves, with its attribute values (0.4.1). | admin |
+| GET | `/node/endpoints/{ep}/events` | The events the node's event log holds for one endpoint (0.4.1). | admin |
+| GET | `/node/events` | The pairing, session and discovery trace, newest first. | admin |
+| GET | `/node/exposure` | Every item the host could expose. | admin |
 | PUT | `/node/exposure` | Apply a batch of item changes and reassemble the endpoints. | admin |
 | POST | `/node/exposure/preview` | The items as a batch of changes would leave them; nothing is written. | admin |
-| GET | `/node/exposure/schema` | How the selection page shows the host's items. | viewer |
-| GET | `/node/fabrics` | The commissioned fabrics. | viewer |
+| GET | `/node/exposure/schema` | How the selection page shows the host's items. | admin |
+| GET | `/node/fabrics` | The commissioned fabrics. | admin |
 | DELETE | `/node/fabrics/{index}` | Remove one fabric. | admin |
 | POST | `/node/maintenance/erase` | Erase the node — its store and endpoint records — and end it. The body must name the action. | admin |
 | POST | `/node/maintenance/factory-reset` | Remove every fabric. The body must name the action. | admin |
 | POST | `/node/maintenance/reassemble` | Rebuild the endpoints from the host's current selection; pairings are untouched. | admin |
-| GET | `/node/mdns` | The live DNS-SD advertisement and its diagnosis. | viewer |
+| GET | `/node/mdns` | The live DNS-SD advertisement and its diagnosis. | admin |
 | POST | `/node/mdns/reannounce` | Announce the node's DNS-SD records now. | admin |
 | GET | `/node/pairing` | The pairing codes — of the window this handler opened while it is open, else the configured ones. | admin |
 | POST | `/node/pairing/window` | Open a commissioning window. | admin |
 | POST | `/node/pairing/window/close` | Close the open commissioning window. | admin |
-| GET | `/node/sessions` | The open secure sessions and the session-id occupancy. | viewer |
+| GET | `/node/sessions` | The open secure sessions and the session-id occupancy. | admin |
 | GET | `/node/status` | Health, counts and the commissioning window. | viewer |
 | GET | `/node/stream` | Server-sent events. | viewer |
-| GET | `/node/surface` | The node's surface report. | viewer |
-| GET | `/node/topology` | The node as a graph — its bridge, its fabrics and the sessions on them. | viewer |
+| GET | `/node/surface` | The node's surface report. | admin |
+| GET | `/node/topology` | The node as a graph — its bridge, its fabrics and the sessions on them. | admin |
 
 ## paramsets {#paramsets}
 

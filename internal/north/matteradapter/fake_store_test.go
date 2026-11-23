@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/endpoint"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/secure/operational"
-	matterstore "github.com/SukramJ/go-fabric/store"
+	"thingfabric.dev/go-fabric/secure/operational"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"

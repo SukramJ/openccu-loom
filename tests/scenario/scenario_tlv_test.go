@@ -9,8 +9,8 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/SukramJ/go-fabric/im"
-	"github.com/SukramJ/go-fabric/tlv"
+	"thingfabric.dev/go-fabric/im"
+	"thingfabric.dev/go-fabric/tlv"
 )
 
 // tlvTopLevelContextTags walks the IM body's outer anonymous struct

@@ -6,9 +6,9 @@ package cover
 import (
 	"context"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	closuredef "thingfabric.dev/go-fabric/cluster/spec/closurecontrol"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 )
 
 // matterDeviceTypeClosure is the Matter Closure device type (0x0230).

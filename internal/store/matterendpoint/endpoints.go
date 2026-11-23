@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+	fabricendpoint "thingfabric.dev/go-fabric/endpoint"
 )
 
 // ErrKeyNotDecodable is returned when a source key's rendering does not

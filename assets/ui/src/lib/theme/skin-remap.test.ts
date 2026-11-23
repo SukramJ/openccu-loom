@@ -58,7 +58,9 @@ describe("HA skin palette remap (fabric-ui tokens.css)", () => {
     expect(paletteRemapBlock).toBeDefined();
     // The remap block itself must be scoped to plain html[data-skin="ha"],
     // not html[data-skin="ha"].dark — the ramp is monotonic on purpose.
-    expect(paletteRemapBlock!.startsWith('html[data-skin="ha"] {')).toBe(true);
+    // The package pairs each selector with its shadow-root twin
+    // (`html[data-skin="ha"], :host([data-skin="ha"])`).
+    expect(/^html\[data-skin="ha"\](,\s*:host\(\[data-skin="ha"\]\))?\s*\{/.test(paletteRemapBlock!)).toBe(true);
   });
 
   it("remaps the neutral (slate) ramp to the refreshed HA greys", () => {
@@ -94,7 +96,7 @@ describe("HA skin palette remap (fabric-ui tokens.css)", () => {
   });
 
   it("does not touch the loom (:root / html.dark) defaults", () => {
-    const rootBlockMatch = appCss.match(/:root\s*\{[^}]*\}/);
+    const rootBlockMatch = appCss.match(/:root(,\s*:host)?\s*\{[^}]*\}/);
     expect(rootBlockMatch).not.toBeNull();
     // The loom :root block must not itself define the HA palette-remap
     // vars — those only ever apply under html[data-skin="ha"].

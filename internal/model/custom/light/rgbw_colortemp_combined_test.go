@@ -12,8 +12,8 @@ import (
 	"context"
 	"testing"
 
-	fabriclight "github.com/SukramJ/go-fabric/cluster/light"
-	"github.com/SukramJ/go-fabric/cluster/wire"
+	fabriclight "thingfabric.dev/go-fabric/cluster/light"
+	colorcontrol "thingfabric.dev/go-fabric/cluster/spec/colorcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -190,13 +190,13 @@ func TestLSCMatterColorModeFollowsKelvin(t *testing.T) {
 	r := newLSCLightRig(t, w)
 	srv := colorServer(t, r)
 
-	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeHueSaturation) {
+	if got := readU8(t, srv, colorcontrol.AttrColorMode); got != uint8(fabriclight.ColorModeHueSaturation) {
 		t.Errorf("ColorMode before kelvin = %d, want 0 (HueSaturation)", got)
 	}
 
 	r.kelvin.OnEvent(int32(4000))
 
-	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+	if got := readU8(t, srv, colorcontrol.AttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
 		t.Errorf("ColorMode after kelvin = %d, want 2 (ColorTemperature)", got)
 	}
 }

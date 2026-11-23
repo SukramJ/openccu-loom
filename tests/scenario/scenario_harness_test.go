@@ -15,17 +15,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/bridge"
-	"github.com/SukramJ/go-fabric/bridge/bridgetest"
-	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/endpoint/endpointtest"
-	"github.com/SukramJ/go-fabric/im"
-	"github.com/SukramJ/go-fabric/im/subscription"
-	"github.com/SukramJ/go-fabric/mdns"
-	"github.com/SukramJ/go-fabric/secure/channel"
-	"github.com/SukramJ/go-fabric/tlv"
-	"github.com/SukramJ/go-fabric/transport/message"
-	"github.com/SukramJ/go-fabric/transport/mrp"
+	"thingfabric.dev/go-fabric/bridge"
+	"thingfabric.dev/go-fabric/bridge/bridgetest"
+	matterendpoint "thingfabric.dev/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/endpoint/endpointtest"
+	"thingfabric.dev/go-fabric/im"
+	"thingfabric.dev/go-fabric/im/subscription"
+	"thingfabric.dev/go-fabric/mdns"
+	"thingfabric.dev/go-fabric/secure/channel"
+	"thingfabric.dev/go-fabric/tlv"
+	"thingfabric.dev/go-fabric/transport/message"
+	"thingfabric.dev/go-fabric/transport/mrp"
 )
 
 // scenarioHarness drives a single scenario file end-to-end against a
@@ -58,6 +58,11 @@ type scenarioHarness struct {
 	peerSessionByID map[uint16]*channel.Session
 
 	topology *scenarioTopology
+
+	// seenExchanges are the exchange ids this scenario has met so far —
+	// the peer's subscribe exchanges and every exchange of an outbound
+	// datagram — against which exchange_id_fresh holds a new one.
+	seenExchanges map[uint16]bool
 
 	// t0 anchors deterministic engine ticks; captured immediately
 	// before the subscriptions are established, so engine_tick_at
@@ -253,7 +258,9 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 
 	// Wire the real bridge reporter so engine-tick step kinds drive
 	// the production ship path.
-	subMgr := subscription.NewManager(subscription.Config{}, br.SubscriptionReporter(), logger)
+	// A nil reporter: AttachSubscriptionManager installs the bridge's own
+	// report sender, the production ship path.
+	subMgr := subscription.NewManager(subscription.Config{}, nil, logger)
 	br.AttachSubscriptionManager(subMgr)
 	engineManual := false
 	for _, spec := range s.Given.Subscriptions {
@@ -354,11 +361,14 @@ func (h *scenarioHarness) establishSubscription(idx int, spec scenarioSubSpec) {
 		h.t.Fatalf("scenario: setup subscribe[%d]: manager rejected the subscription: %v; captured log: %s",
 			idx, err, h.logCapture.dump())
 	}
-	if err := bridgetest.EstablishSubscriptionTarget(h.br, sub.ID, bridgetest.SubscriptionTarget{
+	// The scenarios pin a hand-built peer's wire bytes, session ids and
+	// counters, which a session of the test Commissioner would choose
+	// itself; the deprecated seam is what lets the fixtures state them.
+	if err := bridgetest.EstablishSubscriptionTarget(h.br, sub.ID, bridgetest.SubscriptionTarget{ //nolint:staticcheck // fixture-stated peer, see above
 		Peer:        h.peerAddr,
 		SessionID:   spec.SessionID,
 		ExchangeID:  spec.PeerSubscribeExchangeID,
-		PeerCounter: peerInitialCounter(idx) - 1,
+		PeerCounter: peerInitialCounter(idx) - 1, //nolint:staticcheck // fixture-stated peer counter, see above
 	}); err != nil {
 		h.t.Fatalf("scenario: setup subscribe[%d]: establish report target for subscription %d: %v",
 			idx, sub.ID, err)
@@ -530,7 +540,7 @@ func (h *scenarioHarness) fireAttributeChange(ctx string, st scenarioStep) {
 			HasAttribute: true,
 		},
 	}
-	h.br.SubscriptionReporter()(context.Background(), sub, paths)
+	h.br.SubscriptionReporter()(context.Background(), sub, paths) //nolint:staticcheck // the step bypasses the engine's cadence gate on purpose
 }
 
 // fireViaEngine drives the bridge through the dirty-mark → engine
@@ -720,15 +730,22 @@ func (h *scenarioHarness) expectTX(ctx string, st scenarioStep) {
 		h.t.Errorf("%s: proto.Initiator = %t, want %t", ctx, proto.Initiator, *st.Initiator)
 	}
 
-	if st.ExchangeIDFresh {
-		if proto.ExchangeID == 0 {
-			h.t.Errorf("%s: proto.ExchangeID = 0 (allocator must skip zero)", ctx)
-		}
-		if proto.ExchangeID > 0x7FFF {
-			h.t.Errorf("%s: proto.ExchangeID = %d > 0x7FFF (allocator must mask to 15 bits)", ctx, proto.ExchangeID)
+	// An exchange the bridge opens takes the next id of a counter that
+	// starts at a random 16-bit value and wraps over the full 16 bits, 0
+	// included, as matter.js's ExchangeCounter
+	// (packages/protocol/src/protocol/ExchangeManager.ts) and chip's
+	// ExchangeManager allocate it: no id is out of range, and a fresh one
+	// is one this scenario has not met before.
+	if h.seenExchanges == nil {
+		h.seenExchanges = map[uint16]bool{}
+		for _, sp := range h.s.Given.Subscriptions {
+			h.seenExchanges[sp.PeerSubscribeExchangeID] = true
 		}
 	}
-
+	if st.ExchangeIDFresh && h.seenExchanges[proto.ExchangeID] {
+		h.t.Errorf("%s: proto.ExchangeID = %d was met earlier in this scenario — the bridge reused an exchange instead of opening a new one", ctx, proto.ExchangeID)
+	}
+	h.seenExchanges[proto.ExchangeID] = true
 	if st.ExchangeIDNeqSubscribe {
 		for _, sp := range h.s.Given.Subscriptions {
 			if proto.ExchangeID == sp.PeerSubscribeExchangeID {

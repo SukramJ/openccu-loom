@@ -73,12 +73,12 @@
     {
       "bom-ref": "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0-20260907130242-f06fc1cb3756?type=module",
       "type": "library",
-      "name": "github.com/SukramJ/go-fabric",
+      "name": "thingfabric.dev/go-fabric",
       "version": "v0.0.0-20260907130242-f06fc1cb3756",
       "scope": "required",
       "purl": "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0-20260907130242-f06fc1cb3756?type=module",
       "externalReferences": [
-        { "type": "vcs", "url": "https://github.com/SukramJ/go-fabric" }
+        { "type": "vcs", "url": "https://github.com/thingfabric/go-fabric" }
       ]
     },
     {

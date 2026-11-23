@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	"github.com/SukramJ/go-fabric/mdns"
+	matterbridge "thingfabric.dev/go-fabric/bridge"
+	"thingfabric.dev/go-fabric/mdns"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"

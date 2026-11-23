@@ -1384,7 +1384,6 @@ const EN: Catalog = {
   "config.field.north.matter.dev_rotate_unique_ids":
     "Rotate unique IDs each boot (dev)",
   "config.field.north.matter.commissioning.passcode": "Passcode",
-  "config.field.north.matter.commissioning.salt": "PBKDF2 salt",
   "config.field.north.matter.commissioning.iterations": "PBKDF2 iterations",
   "config.field.north.matter.commissioning.concurrent_pairings":
     "Concurrent pairings",
@@ -1601,7 +1600,7 @@ const EN: Catalog = {
   "config.help.north.matter.product_id":
     "Vendor-assigned product identifier. Defaults to 0x8000.",
   "config.help.north.matter.node_label":
-    "User-visible label for the bridge node, surfaced in commissioners (Apple Home, Google Home, …).",
+    "User-visible label for the bridge node, surfaced in commissioners (Apple Home, Google Home, …). At most 32 bytes (Matter BasicInformation.NodeLabel); umlauts count twice.",
   "config.help.north.matter.discriminator":
     "12-bit Matter commissioning discriminator. Combined with the passcode to form the manual setup code.",
   "config.help.north.matter.prefer_ipv4":
@@ -1628,8 +1627,6 @@ const EN: Catalog = {
     "Development-only: mix a per-boot 16-byte random salt into every bridged endpoint's Matter UniqueID. Apple Home / Google Home need a STABLE UniqueID across restarts to recognise accessories — leave this off in production.",
   "config.help.north.matter.commissioning.passcode":
     "27-bit Matter setup code (Spec §5.1.6.4) — between 00000001 and 99999998. Required to accept commissioner pairings; 0 leaves the PASE acceptor dormant.",
-  "config.help.north.matter.commissioning.salt":
-    "PBKDF2 salt persisted with the passcode (16–32 bytes per Spec §3.10). Empty falls back to a fixed development salt — never ship the default to production.",
   "config.help.north.matter.commissioning.iterations":
     "PBKDF2 iteration count (1000..100000 per Spec §3.10). Default 1000. Higher = more CPU at pairing time, harder to brute-force a captured transcript.",
   "config.help.north.matter.commissioning.concurrent_pairings":
@@ -5613,7 +5610,6 @@ const DE: Catalog = {
   "config.field.north.matter.dev_rotate_unique_ids":
     "UniqueID pro Boot rotieren (Dev)",
   "config.field.north.matter.commissioning.passcode": "Setup-Code",
-  "config.field.north.matter.commissioning.salt": "PBKDF2-Salt",
   "config.field.north.matter.commissioning.iterations": "PBKDF2-Iterationen",
   "config.field.north.matter.commissioning.concurrent_pairings":
     "Parallele Pairings",
@@ -5833,7 +5829,7 @@ const DE: Catalog = {
   "config.help.north.matter.product_id":
     "Vendor-vergebene Produkt-ID. Default 0x8000.",
   "config.help.north.matter.node_label":
-    "Nutzer-sichtbarer Label des Bridge-Nodes (sichtbar in Apple Home, Google Home, …).",
+    "Nutzer-sichtbarer Label des Bridge-Nodes (sichtbar in Apple Home, Google Home, …). Höchstens 32 Byte (Matter BasicInformation.NodeLabel); Umlaute zählen doppelt.",
   "config.help.north.matter.discriminator":
     "12-bit Matter-Commissioning-Discriminator. Mit dem Passcode bildet er den manuellen Setup-Code.",
   "config.help.north.matter.prefer_ipv4":
@@ -5860,8 +5856,6 @@ const DE: Catalog = {
     "Nur für Entwicklung: mischt einen pro-Boot 16-Byte-Random-Salt in die Matter UniqueID jedes Bridged-Endpoints. Apple Home / Google Home brauchen eine STABILE UniqueID über Restarts hinweg, um Geräte wiederzuerkennen — in Produktion AUS lassen.",
   "config.help.north.matter.commissioning.passcode":
     "27-bit Matter-Setup-Code (Spec §5.1.6.4) — zwischen 00000001 und 99999998. Pflicht, damit Commissioner-Pairings akzeptiert werden; 0 lässt den PASE-Acceptor inaktiv.",
-  "config.help.north.matter.commissioning.salt":
-    "PBKDF2-Salt, persistent mit dem Passcode gespeichert (16–32 Byte gemäß Spec §3.10). Leer = fester Development-Salt — niemals in Produktion ausliefern.",
   "config.help.north.matter.commissioning.iterations":
     "PBKDF2-Iterationszahl (1000..100000 gemäß Spec §3.10). Default 1000. Höher = mehr CPU beim Pairing, härter gegen Brute-Force-Angriffe auf abgehörte Transcripts.",
   "config.help.north.matter.commissioning.concurrent_pairings":

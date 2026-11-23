@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/eligibility"
-	"github.com/SukramJ/go-fabric/node"
-	"github.com/SukramJ/go-fabric/surface"
+	"thingfabric.dev/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/node"
+	"thingfabric.dev/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
@@ -55,6 +55,11 @@ func serveNodeAPIOn(t *testing.T, mux http.Handler, method, path, body string) *
 		rdr = strings.NewReader("")
 	}
 	req := httptest.NewRequest(method, path, rdr)
+	// A loopback host, which go-fabric-ui serves without a listed name
+	// (httptest's example.com is refused as host_not_allowed), and the
+	// page's request header, without which no request has admin rights.
+	req.Host = "127.0.0.1"
+	req.Header.Set(fabricui.RequestHeader, "1")
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -88,7 +93,10 @@ func (n *observedNode) Window() node.WindowSnapshot { return n.window }
 // `node.<type>` with the stream's payload — the fabric, window and
 // surface transitions from the node's own observers, which go-fabric-ui
 // does not route through the event source, the endpoint and exposure changes from
-// the event source — and only a removed fabric lands in the audit ledger.
+// the event source (the daemon reports an operator's exposure change through
+// the same sink from the selection itself, pinned by
+// TestOperatorSelectionChangeReachesTheWebSocketHub) — and only a removed
+// fabric lands in the audit ledger.
 // The negative control is the unsubscribe: after it, the hub sees nothing.
 func TestWireMatterNodeEventsPublishesEveryEventTypeUnderTheNodeTopic(t *testing.T) {
 	t.Parallel()

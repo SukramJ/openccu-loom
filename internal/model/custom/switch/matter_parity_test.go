@@ -18,8 +18,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-	"github.com/SukramJ/go-fabric/tlv"
+	"thingfabric.dev/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/tlv"
 )
 
 // TestParityMatterJS_OnOffServer_AcceptsExtensionsTypeCheck verifies that

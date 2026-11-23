@@ -18,6 +18,6 @@ func TestPin_SetupPIN_TrivialCodeBlacklist(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
 		"cmd/openccu-loom",
-		"github.com/SukramJ/go-fabric/node", "ValidateSetupPIN",
+		"thingfabric.dev/go-fabric/node", "ValidateSetupPIN",
 	)
 }

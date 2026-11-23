@@ -1,0 +1,320 @@
+# Feature adoption plan: go-fabric v0.22.2 → v0.25.0, go-fabric-ui v0.9.2 → v0.13.0
+
+Read-only planning result, 2026-11-23. Nothing was edited, built or run.
+
+Abbreviations for sources:
+
+- `GF` = `/Users/markus/go/pkg/mod/thingfabric.dev/go-fabric@v0.25.0`
+- `GU` = `/Users/markus/go/pkg/mod/github.com/!sukram!j/go-fabric-ui@v0.13.0`
+- `loom` = the worktree `fix-1127-fixed-color-effects`, branch `claude/go-fabric-0.25.0`
+
+Every statement below carries its source. Anything I did not read is marked **UNVERIFIED**.
+Per the repo's model table, every reference statement here is a map for the coordinator;
+the lines marked "Fable read" must be confirmed before they enter an ADR, `by_design.md`
+or a comment.
+
+---
+
+## 1. What the two releases are, for a bridge host
+
+- go-fabric 0.25.0 and 0.24.1 carry no behaviour: module path move only (`GF/CHANGELOG.md:13-42`).
+- go-fabric 0.24.0 (`GF/CHANGELOG.md:44-243`) is the matter.js pin lift. Its Added section
+  (`:60-102`) is almost entirely controller, OTA-provider, thermostat-preset and session
+  internals. Host-usable: `node.Config.TimeFormat`, thermostat `SuggestionStore` /
+  `ActivatePreset` / `LocalTemperatureChangeThreshold`.
+- go-fabric 0.23.0 (`GF/CHANGELOG.md:245-1136`) is where the host-facing additions are
+  (Added `:300-478`).
+- go-fabric-ui 0.10.0–0.13.0 (`GU/CHANGELOG.md:8-584`): 0.12 and 0.13 are controller-family
+  only (Inventory tab, `CommissionTimeout`, ICD multi-admin). Loom serves no controller
+  family (`fabricui.Options` literal at `cmd/openccu-loom/daemon_matter.go:1004-1024` sets no
+  `Controller`). Host-usable for the node family: `Options.MaxStreams`, `Options.Done`,
+  the `subscribe(onEvent, onResync?)` second argument, `NodeStore.reassemble()`, and the
+  0.8.0 options #1056 lists.
+
+### State of loom's adoption today (measured)
+
+`node.Config` literal, `cmd/openccu-loom/daemon_matter.go:406-449`: sets `Network`,
+`Commissioning{Passcode, Discriminator, PBKDFIterations, Salt, LocationCapability}`,
+`ProductDescription`, `BasicInformation`, `Store{Credentials, Endpoints}`, `Attestation`,
+`Health`, `Locales`, `Limits{SupportedFabrics}`, `TimeSynchronization`, `Surface`, `Logger`.
+Not set: `BootReason`, `Store.Sealer`, `Commissioning.WindowOnDemand` / `RotatingDeviceID` /
+`Flow` / `PairingHints`, `TimeFormat`, `Faults`, `Metrics`, `Diagnostics`, `ICD`, `OTA`.
+
+`fabricui.Options` literal, `daemon_matter.go:1004-1024`, plus the router's additions at
+`internal/north/rest/router.go:1627-1635` (`Prefix`, `Admin`, `AllowedHosts`, `AllowHost`).
+Not set: `Erase`, `Operations`, `Warnings`, `Counters`, `MaxStreams`, `Done`, `Registry`, `Nodes`.
+
+SPA: `assets/ui/src/routes/matter/Matter.svelte:6-17` imports nine node pages including
+`NodeTopology`; `assets/ui/src/lib/stores/fabric-node.svelte.ts:58-74` passes
+`subscribe: (onEvent) => …` with one argument.
+
+A grep over `cmd/` and `internal/` (non-test) for `SetNodeLabel`, `NodeSwitch`,
+`SetReachable`, `BootReason` (as config), `Sealer`, `WindowOnDemand`,
+`bridgeddevicebasicinformation`, `BridgedBasicInformation` returned no production use.
+
+---
+
+## 2. Issue status
+
+### #1056 (go-fabric-ui 0.8.0 options)
+
+| Item | State | Evidence |
+| --- | --- | --- |
+| Topology tab | done | `Matter.svelte:15,44`; issue comment (PR #1058) |
+| `DiagnoseMDNS` at start | done | `daemon_matter.go:521` `logMatterMDNSInterfaces(n.DiagnoseMDNS, …)` |
+| Live node label | open | `north.matter.node_label` is still a restart rule, `internal/config/restart.go:329`; no `SetNodeLabel` caller |
+| `Options.Erase` + `NodeSwitch` | open | no `Erase` in the Options literal; `matterNodeSource{bundle.node}` is a fixed source (`daemon_matter.go:1005`) |
+| `Options.Operations` | open, product decision | loom has `pkg/hmlog/livelog.go`, `levels.go` and its own handlers `internal/north/rest/handlers/diagnostics_logs.go`, `diagnostics_loglevels.go` |
+| `Options.Warnings` / `Counters` | open | not in the Options literal; the premise "no list exists" has moved, see F3 |
+
+### #1027 acceptance 2
+
+Open. `spec.Availability = in.dev.Available` at
+`internal/north/matteradapter/assembler.go:996, 1070, 1114`; three forwards to
+`mb.NotifyDeviceReachable` at `daemon_matter.go:943` (boot loop) and `:969` (central hook),
+through `wireMatterDeviceReachableForward` (`:841-852`). Verdict and migration in section 4.
+
+### #1092
+
+Open. `harness.Options.EnableMatter` is a no-op (`tests/e2e/harness/daemon.go:71-72`);
+`tests/e2e/matter_boot_test.go:17-32` tests only the disabled case. Both "not established"
+points of the issue are answered in section 5.
+
+---
+
+## 3. Candidate features
+
+Effort S/M/L. Risk is the risk to paired fabrics and to the wiring, not to the build.
+
+### A. Node facade (go-fabric)
+
+| # | Feature (source) | What loom does | User value | Eff. | Risk | Recommendation |
+| --- | --- | --- | --- | --- | --- | --- |
+| F1 | **Bridged endpoint identity is the host's to state.** Breaking change: a bridged endpoint serves SerialNumber and NodeLabel only when the host states them; no SerialNumber is derived from the device address (`GF/CHANGELOG.md:723`; `GF/endpoint/materialize.go:146-150`). Route: `bridgeddevicebasicinformationdef.Declare{Initial}` on `device.New` (`GF/CHANGELOG.md:442`; `GF/device/bridged_basic_information.go:27-56`). Without it ProductName falls back to the device address (`materialize.go:151-158`). | Add one declaration in the two `device.New` paths (`assembler.go:850` `buildDevice`, `:1102`): SerialNumber = CCU device address, ProductName = CCU model, SoftwareVersionString = `Device.Firmware()` current (`internal/model/device/device.go:343`), ProductLabel. All values come from the CCU at run time (no static DB). Contract test on the served attributes; chip-tool run (composition changes). | High. Since the bump every bridged endpoint has lost its SerialNumber and shows the address as product name; controllers show model, serial and firmware per accessory. | M | Medium: fixed-quality attributes change once on paired fabrics. Whether `IncreaseConfigurationVersions` is owed: **UNVERIFIED**, Fable read of matter.js. Constraint lengths are enforced by `device.New` (`materialize.go:214-216`), so an over-long model string refuses the device. | **Adopt now.** It restores what the bump removed and replaces a fallback with the host's statement. |
+| F2 | **`Device.SetReachable` as the one reachability input** (`GF/device/lifecycle.go:217-236`; `GF/docs/guides/migrating-to-the-facade.md:35,38,180`; `GF/docs/guides/advanced-seams.md:89-93`; `GF/CHANGELOG.md:1603`). | Section 4. | Correctness: attribute and event from one state, in order. | L | High (wiring, reconciler, three forwards). | **Adopt now**, as its own slice; closes #1027. |
+| F3 | **`Node.SetNodeLabel(ctx, label)`** (`GF/node/node_label.go:15-41`). The stored label is restored over `Config.BasicInformation.NodeLabel` at the next `New` (same godoc). | Drop the restart rule `north.matter.node_label` (`restart.go:329`); apply the label through the existing reload seam (`cmd/openccu-loom/reload.go:87` `hotReloadHandler`, `reloadDeps`) and the config-save path; wiring pin under `tests/contract/wiring_pins/` asserting the served NodeLabel changes. | Label edits take effect at once. More important: after any stored label (a controller's write, or one `SetNodeLabel`), a config edit plus restart no longer changes the label at all, because the store wins. Today's "restart required" hint is then false. That a controller has written the root label on a real install is **UNVERIFIED**. | S–M | Low. Open point: `ProductDescription.Name` (the DNS-SD device name) is also built from `mc.NodeLabel` (`daemon_matter.go:422`); whether `SetNodeLabel` moves it: **UNVERIFIED**. If not, the mDNS name stays restart-bound and the help text says so. | **Adopt now.** Closes the #1056 item. |
+| F4 | **`Commissioning.WindowOnDemand`** (`GF/node/config.go:524-535`, `GF/CHANGELOG.md:411`): the node opens no window by itself; no PASE and no commissionable record until the host opens one. go-fabric-ui names it as the setting for "a host that wants no window it did not open" (`GU/fabricui/options.go:278-280`). | New `north.matter.commissioning.window_on_demand` (`cfg:"basic"`), label + help in en/de, restart rule, `example.config.yaml`, `docs/reference/configuration.md`; the Pair page already opens windows. One e2e per value (needs slice 0). | Security posture: an unpaired bridge without a configured passcode opens a window at start on credentials nobody was shown (`daemon_matter.go:251-262` falls back to random ones). With the option nothing is advertised until the operator presses "open". | M | Low with default false. A changed default is a behaviour change for first-run pairing with a printed code. | **Adopt now**, default false. The default is the owner's call (D4). |
+| F5 | **`Config.BootReason`** (`GF/node/config.go:92-102`, `GF/CHANGELOG.md:360`). The facade now reports Unspecified where it reported PowerOnReboot (`GF/CHANGELOG.md:570`). go-fabric-ui shows `Status.boot_reason` (`GU/CHANGELOG.md:770`). | State only what loom knows: SoftwareUpdateCompleted when `build.Version` differs from a persisted last-run version; SoftwareReset when the previous stop was an operator restart (`internal/north/rest/handlers/system_admin.go:138` `claimRestart`), which needs a persisted marker; otherwise leave Unspecified. Constants from `cluster/core`, never numbers. | Low: one honest field on the status page and in controllers' diagnostics. | S–M | Low. The persisted marker is new state; a crash between marker and stop must not report SoftwareReset forever (clear at boot). | **Adopt now, last in its slice**; drop it if the marker turns out to need a migration of its own. |
+| F6 | **Sealing at rest**: `store.NewSealed`, `store.NewAESGCMSealer`, `store.Reseal`, `node.Store.Sealer` (`GF/CHANGELOG.md:398,416,432`; `GF/node/config.go:799-813`; `GF/docs/security.md:96-124`). `Store.Sealer` excludes `Store.Credentials`; loom passes `Credentials: matterstore.New(db)` (`daemon_matter.go:348`), so loom would call `store.NewSealed(ctx, db, sealer)` itself. | Seal the Matter secrets (operational keys, IPKs, group keys, resumption secrets) in `openccu-loom.db`. Key source: `internal/secret` already holds an AES key outside the DB (`internal/secret/secret.go:55,132`, ADR 0027). Needs an ADR: key reuse or a second key, backup/restore carrying the key, rotation (`Reseal`), downgrade (a sealed DB is unreadable by an older daemon, `store.ErrNoSealer`). | Real: a copied DB or backup no longer contains the fabric's private keys. | L | High and one-way: every later start needs the same key (`config.go:807-810`); a lost key file loses every pairing. Whether loom's backup archive includes the key file: **UNVERIFIED**. | **Adopt, but as its own ADR-gated slice after the others** (D5). Not something to slip into a bump. |
+| F7 | `Config.TimeFormat` (`GF/CHANGELOG.md` 0.24.0 Added, `node`; `GF/node/config.go:149,633-643`) | none | A bridge has no display; hour format would have to be guessed from the locale. | S | – | **Not for loom**: no source for the value, and a guessed convention is worse than the default. |
+| F8 | `Commissioning.RotatingDeviceID` (`GF/node/config.go:536-549`) | none | – | S | – | **Not for loom**: off in connectedhomeip's default and absent in matter.js per the godoc; no commissioner need known. |
+| F9 | `Commissioning.Flow`, `PairingHints`, `PairingInstruction` (`GF/node/config.go:550-572`) | Could state a truthful hint (the window is opened in the web UI, not by power cycle). Which bit fits: **UNVERIFIED**. | Low; chip-based commissioners read bits 16–22 as no hint (same godoc). | S | Low | **Adopt later**, together with F4 if the owner makes on-demand the default (then `FlowUserIntent` becomes the truthful flow; Fable read first). |
+| F10 | `Config.EndpointState` (`GF/CHANGELOG.md:394`), `Limits.*` beyond `SupportedFabrics`, `Network.InterfaceCheck`, `Sessions`, `CapabilityMinima` | none | – | – | – | **Not for loom**: loom uses the facade's own persistence and defaults; no deprecated twin is in use (grep: no `EndpointPersistence`). |
+| F11 | ICD (`Config.ICD`), OTA requestor/provider (`Config.OTA`, `OTAProvider`), TLS, WebRTC, CommissionerControl, GATT / Wi-Fi | none | – | – | – | **Not for loom**: mains-powered bridge, updated as container or add-on, bridges no Matter devices. |
+| F12 | `contract.BatteryReplaceability` / `PowerSourceSelection.BatteryReplaceability` (`GF/CHANGELOG.md:444`). The zero value is `BatteryUserReplaceable`. | State `BatteryReplaceabilityUnspecified`: loom has no source for replaceability (no static device DB). Where the selection interface is implemented on loom's battery source: **UNVERIFIED** (`assembler.go:276-307` attaches a `contract.MeasurementSource`). | Honesty of one attribute. | S | Low; composition-visible, chip-tool run. | **Adopt now inside the F1 slice** if the Fable read confirms the zero value is served today; otherwise drop. |
+| F13 | `cover.Config.InitialPositionUnknown` (`GF/CHANGELOG.md:366`) | Start a cover whose LEVEL has not arrived with null positions instead of a number. How loom's covers are built (`cluster/spec/windowcovering` declarations): **UNVERIFIED**. | Covers do not report 0 % before the CCU's first value (relevant at a not-ready boot). | M | Medium | **Adopt later**: needs its own read of loom's cover source and matter.js. |
+| F14 | Thermostat `SuggestionStore`, `ActivatePreset`, `SetLocalTemperatureChangeThreshold` (`GF/CHANGELOG.md` 0.24.0 Added) | Only if loom serves presets. **UNVERIFIED**. | – | M | – | **Adopt later / likely not**: check against `north.matter.thermostat_*` first. |
+| F15 | `contract.ElectricalCurrentSource` (DC meters, `GF/CHANGELOG.md:444`) | none | – | – | – | **Not for loom**: no DC meter in the device model known to me (**UNVERIFIED**). |
+
+### B. go-fabric-ui options and pages
+
+| # | Feature (source) | What loom does | User value | Eff. | Risk | Recommendation |
+| --- | --- | --- | --- | --- | --- | --- |
+| U1 | **`Options.Warnings`** (`GU/fabricui/options.go:301-306`); the pages render them (`GU/ui/src/lib/pages/node/HostWarnings.svelte`) | Feed Matter-side findings loom today only logs once per key: devices the kit refused or the spec level withheld (`assembler.go:975-984`, `:1103-1111`, `refusedDevices`), hand-built fallbacks (`logFallback`, `:1129`), mDNS interface findings. Small findings registry in `matteradapter` with stable codes; `Warnings: registry.List`. Non-admins get the code only (`GU/CHANGELOG.md:330-333`), so messages may name devices. | The operator sees on the Matter status page why a selected device is not on the bridge, instead of reading the log. | M | Low | **Adopt now.** The #1056 premise ("no list exists") no longer holds: the findings exist, as log lines. |
+| U2 | **`Options.Counters`** (`options.go:337-342`) | Reassembly runs / failures, refused devices, fallbacks. No such counters exist yet (the reconciler only returns errors). | Low: numbers beside the findings. | S on top of U1 | Low | **Adopt with U1 only if the counters fall out of the registry**; otherwise close the item as "no counter worth showing" (D7). |
+| U3 | **`Options.Done`, `Options.MaxStreams`** (`options.go:330-336`, `GU/CHANGELOG.md:376-380`) | Hand the daemon's shutdown channel as `Done`; keep `MaxStreams` at its default. The SSE routes are mounted even though the SPA uses the WebSocket hub. | Clean shutdown: open node streams end and their observers are removed. | S | Low | **Adopt now.** |
+| U4 | **`subscribe(onEvent, onResync?)`** (`GU/ui/src/lib/store.svelte.ts:49-53`, `GU/CHANGELOG.md:416-418`) | Pass loom's `onResync` (`assets/ui/src/lib/stores/events.svelte.ts:108-114`) as the second argument in `fabric-node.svelte.ts:68-73`; vitest case. Whether loom's resync also fires on a plain socket reconnect: **UNVERIFIED** (`events.svelte.ts:84`). | The Matter pages reload after missed events instead of showing stale fabrics or windows. | S | Low | **Adopt now.** |
+| U5 | **`Options.Erase` + `fabricui.NodeSwitch`** (`options.go:236-251`; `GU/fabricui/nodeswitch.go:17-42`; `GF/node/factory_reset.go:20-65`) | Section 6. | A real "start over": endpoint numbers, UniqueID and store erased, not only the fabrics. | L (A) / M (B) | High (A) | **Adopt in its own slice; variant is the owner's call** (D1). |
+| U6 | **`Options.Operations`** + the `Operation` page (`GU/fabricui/operations.go:18-41`) | none | None beyond loom's own Logs view and log-level editor. | M | – | **Not for loom**: a second place for the same action; the daemon's log is not a Matter concern. Record the decision and close the item (D6). |
+| U7 | `Options.Registry` / `Nodes` (several nodes), `FrameAncestors`, `NewHandler` | none | – | – | – | **Not for loom**: one node per daemon (ADR 0049); loom uses `Mount`, which serves no page. |
+| U8 | Controller family: Inventory tab, `ControllerDiagnosticsPage`, `CommissionTimeout`, `icd_multi_admin` | none | – | – | – | **Not for loom**: no controller. |
+| U9 | `NodeEcosystemHints` (exported from `GU/ui/src/lib/pages/index.ts`, "wave U5a") | Not imported by `Matter.svelte`. Whether `NodePair` already renders it: **UNVERIFIED**. | Per-ecosystem pairing hints under the pairing flow. | S | Low | **Check in slice 1**; adopt if `NodePair` does not include it. It predates 0.10, so it is a leftover, not a new feature. |
+
+### C. Older, still unadopted (not part of these releases; listed so they are not lost)
+
+`node.Config.Metrics` (named counters such as MRP retransmits and recovered panics,
+`GF/node/config.go:272-275`) into loom's metrics, and `node.Config.Faults`
+(`config.go:228-236`). Both predate 0.23.0 (`GF/CHANGELOG.md:1227`, `:1314`). Not in the
+slices below; a separate issue if wanted.
+
+---
+
+## 4. #1027: does v0.25.0 want hosts on `Device.SetReachable`? Yes.
+
+Measured:
+
+1. `Device.SetReachable` godoc: "It is the one reachability input" (`GF/device/lifecycle.go:217-236`).
+   A device starts reachable; before it is added only the value changes.
+2. A bound device reaches the wire through the node: `Device.Spec()` sets
+   `Availability: d.available` (`GF/device/device.go:918`, `lifecycle.go:279`), and a change
+   calls `nodeHost.NotifyReachable` → `Bridge.NotifyEndpointReachable` by endpoint id
+   (`GF/node/lifecycle.go:66-70`). Binding happens when the Aggregator is handed the device
+   itself (`GF/node/aggregator.go:571-582`, `deviceseam.Attach`).
+3. The migration guide routes loom by name: "a source's availability (`assembler.go:861`) is
+   `Device.SetReachable`" (`migrating-to-the-facade.md:35`) and "reachability is
+   `Device.SetReachable`" for loom's replace-under-the-same-key step (`:38`).
+4. `NotifyDeviceReachable` stays "for a host that assembles its own endpoints behind
+   `Config.Snapshotter`" (`advanced-seams.md:89-93`). Loom does not: it uses the Aggregator's
+   partitions (`reconciler.go:327-328`).
+5. Neither `endpoint.Spec.Availability` nor `Bridge.NotifyDeviceReachable` carries a
+   Deprecated marker in v0.25.0 (grep of `GF/endpoint/spec.go`, `types.go`,
+   `GF/bridge/receive.go`; the two Deprecated sections `GF/CHANGELOG.md:180-192`, `:836-879`
+   do not name them). So nothing breaks at the next tag; this is a design migration, not a
+   forced one.
+
+Why loom is not on it: the reconciler adds `&specEndpoint{spec}` (`reconciler.go:82-89`,
+`:341-354`), a type with only `Spec()`. The `*device.Device` built in `deviceSpec`
+(`assembler.go:1102`) and `declaredDeviceSpec` (`:964`) is dropped after `d.Spec()`, so no
+device is ever bound and the spec's `Availability` is overwritten with loom's probe.
+
+### The migration
+
+1. `Described` carries, per endpoint, the go-fabric device beside (or instead of) its spec.
+   The reconciler holds the device per key and hands the Aggregator the device
+   (`b.Add(dev)` / `b.Replace(key, dev)`), so the node binds it.
+2. Before `Add`/`Replace`: `dev.SetReachable(ctx, loomDev.Available())`, because a rebuilt
+   device starts reachable.
+3. `Reconciler.SetReachable(ctx, central, address, ok)` looks up the held devices of that
+   CCU device and calls `SetReachable` on each. The three `cmd` forwards call it instead of
+   `mb.NotifyDeviceReachable`. `ErrNotBridged` on a part is expected and ignored by key
+   (`lifecycle.go:230-234`).
+4. Remove the three `spec.Availability = …` assignments and the comment block at
+   `daemon_matter.go:929-941`.
+5. A name change becomes `Device.Update` on the held device instead of a `Replace`
+   (`migrating-to-the-facade.md:38`), which removes `name` from `endpointIdentity`.
+6. Record in `notes/parity/by_design.md` the divergence the issue comment names:
+   `matterNodeSource` keeps `RevokeWindow` instead of `node.CloseWindow`.
+
+Open points the slice must settle before code (each a stop condition):
+
+- **Post-hoc spec edits.** Loom changes the spec after `d.Spec()`: `attachPowerSource` sets
+  `specs[target].PowerSource` (`assembler.go:276-307`), `declaredDeviceSpec` overwrites
+  `StableKey`, `FriendlyName`, `VendorName`, addresses (`:990-995`). Once the node calls
+  `Spec()` on the device itself, these edits are gone. Each must become a declaration or an
+  option of `device.New`. Whether the device kit takes loom's battery `MeasurementSource` as
+  a declaration: **UNVERIFIED**; if not, it is a go-fabric issue, not a workaround.
+- **Hand-built fallbacks** (`assembler.go:1063-1077`, `:1104-1110`): a device type not in the
+  device layer, or a composition the kit refuses, yields a plain `endpoint.Spec` with no
+  device. How many of loom's endpoints take that path today is **not measured** (it would
+  need a run over the golden fleet counting `logFallback`). Owner's call D2.
+- **Wiring rule 2.** `wireMatterRuntime` walks `reg.List()` three times at boot
+  (`daemon_matter.go:942`, `:952`, `:963`) and repeats the same wiring in the central hook
+  (`:969`). The slice should leave one seam for the reachability forward, not a fourth copy.
+
+Tests the slice owes: a flip on the bus reaches the served `Reachable` and fires
+ReachableChanged once, through the composition root with the CCU booted not ready (slice 0
+harness); a repeated value fires nothing; a rebuilt device starts with the current
+availability; bite proof on the forward.
+
+---
+
+## 5. #1092: both open questions are answerable
+
+- **Which route lists endpoints with their source keys?** `GET /api/v1/node/endpoints`: each
+  entry carries `source.key`, the stable key's `String()`, plus `endpoint_id` and
+  `reachable` (`GU/fabricui/handlers_diagnostics.go:191-199`, `:270-288`). The projection
+  calls a published entry by `identity["source_key"] = key.String()`
+  (`internal/north/matteradapter/projection_plane.go:19-22`, `:90-91`). Same rendering of the
+  same key on both sides, so the comparison needs no mapping.
+- **Can the daemon run the bridge without a commissioner?** `node.Start` needs none; loom
+  already has `north.matter.mdns_advertise: noop` (`internal/config/config.go:962-966`,
+  `daemon_matter.go:58-68`). That a hermetic CI run binds the UDP port is **UNVERIFIED**
+  until tried; the chip-tool suite boots the same stack.
+
+Recommended: candidate 1 of the issue. `harness.Options.EnableMatter` writes a real
+`north.matter` block (enabled, a free UDP port on loopback, `mdns_advertise: noop`), and a
+test with `StartCCUNotReady: true` exposes a set of sources, flips the CCU ready, then
+compares both directions: every `published` entry of
+`GET /devices/{addr}/projection?plane=matter` is a `source.key` of `/node/endpoints`, and
+every keyed endpoint is a published entry. Two bite proofs. Candidate 2 (chip-tool
+PartsList) proves the wire but costs a commissioner per run and cannot run in the hermetic
+suite; it stays as an optional second leg.
+
+---
+
+## 6. Erase: the two shapes
+
+`Node.FactoryReset` removes the fabrics, stops the node and erases its stores; the node is
+single-use and the host brings a new one or exits for its supervisor
+(`GF/node/factory_reset.go:40-48`; `GU/fabricui/options.go:236-251`).
+
+- **A. Rebuildable Matter runtime + `NodeSwitch`.** The bundle `startMatterBridge` returns
+  becomes a unit that can be built twice on the same store. Everything that today captures
+  `bundle.node` or `mb := bundle.node.Bridge()` in a closure reads through one holder: the
+  reconciler (`n.Aggregator()`, `daemon_matter.go:479`), the RTT gauges (`:537-543`),
+  `SetOnReassembled` (`:976`), the node-event bridge (`:979`), the status adapter (`:981-`),
+  the reachability forward. `Options.Node` is a `fabricui.NewNodeSwitch(...)`, `Set` after
+  the new node started. Works in every deployment. L, and every moved closure is a wiring
+  seam that needs its pin.
+- **B. Erase, then restart the process.** `Erase` runs `FactoryReset` and triggers the
+  existing supervised restart; where there is no supervisor (`HasSupervisedRestart`,
+  `cmd/openccu-loom/daemon_north.go:1001`) `Erase` stays nil and the page offers none
+  (`Status.erase` false). M.
+
+A is the better architecture: one behaviour everywhere, and the same holder is what would
+later let Matter be enabled without a restart. B is a convenience seam whose availability
+depends on how the daemon was installed. A after slice 3, because both restructure who
+holds the node's parts.
+
+---
+
+## 7. Proposed PR slices
+
+Order matters: slice 0 gives the others their through-the-root test.
+
+| Slice | Content | Closes | Size | Chip-tool run | Best design? |
+| --- | --- | --- | --- | --- | --- |
+| **0. Matter in the e2e harness** | `EnableMatter` real; projection ↔ `/node/endpoints` round trip both ways, CCU booted not ready; two bite proofs | #1092 | M | no (composition unchanged) | Yes. It is the missing fourth plane of wiring rule 4, and every later slice's first test crosses this seam instead of constructing the collaboration itself. |
+| **1. Node page options** | F3 live node label; U1 warnings (+U2 if real); U3 `Done`; U4 resync; U9 check; U6 recorded as declined | #1056 except Erase | M | no | Yes for label, `Done`, resync. Warnings: yes, provided the findings registry is the one source for both the log line and the page, not a second list. |
+| **2. Bridged device identity** | F1 declaration (serial, model, firmware); F12 if confirmed | new issue | M | **yes** | Yes: the host states what it knows from the CCU, the fallback (address as product name) disappears. Needs the Fable read on ConfigurationVersion first. |
+| **3. Reachability on the device** | F2 as in section 4; `by_design.md` row for `RevokeWindow` | #1027 | L | **yes** | Yes, and the only one of the three options that is: one state, as go-fabric and matter.js have it. Keeping probe + push is the shape go-fabric removed from its own device layer because a probe change reached no subscription (`GF/CHANGELOG.md:1603`). |
+| **4. Commissioning posture** | F4 `window_on_demand`; F5 boot reason | new issue | M | yes for F4 (commissioning path) | Yes with default false. Making on-demand the default is arguably the better product, but it changes first-run pairing; say so and let the owner choose. |
+| **5. Erase** | U5, variant A or B | last item of #1056 | L / M | yes | A yes, B no (section 6). |
+| **6. Sealing at rest** | F6 behind an ADR | new issue | L | no | Only with the ADR's three-question section answered (key custody, backup, rotation). Without it, not finished by the repo's own standard. |
+
+#1056 closes after slices 1 and 5, or after slice 1 if the owner moves Erase to its own issue.
+
+Slices 2 and 3 both write in `internal/north/matteradapter`: sequential, never parallel.
+Paths the delegation table keeps out of an agent's hands appear in every slice
+(`cmd/openccu-loom/daemon_matter.go` is the composition root; F4 adds a `cfg:` field).
+
+---
+
+## 8. Decisions for the owner
+
+- **D1 Erase**: A (rebuildable runtime + `NodeSwitch`), B (erase + supervised restart), or
+  leave 501. Recommendation A, after slice 3.
+- **D2 Hand-built fallback endpoints** in slice 3: keep as a documented exception on
+  `NotifyDeviceReachable`, drop them, or ask go-fabric for the missing types. Needs the
+  fallback count over the golden fleet first; recommendation is to measure, then decide.
+- **D3 Bridged identity values** (slice 2): SerialNumber = CCU address, ProductName = CCU
+  model, firmware as SoftwareVersionString; and accepting a one-time attribute change on
+  paired fabrics.
+- **D4 `window_on_demand` default**: false (no behaviour change) or true when no passcode is
+  configured.
+- **D5 Sealing**: now with an ADR, or deferred. Recommendation: deferred to its own slice,
+  not dropped.
+- **D6 Operation tab**: confirm "not for loom".
+- **D7 Counters**: adopt only if slice 1's registry yields real ones; otherwise close.
+
+---
+
+## 9. What was not verified
+
+- Whether `IncreaseConfigurationVersions` is owed when F1 changes fixed attributes.
+- Whether `SetNodeLabel` also moves the DNS-SD device name.
+- Whether the device kit can take loom's battery source as a declaration (blocks part of slice 3).
+- How many endpoints take the hand-built fallback today.
+- Whether loom's backup contains the `internal/secret` key file.
+- Whether loom's hub resync fires on a plain reconnect.
+- Whether `NodePair` already renders `NodeEcosystemHints`.
+- F13, F14, F15: how loom builds covers and thermostats against the new cluster options.
+- The go-fabric 0.23.0 Changed section (`GF/CHANGELOG.md:479-835`, about 350 entries) was
+  read only for the lines cited here; a behaviour change relevant to loom may sit in the rest.
+- The go-fabric-ui Fixed sections of 0.10–0.12 were not read.
+- No test, build or chip-tool run was performed; every "loom does not use X" rests on grep
+  over `cmd/` and `internal/` non-test Go files.
+
+---
+
+## 10. Owner decisions (2026-11-23)
+
+- **D1 Erase:** A — rebuildable Matter runtime with `fabricui.NodeSwitch`, after slice 3.
+- **D3 Identity:** SerialNumber = CCU address (shipped with the bump PR), ProductName = CCU
+  model, SoftwareVersionString = firmware; the one-time attribute change is accepted.
+- **D4 `window_on_demand`:** the setting is added with default false.
+- **D5 Sealing:** now, behind an ADR that answers key custody, backup and rotation.
+- **D6 Operation tab:** not for loom (recommendation taken).
+- **D7 Counters:** only if slice 1's findings registry yields real ones (recommendation taken).
+- **D2 Hand-built fallbacks:** measure the count over the golden fleet first, then decide.
+- No daemon release before the issues of this plan are closed.

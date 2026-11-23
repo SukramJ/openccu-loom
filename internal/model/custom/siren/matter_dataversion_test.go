@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/cluster/onoff"
 )
 
 // The OnOff server's data version advances on every attribute change the

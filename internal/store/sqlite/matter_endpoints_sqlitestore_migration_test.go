@@ -8,9 +8,9 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/node"
-	matterstore "github.com/SukramJ/go-fabric/store"
 	"github.com/pressly/goose/v3"
+	"thingfabric.dev/go-fabric/node"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
@@ -63,7 +63,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 	migrateTo(t, db, 49)
 
 	st := matterendpoint.New(db)
-	persistence := node.NewEndpointPersistence(matterstore.New(db), nil)
 	for _, r := range legacyEndpointRows() {
 		rec, err := st.GetEndpoint(ctx, r.key)
 		if err != nil {
@@ -73,7 +72,19 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.Errorf("%s: got endpoint %d type 0x%04X scope %q, want %d 0x%04X %q",
 				r.key, rec.EndpointID, rec.DeviceType, rec.Scope, r.endpointID, r.deviceType, r.key.CentralName)
 		}
-		if got := persistence.NodeLabel(ctx, r.key); got != r.nodeLabel {
+	}
+
+	// The labels are go-fabric's settings, read through its store, which
+	// needs the schema of every later migration (matter_settings.sealed
+	// since go-fabric's v10).
+	migrateTo(t, db, goose.MaxVersion)
+	labels := node.NewEndpointState(matterstore.New(db), nil)
+	for _, r := range legacyEndpointRows() {
+		got, err := labels.LoadNodeLabel(ctx, r.key)
+		if err != nil {
+			t.Fatalf("LoadNodeLabel(%s): %v", r.key, err)
+		}
+		if got != r.nodeLabel {
 			t.Errorf("%s: NodeLabel %q, want %q", r.key, got, r.nodeLabel)
 		}
 	}

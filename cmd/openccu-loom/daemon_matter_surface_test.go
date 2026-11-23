@@ -8,9 +8,9 @@ import (
 	"slices"
 	"testing"
 
-	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/im"
+	thermostatspec "thingfabric.dev/go-fabric/cluster/spec/thermostat"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"

@@ -6,8 +6,8 @@ package matterendpoint
 import (
 	"database/sql"
 
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/endpoint/sqlitestore"
+	fabricendpoint "thingfabric.dev/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/endpoint/sqlitestore"
 )
 
 // Store is the typed access surface over matter_endpoints and

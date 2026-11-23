@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	matterstore "github.com/SukramJ/go-fabric/store"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"

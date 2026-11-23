@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/cluster"
-	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
+	"thingfabric.dev/go-fabric/cluster"
+	thermostatspec "thingfabric.dev/go-fabric/cluster/spec/thermostat"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"

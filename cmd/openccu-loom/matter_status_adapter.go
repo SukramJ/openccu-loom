@@ -8,7 +8,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/SukramJ/go-fabric/node"
+	"thingfabric.dev/go-fabric/node"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 

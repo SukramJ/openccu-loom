@@ -1,6 +1,6 @@
 {
   "name": "subscribe__max_interval_keepalive",
-  "description": "Locks the matter.js-aligned heartbeat cadence: after a subscription is admitted, if no dirty marks arrive within min(MaxIntervalCeiling/2, 30 s), the engine MUST ship an empty-payload ReportData (keepalive) so Apple Home's MTRDevice / chip-tool's ReadClient does not drop the subscription. The scenario picks MaxIntervalCeiling=2 (heartbeat ≈ 1 s), waits ~1.5 s without firing any change, and asserts a keepalive arrives with attribute_reports_count=0.",
+  "description": "Locks the matter.js-aligned heartbeat cadence: after a subscription is admitted, if no dirty marks arrive within min(MaxIntervalCeiling/2, 30 s), the engine MUST ship an empty-payload ReportData (keepalive) so Apple Home's MTRDevice / chip-tool's ReadClient does not drop the subscription. The scenario picks MaxIntervalCeiling=2 (a 2 s keep-alive: maxInterval × 0.8 = 1.6 s, raised to matter.js's MIN_INTERVAL of 2 s in ServerSubscription.ts), waits 1 s without firing any change so the 2 s receive window covers the keep-alive, and asserts it arrives with attribute_reports_count=0.",
   "tags": ["matter", "subscribe", "cadence", "max-interval", "keepalive"],
   "given": {
     "subscriptions": [
@@ -14,6 +14,11 @@
     ]
   },
   "steps": [
+    {
+      "actor": "peer",
+      "kind": "wait",
+      "timeout_millis": 1000
+    },
     {
       "actor": "bridge",
       "kind": "expect_tx",

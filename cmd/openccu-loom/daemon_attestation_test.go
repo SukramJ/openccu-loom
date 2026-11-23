@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/node"
-	"github.com/SukramJ/go-fabric/secure/attestation"
+	"thingfabric.dev/go-fabric/node"
+	"thingfabric.dev/go-fabric/secure/attestation"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"

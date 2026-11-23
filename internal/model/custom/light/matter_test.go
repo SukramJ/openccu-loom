@@ -11,12 +11,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
-	"github.com/SukramJ/go-fabric/cluster/wire"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/im"
+	"thingfabric.dev/go-fabric/cluster/levelcontrol"
+	"thingfabric.dev/go-fabric/cluster/onoff"
+	onoffspec "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	"thingfabric.dev/go-fabric/cluster/wire"
+	"thingfabric.dev/go-fabric/contract"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -128,6 +129,29 @@ func (w *recWriter) writes() ([]float64, []hmenum.CommandPriority) {
 
 // levelServer returns the LevelControl cluster server for a dimmable
 // light — go-fabric's [levelcontrol.Server], built once per light.
+// levelChanges counts the attribute changes the light's LevelControl
+// server commits — CurrentLevel whoever moved it, Options, OnLevel — from
+// now on. A committed change is what the bridge advances the endpoint's
+// DataVersion for; the server's own counter is no longer read by anyone,
+// so the tests observe the change itself.
+func levelChanges(t *testing.T, srv *levelcontrol.Server) func() int {
+	t.Helper()
+	var (
+		mu sync.Mutex
+		n  int
+	)
+	t.Cleanup(srv.OnAttributeChange(func(contract.Change) {
+		mu.Lock()
+		n++
+		mu.Unlock()
+	}))
+	return func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return n
+	}
+}
+
 func levelServer(t *testing.T, l *Light) *levelcontrol.Server {
 	t.Helper()
 	for _, s := range matterServers(t, l) {
@@ -524,7 +548,7 @@ func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
 			l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true, Transition: true})
 			l.OnLevel(0.5) // the plain variant (0x00) is gated on the light being on
 			srv := levelServer(t, l)
-			versionBefore := srv.MatterDataVersion()
+			changes := levelChanges(t, srv)
 			tt := uint16(30)
 			fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
 			if _, err := srv.MatterInvoke(context.Background(), cmdID, fields); err != nil {
@@ -546,8 +570,15 @@ func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
 			if on := got[string(hmenum.ParameterOnTime)].(float64); on != custom.TimerNotUsed {
 				t.Errorf("ON_TIME=%v, want TimerNotUsed (%v)", on, custom.TimerNotUsed)
 			}
-			if srv.MatterDataVersion() == versionBefore {
-				t.Error("ramped MoveToLevel must bump the cluster data version")
+			// The command commits no change by itself: CurrentLevel moves
+			// when the device reports the level it reached, as matter.js
+			// advances a version only for a commit that changed a value.
+			if n := changes(); n != 0 {
+				t.Errorf("ramped MoveToLevel committed %d change(s) before the device reported a level, want 0", n)
+			}
+			l.OnLevel(190.0 / 254)
+			if changes() == 0 {
+				t.Error("the device's report of the level it reached committed no change")
 			}
 		})
 	}

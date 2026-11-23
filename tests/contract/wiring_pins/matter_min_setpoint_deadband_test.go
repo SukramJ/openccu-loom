@@ -6,7 +6,7 @@ package wiring_pins
 import (
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/thermo"
+	"thingfabric.dev/go-fabric/cluster/thermo"
 )
 
 // TestPin_ThermostatServer_MinSetpointDeadBand_Default pins that a freshly

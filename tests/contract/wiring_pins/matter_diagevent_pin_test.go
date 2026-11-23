@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/bridge"
+	"thingfabric.dev/go-fabric/bridge"
 )
 
 // TestABridgeWithoutARingStillServesAnEmptyTrace pins the property that

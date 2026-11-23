@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/cluster/onoff"
 )
 
 // TestSirenOnOffAdvertisesLighting pins the LT (Lighting) feature on the

@@ -49,7 +49,7 @@ and MCP.
 - **Config UI** — a Svelte SPA for setup, device configuration, and
   diagnostics.
 - **Matter** — a pure-Go Matter bridge (opt-in, built on
-  [go-fabric](https://github.com/SukramJ/go-fabric)) so your CCU devices
+  [go-fabric](https://github.com/thingfabric/go-fabric)) so your CCU devices
   appear in Apple Home, Google Home, and Alexa.
 - **Alarm system and Security & Safety** — zones, arming, codes and a
   fault overview across your sensors, on MQTT, REST and the web UI.
@@ -122,7 +122,7 @@ want to do.
 ## Project links
 
 - Source: [github.com/SukramJ/openccu-loom](https://github.com/SukramJ/openccu-loom)
-- Matter stack: [go-fabric](https://github.com/SukramJ/go-fabric)
+- Matter stack: [go-fabric](https://github.com/thingfabric/go-fabric)
 - Sibling project (Home Assistant integration):
   [aiohomematic](https://github.com/SukramJ/aiohomematic)
 - Upstream OS: [OpenCCU](https://github.com/OpenCCU/OpenCCU) ·

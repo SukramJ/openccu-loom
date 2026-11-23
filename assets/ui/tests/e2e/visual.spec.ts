@@ -101,6 +101,9 @@ test.describe('Visual regression - light mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -134,6 +137,9 @@ test.describe('Visual regression - light mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -166,6 +172,9 @@ test.describe('Visual regression - light mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -197,6 +206,9 @@ test.describe('Visual regression - light mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -224,6 +236,9 @@ test.describe('Visual regression - light mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -329,6 +344,9 @@ test.describe('Visual regression - dark mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -362,6 +380,9 @@ test.describe('Visual regression - dark mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -394,6 +415,9 @@ test.describe('Visual regression - dark mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -425,6 +449,9 @@ test.describe('Visual regression - dark mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,
@@ -452,6 +479,9 @@ test.describe('Visual regression - dark mode', () => {
       route.fulfill({
         json: {
           enabled: true,
+          // loom runs go-fabric-ui in host mode: the status carries the
+          // host's admin verdict, without which the admin-gated pages stay empty.
+          admin: true,
           listening: true,
           endpoint_count: 4,
           fabric_count: 2,

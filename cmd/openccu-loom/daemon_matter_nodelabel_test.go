@@ -6,8 +6,8 @@ package main
 import (
 	"testing"
 
-	"github.com/SukramJ/go-fabric/im"
-	"github.com/SukramJ/go-fabric/tlv"
+	"thingfabric.dev/go-fabric/im"
+	"thingfabric.dev/go-fabric/tlv"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
@@ -59,7 +59,11 @@ func TestStartMatterBridgePersistsBridgedNodeLabel(t *testing.T) {
 	if key == (matterendpoint.SourceKey{}) {
 		t.Fatalf("no identity row for bridged endpoint %d among %d rows", onOffEP, len(recs))
 	}
-	if got := bundle.node.Persistence().NodeLabel(ctx, key); got != label {
+	got, err := bundle.node.EndpointState().LoadNodeLabel(ctx, key)
+	if err != nil {
+		t.Fatalf("LoadNodeLabel(%s): %v", key, err)
+	}
+	if got != label {
 		t.Fatalf("persisted NodeLabel for %s = %q, want %q — "+
 			"startMatterBridge does not hand the assembler the node's endpoint persistence, "+
 			"so a controller rename is lost on restart", key, got, label)

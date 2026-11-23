@@ -11,10 +11,12 @@ import (
 	"math"
 	"sync"
 
-	"github.com/SukramJ/go-fabric/contract"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/surface"
+	clusterspec "thingfabric.dev/go-fabric/cluster/spec"
+	bdbidef "thingfabric.dev/go-fabric/cluster/spec/bridgeddevicebasicinformation"
+	"thingfabric.dev/go-fabric/contract"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -319,7 +321,47 @@ func specChannelNo(spec endpoint.Spec) int {
 	return math.MaxInt
 }
 
-func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
+func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) {
+	specs, err := a.channelSpecsOf(ctx, centralName, names, dev, ch, sink)
+	for i := range specs {
+		stateSerialNumber(&specs[i])
+	}
+	return specs, err
+}
+
+// stateSerialNumber states the device's own address as the bridged
+// endpoint's BridgedDeviceBasicInformation SerialNumber: the hardware serial
+// printed on the device (an HmIP or BidCos address such as 0001D8A991F2DC),
+// which controllers show beside the product. The node serves a bridged
+// SerialNumber only when the host states it, as matter.js does, and derives
+// none from the address itself. It stays distinct from UniqueID, which a
+// controller keys the accessory by. An address beyond the attribute's
+// constraint in the generated definition is not stated: the assembly would
+// refuse the endpoint, and a missing serial is the lesser loss. A value the
+// spec already states wins.
+func stateSerialNumber(spec *endpoint.Spec) {
+	if spec.BridgedBasicInformation.SerialNumber != nil || spec.DeviceAddress == "" {
+		return
+	}
+	inst, err := bridgedBasicInformationChecks()
+	if err != nil {
+		return
+	}
+	if _, err := inst.CheckValue(bdbidef.AttrSerialNumber, spec.DeviceAddress, nil); err != nil {
+		return
+	}
+	serial := spec.DeviceAddress
+	spec.BridgedBasicInformation.SerialNumber = &serial
+}
+
+// bridgedBasicInformationChecks holds a value to the generated
+// BridgedDeviceBasicInformation definition's type and constraint, the check
+// the assembly runs on what the host states.
+var bridgedBasicInformationChecks = sync.OnceValues(func() (*clusterspec.Instance, error) {
+	return clusterspec.New(bdbidef.Definition, clusterspec.Options{})
+})
+
+func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]endpoint.Spec, 0, 4)
 	note := func(kind matterendpoint.DPKind, key string, outcome SourceOutcome, reason WithheldReason, into string) {
 		if sink == nil {

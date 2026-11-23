@@ -10,9 +10,9 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/mdns"
+	matterbridge "thingfabric.dev/go-fabric/bridge"
+	matterendpoint "thingfabric.dev/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/mdns"
 
 	loomendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 

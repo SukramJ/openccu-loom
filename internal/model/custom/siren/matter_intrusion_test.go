@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/alarm"
+	"thingfabric.dev/go-fabric/cluster/alarm"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )

@@ -9,7 +9,7 @@ were published under the MIT License and stay so.
 The Matter side of OpenCCU-Loom is a semantic port of matter.js
 (https://github.com/matter-js/matter.js), Copyright matter.js contributors,
 licensed under the Apache License 2.0, and runs on go-fabric
-(https://github.com/SukramJ/go-fabric), which carries the same lineage.
+(https://github.com/thingfabric/go-fabric), which carries the same lineage.
 matter.js's NOTICE is reproduced in licenses/NOTICE-matter.js.txt and
 applies to everything mirrored from it: cluster and device-type
 definitions, wire shapes, behaviours and defaults. The attribution of

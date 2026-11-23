@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"testing"
 
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+	fabricendpoint "thingfabric.dev/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/projection"

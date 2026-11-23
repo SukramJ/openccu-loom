@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	matterparity "github.com/SukramJ/go-fabric/parity"
+	matterparity "thingfabric.dev/go-fabric/parity"
 )
 
 // TestParityMatterJS_SwitchClusterRevisions pins every cluster revision

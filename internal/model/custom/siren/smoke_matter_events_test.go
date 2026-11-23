@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/alarm"
-	"github.com/SukramJ/go-fabric/contract"
+	"thingfabric.dev/go-fabric/cluster/alarm"
+	"thingfabric.dev/go-fabric/contract"
 )
 
 // recordingEmitter captures every event the alarm server emits.

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 17.0.0
+  version: 18.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6167,17 +6167,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Status" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
   /node/fabrics:
     get:
       tags: [node]
       operationId: listFabrics
       summary: The commissioned fabrics.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The fabrics.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FabricList" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/fabrics/{index}:
@@ -6199,6 +6206,7 @@ paths:
         "204": { description: Removed. }
         "400": { $ref: "#/components/responses/NodeProblem" }
         "403": { $ref: "#/components/responses/NodeProblem" }
+        "404": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/pairing:
@@ -6243,6 +6251,8 @@ paths:
         "400": { $ref: "#/components/responses/NodeProblem" }
         "403": { $ref: "#/components/responses/NodeProblem" }
         "409": { $ref: "#/components/responses/NodeProblem" }
+        "413": { $ref: "#/components/responses/NodeProblem" }
+        "415": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/pairing/window/close:
@@ -6265,6 +6275,11 @@ paths:
       tags: [node]
       operationId: listEndpoints
       summary: The bridged endpoints a controller sees.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       description: |
         `endpoints` are the bridged endpoints of the node's topology
         (go-fabric `Node.Topology`), each device followed by its parts.
@@ -6277,6 +6292,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EndpointList" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/endpoints/{ep}:
     parameters:
@@ -6285,6 +6301,11 @@ paths:
       tags: [node]
       operationId: getEndpointDetail
       summary: One endpoint the node serves, with its attribute values (0.4.1).
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       description: |
         Read through the node's own read path (go-fabric `Node.ReadCluster`),
         as a controller's read reaches it, without access control: the
@@ -6307,6 +6328,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/EndpointDetail" }
         "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "404": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
@@ -6317,6 +6339,11 @@ paths:
       tags: [node]
       operationId: listEndpointEvents
       summary: The events the node's event log holds for one endpoint (0.4.1).
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       description: |
         The records a controller's event read is answered from (go-fabric
         `Node.Events` with the endpoint's filter), oldest first: the log is
@@ -6334,12 +6361,18 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/EventRecordList" }
         "400": { $ref: "#/components/responses/NodeProblem" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/surface:
     get:
       tags: [node]
       operationId: getNodeSurface
       summary: The node's surface report.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       description: |
         go-fabric's `surface.Report` of the node in go-fabric's own JSON
         encoding (`surface.Report.MarshalJSON`): the effective surface per
@@ -6353,24 +6386,37 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SurfaceReport" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/sessions:
     get:
       tags: [node]
       operationId: listSessions
       summary: The open secure sessions and the session-id occupancy.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The sessions.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SessionList" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/topology:
     get:
       tags: [node]
       operationId: getNodeTopology
       summary: The node as a graph — its bridge, its fabrics and the sessions on them.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       description: |
         Built from go-fabric's `Topology`, `FabricInfos` and
         `SessionDiagnostics`: the node, its Aggregator, the bridged devices
@@ -6386,6 +6432,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TopologyGraph" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/mdns:
@@ -6393,12 +6440,18 @@ paths:
       tags: [node]
       operationId: getMdns
       summary: The live DNS-SD advertisement and its diagnosis.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The advertisement.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Mdns" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/mdns/reannounce:
     post:
@@ -6425,36 +6478,55 @@ paths:
       tags: [node]
       operationId: getCompatibility
       summary: The commissioned ecosystems and known incompatibilities.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The report.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Compatibility" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/events:
     get:
       tags: [node]
       operationId: listDiagnosticEvents
       summary: The pairing, session and discovery trace, newest first.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The trace.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DiagnosticEventList" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/exposure/schema:
     get:
       tags: [node]
       operationId: getExposureSchema
       summary: How the selection page shows the host's items.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The schema.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ExposureSchema" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/exposure:
@@ -6462,12 +6534,18 @@ paths:
       tags: [node]
       operationId: listExposure
       summary: Every item the host could expose.
+      x-admin: true
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: The items.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ItemList" }
+        "403": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
     put:
@@ -6493,6 +6571,8 @@ paths:
         "204": { description: The batch was empty. }
         "400": { $ref: "#/components/responses/NodeProblem" }
         "403": { $ref: "#/components/responses/NodeProblem" }
+        "413": { $ref: "#/components/responses/NodeProblem" }
+        "415": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/exposure/preview:
@@ -6518,6 +6598,8 @@ paths:
               schema: { $ref: "#/components/schemas/ItemList" }
         "400": { $ref: "#/components/responses/NodeProblem" }
         "403": { $ref: "#/components/responses/NodeProblem" }
+        "413": { $ref: "#/components/responses/NodeProblem" }
+        "415": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/maintenance/reassemble:
@@ -6554,6 +6636,8 @@ paths:
         "204": { description: Every fabric is removed. }
         "400": { $ref: "#/components/responses/NodeProblem" }
         "403": { $ref: "#/components/responses/NodeProblem" }
+        "413": { $ref: "#/components/responses/NodeProblem" }
+        "415": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
   /node/maintenance/erase:
@@ -6585,6 +6669,8 @@ paths:
         "204": { description: Erased; the host brings the node back or restarts. }
         "400": { $ref: "#/components/responses/NodeProblem" }
         "403": { $ref: "#/components/responses/NodeProblem" }
+        "413": { $ref: "#/components/responses/NodeProblem" }
+        "415": { $ref: "#/components/responses/NodeProblem" }
         "500": { $ref: "#/components/responses/NodeProblem" }
         "501": { $ref: "#/components/responses/NodeProblem" }
         "503": { $ref: "#/components/responses/NodeProblem" }
@@ -6634,6 +6720,8 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+        "403": { $ref: "#/components/responses/NodeProblem" }
+        "503": { $ref: "#/components/responses/NodeProblem" }
   /visibility/unignore:
     get:
       operationId: listVisibilityUnIgnore
@@ -16367,6 +16455,7 @@ components:
         commissioning_window_duration_seconds: { type: integer }
         window_kind: { $ref: "#/components/schemas/NodeWindowKind" }
         window_deadline: { type: string, format: date-time, description: "When the open window's timer closes it, on the node's clock; absent while no window is open." }
+        window_remaining_seconds: { type: integer, minimum: 0, description: "Seconds until the open window's timer closes it, on the node's clock when the answer was written (0.10.0); absent while no window is open." }
         exposure: { type: boolean, description: Whether the host serves a selection. }
         exposure_reason: { type: string, description: "Why the host serves no selection, in the host's language; absent when it serves one or gives no reason (0.5.0)." }
         csrf_token: { type: string, description: The admin token of token mode; absent when the host decides admin rights. }
@@ -16448,6 +16537,8 @@ components:
         source: { $ref: "#/components/schemas/NodePairingSource" }
         window_open: { type: boolean }
         duration_seconds: { type: integer }
+        window_remaining_seconds: { type: integer, minimum: 0, description: "As on `Status` (0.10.0): seconds until the open window's timer closes it; absent while no window is open." }
+        window_match: { type: boolean, description: "True: the open window admits the codes of this answer; false: a window is open on other credentials (0.10.0). Absent while no window is open." }
     WindowRequest:
       type: object
       properties:
@@ -16826,6 +16917,7 @@ components:
       required: [applied]
       properties:
         applied: { type: integer }
+        reassembled: { type: boolean, description: "False: the selection is stored, the rebuild failed and it is not in effect (0.10.0)." }
     FactoryResetRequest:
       type: object
       required: [confirm]
@@ -17152,6 +17244,7 @@ components:
       required: [number, priority, endpoint, cluster_hex, event_hex]
       properties:
         number: { type: integer, description: The node-wide event number (Matter Core §7.14.2.1). }
+        number_str: { type: string, pattern: "^(0|[1-9][0-9]{0,19})$", description: "The event number in decimal, exact (0.10.0)." }
         priority: { $ref: "#/components/schemas/NodeEventPriority" }
         endpoint: { type: integer }
         cluster_hex: { type: string }

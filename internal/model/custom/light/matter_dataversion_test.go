@@ -7,10 +7,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
+	"thingfabric.dev/go-fabric/cluster/levelcontrol"
+	"thingfabric.dev/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	levelcontroldef "thingfabric.dev/go-fabric/cluster/spec/levelcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
@@ -62,32 +62,34 @@ func TestParityMatterJS_LightLevelDataVersionBumpsOnWrite(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	before := srv.MatterDataVersion()
+	changes := levelChanges(t, srv)
 
 	if err := srv.MatterWrite(context.Background(), levelcontrol.AttrOnLevel, uint64(127)); err != nil {
 		t.Fatalf("MatterWrite(OnLevel): %v", err)
 	}
-	if after := srv.MatterDataVersion(); after <= before {
-		t.Fatalf("LevelControl data version did not advance after an OnLevel write: before=%d after=%d", before, after)
+	if changes() == 0 {
+		t.Fatal("LevelControl committed no change for an OnLevel write")
 	}
 }
 
 // TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke verifies that a
-// successful MoveToLevel advances the LevelControl server's data version.
-// The light is primed on via l.OnLevel first so the command reaches the
-// CCU rather than ending in the ExecuteIfOff gate.
+// MoveToLevel commits its change once the device reports the level it
+// reached, and not before: matter.js advances a version only for a commit
+// that changed a value. The light is primed on via l.OnLevel first so the
+// command reaches the CCU rather than ending in the ExecuteIfOff gate.
 func TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	l.OnLevel(0.5) // light is on
 	srv := levelServer(t, l)
-	before := srv.MatterDataVersion()
+	changes := levelChanges(t, srv)
 
 	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, levelcontroldef.MoveToLevelRequest{Level: 190, TransitionTime: spec.Nullable[uint16]{Null: true}}); err != nil {
 		t.Fatalf("MatterInvoke(MoveToLevel): %v", err)
 	}
-	if after := srv.MatterDataVersion(); after <= before {
-		t.Fatalf("LevelControl data version did not advance after MoveToLevel: before=%d after=%d", before, after)
+	l.OnLevel(190.0 / 254)
+	if changes() == 0 {
+		t.Fatal("LevelControl committed no change once the device reported the level MoveToLevel asked for")
 	}
 }
 
@@ -99,6 +101,8 @@ func TestParityMatterJS_LightDataVersionMonotonicallyRises(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	oo := onOffServer(t, l)
 	lv := levelServer(t, l)
+	lvChanges := levelChanges(t, lv)
+	lvVersion := func() uint32 { return uint32(lvChanges()) }
 
 	ops := []struct {
 		version func() uint32
@@ -107,7 +111,7 @@ func TestParityMatterJS_LightDataVersionMonotonicallyRises(t *testing.T) {
 		{oo.MatterDataVersion, func() error {
 			return oo.MatterWrite(context.Background(), onoff.AttrOnTime, uint64(5))
 		}},
-		{lv.MatterDataVersion, func() error {
+		{lvVersion, func() error {
 			return lv.MatterWrite(context.Background(), levelcontrol.AttrOptions, uint64(levelcontrol.OptionExecuteIfOff))
 		}},
 		{oo.MatterDataVersion, func() error {
@@ -132,16 +136,17 @@ func TestParityMatterJS_LightDataVersionStableOnRead(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	oo := onOffServer(t, l)
 	lv := levelServer(t, l)
-	ooBefore, lvBefore := oo.MatterDataVersion(), lv.MatterDataVersion()
+	lvChanges := levelChanges(t, lv)
+	ooBefore := oo.MatterDataVersion()
 
 	oo.MatterRead(onoff.AttrOnOff)
 	oo.MatterRead(matterAttrClusterRevision)
 	lv.MatterRead(levelcontrol.AttrCurrentLevel)
 	lv.MatterRead(matterAttrFeatureMap)
 
-	if oo.MatterDataVersion() != ooBefore || lv.MatterDataVersion() != lvBefore {
-		t.Fatalf("a read advanced a data version: OnOff %d→%d, LevelControl %d→%d",
-			ooBefore, oo.MatterDataVersion(), lvBefore, lv.MatterDataVersion())
+	if oo.MatterDataVersion() != ooBefore || lvChanges() != 0 {
+		t.Fatalf("a read changed state: OnOff version %d→%d, LevelControl changes %d",
+			ooBefore, oo.MatterDataVersion(), lvChanges())
 	}
 }
 
@@ -154,7 +159,8 @@ func TestParityMatterJS_LightDataVersionStableOnFailedWrite(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	oo := onOffServer(t, l)
 	lv := levelServer(t, l)
-	ooBefore, lvBefore := oo.MatterDataVersion(), lv.MatterDataVersion()
+	lvChanges := levelChanges(t, lv)
+	ooBefore := oo.MatterDataVersion()
 
 	if err := oo.MatterWrite(context.Background(), onoff.AttrOnTime, true); err == nil {
 		t.Fatal("MatterWrite(OnTime, bool) succeeded, want a type refusal")
@@ -170,8 +176,8 @@ func TestParityMatterJS_LightDataVersionStableOnFailedWrite(t *testing.T) {
 	}
 	_ = lv.MatterWrite(context.Background(), 0x4001, uint8(0))
 
-	if oo.MatterDataVersion() != ooBefore || lv.MatterDataVersion() != lvBefore {
-		t.Fatalf("failed writes advanced a data version: OnOff %d→%d, LevelControl %d→%d",
-			ooBefore, oo.MatterDataVersion(), lvBefore, lv.MatterDataVersion())
+	if oo.MatterDataVersion() != ooBefore || lvChanges() != 0 {
+		t.Fatalf("failed writes changed state: OnOff version %d→%d, LevelControl changes %d",
+			ooBefore, oo.MatterDataVersion(), lvChanges())
 	}
 }

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/SukramJ/go-fabric/contract"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/schema"
+	"thingfabric.dev/go-fabric/contract"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/schema"
 )
 
 // MatterDeviceHolder keeps the one go-fabric device a source is on the

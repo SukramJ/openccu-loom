@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	matterparity "github.com/SukramJ/go-fabric/parity"
+	matterparity "thingfabric.dev/go-fabric/parity"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )

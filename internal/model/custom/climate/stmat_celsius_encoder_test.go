@@ -6,7 +6,7 @@ package climate
 import (
 	"testing"
 
-	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
+	thermostatspec "thingfabric.dev/go-fabric/cluster/spec/thermostat"
 )
 
 // TestStMatCelsiusEncoderIsTheMeasurementOne pins that this profile encodes

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	gofabricmdns "github.com/SukramJ/go-fabric/mdns"
+	gofabricmdns "thingfabric.dev/go-fabric/mdns"
 )
 
 // TestVirtualInterfaceNameAgreesWithGoFabric pins [IsVirtualInterfaceName]
@@ -148,7 +148,7 @@ func goFabricPrefixesFromCheckout() (prefixes []string, why string) {
 	if err != nil {
 		return nil, source + " " + strconv.Quote(dir) + " has no readable go.mod: " + err.Error()
 	}
-	if !strings.Contains(string(gomod), "module github.com/SukramJ/go-fabric") {
+	if !strings.Contains(string(gomod), "module thingfabric.dev/go-fabric") {
 		return nil, source + " " + strconv.Quote(dir) + " is not the go-fabric module"
 	}
 

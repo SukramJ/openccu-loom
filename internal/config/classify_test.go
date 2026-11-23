@@ -56,7 +56,6 @@ func TestSecretFieldsExplicit(t *testing.T) {
 		"north.rest.auth.oidc.client_secret",
 		"north.matter.attestation.dac_key_path",
 		"north.matter.commissioning.passcode",
-		"north.matter.commissioning.salt",
 		"centrals.password",
 	}
 	for _, w := range wantSecret {

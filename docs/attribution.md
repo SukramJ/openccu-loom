@@ -132,7 +132,7 @@ binary are addressed separately by ADR 0003 and the `NOTICE.md` of the
   not a CSA project and is not certified by the Alliance.
 - Used as: the gold standard for the entire Matter side. The Matter stack is
   not part of this repository — it lives in the
-  [go-fabric](https://github.com/SukramJ/go-fabric) module, which OpenCCU-Loom
+  [go-fabric](https://github.com/thingfabric/go-fabric) module, which OpenCCU-Loom
   embeds as a library, and which is a semantic port of matter.js HEAD: cluster
   IDs, revisions, attribute IDs, constraints, defaults and wire shape are
   mirrored from it, and 270+ Go files there cite the matter.js

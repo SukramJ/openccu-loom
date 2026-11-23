@@ -12,7 +12,7 @@ pay for them only when you work there:
 
 | File | Covers |
 |---|---|
-| [go-fabric `CLAUDE.md`](https://github.com/SukramJ/go-fabric/blob/main/CLAUDE.md) | the matter.js gold-standard workflow, schema regeneration — the Matter stack is its own module now |
+| [go-fabric `CLAUDE.md`](https://github.com/thingfabric/go-fabric/blob/main/CLAUDE.md) | the matter.js gold-standard workflow, schema regeneration — the Matter stack is its own module now |
 | [`assets/ui/CLAUDE.md`](./assets/ui/CLAUDE.md) | SPA operating concept, i18n + theme duty, Playwright suite |
 | [`tests/CLAUDE.md`](./tests/CLAUDE.md) | the test pillars, test naming, the snapshot-parity pipeline |
 | [`internal/model/custom/CLAUDE.md`](./internal/model/custom/CLAUDE.md) | adding a device profile |
@@ -264,7 +264,7 @@ Cluster IDs, revisions, attribute IDs, constraints, defaults and wire shape
 are taken verbatim — hand-coding any of them from the Matter PDF is
 forbidden, because drift produces silent Apple/Google pair-aborts. The full
 workflow (which file to read, how to cite it, which parity test to extend)
-is in [go-fabric `CLAUDE.md`](https://github.com/SukramJ/go-fabric/blob/main/CLAUDE.md);
+is in [go-fabric `CLAUDE.md`](https://github.com/thingfabric/go-fabric/blob/main/CLAUDE.md);
 deliberate divergences land in `notes/parity/by_design.md`.
 
 **Work that starts here.** Matter rules live in go-fabric. A rule decided while

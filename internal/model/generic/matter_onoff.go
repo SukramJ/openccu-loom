@@ -6,8 +6,8 @@ package generic
 import (
 	"context"
 
-	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 )
 
 // matterOnOffSink adapts a profile's function onto [onoffdef.Sink].

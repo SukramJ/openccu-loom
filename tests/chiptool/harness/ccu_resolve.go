@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/go-fabric-ui/fabricui"
 )
 
 // ExposureItem is one row of go-fabric-ui's selection list
@@ -102,6 +104,7 @@ func (b *Bridge) fetchExposableCtx(ctx context.Context) ([]ExposureItem, error) 
 		return nil, fmt.Errorf("build list request: %w", err)
 	}
 	req.Header.Set("Authorization", b.AuthHeader())
+	req.Header.Set(fabricui.RequestHeader, "1")
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("GET /node/exposure: %w", err)

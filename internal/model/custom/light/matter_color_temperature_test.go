@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	colorcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
+	colorcontrolspec "thingfabric.dev/go-fabric/cluster/spec/colorcontrol"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )

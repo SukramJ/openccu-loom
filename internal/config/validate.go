@@ -15,9 +15,11 @@ import (
 	"strings"
 	"time"
 
-	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
-	"github.com/SukramJ/go-fabric/secure/spake2"
-	"github.com/SukramJ/go-fabric/surface"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	basicdef "thingfabric.dev/go-fabric/cluster/spec/basicinformation"
+	mattersetup "thingfabric.dev/go-fabric/secure/setup"
+	"thingfabric.dev/go-fabric/secure/spake2"
+	"thingfabric.dev/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 )
@@ -147,6 +149,9 @@ func validateMCP(m *NorthMCP) error {
 // commissioner can pair with it.
 func validateMatter(m *NorthMatter) error {
 	if err := validateHostPort("north.matter.listen", m.Listen); err != nil {
+		return err
+	}
+	if err := validateMatterNodeLabel(m.NodeLabel); err != nil {
 		return err
 	}
 	// The bounds are the owning packages' own declarations, not copies:
@@ -424,4 +429,24 @@ func walkLeaves(rv reflect.Value, prefix string, visit func(path string, v refle
 	default:
 		visit(prefix, rv)
 	}
+}
+
+// validateMatterNodeLabel holds north.matter.node_label to the constraint
+// of BasicInformation.NodeLabel in go-fabric's generated definition, the
+// check the node facade runs at build: a label beyond it fails the node's
+// start, so the save is refused here instead of leaving the bridge down
+// after the next restart. Empty selects the default and is not checked.
+func validateMatterNodeLabel(label string) error {
+	if label == "" {
+		return nil
+	}
+	inst, err := spec.New(basicdef.Definition, spec.Options{})
+	if err != nil {
+		return fmt.Errorf("config: north.matter.node_label: the BasicInformation definition: %w", err)
+	}
+	if _, err := inst.CheckValue(basicdef.AttrNodeLabel, label, nil); err != nil {
+		return fmt.Errorf("config: north.matter.node_label (constraint %q): %w",
+			basicdef.Definition.Attribute(basicdef.AttrNodeLabel).Constraint.Text, err)
+	}
+	return nil
 }

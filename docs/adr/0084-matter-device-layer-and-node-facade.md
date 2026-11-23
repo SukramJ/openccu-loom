@@ -8,9 +8,9 @@
   Matter), [ADR 0049](./0049-matter-one-endpoint-per-device.md) (one endpoint
   per device), [ADR 0063](./0063-self-maintained-device-profiles.md) (the
   profiles are hand-maintained),
-  go-fabric [ADR 0016](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0016-device-type-validation.md),
-  [ADR 0017](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0017-generated-default-cluster-server.md) and
-  [ADR 0018](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0018-device-layer-and-node-facade.md)
+  go-fabric [ADR 0016](https://github.com/thingfabric/go-fabric/blob/main/docs/adr/0016-device-type-validation.md),
+  [ADR 0017](https://github.com/thingfabric/go-fabric/blob/main/docs/adr/0017-generated-default-cluster-server.md) and
+  [ADR 0018](https://github.com/thingfabric/go-fabric/blob/main/docs/adr/0018-device-layer-and-node-facade.md)
   (the device layer and the node facade this ADR adopts)
 - **Supersedes**: nothing; it binds the migration go-fabric ADR 0018 names
   ("openccu-loom migrates at least its lights and covers before v1.0.0")
@@ -214,18 +214,18 @@ two stores, never the database handle: `node.Store.DB` would apply
 go-fabric's schema, which the daemon carries in its own migrations.
 
 The phase was blocked twice on seams the facade lacked. First the host
-hooks of [go-fabric #58](https://github.com/SukramJ/go-fabric/issues/58)
+hooks of [go-fabric #58](https://github.com/thingfabric/go-fabric/issues/58)
 (fabric observers, a commissioning-complete and a window-transition
 observer, per-window PASE credentials, TimeSynchronization as an opt-in,
 `SupportedFabrics`), closed in go-fabric 0.3.1. Then, read against main at
 c7e67ac, four daemon responsibilities with no seam, filed as
-[issue #87](https://github.com/SukramJ/go-fabric/issues/87) and closed by
+[issue #87](https://github.com/thingfabric/go-fabric/issues/87) and closed by
 #88: a host-assembled topology (`Config.Topology`; the facade's label /
 configuration-version / scene persistence is keyed by `SourceKey.String()`
 since, so the daemon's key type is persisted too), the pinned
 `BasicInformation.UniqueID`, the session and subscription managers for
 the diagnostics endpoint, and host-initiated fabric removal. And on the
-way onto the facade two more, [issue #89](https://github.com/SukramJ/go-fabric/issues/89),
+way onto the facade two more, [issue #89](https://github.com/thingfabric/go-fabric/issues/89),
 closed by #92: `Config.Groups` / `Node.Groups()` for the shared group
 manager, and responder session parameters that advertise `Network.TCP`'s
 roles (the daemon had set them on every PASE and CASE adapter itself).

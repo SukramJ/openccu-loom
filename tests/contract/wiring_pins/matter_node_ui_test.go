@@ -28,7 +28,8 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 	matter := collapseSpaces(readMatterComposition(t))
 	for _, want := range []struct{ what, expr string }{
 		{"the node", "Node: matterNodeSource{bundle.node},"},
-		{"loom's exposure provider", "Exposure: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{"},
+		{"loom's exposure provider", "ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{"},
+		{"the selection's change report to the WebSocket hub", "Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec),"},
 		{"the candidate walk", "Candidates: candidates.MatterCandidates,"},
 		{"the allowlist store", "Store: mids,"},
 		{"the audit ledger", "Audit: auditRec,"},

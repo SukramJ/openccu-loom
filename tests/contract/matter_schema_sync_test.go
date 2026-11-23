@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	matterparity "github.com/SukramJ/go-fabric/parity"
+	matterparity "thingfabric.dev/go-fabric/parity"
 )
 
 // TestMatterSchemaSnapshotInSync asserts that this repo's pinned copy of the
@@ -55,7 +55,7 @@ func TestMatterSchemaSnapshotInSync(t *testing.T) {
 	if pinnedSum != embeddedSum {
 		t.Fatalf("matter schema snapshots diverge:\n"+
 			"  pinned   %s (sha256 %x)\n"+
-			"  embedded github.com/SukramJ/go-fabric/parity.SchemaJSON() (sha256 %x)\n"+
+			"  embedded thingfabric.dev/go-fabric/parity.SchemaJSON() (sha256 %x)\n"+
 			"the module ships a different extract than the one pinned here — run "+
 			"`make sync-matter-schema` and review the resulting diff",
 			pinned, pinnedSum, embeddedSum)

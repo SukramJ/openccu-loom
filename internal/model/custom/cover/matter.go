@@ -7,9 +7,9 @@ import (
 	"context"
 	"errors"
 
-	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
-	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	closuredef "thingfabric.dev/go-fabric/cluster/spec/closurecontrol"
+	windowcoveringspec "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -389,7 +389,7 @@ func (b *Blind) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, e
 // matterWindowCoveringDevice builds the cover's WindowCovering device
 // once: the WindowCovering cluster declared with the variant's Type /
 // EndProductType and features, the position the CCU last reported as the
-// initial value (open until the first report) and the cover's operations
+// initial value (null — unknown — until the first report) and the cover's operations
 // as its Mover; source is the variant (any: the Cover or the Blind that
 // embeds it), whose change notifier the device carries. The LEVEL (and
 // LEVEL_2) data points' confirmed-update hooks

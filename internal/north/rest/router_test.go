@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
@@ -938,16 +939,24 @@ func TestRouter_NodePairing_RequiresAdmin(t *testing.T) {
 		})
 	}
 
+	// A loopback host go-fabric-ui serves without a listed name, and the
+	// page's request header, so the role alone decides.
+	nodeReq := func() *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/node/pairing", http.NoBody)
+		r.Host = "127.0.0.1"
+		r.Header.Set(fabricui.RequestHeader, "1")
+		return r
+	}
 	for _, role := range []auth.Role{auth.RoleViewer, auth.RoleOperator} {
 		rr := httptest.NewRecorder()
-		build(role).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/node/pairing", http.NoBody))
+		build(role).ServeHTTP(rr, nodeReq())
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("%s must not receive the pairing codes, got %d body=%s", role, rr.Code, rr.Body.String())
 		}
 	}
 
 	rr := httptest.NewRecorder()
-	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/node/pairing", http.NoBody))
+	build(auth.RoleAdmin).ServeHTTP(rr, nodeReq())
 	if rr.Code == http.StatusForbidden || rr.Code == http.StatusUnauthorized {
 		t.Fatalf("admin must pass the gate, got %d body=%s", rr.Code, rr.Body.String())
 	}

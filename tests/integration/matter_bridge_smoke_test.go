@@ -16,9 +16,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/groups"
-	matterstore "github.com/SukramJ/go-fabric/store"
+	"thingfabric.dev/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/groups"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"

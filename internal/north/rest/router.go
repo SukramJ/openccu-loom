@@ -464,6 +464,18 @@ type Deps struct {
 	// both nil — the test fallback the role gates share), where it admits
 	// everybody.
 	IsAdmin func(*http.Request) bool
+	// NodeAllowedHosts are the DNS names besides loopback names and IP
+	// addresses under which go-fabric-ui serves the node routes
+	// (fabricui.Options.AllowedHosts); every other name answers 403
+	// host_not_allowed there, its defence against DNS rebinding. Entries
+	// are bare host names; the composition root derives them from the
+	// configuration.
+	NodeAllowedHosts []string
+	// NodeAllowHost admits a request under a name NodeAllowedHosts does
+	// not list, from what only a trusted proxy produces
+	// (fabricui.Options.AllowHost) — Home Assistant's Ingress, which hands
+	// on the browser's own Host. Nil admits by name only.
+	NodeAllowHost func(*http.Request) bool
 	// MatterAuditRecorder is the write side of the audit ledger the
 	// visibility mutation handlers append to. Same buffer as the read-side
 	// [Deps.Audit] in production; nil = audit-disabled (test). The Matter
@@ -1619,9 +1631,36 @@ func nodeUIHandler(d Deps) http.Handler {
 		open := d.RequireAdmin == nil && d.AuthRequire == nil
 		o.Admin = func(*http.Request) bool { return open }
 	}
+	o.AllowedHosts = d.NodeAllowedHosts
+	o.AllowHost = d.NodeAllowHost
 	h, err := NodeAPI(o)
 	if err != nil {
 		panic(err)
 	}
-	return h
+	return forwardedHost(h)
+}
+
+// forwardedHost hands go-fabric-ui the host the browser addressed when a
+// reverse proxy rewrote Host to its upstream and named the original in
+// X-Forwarded-Host. The module checks Host against its allowed names and an
+// admin route's Origin against Host; behind such a proxy the browser's
+// Origin never matches the upstream address, so every admin route — every
+// node read since go-fabric-ui 0.10 — would answer 403. The WebSocket
+// handler applies the same rule to its Origin check. A cross-origin page
+// cannot send the header without a CORS preflight the daemon refuses, and a
+// page that reached the daemon under a rebound name still presents its own
+// Origin, which the module refuses on every admin route. With several
+// proxies in a chain the first entry is the browser's.
+func forwardedHost(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+			host, _, _ := strings.Cut(xfh, ",")
+			if host = strings.TrimSpace(host); host != "" {
+				r2 := r.Clone(r.Context())
+				r2.Host = host
+				r = r2
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

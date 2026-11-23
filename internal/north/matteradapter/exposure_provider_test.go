@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"

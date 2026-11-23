@@ -30,11 +30,14 @@ import (
 // colour picker, a physical colour-temperature gradient, chart series —
 // are listed in contentColourFiles with the reason.
 
+// Each selector may carry its shadow-root twin (`:root, :host`,
+// `html.dark, :host(.dark)`, …), which @sukramj/fabric-ui's tokens.css
+// adds so the tokens also apply inside a custom element.
 var themeBlockRes = map[string]*regexp.Regexp{
-	":root":                regexp.MustCompile(`(?s)(?:^|\n):root\s*\{([^}]*)\}`),
-	`html.dark`:            regexp.MustCompile(`(?s)\nhtml\.dark\s*\{([^}]*)\}`),
-	`html[data-skin="ha"]`: regexp.MustCompile(`(?s)\nhtml\[data-skin="ha"\]\s*\{([^}]*)\}`),
-	`html[data-skin].dark`: regexp.MustCompile(`(?s)\nhtml\[data-skin="ha"\]\.dark\s*\{([^}]*)\}`),
+	":root":                regexp.MustCompile(`(?s)(?:^|\n):root(?:,\s*:host)?\s*\{([^}]*)\}`),
+	`html.dark`:            regexp.MustCompile(`(?s)\nhtml\.dark(?:,\s*:host\(\.dark\))?\s*\{([^}]*)\}`),
+	`html[data-skin="ha"]`: regexp.MustCompile(`(?s)\nhtml\[data-skin="ha"\](?:,\s*:host\(\[data-skin="ha"\]\))?\s*\{([^}]*)\}`),
+	`html[data-skin].dark`: regexp.MustCompile(`(?s)\nhtml\[data-skin="ha"\]\.dark(?:,\s*:host\(\[data-skin="ha"\]\.dark\))?\s*\{([^}]*)\}`),
 }
 
 func themeTokensIn(block string) map[string]bool {

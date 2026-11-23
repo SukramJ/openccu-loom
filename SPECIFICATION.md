@@ -607,7 +607,7 @@ cluster subset, DP→cluster mapping, and effort estimates live in
 Bring-up bug lessons (7 structural bugs from the live chip-tool
 smoke runs, waves 7–12) are recorded in
 **[ADR 0013](docs/adr/0013-matter-commissioning-bring-up.md)**. **Since 0.74.0 the Matter stack is a dependency, not a subtree.** It
-lives in **[`github.com/SukramJ/go-fabric`](https://github.com/SukramJ/go-fabric)**
+lives in **[`thingfabric.dev/go-fabric`](https://github.com/thingfabric/go-fabric)**
 (this project's own module; MIT up to v0.4.0, Apache-2.0 from its next release): the protocol substrate, the cluster
 servers, the interaction model, commissioning, mDNS and the generated
 schema. What stays here is `internal/north/matteradapter` — the walk

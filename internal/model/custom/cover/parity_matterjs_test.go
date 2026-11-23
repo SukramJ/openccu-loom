@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	matterparity "github.com/SukramJ/go-fabric/parity"
+	matterparity "thingfabric.dev/go-fabric/parity"
 
-	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+	windowcoveringspec "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
+	"thingfabric.dev/go-fabric/cluster/spec"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"

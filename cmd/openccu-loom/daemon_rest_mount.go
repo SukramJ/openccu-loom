@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
@@ -506,6 +507,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			id, ok := auth.IdentityFrom(r.Context())
 			return ok && id.HasRole(auth.RoleAdmin)
 		},
+		NodeAllowedHosts:    nodeAllowedHosts(cfg, os.Hostname),
+		NodeAllowHost:       nodeSupervisorAllowHost(cfg, deploymentKind()),
 		MatterAuditRecorder: d.auditRec,
 		// Visibility / un-ignore surface — notes/concepts/ui/unignore-concept.md.
 		VisibilityUnIgnoreStore:     d.visibilityUnIgnoreStore,
