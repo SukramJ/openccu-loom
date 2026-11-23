@@ -13,10 +13,8 @@ import (
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // matterStatusReaderAdapter implements [mcp.MatterStatusReader] against
@@ -79,27 +77,25 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) mcp.Matter
 // (matteradapter.ExposureProviderConfig.Candidates). The registry is walked
 // on every call, so freshly-discovered devices surface immediately.
 //
-// cfg is the config the daemon booted with, not a live view: nothing mutates
-// North.Matter after boot, so a saved expose_secondary_channels change is
-// reflected here only on the next start. That is the same restriction the
-// Matter bridge itself has — the field is restart-required in
-// [config.RestartRules], so the SPA badges it and the save response says so.
+// asm is the bridge's assembler: listing a candidate asks its source for
+// its device with the request the bridge's walk passes, so the listing
+// never makes a source build anew. Its expose_secondary_channels is the
+// value the daemon booted with — the field is restart-required in
+// [config.RestartRules], so the SPA badges it and the save response says
+// so.
 type matterCandidateProviderAdapter struct {
 	reg *central.Registry
-	cfg *config.Config
-	// build is the bridge's [matteradapter.Config.Build]: listing a
-	// candidate builds its device, and the source keeps the first build.
-	build interfaces.MatterBuildOptions
+	asm *matteradapter.Assembler
 }
 
-// MatterCandidates calls [matteradapter.CollectCandidates] directly (rather
+// MatterCandidates calls [matteradapter.Assembler.CollectCandidates] directly (rather
 // than through a stored closure) so the production reachability graph can
 // trace the Matter eligibility entry points from this method — the
 // reachability analyzer seeds the handler that invokes this as an entry
 // point but cannot follow an indirect call through a func-typed struct
 // field.
 func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []matteradapter.Candidate {
-	if a == nil || a.reg == nil || a.cfg == nil {
+	if a == nil || a.reg == nil || a.asm == nil {
 		return nil
 	}
 	var out []matteradapter.Candidate
@@ -107,7 +103,7 @@ func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []m
 		if u == nil || u.ModelRegistry == nil {
 			continue
 		}
-		out = append(out, matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), a.cfg.North.Matter.ExposeSecondaryChannels, a.build)...)
+		out = append(out, a.asm.CollectCandidates(u.Name(), u.ModelRegistry.List())...)
 	}
 	return out
 }

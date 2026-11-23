@@ -41,7 +41,7 @@ func decideFleet(t *testing.T, a *matteradapter.Assembler) (decisions []matterad
 	}
 	for _, d := range described {
 		for i := range d.Endpoints {
-			describedKeys = append(describedKeys, d.Endpoints[i].StableKey.String())
+			describedKeys = append(describedKeys, d.Endpoints[i].Spec().StableKey.String())
 		}
 	}
 	sort.Strings(describedKeys)

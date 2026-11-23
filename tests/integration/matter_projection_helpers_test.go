@@ -23,7 +23,7 @@ func matterProjectionOf(t *testing.T, cdp any, witness string) (deviceType uint1
 	t.Helper()
 	switch src := cdp.(type) {
 	case interfaces.MatterDeviceSource:
-		d, err := src.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey(witness), Name: witness})
+		d, err := src.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey(witness), Name: witness}})
 		if err != nil {
 			t.Errorf("%s (%T): the device kit refused the source's device: %v", witness, cdp, err)
 			return src.MatterDeviceType(), nil, true

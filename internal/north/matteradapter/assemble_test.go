@@ -41,7 +41,7 @@ func describeSnapshots(ctx context.Context, a *matteradapter.Assembler, snapshot
 	}
 	out := make([]endpoint.Snapshot, 0, len(described))
 	for _, d := range described {
-		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
+		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: endpointSpecs(d.Endpoints)})
 	}
 	return out, nil
 }
@@ -66,4 +66,14 @@ func assembleDevicesWith(ctx context.Context, a *matteradapter.Assembler, store 
 		return nil, err
 	}
 	return inner.Assemble(ctx, snaps)
+}
+
+// endpointSpecs is the endpoint assembler's input for one described
+// scope: each described endpoint's spec.
+func endpointSpecs(eps []matteradapter.Endpoint) []endpoint.Spec {
+	out := make([]endpoint.Spec, 0, len(eps))
+	for _, e := range eps {
+		out = append(out, e.Spec())
+	}
+	return out
 }

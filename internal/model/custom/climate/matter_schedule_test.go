@@ -112,13 +112,16 @@ func buildWith(t *testing.T, c *Climate, build interfaces.MatterBuildOptions) *t
 	if build.ThermostatSchedules {
 		build.Surface.Extensions = surface.NewExtensions(MatterScheduleExtension)
 	}
-	d, err := c.MatterDeviceWith(fabricdevice.Options{
-		StableKey: fabricdevice.StringKey("climate-test"),
-		Name:      "climate",
-		Surface:   build.Surface,
-	}, build)
+	d, err := c.MatterDevice(interfaces.MatterDeviceRequest{
+		Options: fabricdevice.Options{
+			StableKey: fabricdevice.StringKey("climate-test"),
+			Name:      "climate",
+			Surface:   build.Surface,
+		},
+		Build: build,
+	})
 	if err != nil {
-		t.Fatalf("MatterDeviceWith: %v", err)
+		t.Fatalf("MatterDevice: %v", err)
 	}
 	srv, ok := d.Server(thermostatspec.ClusterID).(*thermo.ThermostatServer)
 	if !ok {
@@ -168,13 +171,16 @@ func TestMatterSchedulesAloneServeNoHold(t *testing.T) {
 // surface.ErrExtensionNotEnabled rather than served.
 func TestMatterSchedulesNeedTheExtension(t *testing.T) {
 	r, _, _ := scheduleRig(t, &climateLoader{sched: twoProgramSchedule()}, true)
-	_, err := r.climate.MatterDeviceWith(fabricdevice.Options{
-		StableKey: fabricdevice.StringKey("climate-test"),
-		Name:      "climate",
-		Surface:   surface.Policies{},
-	}, interfaces.MatterBuildOptions{ThermostatSchedules: true})
+	_, err := r.climate.MatterDevice(interfaces.MatterDeviceRequest{
+		Options: fabricdevice.Options{
+			StableKey: fabricdevice.StringKey("climate-test"),
+			Name:      "climate",
+			Surface:   surface.Policies{},
+		},
+		Build: interfaces.MatterBuildOptions{ThermostatSchedules: true},
+	})
 	if !errors.Is(err, surface.ErrExtensionNotEnabled) {
-		t.Fatalf("MatterDeviceWith without the extension: err = %v, want surface.ErrExtensionNotEnabled", err)
+		t.Fatalf("MatterDevice without the extension: err = %v, want surface.ErrExtensionNotEnabled", err)
 	}
 }
 

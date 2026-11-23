@@ -99,9 +99,10 @@ type Garage struct {
 	doorMode *combined.EnumSelect
 
 	// matterDevice holds the Closure device the Matter projection serves
-	// (matter_closure.go), built once per drive: the cluster server owns
-	// the attribute state a controller subscribes to, so rebuilding it
-	// would reset the reported position to "nothing observed" mid-session.
+	// (matter_closure.go), built anew only when the host's facts about the
+	// physical device change: the cluster server owns the attribute state a
+	// controller subscribes to, so a rebuild on every assembly would reset
+	// the reported position to "nothing observed" mid-session.
 	matterDevice generic.MatterDeviceHolder
 
 	mu       sync.RWMutex

@@ -193,7 +193,7 @@ func assembleSmoke(t *testing.T, a *matteradapter.Assembler, store endpoint.Stor
 	}
 	out := make([]endpoint.Snapshot, 0, len(described))
 	for _, d := range described {
-		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
+		out = append(out, endpoint.Snapshot{Scope: d.Scope, Endpoints: endpointSpecs(d.Endpoints)})
 	}
 	top, err := inner.Assemble(ctx, out)
 	if err != nil {
@@ -724,4 +724,14 @@ func TestMatterBridgeSmoke_BridgedEndpointParentEndpointID(t *testing.T) {
 			}
 		}
 	}
+}
+
+// endpointSpecs is the endpoint assembler's input for one described
+// scope: each described endpoint's spec.
+func endpointSpecs(eps []matteradapter.Endpoint) []endpoint.Spec {
+	out := make([]endpoint.Spec, 0, len(eps))
+	for _, e := range eps {
+		out = append(out, e.Spec())
+	}
+	return out
 }

@@ -93,7 +93,8 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 }
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: an
-// OnOffPlugInUnit with the OnOff cluster declared, built once per siren.
+// OnOffPlugInUnit with the OnOff cluster declared, held per siren and
+// rebuilt only when the host's facts change.
 // OnOffPlugInUnit (0x010A) mandates the LT (Lighting) feature on OnOff
 // (on-off-plug-in-unit.element.ts:27-30), so the declaration selects it;
 // the LT attributes, the timed commands and the scene paths are the kit
@@ -113,36 +114,35 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 // The server starts from the observed activity, false while nothing was
 // observed: OnOff is a non-nullable bool (Matter §1.5.6.2; chip-tool
 // answers CHIP_ERROR_WRONG_TLV_TYPE to TLV null there).
-func (s *Siren) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		active, _ := s.IsActive()
-		d, err := generic.NewMatterDevice(s, uint16(fabricdevice.OnOffPlugInUnitID), opts,
-			generic.MatterOnOffDeclaration(true, active, func(ctx context.Context, on bool) error {
-				if on {
-					return s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
-				}
-				return s.TurnOff(ctx, matterDispatchPriority)
-			}))
-		if err != nil {
-			return nil, err
-		}
-		syncActive := func(_, _ bool) {
+func (s *Siren) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return s.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
 			active, _ := s.IsActive()
-			generic.SetMatterOnOff(d, active)
-		}
-		if s.acousticActive != nil {
-			_ = s.acousticActive.OnConfirmedUpdate(syncActive)
-		}
-		if s.opticalActive != nil {
-			_ = s.opticalActive.OnConfirmedUpdate(syncActive)
-		}
-		// A confirmation that landed between the initial read and the
-		// hook registration is not lost: the current value is stored
-		// again, which is a no-op when nothing changed.
-		if active, observed := s.IsActive(); observed {
-			generic.SetMatterOnOff(d, active)
-		}
-		return d, nil
+			return generic.NewMatterDevice(s, uint16(fabricdevice.OnOffPlugInUnitID), req.Options,
+				append(host, generic.MatterOnOffDeclaration(true, active, func(ctx context.Context, on bool) error {
+					if on {
+						return s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
+					}
+					return s.TurnOff(ctx, matterDispatchPriority)
+				}))...)
+		},
+		Bind: func() {
+			syncActive := func(_, _ bool) {
+				active, _ := s.IsActive()
+				generic.SetMatterOnOff(s.matterDevice.Current(), active)
+			}
+			if s.acousticActive != nil {
+				_ = s.acousticActive.OnConfirmedUpdate(syncActive)
+			}
+			if s.opticalActive != nil {
+				_ = s.opticalActive.OnConfirmedUpdate(syncActive)
+			}
+		},
+		Settle: func(d *fabricdevice.Device) {
+			if active, observed := s.IsActive(); observed {
+				generic.SetMatterOnOff(d, active)
+			}
+		},
 	})
 }
 
@@ -152,17 +152,20 @@ func (s *SmokeSiren) MatterDeviceType() uint16 {
 }
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: a SmokeCoAlarm
-// with the SmokeCOAlarm cluster declared over this siren's status, built
-// once so the server's event baseline survives reassembly. HM-SWSD
+// with the SmokeCOAlarm cluster declared over this siren's status, held
+// so the server's event baseline survives reassembly and rebuilt only
+// when the host's facts change. HM-SWSD
 // carries a smoke sensor only, so the CO feature and every
 // CO-conformance attribute stay off the wire.
-func (s *SmokeSiren) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		return generic.NewMatterDevice(s, uint16(fabricdevice.SmokeCoAlarmID), opts,
-			smokecoalarmdef.Declare{
-				StateSource: smokeAlarmSource{s: s},
-				Features:    smokecoalarmdef.FeatureSmokeAlarm,
-			})
+func (s *SmokeSiren) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return s.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			return generic.NewMatterDevice(s, uint16(fabricdevice.SmokeCoAlarmID), req.Options,
+				append(host, smokecoalarmdef.Declare{
+					StateSource: smokeAlarmSource{s: s},
+					Features:    smokecoalarmdef.FeatureSmokeAlarm,
+				})...)
+		},
 	})
 }
 

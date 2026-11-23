@@ -442,3 +442,63 @@ Owner decisions (wizard):
   follow-up.
 - **Base:** slice 3 is stacked on #1168 (`claude/matter-bridged-identity`), rebased onto main
   after its merge.
+
+## 14. Slice 3b: measurements and decisions (2026-11-23)
+
+Measured before code (Fable notes, load-bearing lines re-read by the coordinator):
+
+- **Device restart on a CCU firmware update.** BidCos-RF: rfd starts the bootloader, flashes
+  and reports `DEVICE_IN_BOOTLOADER` true then false (`OpenCCU-Base/src/rfd/RFDevice.cpp:1499-1527`,
+  `:1561-1570`), then announces the device with `newDevices` (`:1619-1624`). BidCos-Wired: hs485d
+  update mode, flash, bootloader message "g", `newDevices` (`src/hs485d/HS485Device.cpp:843-943`).
+  HmIP-RF / HmIP-Wired: UNVERIFIED (no open source or fixture states a restart). Runtime state kept
+  or reset: UNVERIFIED for every family. rfd writes the new FIRMWARE from the file without device
+  confirmation (`RFDevice.cpp:1605-1613`). **Consequence:** the rebuild is justified by go-fabric's
+  construction-time BDBI statement and the F quality, never by "the device restarted".
+- **Same-key `Replace` under a running subscription** (v0.25.0, `fabrictest` experiment with
+  controls): the subscription survives, the endpoint number and Descriptor stay; **no attribute of the
+  replaced endpoint is reported and its DataVersions carry over** (`bridge/bridge.go:1774` skips known
+  endpoint ids; state keyed by SourceKey, `endpoint/types.go:246-275`). A `DataVersionFilter` with the
+  pre-replace version hides a changed cluster. BDBI is covered only by the ConfigurationVersion raise.
+  matter.js re-announces a re-added endpoint (`Datasource.ts:763`, `ProtocolService.ts:290-296`).
+  Handed over as **thingfabric/go-fabric#589**.
+- Availability events are published after the model state changed
+  (`internal/central/adapter/device_availability.go:46-53`, `eventbridge.go:1765-1793`), so a seed that
+  reads the model at seed time loses no flip.
+
+Owner decisions (wizard):
+
+- go-fabric#589 filed; 3b proceeds (a firmware rebuild serves the same model values except the BDBI
+  strings, which the ConfigurationVersion raise covers); the gap goes into `by_design.md` until the bump.
+- Approach approved: (1) one source contract `MatterDevice(MatterDeviceRequest{Options, Build, Host})`;
+  the holder rebuilds when the host facts (battery, stated BDBI strings) change; hooks register once
+  and reach the device through `Current()`; (2) `Described` carries the go-fabric device, the reconciler
+  hands the Aggregator the device, `specEndpoint` goes; (3) a name change is `Device.Update`, name leaves
+  `endpointIdentity`; (4) `Reconciler.SetReachable` replaces `NotifyDeviceReachable` in the forward,
+  seeded from the model under the lock that indexes the device; (5) every `spec.Availability` assignment
+  goes.
+
+As built (branch `claude/matter-reachability-3b`):
+
+- One source contract `MatterDevice(MatterDeviceRequest{Options, Build, Host})`; `MatterHostFacts`
+  (battery, stated identity) are the only facts a source rebuilds for. `MatterDeviceHolder.Device(req,
+  MatterDeviceBuild{New, Bind, Settle})`: hooks register once and resolve `Current()`; `Settle` stores the
+  current state after every swap.
+- Every caller asks a source through `Assembler.deviceRequest` (walk, projection probe, eligibility
+  listing — now `Assembler.CollectCandidates` — and `DecideDevice`), so no caller makes a source rebuild.
+  The battery target is remembered per physical device (`powerTargets`); a walk that finds a new target
+  describes the device once more.
+- `Described.Endpoints` are `Endpoint{Device, Kept, Available}`; the reconciler binds the device,
+  `specEndpoint` and every `spec.Availability` assignment are gone; a rename is `Device.Update`.
+- `Reconciler.SetReachable` + seed: `reachMu` orders a flip against one central's seed → batch → reindex,
+  because during a `Replace` both devices are bound (`node/aggregator.go:502-503`, detach `:404-407`) and
+  `notifyReachable` emits without dedupe (`bridge/receive.go:1051-1059`). Found by the Fable text review;
+  reasoned, not measured (the window is a race).
+- Guards: `TestReconcilerSetReachableReportsEachFlipOnce` (event log: one per flip, none on repeat),
+  `…StatesTheModelsAvailabilityBeforeBinding`, `…KeepsReachabilityAcrossAFirmwareRebuild`,
+  `…StatesARenameOnTheHeldDevice`, e2e `TestE2EMatterReachableFollowsTheCCU` (flip and back; UNREACH
+  before a not-ready restart), pin `TestPin_SetReachable_WiredInDaemon`, holder rebuild test in
+  `internal/model/generic`. Bite proofs: seed removed → 2 unit + e2e phase 2 red; forward call removed →
+  e2e phase 1 + pin red; hook capturing the first device → rebuild test red.
+- Open: chip-tool run (composition binding changed → `needs-chiptool`), go-fabric#589 bump, push/PR on
+  the owner's word.

@@ -72,7 +72,7 @@ func matterSwitch(t *testing.T) (*Switch, matterOnOffServer, *matterWriter) {
 // matterDeviceOf returns the device s projects.
 func matterDeviceOf(t *testing.T, s *Switch) *fabricdevice.Device {
 	t.Helper()
-	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey(s.Address()), Name: "switch"})
+	d, err := s.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey(s.Address()), Name: "switch"}})
 	if err != nil {
 		t.Fatalf("MatterDevice: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestMatterDeviceShadowsTheEmbeddedGenericSwitch(t *testing.T) {
 	t.Parallel()
 	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
 	var src interfaces.MatterDeviceSource = s
-	d, err := src.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("k"), Name: "switch"})
+	d, err := src.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("k"), Name: "switch"}})
 	if err != nil || d == nil {
 		t.Fatalf("MatterDevice through the interface = (%v, %v), want a device", d, err)
 	}

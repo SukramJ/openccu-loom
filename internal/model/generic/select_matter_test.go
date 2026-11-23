@@ -60,7 +60,7 @@ func newModeSelect(t *testing.T, ops hmenum.Operations, values []string) (*Selec
 // projects nothing.
 func modeSelectDevice(t *testing.T, s *Select) *fabricdevice.Device {
 	t.Helper()
-	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("select"), Name: "select"})
+	d, err := s.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("select"), Name: "select"}})
 	if err != nil {
 		t.Fatalf("MatterDevice: %v", err)
 	}

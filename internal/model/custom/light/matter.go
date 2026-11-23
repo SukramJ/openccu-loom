@@ -113,18 +113,20 @@ func (l *Light) MatterDeviceType() uint16 {
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: an OnOffLight
 // or, dimmable, a DimmableLight built from the light's declarations.
-func (l *Light) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterLightDevice(l, l.MatterDeviceType(), opts, nil)
+func (l *Light) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, l.MatterDeviceType(), req, nil)
 }
 
-// matterLightDevice builds the device of a light once: the OnOff cluster
+// matterLightDevice holds the device of a light, rebuilt only when the
+// host's facts change: the OnOff cluster
 // declared (Lighting; Sink [Light.TurnOn] / [Light.TurnOff] at
 // [matterDispatchPriority]; the observed brightness as the start, false
 // while nothing was observed — the OnOff attribute is mandatory and
 // non-nullable, on-off.element.ts:29, and Apple Home drops an accessory
 // whose first report carries no boolean); on a dimmable light the
 // LevelControl cluster declared on the dimmer's own ramp ([lightRamp]);
-// and the ColorControl a colour variant declares (color). source is the
+// and the ColorControl a colour variant declares (color, nil on a light
+// without colour). source is the
 // variant that builds the device (any: Light or one of the types that
 // embed it), whose change notifier the device carries. A timed-on ends
 // through the kit server's countdown (OnOffServer.ts:216-232, whose off
@@ -134,50 +136,57 @@ func (l *Light) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, e
 // through [generic.SetMatterOnOff], the one path that stores without
 // asking the Sink, so a wall switch or a CCU program reaches a subscribed
 // controller and a confirmed command does not echo into a second write.
+// The hooks are registered once and resolve the device when they fire,
+// so after a rebuild they feed the device the holder now holds.
 //
 // matter.js packages/node/src/devices/on-off-light.ts also lists Groups
 // (0x0004) and ScenesManagement (0x0062) as mandatory server clusters.
 // Those are stack state, not device state: the endpoint assembler mounts
 // both from the node's group state, so the light declares neither.
-func (l *Light) matterLightDevice(source any, deviceType uint16, opts fabricdevice.Options, color *colorPlan) (*fabricdevice.Device, error) {
-	return l.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		on, _ := l.IsOn()
-		decls := []fabricdevice.Declaration{
-			generic.MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
-				if on {
-					return l.TurnOn(ctx, matterDispatchPriority)
-				}
-				return l.TurnOff(ctx, matterDispatchPriority)
-			}),
-		}
-		if l.Capabilities.Dimmable {
-			decls = append(decls, levelcontroldef.Declare{Ramp: lightRamp{l: l}})
-		}
-		if color != nil {
-			decls = append(decls, color.declare)
-		}
-		d, err := generic.NewMatterDevice(source, deviceType, opts, decls...)
-		if err != nil {
-			return nil, err
-		}
-		if l.Float != nil {
-			_ = l.OnConfirmedUpdate(func(_, _ float64) {
-				on, _ := l.IsOn()
-				generic.SetMatterOnOff(d, on)
-			})
-		}
+func (l *Light) matterLightDevice(source any, deviceType uint16, req interfaces.MatterDeviceRequest, color *colorPlan) (*fabricdevice.Device, error) {
+	return l.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			on, _ := l.IsOn()
+			decls := host
+			decls = append(decls,
+				generic.MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
+					if on {
+						return l.TurnOn(ctx, matterDispatchPriority)
+					}
+					return l.TurnOff(ctx, matterDispatchPriority)
+				}))
+			if l.Capabilities.Dimmable {
+				decls = append(decls, levelcontroldef.Declare{Ramp: lightRamp{l: l}})
+			}
+			if color != nil {
+				decls = append(decls, color.declare())
+			}
+			return generic.NewMatterDevice(source, deviceType, req.Options, decls...)
+		},
+		Bind: func() {
+			if l.Float != nil {
+				_ = l.OnConfirmedUpdate(func(_, _ float64) {
+					on, _ := l.IsOn()
+					generic.SetMatterOnOff(l.matterDevice.Current(), on)
+				})
+			}
+			if color != nil {
+				color.bind()
+			}
+		},
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current value is stored
 		// again, which is a no-op when nothing changed.
-		if on, observed := l.IsOn(); observed {
-			generic.SetMatterOnOff(d, on)
-		}
-		if color != nil {
-			if srv := colorInboundOf(d); srv != nil {
-				color.bind(srv)
+		Settle: func(d *fabricdevice.Device) {
+			if on, observed := l.IsOn(); observed {
+				generic.SetMatterOnOff(d, on)
 			}
-		}
-		return d, nil
+			if color != nil {
+				if srv := colorInboundOf(d); srv != nil {
+					color.settle(srv)
+				}
+			}
+		},
 	})
 }
 

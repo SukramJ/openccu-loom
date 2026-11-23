@@ -95,14 +95,14 @@ var compositionRootSeams = []compositionRootSeam{
 		},
 	},
 	{
-		// Listing a candidate builds its device, and a source keeps the
-		// device it built first: an adapter without the bridge's build
-		// options pins every thermostat to the surface without its opt-ins
-		// whenever the eligibility listing runs before the first assembly.
+		// Listing a candidate asks its source for its device, and a source
+		// builds anew when the request's facts differ: an adapter without
+		// the bridge's assembler would list through another request and
+		// make every listed source rebuild the device the bridge serves.
 		pkg: "", typeName: "matterCandidateProviderAdapter",
 		declDir:  "cmd/openccu-loom",
 		fillFile: "cmd/openccu-loom/daemon_matter.go",
-		minDecl:  3,
+		minDecl:  2,
 	},
 	{
 		pkg: "handlers", typeName: "SetupService",

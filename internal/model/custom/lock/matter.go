@@ -68,14 +68,17 @@ func (l *Lock) OnMatterValueChanged(cb func()) func() {
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: a DoorLock
 // with the DoorLock cluster (0x0101) declared on this Lock as its
-// StateSource, built once per lock. The server reads LockState from the
-// lock at every read and hands it the three commands; Unbolting is
-// selected because every lock kind this profile drives can open the
-// door, and an empty selection is none (matter.js's).
-func (l *Lock) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		return generic.NewMatterDevice(l, matterDeviceTypeDoorLock, opts,
-			doorlockdef.Declare{StateSource: l, Features: doorlockdef.FeatureUnbolting})
+// StateSource, held per lock and rebuilt only when the host's facts
+// change. The server reads LockState from the lock at every read and
+// hands it the three commands; Unbolting is selected because every lock
+// kind this profile drives can open the door, and an empty selection is
+// none (matter.js's).
+func (l *Lock) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			return generic.NewMatterDevice(l, matterDeviceTypeDoorLock, req.Options,
+				append(host, doorlockdef.Declare{StateSource: l, Features: doorlockdef.FeatureUnbolting})...)
+		},
 	})
 }
 

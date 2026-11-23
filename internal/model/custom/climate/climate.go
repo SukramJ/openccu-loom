@@ -159,7 +159,8 @@ type Climate struct {
 	payload.ServiceRegistry
 
 	// matterDevice holds the Thermostat device the Matter projection
-	// serves, built once per Climate (matter.go).
+	// serves (matter.go), built anew only when the host's facts about the
+	// physical device change.
 	matterDevice generic.MatterDeviceHolder
 	// matterServes is what that device serves beyond the base surface
 	// (matter_schedule.go), stored before the device's hooks are wired

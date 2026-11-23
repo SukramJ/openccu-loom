@@ -191,12 +191,16 @@ func miredsToKelvin(m uint16) int32 {
 	return 1_000_000 / int32(m)
 }
 
-// colorPlan is a colour variant's ColorControl: the declaration the
-// device is built with, and the binding of the built server to the
-// variant's confirmations, run once the device exists.
+// colorPlan is a colour variant's ColorControl: the declaration every
+// build of the device reads from the light's current state, the binding
+// of the variant's confirmations to the server (registered once; each
+// hook resolves the server of the device the holder holds when it
+// fires), and the settle that stores the current colour on the server of
+// a device just built.
 type colorPlan struct {
-	declare ccdef.Declare
-	bind    func(srv colorInbound)
+	declare func() ccdef.Declare
+	bind    func()
+	settle  func(srv colorInbound)
 }
 
 // colorInbound is the inbound side of the kit's ColorControl server: the
@@ -216,6 +220,17 @@ func colorInboundOf(d *fabricdevice.Device) colorInbound {
 	}
 	srv, _ := d.Server(ccdef.ClusterID).(colorInbound)
 	return srv
+}
+
+// resyncTo returns a hook that stores the light's current colour through
+// settle on the ColorControl server of the device the holder holds when
+// the hook fires; nothing before the first build.
+func (l *Light) resyncTo(settle func(srv colorInbound)) func() {
+	return func() {
+		if srv := colorInboundOf(l.matterDevice.Current()); srv != nil {
+			settle(srv)
+		}
+	}
 }
 
 // The colour modes in the generated vocabulary.
@@ -381,8 +396,8 @@ func (l *ColorTempLight) MatterDeviceType() uint16 {
 // MatterDevice for ColorTempLight is a ColorTemperatureLight: OnOff and
 // LevelControl from the embedded Light's declarations plus ColorControl
 // with the CT feature.
-func (l *ColorTempLight) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterLightDevice(l, matterDeviceTypeColorTemperatureLight, opts, l.colorPlan())
+func (l *ColorTempLight) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, matterDeviceTypeColorTemperatureLight, req, l.colorPlan())
 }
 
 // hsColor is the server-side colour of the light's observed hue and
@@ -412,7 +427,7 @@ func (l *ColorTempLight) ctColor() (ccdef.Color, bool) {
 	}, true
 }
 
-// matterColorServer builds the CT light's ColorControl server once:
+// matterColorServer plans the CT light's ColorControl server for every build:
 // go-fabric's server with the CT feature, the physical mired range from
 // the light's Kelvin bounds, the CCU write as its colour temperature
 // writer and the COLOR_TEMPERATURE (or COLOR_LEVEL) data point's
@@ -421,40 +436,43 @@ func (l *ColorTempLight) ctColor() (ccdef.Color, bool) {
 // or by a CCU program reaches a subscribed controller and a confirmed
 // command does not echo into a second write.
 func (l *ColorTempLight) colorPlan() *colorPlan {
-	minMireds, maxMireds := physicalMireds(l.MinKelvin, l.MaxKelvin)
-	mireds := matterInitialMireds
-	if c, observed := l.ctColor(); observed {
-		mireds = c.ColorTemperatureMireds
+	settle := func(srv colorInbound) {
+		if c, observed := l.ctColor(); observed {
+			srv.Set(c)
+		}
 	}
 	return &colorPlan{
-		declare: ccdef.Declare{
-			Features: ccdef.FeatureColorTemperature,
-			Initial: ccdef.Patch{
-				ColorTempPhysicalMinMireds: &minMireds,
-				ColorTempPhysicalMaxMireds: &maxMireds,
-				ColorTemperatureMireds:     &mireds,
-			},
-			ColorTemperatureWriter: ctColorWriter{setKelvin: func(ctx context.Context, k int32) error {
-				return l.SetKelvin(ctx, k, matterDispatchPriority)
-			}},
-		},
-		bind: func(srv colorInbound) {
-			resync := func() {
-				if c, observed := l.ctColor(); observed {
-					srv.Set(c)
-				}
+		declare: func() ccdef.Declare {
+			minMireds, maxMireds := physicalMireds(l.MinKelvin, l.MaxKelvin)
+			mireds := matterInitialMireds
+			if c, observed := l.ctColor(); observed {
+				mireds = c.ColorTemperatureMireds
 			}
+			return ccdef.Declare{
+				Features: ccdef.FeatureColorTemperature,
+				Initial: ccdef.Patch{
+					ColorTempPhysicalMinMireds: &minMireds,
+					ColorTempPhysicalMaxMireds: &maxMireds,
+					ColorTemperatureMireds:     &mireds,
+				},
+				ColorTemperatureWriter: ctColorWriter{setKelvin: func(ctx context.Context, k int32) error {
+					return l.SetKelvin(ctx, k, matterDispatchPriority)
+				}},
+			}
+		},
+		bind: func() {
+			resync := l.resyncTo(settle)
 			if l.kelvin != nil {
 				_ = l.kelvin.OnConfirmedUpdate(func(_, _ int32) { resync() })
 			}
 			if l.colorLevel != nil {
 				_ = l.colorLevel.OnConfirmedUpdate(func(_, _ float64) { resync() })
 			}
-			// A confirmation that landed between the initial read and
-			// the hook registration is not lost: the current value is
-			// stored again, which is a no-op when nothing changed.
-			resync()
 		},
+		// A confirmation that landed between the initial read and the
+		// hook registration is not lost: the current value is stored
+		// again, which is a no-op when nothing changed.
+		settle: settle,
 	}
 }
 
@@ -468,11 +486,11 @@ func (l *ColorLight) MatterDeviceType() uint16 {
 // LevelControl from the embedded Light's declarations plus ColorControl
 // with the HS and XY features, and the CT feature the device type
 // mandates mapped onto the colour ([ctViaHS]).
-func (l *ColorLight) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterLightDevice(l, matterDeviceTypeExtendedColorLight, opts, l.colorPlan())
+func (l *ColorLight) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, matterDeviceTypeExtendedColorLight, req, l.colorPlan())
 }
 
-// matterColorServer builds the HS light's ColorControl server once; see
+// matterColorServer plans the HS light's ColorControl server for every build; see
 // [ColorTempLight.matterColorServer] for the shape. The HUE / SATURATION
 // pair or the RF dimmers' COLOR integer feed the confirmed colour back.
 // The XY feature the ExtendedColorLight device type mandates is served
@@ -481,34 +499,34 @@ func (l *ColorLight) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Devi
 // x/y attributes start from the observed colour so a read before the
 // first MoveToColor is not the zero colour.
 func (l *ColorLight) colorPlan() *colorPlan {
-	mode := colorModeHS
-	initial := ccdef.Patch{EnhancedColorMode: &mode}
-	if c, observed := l.hsColor(); observed {
-		hue, sat := c.Hue, c.Saturation
-		x, y := hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
-		initial.CurrentHue, initial.CurrentSaturation = &hue, &sat
-		initial.CurrentX, initial.CurrentY = &x, &y
+	settle := func(srv colorInbound) {
+		if c, observed := l.hsColor(); observed && !confirmsXY(srv.Color(), c) && !confirmsCT(srv.Color(), c) {
+			srv.Set(c)
+		}
 	}
-	minMireds, maxMireds, mireds := matterMinMireds, matterMaxMireds, matterInitialMireds
-	initial.ColorTempPhysicalMinMireds, initial.ColorTempPhysicalMaxMireds = &minMireds, &maxMireds
-	initial.ColorTemperatureMireds = &mireds
-	colour := hsColorWriter{l: l}
 	return &colorPlan{
-		declare: ccdef.Declare{
-			Features:               ccdef.FeatureHueSaturation | ccdef.FeatureXy | ccdef.FeatureColorTemperature,
-			Initial:                initial,
-			ColorWriter:            colour,
-			ColorTemperatureWriter: ctViaHS{colour: colour},
-		},
-		bind: func(srv colorInbound) {
-			resync := func() {
-				if c, observed := l.hsColor(); observed && !confirmsXY(srv.Color(), c) && !confirmsCT(srv.Color(), c) {
-					srv.Set(c)
-				}
+		declare: func() ccdef.Declare {
+			mode := colorModeHS
+			initial := ccdef.Patch{EnhancedColorMode: &mode}
+			if c, observed := l.hsColor(); observed {
+				hue, sat := c.Hue, c.Saturation
+				x, y := hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
+				initial.CurrentHue, initial.CurrentSaturation = &hue, &sat
+				initial.CurrentX, initial.CurrentY = &x, &y
 			}
-			l.onColorConfirmed(resync)
-			resync()
+			minMireds, maxMireds, mireds := matterMinMireds, matterMaxMireds, matterInitialMireds
+			initial.ColorTempPhysicalMinMireds, initial.ColorTempPhysicalMaxMireds = &minMireds, &maxMireds
+			initial.ColorTemperatureMireds = &mireds
+			colour := hsColorWriter{l: l}
+			return ccdef.Declare{
+				Features:               ccdef.FeatureHueSaturation | ccdef.FeatureXy | ccdef.FeatureColorTemperature,
+				Initial:                initial,
+				ColorWriter:            colour,
+				ColorTemperatureWriter: ctViaHS{colour: colour},
+			}
 		},
+		bind:   func() { l.onColorConfirmed(l.resyncTo(settle)) },
+		settle: settle,
 	}
 }
 
@@ -537,8 +555,8 @@ func (l *RGBWLight) MatterDeviceType() uint16 {
 // MatterDevice for RGBWLight is an ExtendedColorLight: OnOff and
 // LevelControl from the embedded Light's declarations plus ColorControl
 // with the HS, XY and CT features.
-func (l *RGBWLight) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterLightDevice(l, matterDeviceTypeExtendedColorLight, opts, l.colorPlan())
+func (l *RGBWLight) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, matterDeviceTypeExtendedColorLight, req, l.colorPlan())
 }
 
 // matterColorMode is the colour mode the device is in: CT while the
@@ -586,50 +604,52 @@ func (l *RGBWLight) deviceColor() (ccdef.Color, bool) {
 	}
 }
 
-// matterColorServer builds the RGBW light's ColorControl server once:
+// matterColorServer plans the RGBW light's ColorControl server for every build:
 // HS, XY and CT features, both writer ports, and the HUE / SATURATION /
 // COLOR_TEMPERATURE data points plus the device operating mode feeding
 // the confirmed colour back through Set.
 func (l *RGBWLight) colorPlan() *colorPlan {
-	minMireds, maxMireds := physicalMireds(l.MinKelvin, l.MaxKelvin)
-	mode := l.matterColorMode()
-	mireds := matterInitialMireds
-	initial := ccdef.Patch{
-		ColorTempPhysicalMinMireds: &minMireds,
-		ColorTempPhysicalMaxMireds: &maxMireds,
-		EnhancedColorMode:          &mode,
-	}
-	if c, _ := l.deviceColor(); c.ColorTemperatureMireds != 0 || c.Hue != 0 || c.Saturation != 0 {
-		hue, sat := c.Hue, c.Saturation
-		x, y := hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
-		initial.CurrentHue, initial.CurrentSaturation = &hue, &sat
-		initial.CurrentX, initial.CurrentY = &x, &y
-		if c.ColorTemperatureMireds != 0 {
-			mireds = c.ColorTemperatureMireds
-		}
-	}
-	initial.ColorTemperatureMireds = &mireds
 	return &colorPlan{
-		declare: ccdef.Declare{
-			Features:    ccdef.FeatureHueSaturation | ccdef.FeatureXy | ccdef.FeatureColorTemperature,
-			Initial:     initial,
-			ColorWriter: hsColorWriter{l: l.ColorLight},
-			ColorTemperatureWriter: ctColorWriter{setKelvin: func(ctx context.Context, k int32) error {
-				return l.SetKelvin(ctx, k, matterDispatchPriority)
-			}},
-		},
-		bind: func(srv colorInbound) {
-			// The hooks close over srv: the holder's lock is held while
-			// the device is built, and the first sync below runs inside
-			// it. Each colour axis confirms in its own mode
-			// ([RGBWLight.syncAxisTo]); the operating mode and the first
-			// sync use the device's mode.
-			l.onColorConfirmed(func() { l.syncAxisTo(srv, colorModeHS) })
-			if l.kelvin != nil {
-				_ = l.kelvin.OnConfirmedUpdate(func(_, _ int32) { l.syncAxisTo(srv, colorModeCT) })
+		declare: func() ccdef.Declare {
+			minMireds, maxMireds := physicalMireds(l.MinKelvin, l.MaxKelvin)
+			mode := l.matterColorMode()
+			mireds := matterInitialMireds
+			initial := ccdef.Patch{
+				ColorTempPhysicalMinMireds: &minMireds,
+				ColorTempPhysicalMaxMireds: &maxMireds,
+				EnhancedColorMode:          &mode,
 			}
-			l.syncColorTo(srv)
+			if c, _ := l.deviceColor(); c.ColorTemperatureMireds != 0 || c.Hue != 0 || c.Saturation != 0 {
+				hue, sat := c.Hue, c.Saturation
+				x, y := hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
+				initial.CurrentHue, initial.CurrentSaturation = &hue, &sat
+				initial.CurrentX, initial.CurrentY = &x, &y
+				if c.ColorTemperatureMireds != 0 {
+					mireds = c.ColorTemperatureMireds
+				}
+			}
+			initial.ColorTemperatureMireds = &mireds
+			return ccdef.Declare{
+				Features:    ccdef.FeatureHueSaturation | ccdef.FeatureXy | ccdef.FeatureColorTemperature,
+				Initial:     initial,
+				ColorWriter: hsColorWriter{l: l.ColorLight},
+				ColorTemperatureWriter: ctColorWriter{setKelvin: func(ctx context.Context, k int32) error {
+					return l.SetKelvin(ctx, k, matterDispatchPriority)
+				}},
+			}
 		},
+		bind: func() {
+			// The hooks resolve the server when they fire, so they feed
+			// the device the holder holds after a rebuild. Each colour
+			// axis confirms in its own mode ([RGBWLight.syncAxisTo]);
+			// the operating mode and the settle use the device's mode.
+			l.onColorConfirmed(l.resyncTo(func(srv colorInbound) { l.syncAxisTo(srv, colorModeHS) }))
+			if l.kelvin != nil {
+				resyncCT := l.resyncTo(func(srv colorInbound) { l.syncAxisTo(srv, colorModeCT) })
+				_ = l.kelvin.OnConfirmedUpdate(func(_, _ int32) { resyncCT() })
+			}
+		},
+		settle: l.syncColorTo,
 	}
 }
 

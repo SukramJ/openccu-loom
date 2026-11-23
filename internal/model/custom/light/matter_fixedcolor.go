@@ -74,47 +74,50 @@ func (w fixedColorWriter) SetColor(ctx context.Context, c ccdef.Color) error {
 	return w.l.SetColor(ctx, HSToFixedColor(hue, sat), matterDispatchPriority)
 }
 
-// matterColorServer builds the fixed-colour light's ColorControl server
-// once; see [ColorLight.matterColorServer] for the shape. The COLOR enum
+// matterColorServer plans the fixed-colour light's ColorControl server
+// for every build; see [ColorLight.matterColorServer] for the shape. The COLOR enum
 // (and the CHANNEL_COLOR the device reports while a transition runs)
 // feed the confirmed slot back as its reference colour.
 func (l *FixedColorLight) colorPlan() *colorPlan {
-	mode := colorModeHS
-	initial := ccdef.Patch{EnhancedColorMode: &mode}
-	if c, observed := l.hsColor(); observed {
-		hue, sat := c.Hue, c.Saturation
-		x, y := hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
-		initial.CurrentHue, initial.CurrentSaturation = &hue, &sat
-		initial.CurrentX, initial.CurrentY = &x, &y
+	// The slot the device snaps a white to is rarely the exact
+	// conversion, so the confirmed slot moves the server to HS;
+	// [confirmsCT] keeps the CT mode only for an exact echo.
+	settle := func(srv colorInbound) {
+		if c, observed := l.hsColor(); observed && !confirmsXY(srv.Color(), c) && !confirmsCT(srv.Color(), c) {
+			srv.Set(c)
+		}
 	}
-	minMireds, maxMireds, mireds := matterMinMireds, matterMaxMireds, matterInitialMireds
-	initial.ColorTempPhysicalMinMireds, initial.ColorTempPhysicalMaxMireds = &minMireds, &maxMireds
-	initial.ColorTemperatureMireds = &mireds
-	colour := fixedColorWriter{l: l}
 	return &colorPlan{
-		declare: ccdef.Declare{
-			Features:               ccdef.FeatureHueSaturation | ccdef.FeatureXy | ccdef.FeatureColorTemperature,
-			Initial:                initial,
-			ColorWriter:            colour,
-			ColorTemperatureWriter: ctViaHS{colour: colour},
-		},
-		bind: func(srv colorInbound) {
-			// The slot the device snaps a white to is rarely the exact
-			// conversion, so the confirmed slot moves the server to HS;
-			// [confirmsCT] keeps the CT mode only for an exact echo.
-			resync := func() {
-				if c, observed := l.hsColor(); observed && !confirmsXY(srv.Color(), c) && !confirmsCT(srv.Color(), c) {
-					srv.Set(c)
-				}
+		declare: func() ccdef.Declare {
+			mode := colorModeHS
+			initial := ccdef.Patch{EnhancedColorMode: &mode}
+			if c, observed := l.hsColor(); observed {
+				hue, sat := c.Hue, c.Saturation
+				x, y := hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
+				initial.CurrentHue, initial.CurrentSaturation = &hue, &sat
+				initial.CurrentX, initial.CurrentY = &x, &y
 			}
+			minMireds, maxMireds, mireds := matterMinMireds, matterMaxMireds, matterInitialMireds
+			initial.ColorTempPhysicalMinMireds, initial.ColorTempPhysicalMaxMireds = &minMireds, &maxMireds
+			initial.ColorTemperatureMireds = &mireds
+			colour := fixedColorWriter{l: l}
+			return ccdef.Declare{
+				Features:               ccdef.FeatureHueSaturation | ccdef.FeatureXy | ccdef.FeatureColorTemperature,
+				Initial:                initial,
+				ColorWriter:            colour,
+				ColorTemperatureWriter: ctViaHS{colour: colour},
+			}
+		},
+		bind: func() {
+			resync := l.resyncTo(settle)
 			if l.color != nil {
 				_ = l.color.OnConfirmedUpdate(func(_, _ int32) { resync() })
 			}
 			if l.channelColor != nil {
 				_ = l.channelColor.OnConfirmedUpdate(func(_, _ int32) { resync() })
 			}
-			resync()
 		},
+		settle: settle,
 	}
 }
 
@@ -128,8 +131,8 @@ func (l *FixedColorLight) MatterDeviceType() uint16 {
 // LevelControl from the embedded Light's declarations plus the
 // palette-quantised ColorControl with the HS and XY features, and the CT
 // feature the device type mandates mapped onto the palette ([ctViaHS]).
-func (l *FixedColorLight) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterLightDevice(l, matterDeviceTypeExtendedColorLight, opts, l.colorPlan())
+func (l *FixedColorLight) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, matterDeviceTypeExtendedColorLight, req, l.colorPlan())
 }
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier],
@@ -157,8 +160,8 @@ func (l *SoundPlayerLED) MatterDeviceType() uint16 {
 
 // MatterDevice for SoundPlayerLED is a DimmableLight: OnOff and
 // LevelControl, no colour (see [SoundPlayerLED.MatterDeviceType]).
-func (l *SoundPlayerLED) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return l.matterLightDevice(l, matterDeviceTypeDimmableLight, opts, nil)
+func (l *SoundPlayerLED) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return l.matterLightDevice(l, matterDeviceTypeDimmableLight, req, nil)
 }
 
 // OnMatterValueChanged for SoundPlayerLED notifies on the on/off and

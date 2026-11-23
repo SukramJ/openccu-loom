@@ -15,6 +15,7 @@ import (
 	"thingfabric.dev/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // requesterCtx is the context of a lock command from a commissioned
@@ -29,7 +30,7 @@ func requesterCtx() context.Context {
 // matterServers returns the cluster servers of the device the lock
 // projects.
 func matterServers(l *Lock) []contract.ClusterServer {
-	d, err := l.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey(l.Address), Name: "lock"})
+	d, err := l.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey(l.Address), Name: "lock"}})
 	if err != nil || d == nil {
 		panic(fmt.Sprintf("MatterDevice = (%v, %v), want a device", d, err))
 	}

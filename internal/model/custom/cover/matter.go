@@ -310,23 +310,22 @@ func (m wcMover) Stop(ctx context.Context) error {
 func (g *Garage) MatterDeviceType() uint16 { return matterDeviceTypeClosure }
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: a Closure
-// with ClosureControl declared on the drive as its Mover, built once per
-// drive and seeded from the drive's state; later DOOR_STATE and SECTION
-// pushes reach the server through [Garage.publishClosure].
-func (g *Garage) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return g.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		d, err := generic.NewMatterDevice(g, matterDeviceTypeClosure, opts, closuredef.Declare{
-			// Positioning and Ventilation, as the server advertised them
-			// before (every garage drive, ventilation stop or not): the
-			// MoveTo targets a controller may name follow the selection.
-			Features: closuredef.FeaturePositioning | closuredef.FeatureVentilation,
-			Mover:    garageMover{g: g},
-		})
-		if err != nil {
-			return nil, err
-		}
-		g.publishClosureTo(d)
-		return d, nil
+// with ClosureControl declared on the drive as its Mover, held per drive
+// (rebuilt only when the host's facts change) and seeded from the
+// drive's state on every build; later DOOR_STATE and SECTION pushes
+// reach the server through [Garage.publishClosure].
+func (g *Garage) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return g.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			return generic.NewMatterDevice(g, matterDeviceTypeClosure, req.Options, append(host, closuredef.Declare{
+				// Positioning and Ventilation, as the server advertised them
+				// before (every garage drive, ventilation stop or not): the
+				// MoveTo targets a controller may name follow the selection.
+				Features: closuredef.FeaturePositioning | closuredef.FeatureVentilation,
+				Mover:    garageMover{g: g},
+			})...)
+		},
+		Settle: g.publishClosureTo,
 	})
 }
 
@@ -350,8 +349,8 @@ const wcLiftTiltFeatures = wcLiftFeatures | windowcoveringspec.FeatureTilt | win
 // MatterDevice implements [interfaces.MatterDeviceSource]: the
 // lift-only WindowCovering device with the Cover's own operations behind
 // the Mover.
-func (c *Cover) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return c.matterWindowCoveringDevice(c, opts, wcPorts{
+func (c *Cover) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return c.matterWindowCoveringDevice(c, req, wcPorts{
 		features:    wcLiftFeatures,
 		open:        c.Open,
 		close:       c.Close,
@@ -369,8 +368,8 @@ func (b *Blind) MatterDeviceType() uint16 { return matterDeviceTypeWindowCoverin
 // combined-write operations behind the Mover. Shadows the embedded
 // Cover's method; the device is the one held on the embedded Cover, so
 // whichever method the assembler reaches first builds it.
-func (b *Blind) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return b.matterWindowCoveringDevice(b, opts, wcPorts{
+func (b *Blind) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return b.matterWindowCoveringDevice(b, req, wcPorts{
 		features:     wcLiftTiltFeatures,
 		open:         b.Open,
 		close:        b.Close,
@@ -386,8 +385,8 @@ func (b *Blind) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, e
 	})
 }
 
-// matterWindowCoveringDevice builds the cover's WindowCovering device
-// once: the WindowCovering cluster declared with the variant's Type /
+// matterWindowCoveringDevice holds the cover's WindowCovering device,
+// rebuilt only when the host's facts change: the WindowCovering cluster declared with the variant's Type /
 // EndProductType and features, the position the CCU last reported as the
 // initial value (null — unknown — until the first report) and the cover's operations
 // as its Mover; source is the variant (any: the Cover or the Blind that
@@ -398,50 +397,51 @@ func (b *Blind) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, e
 // wall or by a CCU program reaches a subscribed controller and a
 // confirmed command does not echo into a second write. Motion reaches
 // the server through [Cover.OnDirection] → [Cover.syncMatterMotion].
-func (c *Cover) matterWindowCoveringDevice(source any, opts fabricdevice.Options, ports wcPorts) (*fabricdevice.Device, error) {
-	return c.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		c.matterPorts = ports
-		wcType := coverTypeFor(c.Variant)
-		endProduct := coverEndProductTypeFor(c.Variant)
-		if ports.tiltPosition != nil {
-			// The lift+tilt interior product (window-covering-cluster.
-			// element.ts:177); TiltOnlyInteriorBlind (9) would drop the
-			// lift axis a Blind always carries.
-			wcType = windowcoveringspec.TypeTiltBlindLift
-			endProduct = windowcoveringspec.EndProductTypeInteriorBlind
-		}
-		initial := windowcoveringspec.Patch{Type: &wcType, EndProductType: &endProduct}
-		if pct, ok := c.matterLiftPosition(); ok {
-			initial.CurrentPositionLiftPercent100ths = &pct
-		}
-		if pct, ok := c.matterTiltPosition(); ok {
-			initial.CurrentPositionTiltPercent100ths = &pct
-		}
-		d, err := generic.NewMatterDevice(source, matterDeviceTypeWindowCovering, opts, windowcoveringspec.Declare{
-			Initial:  initial,
-			Features: ports.features,
-			Mover:    wcMover{c: c, ports: ports},
-		})
-		if err != nil {
-			return nil, err
-		}
-		srv := wcServerOf(d)
-		// The hooks close over srv rather than going through the holder:
-		// the holder's lock is held while this builder runs, and the
-		// first sync below runs inside it.
-		if c.Float != nil {
-			_ = c.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterLiftTo(srv) })
-		}
-		if ports.onTiltConfirmed != nil {
-			ports.onTiltConfirmed(func() { c.syncMatterTiltTo(srv) })
-		}
+func (c *Cover) matterWindowCoveringDevice(source any, req interfaces.MatterDeviceRequest, ports wcPorts) (*fabricdevice.Device, error) {
+	return c.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			c.matterPorts = ports
+			wcType := coverTypeFor(c.Variant)
+			endProduct := coverEndProductTypeFor(c.Variant)
+			if ports.tiltPosition != nil {
+				// The lift+tilt interior product (window-covering-cluster.
+				// element.ts:177); TiltOnlyInteriorBlind (9) would drop the
+				// lift axis a Blind always carries.
+				wcType = windowcoveringspec.TypeTiltBlindLift
+				endProduct = windowcoveringspec.EndProductTypeInteriorBlind
+			}
+			initial := windowcoveringspec.Patch{Type: &wcType, EndProductType: &endProduct}
+			if pct, ok := c.matterLiftPosition(); ok {
+				initial.CurrentPositionLiftPercent100ths = &pct
+			}
+			if pct, ok := c.matterTiltPosition(); ok {
+				initial.CurrentPositionTiltPercent100ths = &pct
+			}
+			return generic.NewMatterDevice(source, matterDeviceTypeWindowCovering, req.Options, append(host, windowcoveringspec.Declare{
+				Initial:  initial,
+				Features: ports.features,
+				Mover:    wcMover{c: c, ports: ports},
+			})...)
+		},
+		Bind: func() {
+			// The hooks resolve the server when they fire, so they feed
+			// the device the holder holds after a rebuild.
+			if c.Float != nil {
+				_ = c.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterLiftTo(wcServerOf(c.matterDevice.Current())) })
+			}
+			if ports.onTiltConfirmed != nil {
+				ports.onTiltConfirmed(func() { c.syncMatterTiltTo(wcServerOf(c.matterDevice.Current())) })
+			}
+		},
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current values are stored
 		// again, which is a no-op when nothing changed.
-		c.syncMatterLiftTo(srv)
-		c.syncMatterTiltTo(srv)
-		c.syncMatterMotionTo(srv, false, c.moving())
-		return d, nil
+		Settle: func(d *fabricdevice.Device) {
+			srv := wcServerOf(d)
+			c.syncMatterLiftTo(srv)
+			c.syncMatterTiltTo(srv)
+			c.syncMatterMotionTo(srv, false, c.moving())
+		},
 	})
 }
 

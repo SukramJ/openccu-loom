@@ -73,9 +73,8 @@ type Config struct {
 	NameResolver NameResolver
 	// Build is what a device source builds its device under — the
 	// operator's opt-ins and the ports they need. The eligibility listing
-	// builds the same devices and takes the same value
-	// ([CollectCandidates]), because a source keeps the device it built
-	// first.
+	// ([Assembler.CollectCandidates]) asks the same sources through the
+	// same request ([Assembler.deviceRequest]).
 	Build interfaces.MatterBuildOptions
 	// Now stamps when a finding was first seen ([Finding].Since). Nil
 	// selects the wall clock; tests supply a fixed one.
@@ -128,8 +127,8 @@ func (allowAllExposureChecker) IsExposed(_ context.Context, _ matterendpoint.Sou
 }
 
 // Assembler walks one or more device fleets and describes every endpoint
-// they project as an [endpoint.Spec]; the node's Aggregator assembles
-// them ([Reconciler]). Multi-call-safe.
+// they project as a go-fabric device ([Endpoint]); the node's Aggregator
+// binds and assembles them ([Reconciler]). Multi-call-safe.
 type Assembler struct {
 	exposures ExposureChecker
 	cfg       Config
@@ -138,6 +137,9 @@ type Assembler struct {
 	// specification level withholds — the record behind both the log line
 	// and [Assembler.Findings].
 	findings findingRegistry
+	// power is the bridged device of each physical device that serves its
+	// battery as PowerSource, as the last walk chose it.
+	power powerTargets
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -185,8 +187,8 @@ func (a *Assembler) channelLabel() string {
 }
 
 // DeviceSnapshot is one central's device fleet as the daemon holds it:
-// what [Assembler.DescribeDevices] turns into the flat [endpoint.Spec]
-// values the node's Aggregator assembles.
+// what [Assembler.DescribeDevices] turns into the bridged devices the
+// node's Aggregator binds.
 // loom:reachable:reason="constructed per registered central by matterSnapshotter in cmd/openccu-loom/daemon_matter.go"
 type DeviceSnapshot struct {
 	// CentralName scopes every endpoint produced from Devices to this
@@ -198,18 +200,38 @@ type DeviceSnapshot struct {
 }
 
 // Described is one central's fleet as the walk describes it: the
-// endpoints the central projects, under the central's scope, and the keys
-// an earlier composition stored for its devices that no composition
-// produces any more ([supersededKeys]).
+// bridged devices the central projects, under the central's scope, and
+// the keys an earlier composition stored for its devices that no
+// composition produces any more ([supersededKeys]).
 type Described struct {
 	Scope      string
-	Endpoints  []endpoint.Spec
+	Endpoints  []Endpoint
 	Superseded []matterendpoint.SourceKey
 }
 
+// Endpoint is one bridged device the walk describes: the go-fabric device
+// the node binds, and what the reconciler needs to hold it.
+type Endpoint struct {
+	// Device is the bridged device; its Spec is what the node assembles.
+	Device *fabricdevice.Device
+	// Kept says the device is a model source's own
+	// ([interfaces.MatterDeviceSource]), which the source keeps across
+	// walks: another pointer under the same key is a device the source
+	// built anew, and it replaces the held one. A device the walk builds
+	// itself is new on every walk and replaces the held one only when what
+	// the wire sees changed.
+	Kept bool
+	// Available reads whether the physical device is reachable at the
+	// moment it is asked. A new device starts reachable, so the reconciler
+	// states this on it before the node binds it.
+	Available func() bool
+}
+
+// Spec is the endpoint the node assembles from the device.
+func (e Endpoint) Spec() endpoint.Spec { return e.Device.Spec() }
+
 // DescribeDevices walks the model fleets in snapshots and describes every
-// endpoint they project as an [endpoint.Spec], one [Described] per
-// snapshot in order.
+// bridged device they project, one [Described] per snapshot in order.
 func (a *Assembler) DescribeDevices(ctx context.Context, snapshots []DeviceSnapshot) ([]Described, error) {
 	out := make([]Described, 0, len(snapshots))
 	for _, snap := range snapshots {
@@ -222,7 +244,7 @@ func (a *Assembler) DescribeDevices(ctx context.Context, snapshots []DeviceSnaps
 	return out, nil
 }
 
-// snapshotSpecs describes one central's fleet as endpoint specs.
+// snapshotSpecs describes one central's fleet as bridged devices.
 func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Described, error) {
 	if snap.CentralName == "" {
 		return Described{}, errors.New("matteradapter: snapshot CentralName is required")
@@ -233,25 +255,24 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 	}
 	gen := a.findings.beginWalk()
 	out := Described{Scope: snap.CentralName}
+	walked := make(map[string]struct{}, len(snap.Devices))
 	for _, dev := range snap.Devices {
 		if dev == nil {
 			continue
 		}
-		deviceSpecs := make([]endpoint.Spec, 0, 4)
+		walked[dev.Address] = struct{}{}
 		for _, ch := range dev.Channels() {
-			if ch == nil {
-				continue
+			if ch != nil {
+				out.Superseded = append(out.Superseded, supersededKeys(snap.CentralName, dev, ch)...)
 			}
-			specs, err := a.channelSpecs(ctx, snap.CentralName, names, dev, ch, nil)
-			if err != nil {
-				return Described{}, err
-			}
-			deviceSpecs = append(deviceSpecs, specs...)
-			out.Superseded = append(out.Superseded, supersededKeys(snap.CentralName, dev, ch)...)
 		}
-		attachPowerSource(dev, deviceSpecs)
-		out.Endpoints = append(out.Endpoints, deviceSpecs...)
+		eps, err := a.describeDevice(ctx, snap.CentralName, names, dev)
+		if err != nil {
+			return Described{}, err
+		}
+		out.Endpoints = append(out.Endpoints, eps...)
 	}
+	a.power.retain(snap.CentralName, walked)
 	// The central's walk is complete: a finding it did not meet again
 	// belongs to a source that left the fleet (deleted, unexposed, no
 	// longer projected) and must not linger as a warning.
@@ -259,9 +280,9 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 	return out, nil
 }
 
-// attachPowerSource binds the device's battery reading to exactly one of its
-// endpoint specs, so the PowerSource cluster (0x002F) is served where the
-// Device Library puts it.
+// describeDevice describes the bridged devices of one physical device and
+// places its battery reading on exactly one of them, as the PowerSource
+// cluster (0x002F) served where the Device Library puts it.
 //
 // PowerSource is a property of the physical device, not of any one function it
 // exposes, and BridgedNode (0x0013) — the secondary device type every bridged
@@ -271,73 +292,193 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 // power-source information belongs at the bridged-node level, not on an
 // endpoint whose device type does not specify it.
 //
-// The alternative — letting the battery data point materialise as an endpoint
-// of its own — produced an endpoint with device type 0, whose DeviceTypeList
-// was [BridgedNode] alone and which Apple files under its "Other" fallback.
+// Exactly one bridged device gets it. A device with a switch and a metering
+// channel has one battery, and advertising it twice would have controllers
+// show two battery levels for one device. The target is the bridged device
+// with the smallest channel number, read back through [keyChannelNo],
+// because the lowest-numbered channel is the device's primary function; ties
+// keep the earliest, which is the order the channel walk described them in.
 //
-// Exactly one endpoint gets it. A device with a switch and a metering channel
-// has one battery, and advertising it twice would have controllers show two
-// battery levels for one device. The target is searched for explicitly rather
-// than taken from slice order: the spec with the smallest channel number wins,
-// read back through [specChannelNo], because the lowest-numbered channel is
-// the device's primary function. Ties keep the earliest spec, which is the
-// order channelSpecs appended within that one channel.
-func attachPowerSource(dev *device.Device, specs []endpoint.Spec) {
-	if dev == nil || len(specs) == 0 {
-		return
+// go-fabric takes the battery only when a device is built
+// (fabricdevice.Measurement), and a model source keeps the device it built,
+// so every request for a source must carry the same facts or the source
+// builds anew. The walk therefore builds with the target the last walk
+// chose ([powerTargets]); when the target it finds differs — the first walk
+// of a device, or a lower channel exposed or withheld since — it records
+// the new one and describes the device once more, so the two bridged
+// devices the battery moves between are built with their new facts.
+func (a *Assembler) describeDevice(ctx context.Context, centralName string, names NameResolver, dev *device.Device) ([]Endpoint, error) {
+	battery := batteryOf(dev)
+	prev := a.power.prepare(centralName, dev.Address, battery)
+	eps, err := a.describeChannels(ctx, centralName, names, dev)
+	if err != nil || battery == nil {
+		return eps, err
 	}
-	var battery contract.MeasurementSource
+	target := powerTarget(eps)
+	if target == prev {
+		return eps, nil
+	}
+	a.power.choose(centralName, dev.Address, target)
+	return a.describeChannels(ctx, centralName, names, dev)
+}
+
+// describeChannels describes the bridged devices of every channel of dev.
+func (a *Assembler) describeChannels(ctx context.Context, centralName string, names NameResolver, dev *device.Device) ([]Endpoint, error) {
+	out := make([]Endpoint, 0, 4)
+	for _, ch := range dev.Channels() {
+		if ch == nil {
+			continue
+		}
+		eps, err := a.channelSpecs(ctx, centralName, names, dev, ch, nil)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, eps...)
+	}
+	return out, nil
+}
+
+// batteryOf is the device's battery reading: the first generic data point
+// of the battery measurement class. The derived battery level is never a
+// candidate (it is folded, not served).
+func batteryOf(dev *device.Device) contract.MeasurementSource {
 	for _, ch := range dev.Channels() {
 		if ch == nil {
 			continue
 		}
 		for _, gdp := range ch.DataPoints() {
-			meas, ok := gdp.(contract.MeasurementSource)
-			if !ok || meas.MatterMeasurementClass() != contract.MeasurementBattery {
-				continue
+			if meas, ok := gdp.(contract.MeasurementSource); ok && meas.MatterMeasurementClass() == contract.MeasurementBattery {
+				return meas
 			}
-			battery = meas
-			break
-		}
-		if battery != nil {
-			break
 		}
 	}
-	if battery == nil {
-		return
-	}
-	target := 0
-	for i := 1; i < len(specs); i++ {
-		if specChannelNo(specs[i]) < specChannelNo(specs[target]) {
-			target = i
-		}
-	}
-	specs[target].PowerSource = battery
+	return nil
 }
 
-// specChannelNo reads the channel number back out of a spec's stable
-// key. The bridge module carries the key opaquely, so the assertion —
-// not a parse of its rendered form — is how this package recovers its
-// own coordinates. A spec this package did not build has no channel and
-// sorts last, which keeps [attachPowerSource] deterministic instead of
-// panicking.
-func specChannelNo(spec endpoint.Spec) int {
-	if k, ok := spec.StableKey.(matterendpoint.SourceKey); ok {
-		return k.ChannelNo
+// powerTarget is the key of the bridged device that serves the battery:
+// the smallest channel number, ties to the earliest. "" for none.
+func powerTarget(eps []Endpoint) string {
+	target, best := "", math.MaxInt
+	for _, e := range eps {
+		k := e.Device.Spec().StableKey
+		if n := keyChannelNo(k); n < best {
+			target, best = k.String(), n
+		}
+	}
+	return target
+}
+
+// keyChannelNo reads the channel number back out of a stable key. The
+// bridge module carries the key opaquely, so the assertion — not a parse
+// of its rendered form — is how this package recovers its own
+// coordinates. A key this package did not build has no channel and sorts
+// last, which keeps [powerTarget] deterministic instead of panicking.
+func keyChannelNo(k fabricdevice.SourceKey) int {
+	if sk, ok := k.(matterendpoint.SourceKey); ok {
+		return sk.ChannelNo
 	}
 	return math.MaxInt
 }
 
-func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) {
-	specs, err := a.channelSpecsOf(ctx, centralName, names, dev, ch, sink)
-	for i := range specs {
-		stateIdentity(&specs[i], dev)
-	}
-	return specs, err
+// powerTargets remembers, per central and physical device, the battery
+// reading and the key of the bridged device that serves it.
+type powerTargets struct {
+	mu sync.Mutex
+	m  map[string]map[string]batteryPlacement // central → device address
 }
 
-// stateIdentity states what the CCU knows of the physical device as the
-// bridged endpoint's BridgedDeviceBasicInformation. The node serves
+type batteryPlacement struct {
+	battery contract.MeasurementSource
+	key     string
+}
+
+// prepare records the device's battery for this walk and returns the
+// target the last walk chose; a changed battery reading has none yet.
+func (p *powerTargets) prepare(centralName, address string, battery contract.MeasurementSource) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.m == nil {
+		p.m = map[string]map[string]batteryPlacement{}
+	}
+	devs := p.m[centralName]
+	if devs == nil {
+		devs = map[string]batteryPlacement{}
+		p.m[centralName] = devs
+	}
+	t := devs[address]
+	if t.battery != battery {
+		t = batteryPlacement{battery: battery}
+	}
+	devs[address] = t
+	return t.key
+}
+
+// choose records key as the device's battery target.
+func (p *powerTargets) choose(centralName, address, key string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if devs := p.m[centralName]; devs != nil {
+		t := devs[address]
+		t.key = key
+		devs[address] = t
+	}
+}
+
+// batteryFor is the battery the bridged device under key serves, nil when
+// another bridged device of its physical device serves it.
+func (p *powerTargets) batteryFor(key matterendpoint.SourceKey) contract.MeasurementSource {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	t := p.m[key.CentralName][key.DeviceAddress]
+	if t.key == "" || t.key != key.String() {
+		return nil
+	}
+	return t.battery
+}
+
+// retain drops the devices of centralName a walk no longer names.
+func (p *powerTargets) retain(centralName string, walked map[string]struct{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for addr := range p.m[centralName] {
+		if _, ok := walked[addr]; !ok {
+			delete(p.m[centralName], addr)
+		}
+	}
+}
+
+// hostFacts are the facts the host states on the bridged device under key
+// of the physical device dev: its battery when this one serves it, and
+// what the CCU knows of the physical device.
+func (a *Assembler) hostFacts(key matterendpoint.SourceKey, dev *device.Device) interfaces.MatterHostFacts {
+	return interfaces.MatterHostFacts{
+		Battery:  a.power.batteryFor(key),
+		Identity: deviceIdentity(dev),
+	}
+}
+
+// deviceRequest is the request every path that asks a model source for
+// its device passes — the walk, the projection probe, the eligibility
+// listing — so a source sees the same facts whichever asks first and
+// builds anew only when a fact changed. name is read on a build only; the
+// walk states its own name on the device ([fabricdevice.Device.Update]).
+func (a *Assembler) deviceRequest(key matterendpoint.SourceKey, name string, dev *device.Device, ch *device.Channel) interfaces.MatterDeviceRequest {
+	return interfaces.MatterDeviceRequest{
+		Options: fabricdevice.Options{
+			StableKey:      key,
+			Name:           name,
+			Vendor:         bridgedVendorName,
+			DeviceAddress:  dev.Address,
+			ChannelAddress: ch.Address,
+			Surface:        a.cfg.Build.Surface,
+		},
+		Build: a.cfg.Build,
+		Host:  a.hostFacts(key, dev),
+	}
+}
+
+// deviceIdentity is what the CCU knows of the physical device, stated as
+// every bridged device's BridgedDeviceBasicInformation. The node serves
 // SerialNumber only when the host states it, and ProductName and
 // ProductLabel fall back to the device address otherwise; matter.js leaves
 // all three to the bridge:
@@ -353,34 +494,35 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 //     reported one; the attribute's constraint has a minimum length of 1.
 //
 // Each value is held to the attribute's constraint in the generated
-// definition and left unstated when it does not fit: the assembly would
-// refuse the endpoint, and a missing attribute is the lesser loss. A value
-// the spec already states wins.
-func stateIdentity(spec *endpoint.Spec, dev *device.Device) {
-	stated := &spec.BridgedBasicInformation
-	stateString(&stated.SerialNumber, bdbidef.AttrSerialNumber, spec.DeviceAddress)
+// definition and left unstated when it does not fit: go-fabric refuses the
+// device on a value that does not fit, and a missing attribute is the
+// lesser loss.
+func deviceIdentity(dev *device.Device) interfaces.MatterStatedIdentity {
 	if dev == nil {
-		return
+		return interfaces.MatterStatedIdentity{}
 	}
-	stateString(&stated.ProductName, bdbidef.AttrProductName, dev.Model)
-	stateString(&stated.ProductLabel, bdbidef.AttrProductLabel, dev.Model)
-	stateString(&stated.SoftwareVersionString, bdbidef.AttrSoftwareVersionString, dev.SwVersion())
+	return interfaces.MatterStatedIdentity{
+		SerialNumber:          stateString(bdbidef.AttrSerialNumber, dev.Address),
+		ProductName:           stateString(bdbidef.AttrProductName, dev.Model),
+		ProductLabel:          stateString(bdbidef.AttrProductLabel, dev.Model),
+		SoftwareVersionString: stateString(bdbidef.AttrSoftwareVersionString, dev.SwVersion()),
+	}
 }
 
-// stateString sets *field to value when nothing is stated yet, value is not
-// empty and it meets attribute attr's constraint.
-func stateString(field **string, attr uint32, value string) {
-	if *field != nil || value == "" {
-		return
+// stateString is value when it meets attribute attr's constraint, "" (not
+// stated) otherwise.
+func stateString(attr uint32, value string) string {
+	if value == "" {
+		return ""
 	}
 	inst, err := bridgedBasicInformationChecks()
 	if err != nil {
-		return
+		return ""
 	}
 	if _, err := inst.CheckValue(attr, value, nil); err != nil {
-		return
+		return ""
 	}
-	*field = &value
+	return value
 }
 
 // bridgedBasicInformationChecks holds a value to the generated
@@ -390,8 +532,8 @@ var bridgedBasicInformationChecks = sync.OnceValues(func() (*clusterspec.Instanc
 	return clusterspec.New(bdbidef.Definition, clusterspec.Options{})
 })
 
-func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
-	out := make([]endpoint.Spec, 0, 4)
+func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
+	out := make([]Endpoint, 0, 4)
 	note := func(kind matterendpoint.DPKind, key string, outcome SourceOutcome, reason WithheldReason, into string) {
 		if sink == nil {
 			return
@@ -461,7 +603,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 			case !ok:
 				withheld(matterendpoint.DPKindCustom, key, WithheldNotOnAllowList)
 			default:
-				if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCustom, key, src); built {
+				if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCustom, key, src); built {
 					out = append(out, spec)
 					published(matterendpoint.DPKindCustom, key)
 				} else {
@@ -485,7 +627,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 				withheld(matterendpoint.DPKindCalculated, key, WithheldNotOnAllowList)
 				continue
 			}
-			if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src); built {
+			if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src); built {
 				out = append(out, spec)
 				published(matterendpoint.DPKindCalculated, key)
 			} else {
@@ -518,7 +660,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 		}
 		if meas.MatterMeasurementClass() == contract.MeasurementBattery {
 			// A battery has no device type, so it never becomes an endpoint
-			// of its own (see attachPowerSource). The derived level does not
+			// of its own (see describeDevice). The derived level does not
 			// feed the PowerSource either: that reads the device's generic
 			// battery data point, so this source projects nothing.
 			withheld(matterendpoint.DPKindCalculated, key, WithheldNoMapping)
@@ -548,7 +690,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 			withheld(matterendpoint.DPKindCombined, key, WithheldNotOnAllowList)
 			continue
 		}
-		if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCombined, key, src); built {
+		if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCombined, key, src); built {
 			out = append(out, spec)
 			published(matterendpoint.DPKindCombined, key)
 		} else {
@@ -603,7 +745,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 				// parameters (a generic Switch serves STATE alone), so the
 				// projection is probed before the allowlist and the spec —
 				// with its persisted-label read — is described after it.
-				if src.projects(a.sourceOptions(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key), a.cfg.Build) {
+				if src.projects(a.deviceRequest(genericKey(centralName, dev, ch, key), endpoint.ComposeNodeLabel(names.EndpointLabel(genericKey(centralName, dev, ch, key)), ""), dev, ch)) {
 					allowed, err := allow(matterendpoint.DPKindGeneric, key)
 					if err != nil {
 						return nil, err
@@ -612,7 +754,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 						withheld(matterendpoint.DPKindGeneric, key, WithheldNotOnAllowList)
 						continue
 					}
-					if spec, built := a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
+					if spec, built := a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src); built {
 						out = append(out, spec)
 						published(matterendpoint.DPKindGeneric, key)
 					} else {
@@ -646,7 +788,7 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 		}
 		if meas.MatterMeasurementClass() == contract.MeasurementBattery {
 			// PowerSource is mounted on one of the device's endpoints by
-			// attachPowerSource, never as an endpoint of its own — it has no
+			// describeDevice, never as an endpoint of its own — it has no
 			// device type, and an endpoint without one advertises
 			// DeviceTypeList=[BridgedNode] alone.
 			note(matterendpoint.DPKindGeneric, key, OutcomeFolded, "", FoldedIntoPowerSource)
@@ -717,7 +859,7 @@ func (a *Assembler) makeElectricalGroupSpec(
 	dev *device.Device,
 	ch *device.Channel,
 	members []device.ParameterDataPoint,
-) (endpoint.Spec, bool) {
+) (Endpoint, bool) {
 	srcs := make([]generic.ElectricalGroupMember, 0, len(members))
 	for _, m := range members {
 		src, ok := m.(generic.ElectricalGroupMember)
@@ -728,7 +870,7 @@ func (a *Assembler) makeElectricalGroupSpec(
 	}
 	group := generic.NewElectricalGroup(srcs...)
 	if group == nil {
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
 	}
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
@@ -777,14 +919,14 @@ func (a *Assembler) makeButtonGroupSpec(
 	dev *device.Device,
 	ch *device.Channel,
 	members []device.ParameterDataPoint,
-) (endpoint.Spec, bool) {
+) (Endpoint, bool) {
 	srcs := make([]generic.PressEventSource, 0, len(members))
 	for _, m := range members {
 		srcs = append(srcs, m)
 	}
 	group := generic.NewButtonGroup(srcs...)
 	if group == nil {
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
 	}
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
@@ -921,26 +1063,12 @@ func projectionOf(dp any) (projection, bool) {
 	return projection{}, false
 }
 
-// buildDevice is src's device, built under build when the source's device
-// depends on it. Every path that builds a device goes through here, so a
-// source sees the same options whichever path builds it first, and every
-// device is composed under the bridge's surface policies — the node
-// refuses one composed under other ones.
-func buildDevice(src interfaces.MatterDeviceSource, opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
-	opts.Surface = build.Surface
-	if c, ok := src.(interfaces.MatterConfiguredDeviceSource); ok {
-		return c.MatterDeviceWith(opts, build)
-	}
-	return src.MatterDevice(opts)
-}
-
 // projects reports whether the source projects an endpoint at all: a
-// device source once its device is built with opts (the build is kept by
-// the source, so the later spec reuses it), a server source when it
-// serves a cluster.
-func (p projection) projects(opts fabricdevice.Options, build interfaces.MatterBuildOptions) bool {
+// device source once it built its device for req (the source keeps it, so
+// the later spec reuses it), a server source when it serves a cluster.
+func (p projection) projects(req interfaces.MatterDeviceRequest) bool {
 	if p.device != nil {
-		d, err := buildDevice(p.device, opts, build)
+		d, err := p.device.MatterDevice(req)
 		return err == nil && d != nil
 	}
 	return len(p.source.MatterClusterServers()) > 0
@@ -978,6 +1106,7 @@ func customPostfixLabel(names NameResolver, key matterendpoint.SourceKey, src pr
 // makeSpec describes one source-backed bridged endpoint. The second
 // result is false when the source projects nothing.
 func (a *Assembler) makeSpec(
+	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -985,7 +1114,7 @@ func (a *Assembler) makeSpec(
 	kind matterendpoint.DPKind,
 	key string,
 	src projection,
-) (endpoint.Spec, bool) {
+) (Endpoint, bool) {
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -1001,72 +1130,55 @@ func (a *Assembler) makeSpec(
 		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), customPostfixLabel(names, sourceKey, src)),
 	}
 	if src.device != nil {
-		return a.declaredDeviceSpec(in, src.device)
+		return a.declaredDeviceSpec(ctx, in, src.device)
 	}
 	if len(src.source.MatterClusterServers()) == 0 && kind == matterendpoint.DPKindGeneric {
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
 	}
 	in.source = src.source
 	return a.deviceSpec(in)
 }
 
-// sourceOptions are the device options of a source-backed endpoint: the
-// key, the composed label and the addresses — what
-// [Assembler.declaredDeviceSpec] hands the source, so a device built from
-// the projection probe is the one the spec reuses.
-func (a *Assembler) sourceOptions(centralName string, names NameResolver, dev *device.Device, ch *device.Channel, kind matterendpoint.DPKind, key string) fabricdevice.Options {
-	sourceKey := matterendpoint.SourceKey{
+// genericKey is the key of the generic data point key on channel ch.
+func genericKey(centralName string, dev *device.Device, ch *device.Channel, key string) matterendpoint.SourceKey {
+	return matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
 		ChannelNo:     ch.Number,
-		DPKind:        kind,
+		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         key,
-	}
-	return fabricdevice.Options{
-		StableKey:      sourceKey,
-		Name:           endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
-		Vendor:         bridgedVendorName,
-		DeviceAddress:  dev.Address,
-		ChannelAddress: ch.Address,
 	}
 }
 
 // declaredDeviceSpec describes the endpoint of a source that builds its
 // device itself from its cluster declarations. The device is the
-// source's and lives as long as the source; the name, addresses and
-// availability are this walk's, applied on the device's Spec (a
-// controller-written NodeLabel is the node's persistence and overrides
-// the name there). A source that projects nothing, or whose device the
-// kit refuses, yields no endpoint — there is no hand-built fallback,
-// because the servers exist only inside the device.
-func (a *Assembler) declaredDeviceSpec(in specInput, src interfaces.MatterDeviceSource) (endpoint.Spec, bool) {
-	d, err := buildDevice(src, fabricdevice.Options{
-		StableKey:      in.key,
-		Name:           in.friendlyName,
-		Vendor:         bridgedVendorName,
-		DeviceAddress:  in.dev.Address,
-		ChannelAddress: in.ch.Address,
-	}, a.cfg.Build)
+// source's: it lives as long as the source and is built anew only when the
+// host's facts change ([interfaces.MatterDeviceSource]). The walk's name is
+// the host's statement on it ([fabricdevice.Device.Update]): served at once
+// to a subscribed controller when the device is bound, unless a written
+// label wins, and the name the node assembles otherwise. A source that
+// projects nothing, or whose device the kit refuses, yields no endpoint —
+// there is no hand-built fallback, because the servers exist only inside
+// the device.
+func (a *Assembler) declaredDeviceSpec(ctx context.Context, in specInput, src interfaces.MatterDeviceSource) (Endpoint, bool) {
+	d, err := src.MatterDevice(a.deviceRequest(in.key, in.friendlyName, in.dev, in.ch))
 	if err != nil {
 		code := FindingDeviceRefused
 		if errors.Is(err, surface.ErrWithheld) {
 			code = FindingDeviceWithheld
 		}
 		a.recordFinding(in, code, err)
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
 	}
 	if d == nil {
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
+	}
+	if err := d.Update(ctx, func(st *fabricdevice.HostStatement) { st.Name = in.friendlyName }); err != nil {
+		a.recordFinding(in, FindingDeviceRefused, err)
+		return Endpoint{}, false
 	}
 	a.findings.clear(in.key.String())
-	spec := d.Spec()
-	spec.StableKey = in.key
-	spec.FriendlyName = in.friendlyName
-	spec.VendorName = bridgedVendorName
-	spec.DeviceAddress = in.dev.Address
-	spec.ChannelAddress = in.ch.Address
-	spec.Availability = in.dev.Available
-	return spec, true
+	return Endpoint{Device: d, Kept: true, Available: in.dev.Available}, true
 }
 
 // makeMeasurementSpec describes one standalone sensor endpoint. Its
@@ -1080,7 +1192,7 @@ func (a *Assembler) makeMeasurementSpec(
 	kind matterendpoint.DPKind,
 	key string,
 	meas contract.MeasurementSource,
-) (endpoint.Spec, bool) {
+) (Endpoint, bool) {
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -1131,21 +1243,14 @@ type specInput struct {
 // be the one endpoint no go-fabric device stands behind: no validation by
 // [fabricdevice.New], no surface report and no
 // [fabricdevice.Device.SetReachable].
-func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
+func (a *Assembler) deviceSpec(in specInput) (Endpoint, bool) {
 	t, ok := fabricdevice.Lookup(uint32(in.deviceType))
 	if !ok {
 		a.recordFinding(in, FindingDeviceRefused, fmt.Errorf("%w: 0x%04X", errDeviceTypeNotInLayer, in.deviceType))
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
 	}
-	opts := fabricdevice.Options{
-		StableKey:      in.key,
-		Name:           in.friendlyName,
-		Vendor:         bridgedVendorName,
-		DeviceAddress:  in.dev.Address,
-		ChannelAddress: in.ch.Address,
-		Surface:        a.cfg.Build.Surface,
-	}
-	var decls []fabricdevice.Declaration
+	req := a.deviceRequest(in.key, in.friendlyName, in.dev, in.ch)
+	decls := req.Host.Declarations()
 	if in.source != nil {
 		for _, srv := range in.source.MatterClusterServers() {
 			if srv == nil {
@@ -1160,19 +1265,17 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 	if in.measurement != nil {
 		decls = append(decls, fabricdevice.Measurement(in.measurement))
 	}
-	d, err := fabricdevice.New(t, opts, decls...)
+	d, err := fabricdevice.New(t, req.Options, decls...)
 	if err != nil {
 		code := FindingDeviceRefused
 		if errors.Is(err, surface.ErrWithheld) {
 			code = FindingDeviceWithheld
 		}
 		a.recordFinding(in, code, err)
-		return endpoint.Spec{}, false
+		return Endpoint{}, false
 	}
 	a.findings.clear(in.key.String())
-	spec := d.Spec()
-	spec.Availability = in.dev.Available
-	return spec, true
+	return Endpoint{Device: d, Available: in.dev.Available}, true
 }
 
 // logWithheld reports a device the configured specification level

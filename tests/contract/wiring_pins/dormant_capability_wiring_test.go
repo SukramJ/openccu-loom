@@ -171,14 +171,14 @@ func exprSource(fset *token.FileSet, e ast.Expr) string {
 
 // --- D3: BridgedDevice reachability ---
 
-// TestPin_NotifyDeviceReachable_WiredInDaemon pins that the daemon forwards CCU
-// device-availability transitions into the Matter bridge. Without it every
-// bridged endpoint stays Reachable=true forever and a dead CCU device still
-// shows online in Apple/Google Home.
-func TestPin_NotifyDeviceReachable_WiredInDaemon(t *testing.T) {
+// TestPin_SetReachable_WiredInDaemon pins that the daemon forwards CCU
+// device-availability transitions to the bridged devices the reconciler
+// holds. Without it every bridged endpoint keeps the reachability it was
+// bound with and a dead CCU device still shows online in Apple/Google Home.
+func TestPin_SetReachable_WiredInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
 		"cmd/openccu-loom",
-		"mb", "NotifyDeviceReachable")
+		"reconciler", "SetReachable")
 }
 
 // --- D4: stale CASE session teardown on NOC rotation ---

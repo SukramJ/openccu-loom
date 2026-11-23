@@ -108,12 +108,14 @@ func (s *Select) MatterDeviceType() uint16 { return matterSelectDeviceType }
 //
 // The data point itself is the narrow port; the Matter shape of its values
 // belongs to the kit's server, which reads the port at every read.
-func (s *Select) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+func (s *Select) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
 	if !matterSelectEligible(s) {
 		return nil, nil //nolint:nilnil // a parameter that cannot back ModeSelect projects no device
 	}
-	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		return NewMatterDevice(s, matterSelectDeviceType, opts, msdef.Declare{ModeSource: s})
+	return s.matterDevice.Device(req, MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			return NewMatterDevice(s, matterSelectDeviceType, req.Options, append(host, msdef.Declare{ModeSource: s})...)
+		},
 	})
 }
 

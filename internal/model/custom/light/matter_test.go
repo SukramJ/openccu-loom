@@ -73,7 +73,7 @@ func TestMatterClusterServersNonDimmable(t *testing.T) {
 // matterDeviceOf returns the device src projects, built once per source.
 func matterDeviceOf(t *testing.T, src interfaces.MatterDeviceSource) *fabricdevice.Device {
 	t.Helper()
-	d, err := src.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("light-test"), Name: "light"})
+	d, err := src.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("light-test"), Name: "light"}})
 	if err != nil || d == nil {
 		t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
 	}
