@@ -21,6 +21,7 @@ import (
 	"thingfabric.dev/go-fabric/surface"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -167,6 +168,8 @@ type matterBridgeBundle struct {
 	// the CSA test vendor while the operator believes the production chain
 	// is served.
 	commissioningBlocked error
+	// nodeLabel applies north.matter.node_label to the running node.
+	nodeLabel *matterNodeLabeler
 }
 
 // matterRootNodeDeviceType is the device type the commissionable record's
@@ -392,7 +395,19 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			channelLabel = w
 		}
 	}
-	rootSerial := matterRootSerial(mc)
+	// The root serial is pinned on the first Matter start that has the
+	// table, seeded with the value the label-derived formula gives for the
+	// label configured then — what an unchanged installation served before
+	// — and a later label change no longer moves it. The same row holds the label last applied from the
+	// configuration (matterNodeLabeler).
+	hostID, err := sqlite.LoadMatterHostIdentity(ctx, db, sqlite.MatterHostIdentity{
+		RootSerial:       matterRootSerial(mc),
+		AppliedNodeLabel: mc.NodeLabel,
+	})
+	if err != nil {
+		return fail("matter.bridge.host_identity", err)
+	}
+	rootSerial := hostID.RootSerial
 	passcode, salt, iterations, configured, err := matterCommissioningCredentials(mc.Commissioning, logger)
 	if err != nil {
 		return fail("matter.bridge.pase.credentials", err)
@@ -516,6 +531,13 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		logger.Info("matter.bridge.attestation.vendor",
 			slog.String("hint", "production DAC/PAI/CD loaded from config — chip-tool can validate without --bypass-attestation-verifier"))
 	}
+	// A node_label saved while the bridge was off reaches the node here,
+	// before it starts and before any controller reads it. A refusal does
+	// not stop the bridge: the node serves the label it had.
+	nodeLabel := newMatterNodeLabeler(n, db, hostID.AppliedNodeLabel, logger)
+	if _, lErr := nodeLabel.Apply(ctx, mc.NodeLabel); lErr != nil {
+		logger.Warn("matter.bridge.node_label_apply_failed", slog.String("err", lErr.Error()))
+	}
 	if err := n.Start(ctx); err != nil {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		_ = n.Stop(stopCtx)
@@ -577,6 +599,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		events:                  uiEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
+		nodeLabel:               nodeLabel,
 	}
 }
 
@@ -588,6 +611,10 @@ type matterWiring struct {
 	// reassemble hook and the event source. The router sets Prefix and
 	// Admin.
 	nodeUI fabricui.Options
+	// nodeLabel applies north.matter.node_label to the running node; the
+	// composition root hands it to the reload deps (config save and file
+	// watcher).
+	nodeLabel *matterNodeLabeler
 	// status is the daemon-side status seam the MCP tool and the health
 	// probe read; the REST status comes from go-fabric-ui over the node.
 	status *matterStatusReaderAdapter
@@ -925,6 +952,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	wiring.exposureStore = mids
 	wiring.projection = matteradapter.NewProjectionPlane(bundle.assembler, mids)
 	wiring.retire = bundle.retire
+	wiring.nodeLabel = bundle.nodeLabel
 	wiring.forget = bundle.forget
 
 	// Wire CCU device-availability → BridgedDeviceBasicInformation
@@ -1021,6 +1049,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Logger:           logger,
 		ConfiguredWindow: bundle.configuredCommissioning && !mcfg.Commissioning.EphemeralWindow,
 		NodeConfig:       matterNodeConfigView(mcfg),
+		// Selected sources the bridge holds no endpoint for, on the status
+		// and selection pages instead of only in the log.
+		Warnings: matterWarnings(bundle.assembler, catalogs, cfg.Locale),
 	}
 	return wiring, closers, teardown
 }

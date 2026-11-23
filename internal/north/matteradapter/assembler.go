@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+	"time"
 
 	clusterspec "thingfabric.dev/go-fabric/cluster/spec"
 	bdbidef "thingfabric.dev/go-fabric/cluster/spec/bridgeddevicebasicinformation"
@@ -76,6 +77,9 @@ type Config struct {
 	// ([CollectCandidates]), because a source keeps the device it built
 	// first.
 	Build interfaces.MatterBuildOptions
+	// Now stamps when a finding was first seen ([Finding].Since). Nil
+	// selects the wall clock; tests supply a fixed one.
+	Now func() time.Time
 }
 
 // NameResolver is this daemon's naming authority for endpoint labels.
@@ -132,10 +136,11 @@ type Assembler struct {
 	logger    *slog.Logger
 	// fallbackTypes records, once each, a device type the generated
 	// device layer does not carry, so the hand-built Spec path is visible
-	// in the log rather than silent; refusedDevices records, once each, a
-	// source whose own device the kit refused.
-	fallbackTypes  sync.Map
-	refusedDevices sync.Map
+	// in the log rather than silent; findings holds, once each, a source
+	// the kit refused or the specification level withholds — the record
+	// behind both that log line and [Assembler.Findings].
+	fallbackTypes sync.Map
+	findings      findingRegistry
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -229,6 +234,7 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 	if names == nil {
 		names = newModelNameResolver(snap.Devices, a.cfg.Labels, a.channelLabel())
 	}
+	gen := a.findings.beginWalk()
 	out := Described{Scope: snap.CentralName}
 	for _, dev := range snap.Devices {
 		if dev == nil {
@@ -249,6 +255,10 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Des
 		attachPowerSource(dev, deviceSpecs)
 		out.Endpoints = append(out.Endpoints, deviceSpecs...)
 	}
+	// The central's walk is complete: a finding it did not meet again
+	// belongs to a source that left the fleet (deleted, unexposed, no
+	// longer projected) and must not linger as a warning.
+	a.findings.prune(snap.CentralName, gen)
 	return out, nil
 }
 
@@ -1011,24 +1021,17 @@ func (a *Assembler) declaredDeviceSpec(in specInput, src interfaces.MatterDevice
 		ChannelAddress: in.ch.Address,
 	}, a.cfg.Build)
 	if err != nil {
-		// Once per key: the source retries the build on every assembly,
-		// and the finding does not change between two of them.
-		if _, seen := a.refusedDevices.LoadOrStore(in.key.String(), struct{}{}); !seen {
-			if errors.Is(err, surface.ErrWithheld) {
-				a.logWithheld(in.deviceType, in.key.String(), err)
-			} else {
-				a.logger.Warn("matter.assembler.device_refused",
-					slog.String("device_type", fmt.Sprintf("0x%04X", in.deviceType)),
-					slog.String("key", in.key.String()),
-					slog.String("err", err.Error()))
-			}
+		code := FindingDeviceRefused
+		if errors.Is(err, surface.ErrWithheld) {
+			code = FindingDeviceWithheld
 		}
+		a.recordFinding(in, code, err)
 		return endpoint.Spec{}, false
 	}
 	if d == nil {
 		return endpoint.Spec{}, false
 	}
-	a.refusedDevices.Delete(in.key.String())
+	a.findings.clear(in.key.String())
 	spec := d.Spec()
 	spec.StableKey = in.key
 	spec.FriendlyName = in.friendlyName
@@ -1143,11 +1146,12 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 	}
 	d, err := fabricdevice.New(t, opts, decls...)
 	if errors.Is(err, surface.ErrWithheld) {
-		if _, seen := a.refusedDevices.LoadOrStore(in.key.String(), struct{}{}); !seen {
-			a.logWithheld(in.deviceType, in.key.String(), err)
-		}
+		a.recordFinding(in, FindingDeviceWithheld, err)
 		return endpoint.Spec{}, false
 	}
+	// Built, or fell back to the hand-built Spec: either way the source
+	// is served, so it is no longer withheld.
+	a.findings.clear(in.key.String())
 	if err != nil {
 		a.logFallback(in.deviceType, "device layer refused the composition", err)
 		return handBuilt, true
@@ -1162,6 +1166,15 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 // defect, so it is logged at info.
 func (a *Assembler) logWithheld(deviceType uint16, key string, err error) {
 	a.logger.Info("matter.assembler.device_withheld",
+		slog.String("device_type", fmt.Sprintf("0x%04X", deviceType)),
+		slog.String("key", key),
+		slog.String("err", err.Error()))
+}
+
+// logRefused reports a source whose own device the kit refused. The source
+// yields no endpoint, so it is logged as a warning.
+func (a *Assembler) logRefused(deviceType uint16, key string, err error) {
+	a.logger.Warn("matter.assembler.device_refused",
 		slog.String("device_type", fmt.Sprintf("0x%04X", deviceType)),
 		slog.String("key", key),
 		slog.String("err", err.Error()))

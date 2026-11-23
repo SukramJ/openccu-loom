@@ -92,6 +92,15 @@ func (s *Server) Addr() string {
 	return s.listen
 }
 
+// RegisterOnShutdown registers fn to run when Shutdown begins, before the
+// server waits for open requests to finish (http.Server.RegisterOnShutdown).
+// A long-lived response — an event stream — that ends only on its own
+// signal registers that signal here; otherwise Shutdown waits for it until
+// its context expires.
+func (s *Server) RegisterOnShutdown(fn func()) {
+	s.srv.RegisterOnShutdown(fn)
+}
+
 // Shutdown gracefully stops the server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("rest.shutdown")

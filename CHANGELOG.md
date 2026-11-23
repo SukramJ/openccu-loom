@@ -84,6 +84,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Origin checks and the contract changes above; the controller family's
   onboarding inventory (v0.13.0) is not served here, since the daemon
   runs no controller.
+- **`north.matter.node_label` takes effect without a restart.** A saved
+  label reaches the running bridge at once, through the Web UI's save and
+  through a config-file edit alike; a label changed while the bridge was
+  off is applied at its next start (from the first start of this release
+  on; that start takes the label configured then as the starting point).
+  A name a controller gave the bridge
+  stays until the setting is changed again — before, a stored name kept
+  winning over every later edit. The name a pairing window advertises
+  still follows at the next restart. (#1056)
+- **The bridge's root serial number is pinned.** It was derived from the
+  node label, so a renamed bridge came back with a new serial after its
+  next restart. The value is now fixed on the first start of this release
+  — derived as before from the label configured then, so an unchanged
+  installation keeps the serial it served — and no longer changes.
+
+### Added
+
+- **The Matter status and selection pages name the devices the bridge
+  holds no endpoint for**: a selected device the Matter device layer
+  refused, or one the configured specification level
+  (`north.matter.spec_level`) withholds, with the time it was first seen.
+  The warnings come from the same record as the log lines
+  `matter.assembler.device_refused` / `device_withheld`, disappear once the
+  device builds or leaves the selection, and show their message to admins
+  only. (#1056)
+- **The Matter pages reload after a gap in the event stream** (a daemon
+  restart, a connection that fell behind), instead of showing fabrics and
+  commissioning windows that changed meanwhile. (#1056)
+- **A shutdown ends open Matter node event streams at once** instead of
+  waiting for them until the shutdown deadline. (#1056)
 
 ## [0.107.1] - 2026-11-23
 

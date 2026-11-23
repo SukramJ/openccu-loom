@@ -126,6 +126,22 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 			}
 		}
 
+		// Live: north.matter.node_label, through the applier the config
+		// save uses. It applies the EFFECTIVE label, for the reason the
+		// deferred-creation branch above gives: a DB-tier north.matter
+		// section wins over the file.
+		if prev.North.Matter.WithDefaults().NodeLabel != next.North.Matter.WithDefaults().NodeLabel {
+			labelCtx, cancel := context.WithTimeout(context.Background(), sectionApplyTimeout)
+			changed, lErr := matterLabelSection{deps: deps, logger: logger}.ApplyMatterSection(labelCtx)
+			cancel()
+			switch {
+			case lErr != nil:
+				logger.Warn("daemon.reload.matter_node_label_failed", slog.String("err", lErr.Error()))
+			case changed:
+				applied++
+			}
+		}
+
 		// Hot-reloadable: MQTT. The supervisor owns the rebuild
 		// sequence (new stack starts before the old one tears down,
 		// rollback on connect failure). A nil supervisor means the

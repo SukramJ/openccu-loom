@@ -1600,7 +1600,7 @@ const EN: Catalog = {
   "config.help.north.matter.product_id":
     "Vendor-assigned product identifier. Defaults to 0x8000.",
   "config.help.north.matter.node_label":
-    "User-visible label for the bridge node, surfaced in commissioners (Apple Home, Google Home, …). At most 32 bytes (Matter BasicInformation.NodeLabel); umlauts count twice.",
+    "User-visible label for the bridge node, surfaced in commissioners (Apple Home, Google Home, …). At most 32 bytes (Matter BasicInformation.NodeLabel); umlauts count twice. A change reaches the running bridge at once; the name a pairing window advertises follows at the next restart. A name a controller gave the bridge stays until this setting changes again.",
   "config.help.north.matter.discriminator":
     "12-bit Matter commissioning discriminator. Combined with the passcode to form the manual setup code.",
   "config.help.north.matter.prefer_ipv4":
@@ -5829,7 +5829,7 @@ const DE: Catalog = {
   "config.help.north.matter.product_id":
     "Vendor-vergebene Produkt-ID. Default 0x8000.",
   "config.help.north.matter.node_label":
-    "Nutzer-sichtbarer Label des Bridge-Nodes (sichtbar in Apple Home, Google Home, …). Höchstens 32 Byte (Matter BasicInformation.NodeLabel); Umlaute zählen doppelt.",
+    "Nutzer-sichtbarer Label des Bridge-Nodes (sichtbar in Apple Home, Google Home, …). Höchstens 32 Byte (Matter BasicInformation.NodeLabel); Umlaute zählen doppelt. Eine Änderung erreicht die laufende Bridge sofort; den Namen, den ein Kopplungsfenster ankündigt, übernimmt sie beim nächsten Neustart. Einen Namen, den ein Controller der Bridge gegeben hat, behält sie, bis diese Einstellung erneut geändert wird.",
   "config.help.north.matter.discriminator":
     "12-bit Matter-Commissioning-Discriminator. Mit dem Passcode bildet er den manuellen Setup-Code.",
   "config.help.north.matter.prefer_ipv4":

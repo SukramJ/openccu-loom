@@ -318,3 +318,34 @@ Paths the delegation table keeps out of an agent's hands appear in every slice
 - **D7 Counters:** only if slice 1's findings registry yields real ones (recommendation taken).
 - **D2 Hand-built fallbacks:** measure the count over the golden fleet first, then decide.
 - No daemon release before the issues of this plan are closed.
+
+## 11. Slice 1 as built (2026-11-23)
+
+Branch `claude/matter-node-page-options-1056`, from `main` at 1a41379e (slice 0, #1165, still open).
+
+- **F3 live node label.** Owner decisions (wizard): a loom-owned marker, and the root serial pinned.
+  Migration 056 `matter_host_identity` (single row: `root_serial`, `applied_node_label`), seeded on the
+  first Matter start with the label-derived serial and the configured label, so an upgrade changes
+  neither. `matterNodeLabeler` applies `north.matter.node_label` only when it differs from the marker:
+  live through the config save (`sectionApplier`, `north.matter`) and the file watcher
+  (`hotReloadHandler`), and before `Start` for a change made while the bridge was off. A controller's
+  rename stands until the setting changes. The restart rule is gone. Fable note (verified): the stored
+  label is restored at `New` (GF `node/persist.go:300-306`); `SetNodeLabel` before `Start` is allowed
+  (GF `cluster/core/basic_information.go:856-875`, no started guard); the DNS-SD name is built once in
+  `New` (GF `node/node.go:448,455`, `node/commissioning.go:336-349`), so it follows at the next restart.
+- **Gap left to go-fabric-ui.** `NodeConfigView.Label` on the status page is stored once under `Mount`
+  (GU `fabricui/handler.go:335`, no setter); after a live change it shows the old label until the
+  restart. Handover issue to go-fabric-ui: a `NodeConfig` func or setter.
+- **U1 warnings.** `matteradapter` findings registry (`findings.go`), the one record behind the
+  `device_refused` / `device_withheld` log lines and `Options.Warnings`; pruned per completed central
+  walk and on `Retire`. mDNS interface findings are NOT warnings: the Diagnostics tab already shows the
+  whole diagnosis. `device_layer_fallback` stays log-only (a loom gap, not operator configuration).
+- **U2 counters (D7): closed.** The registry yields no counter "since start" worth showing.
+- **U3 `Done`:** closed from the REST server's shutdown hook (`Server.RegisterOnShutdown`); the SSE
+  route is `GET /node/stream` (GU `fabricui/stream.go:27,135-137`).
+- **U4 resync:** `nodeSubscription` passes the hub's `replay_lost` resync to the node store.
+- **U6 Operation tab: declined** (D6). **U9 `NodeEcosystemHints`: nothing to do**, `Pair.svelte` renders
+  it (GU `ui/src/lib/pages/node/Pair.svelte:20,244-246`).
+- **Follow-up once #1165 is merged:** an e2e round trip (config save → served root NodeLabel) through
+  the harness' `EnableMatter`; today the effect is measured in `cmd/openccu-loom` through
+  `startMatterBridge` plus source pins for the composition-root lines.

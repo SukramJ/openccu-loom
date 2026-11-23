@@ -792,6 +792,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// central. Nil-safe on both sides (bridge disabled / orchestrator
 	// unavailable).
 	centralOrch.setMatterCentralHook(matter.centralHook)
+	// A node_label edit — saved in the SPA or in the file — reaches the
+	// running node through this labeler instead of waiting for a restart.
+	deps.SetMatterNodeLabeler(matter.nodeLabel)
 	centralOrch.setMatterExposureStore(matter.exposureStore)
 	centralOrch.setMatterPartitionRetirer(matter.retire)
 	centralOrch.setMatterDeviceForgetter(matter.forget)

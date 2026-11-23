@@ -47,17 +47,56 @@ type sectionReloader interface {
 // rebuild machinery existed and simply had no caller on this path.
 type sectionApplier struct {
 	mqtt   sectionReloader
+	matter matterSectionApplier
 	logger *slog.Logger
+}
+
+// matterSectionApplier applies the part of a north.matter save the running
+// node can take live — today the node label (matterNodeLabeler); every
+// other north.matter field is restart-required. It reports whether the
+// node changed.
+type matterSectionApplier interface {
+	ApplyMatterSection(ctx context.Context) (bool, error)
+}
+
+// matterLabelSection reads the effective north.matter.node_label and hands
+// it to the running node's labeler. The config save and the file watcher
+// both go through it, so the two paths cannot disagree.
+type matterLabelSection struct {
+	deps   *reloadDeps
+	logger *slog.Logger
+}
+
+// ApplyMatterSection implements matterSectionApplier. Only a freshly
+// assembled config is applied: the fallback snapshot is the last one
+// recorded (at boot, on a file reload or an MQTT reload), which a label
+// saved in the SPA since then need not be part of — applying it could turn
+// the node's label back.
+func (m matterLabelSection) ApplyMatterSection(ctx context.Context) (bool, error) {
+	l := m.deps.MatterNodeLabeler()
+	if l == nil {
+		return false, nil
+	}
+	cfg, fresh := m.deps.AssembleConfig(ctx)
+	if cfg == nil || !fresh {
+		if m.logger != nil {
+			m.logger.Warn("matter.bridge.node_label_not_applied",
+				slog.String("reason", "the effective config could not be assembled"),
+				slog.String("effect", "the label applies at the next start"))
+		}
+		return false, nil
+	}
+	return l.Apply(ctx, cfg.North.Matter.WithDefaults().NodeLabel)
 }
 
 // newSectionApplier binds the per-section reloaders. A reloader that is
 // nil, or that reports itself unavailable, leaves its section reporting
 // "not applied" rather than claiming a rebuild that cannot happen.
-func newSectionApplier(mqtt sectionReloader, logger *slog.Logger) *sectionApplier {
+func newSectionApplier(mqtt sectionReloader, matter matterSectionApplier, logger *slog.Logger) *sectionApplier {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &sectionApplier{mqtt: mqtt, logger: logger}
+	return &sectionApplier{mqtt: mqtt, matter: matter, logger: logger}
 }
 
 // ApplySection implements handlers.SectionApplier.
@@ -85,6 +124,24 @@ func (a *sectionApplier) ApplySection(ctx context.Context, section configstore.S
 			slog.String("section", string(section)),
 			slog.Duration("took", took))
 		return true, nil
+	case configstore.SectionMatter:
+		if a.matter == nil {
+			return false, nil
+		}
+		applyCtx, cancel := context.WithTimeout(ctx, sectionApplyTimeout)
+		defer cancel()
+		applied, err := a.matter.ApplyMatterSection(applyCtx)
+		if err != nil {
+			a.logger.Warn("config.section.apply_failed",
+				slog.String("section", string(section)),
+				slog.String("error", err.Error()),
+				slog.String("effect", "the value is stored and takes effect at the next restart"))
+			return false, err
+		}
+		if applied {
+			a.logger.Info("config.section.applied", slog.String("section", string(section)))
+		}
+		return applied, nil
 	default:
 		return false, nil
 	}

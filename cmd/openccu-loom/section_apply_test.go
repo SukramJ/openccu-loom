@@ -30,7 +30,7 @@ func TestSectionApplierRebuildsTheMQTTStack(t *testing.T) {
 	t.Parallel()
 
 	r := &fakeSectionReloader{}
-	applied, err := newSectionApplier(r, nil).ApplySection(context.Background(), configstore.SectionMQTT)
+	applied, err := newSectionApplier(r, nil, nil).ApplySection(context.Background(), configstore.SectionMQTT)
 	if err != nil {
 		t.Fatalf("ApplySection: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestSectionApplierLeavesOtherSectionsAlone(t *testing.T) {
 	t.Parallel()
 
 	r := &fakeSectionReloader{}
-	a := newSectionApplier(r, nil)
+	a := newSectionApplier(r, nil, nil)
 	for _, section := range []configstore.Section{
 		configstore.SectionREST,
 		configstore.SectionMatter,
@@ -74,7 +74,7 @@ func TestSectionApplierReportsAFailedReload(t *testing.T) {
 	t.Parallel()
 
 	r := &fakeSectionReloader{err: errors.New("broker refused the connection")}
-	applied, err := newSectionApplier(r, nil).ApplySection(context.Background(), configstore.SectionMQTT)
+	applied, err := newSectionApplier(r, nil, nil).ApplySection(context.Background(), configstore.SectionMQTT)
 	if err == nil {
 		t.Fatal("a failed rebuild must be reported")
 	}
@@ -96,7 +96,7 @@ func TestSectionApplierWithoutAReloaderReportsNotApplied(t *testing.T) {
 	t.Parallel()
 
 	absent := newMQTTReloadAdapter(nil, nil, nil, nil)
-	applied, err := newSectionApplier(absent, nil).ApplySection(context.Background(), configstore.SectionMQTT)
+	applied, err := newSectionApplier(absent, nil, nil).ApplySection(context.Background(), configstore.SectionMQTT)
 	if err != nil {
 		t.Fatalf("ApplySection: %v", err)
 	}

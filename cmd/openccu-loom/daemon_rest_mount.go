@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
@@ -411,7 +412,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// produces a file-watcher event, so without this the only way to
 		// make a north.mqtt edit real was to restart or to know about
 		// POST /admin/mqtt/reload.
-		SectionApplier:  newSectionApplier(mqttReload, logger),
+		SectionApplier:  newSectionApplier(mqttReload, matterLabelSection{deps: d.reload, logger: logger}, logger),
 		OIDC:            buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 		SPAHandler:      ui.SPAHandler(),
 		EditorComponent: editorComponent(logger),
@@ -564,12 +565,21 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		logger.Error("rest.auth_not_wired — refusing to serve", slog.String("err", err.Error()))
 		return func() {}
 	}
+	// go-fabric-ui's node event streams (GET /node/stream) end when their
+	// client leaves, their node goes away, a write fails, or this channel
+	// closes; closing it as the server
+	// begins its shutdown ends them and removes their node observers, so a
+	// connected stream does not hold the graceful shutdown until its
+	// deadline.
+	nodeStreamsDone := make(chan struct{})
+	deps.NodeUI.Done = nodeStreamsDone
 	router := rest.NewRouter(deps)
 	var topHandler http.Handler = router
 	if cfg.North.MCP.Enabled {
 		topHandler = mountMCP(cfg, d, router, loginLimiter, logger)
 	}
 	restServer := rest.NewServer(cfg.North.REST.Listen, topHandler, logger)
+	restServer.RegisterOnShutdown(sync.OnceFunc(func() { close(nodeStreamsDone) }))
 	if tlsReloader != nil {
 		restServer.EnableTLS(tlsReloader)
 	}
