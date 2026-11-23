@@ -291,10 +291,11 @@ func TestBatteryRidesOnADeviceEndpointRatherThanItsOwn(t *testing.T) {
 // TestCalculatedBatteryLevelRidesOnADeviceEndpointRatherThanItsOwn is the
 // calculated twin of [TestBatteryRidesOnADeviceEndpointRatherThanItsOwn]: the
 // derived battery level (OPERATING_VOLTAGE_LEVEL) is a battery reading too, so
-// it folds into the device's PowerSource like LOWBAT does. Served as an
-// endpoint of its own it would have no device type, which the bridge serves
-// as DeviceTypeList=[BridgedNode] alone; handed to the device layer it would
-// be refused, and the node page would warn about a device that is fine.
+// it never becomes an endpoint of its own; it is withheld, and the
+// PowerSource keeps reading the generic battery data point. Served as an
+// endpoint it would have no device type, which the bridge serves as
+// DeviceTypeList=[BridgedNode] alone; handed to the device layer it would be
+// refused, and the Matter pages would warn about a device that is fine.
 func TestCalculatedBatteryLevelRidesOnADeviceEndpointRatherThanItsOwn(t *testing.T) {
 	dev := buildMeteringPlug(t)
 	// Measurements on: with them off the calculated level is withheld before

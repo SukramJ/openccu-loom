@@ -11,6 +11,7 @@ import (
 	"thingfabric.dev/go-fabric/contract"
 	"thingfabric.dev/go-fabric/eligibility"
 
+	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -193,6 +194,21 @@ func TestCollectCandidates_CalculatedDP_Mappable(t *testing.T) {
 	}
 	if got[0].Verdict.State != eligibility.StateMappable {
 		t.Errorf("state = %v, want Mappable", got[0].Verdict.State)
+	}
+}
+
+// TestCollectCandidates_CalculatedBatteryLevelIsNoCandidate pins that the
+// derived battery level is not offered for exposure: the assembly never makes
+// it an endpoint and the PowerSource reads the generic battery data point, so
+// selecting it would change nothing on the bridge.
+func TestCollectCandidates_CalculatedBatteryLevelIsNoCandidate(t *testing.T) {
+	t.Parallel()
+	d := device.New(device.Config{Address: "B1", Name: "Thermostat"})
+	ch := d.AddChannel("B1:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	ch.AttachCalculatedDataPoint(calculated.NewOperatingVoltageLevelSensorWithIdentity("c", ch.Address))
+
+	if got := matteradapter.CollectCandidates("c", []*device.Device{d}, false, interfaces.MatterBuildOptions{}); len(got) != 0 {
+		t.Fatalf("candidates = %+v, want none", got)
 	}
 }
 

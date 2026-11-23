@@ -1487,9 +1487,10 @@ armed over PASE before it closes the window (`bridge/commissioning_window.go:851
 Matter §11.19.7.3 step 1).
 
 **OpenCCU-Loom state:** the node page's close revokes. An operator who closes
-or replaces a window there abandons the pairing on it; a PASE session or a
-fail-safe left behind answers the retry's commissioner Busy until the
-fail-safe expires.
+or replaces a window there abandons the pairing on it. A fail-safe left armed
+over PASE would make the next window the operator opens answer Busy until it
+expires (`bridge/commissioning_window.go:245-249`); the revoke expires it and
+closes the abandoned PASE session.
 
 **Guard:** `TestMatterNodePagesRevokeTheWindowTheyCloseOrReplace`
 (`cmd/openccu-loom/daemon_matter_window_cluster_wiring_test.go`), through the

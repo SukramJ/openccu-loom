@@ -35,8 +35,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
-	"github.com/SukramJ/openccu-loom/internal/wiring"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -867,44 +865,6 @@ func releasedDevicesOf(u *central.Unit) []*device.Device {
 	return out
 }
 
-// wireMatterReachableForward forwards every central's device-availability
-// signal into the bridge, so the matching bridged endpoints fire the §9.13.6
-// ReachableChanged event (see [matterbridge.Bridge.NotifyDeviceReachable]).
-//
-// It rides the registry observer, which replays over the centrals present at
-// boot and runs for every one adopted later: the forward used to be wired
-// twice, by a boot walk and again by the live-adopt hook. The returned remove
-// drops every subscription.
-func wireMatterReachableForward(reg *central.Registry, notify func(centralName, address string, reachable bool)) (remove func()) {
-	if reg == nil || notify == nil {
-		return func() {}
-	}
-	return reg.OnRegisterDeclared(wiring.Seam{
-		Name:         "matter.reachable_forward",
-		Collaborator: "subscribeMatterDeviceReachable",
-		Phase:        wiring.PhasePerCentral,
-		Why:          "a CCU device going unreachable, or coming back, never reaches a subscribed Matter controller: the ReachableChanged event and the Reachable report are pushed only by this forward",
-	}, func(u *central.Unit) func() {
-		return subscribeMatterDeviceReachable(u, notify)
-	})
-}
-
-// subscribeMatterDeviceReachable forwards one central's AvailabilityChanged
-// lifecycle events to notify. It returns the unsubscribe closure, or nil when
-// the central has no bus to subscribe to.
-func subscribeMatterDeviceReachable(u *central.Unit, notify func(centralName, address string, reachable bool)) func() {
-	if u == nil || u.EventBus == nil || notify == nil {
-		return nil
-	}
-	cName := u.Name()
-	return u.EventBus.Subscribe(func(e hmevent.DeviceLifecycleEvent) {
-		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
-			return
-		}
-		notify(cName, e.Address, e.Available)
-	})
-}
-
 // matterCentralHook wires one central into the running Matter bridge:
 // reassemble-on-ready onto the shared debounce pipeline and hot-plug device
 // lifecycle. The live-adopt orchestrator invokes it for runtime-added centrals
@@ -1161,9 +1121,10 @@ func matterHealth(t *health.Tracker) *node.Health {
 
 // matterNodeSource is the node as go-fabric-ui's pages reach it. Closing a
 // window there revokes it rather than node.Node.CloseWindow: the operator
-// who closes or replaces a window abandons the pairing on it, and a PASE
-// session or an armed fail-safe left behind answers the retry's
-// commissioner Busy until the fail-safe expires.
+// who closes or replaces a window abandons the pairing on it: the revoke
+// closes its PASE session and expires a fail-safe armed over it, which
+// would otherwise make the next window opened answer Busy until it
+// expires (go-fabric bridge/commissioning_window.go:245-249, :889-901).
 type matterNodeSource struct{ *node.Node }
 
 // CloseWindow implements [fabricui.NodeSource].

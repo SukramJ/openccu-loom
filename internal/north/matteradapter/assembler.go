@@ -1125,11 +1125,12 @@ type specInput struct {
 //
 // Every bridged endpoint is a device of that layer. A device type the
 // generated layer does not carry, or a composition it refuses, yields no
-// endpoint (false) and a [FindingDeviceRefused] the operator sees on the
-// node page; a device the specification level withholds yields a
-// [FindingDeviceWithheld]. A hand-built Spec in their place would be the
-// one endpoint no go-fabric device stands behind: no device-type
-// validation, no surface report and no [fabricdevice.Device.SetReachable].
+// endpoint (false) and a [FindingDeviceRefused], which the Matter status
+// and selection pages name; a device the specification level withholds
+// yields a [FindingDeviceWithheld]. A hand-built Spec in their place would
+// be the one endpoint no go-fabric device stands behind: no validation by
+// [fabricdevice.New], no surface report and no
+// [fabricdevice.Device.SetReachable].
 func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 	t, ok := fabricdevice.Lookup(uint32(in.deviceType))
 	if !ok {

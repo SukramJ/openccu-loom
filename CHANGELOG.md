@@ -138,9 +138,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A selected battery level no longer appears in Matter as a device of its
   own.** The battery level the daemon derives from the operating voltage
   could be selected for Matter, and was then served as an endpoint without a
-  device type, which Apple Home files under "Other". It is now never an
-  endpoint; the device's battery stays on its PowerSource, fed by the
-  device's low-battery data point as before. (#1027)
+  device type of its own. It is no longer offered for selection and never
+  becomes an endpoint; the device's battery stays on its PowerSource, fed by
+  the device's low-battery data point as before. (#1027)
 
 ## [0.107.1] - 2026-11-23
 

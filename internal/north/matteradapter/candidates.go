@@ -155,8 +155,13 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 		emit(matterendpoint.DPKindCustom, cdp)
 	}
 
-	// Calculated DPs (derived sensors).
+	// Calculated DPs (derived sensors). A derived battery level is no
+	// candidate: the assembly withholds it, and the PowerSource reads the
+	// generic battery data point, so exposing it would change nothing.
 	for _, calc := range ch.CalculatedDataPoints() {
+		if m, ok := calc.(contract.MeasurementSource); ok && m.MatterMeasurementClass() == contract.MeasurementBattery {
+			continue
+		}
 		emit(matterendpoint.DPKindCalculated, calc)
 	}
 
