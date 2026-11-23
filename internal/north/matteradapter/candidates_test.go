@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/contract"
-	"github.com/SukramJ/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/contract"
+	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"

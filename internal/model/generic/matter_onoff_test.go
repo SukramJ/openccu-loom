@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 )
 
 // TestMatterOnOffServerAcceptsASynchronousEcho pins the go-fabric contract

@@ -12,13 +12,13 @@ import (
 	"testing"
 	"testing/synctest"
 
-	mattercluster "github.com/SukramJ/go-fabric/cluster"
-	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
-	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
+	mattercluster "thingfabric.dev/go-fabric/cluster"
+	closuredef "thingfabric.dev/go-fabric/cluster/spec/closurecontrol"
+	clusterwire "thingfabric.dev/go-fabric/cluster/wire"
 
-	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+	windowcoveringspec "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
+	"thingfabric.dev/go-fabric/cluster/spec"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"

@@ -7,16 +7,16 @@ import (
 	"context"
 	"fmt"
 
-	contract "github.com/SukramJ/go-fabric/contract"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/schema"
-	"github.com/SukramJ/go-fabric/surface"
+	contract "thingfabric.dev/go-fabric/contract"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/schema"
+	"thingfabric.dev/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // The Matter port contracts live in
-// [github.com/SukramJ/go-fabric/contract], a separate module that depends on
+// [thingfabric.dev/go-fabric/contract], a separate module that depends on
 // nothing in this repository. They are re-exported here as aliases so the
 // call sites that reach for them through this package keep compiling; new
 // code should name the contract symbol directly.

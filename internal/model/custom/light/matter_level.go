@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
+	levelcontroldef "thingfabric.dev/go-fabric/cluster/spec/levelcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

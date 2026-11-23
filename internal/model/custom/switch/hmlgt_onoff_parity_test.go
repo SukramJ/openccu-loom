@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	matterparity "github.com/SukramJ/go-fabric/parity"
+	matterparity "thingfabric.dev/go-fabric/parity"
 )
 
 // hmLgtOnOffCluster is the matter.js OnOff element as the snapshot

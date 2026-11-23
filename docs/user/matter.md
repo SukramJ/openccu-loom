@@ -55,7 +55,7 @@ To pair, your phone app needs either the **setup QR code** or the **11-digit man
 
 ## The Matter view
 
-The **Matter** view (shown only while the bridge is enabled) has eight tabs. The pages are the node page family of [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui), shared by every daemon built on go-fabric; what is OpenCCU-Loom's own is the list of exposable CCU channels and their names. The terms the tabs use — fabric, commissioning window, endpoint, served surface, topology — are explained in go-fabric's [glossary](https://sukramj.github.io/go-fabric/reference/glossary/).
+The **Matter** view (shown only while the bridge is enabled) has eight tabs. The pages are the node page family of [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui), shared by every daemon built on go-fabric; what is OpenCCU-Loom's own is the list of exposable CCU channels and their names. The terms the tabs use — fabric, commissioning window, endpoint, served surface, topology — are explained in go-fabric's [glossary](https://docs.thingfabric.dev/reference/glossary/).
 
 - **Status** — whether the bridge listens and advertises, how many endpoints it serves, how many controllers are paired, and whether a commissioning window is open; below it the bridge's configuration as `north.matter` sets it (label, listen address, discriminator, vendor and product), read-only.
 - **Pair** — open a commissioning window with its QR code, manual code and countdown, and close it again early.
@@ -187,11 +187,11 @@ Matter controllers do not implement the specification uniformly — each ecosyst
 - A device must be mappable to a supported Matter type before it can be exposed.
 - The default test vendor identity means ecosystems may treat the bridge as uncertified (see the warning above).
 
-For the technical contract behind the Matter mapping, see [`docs/matter-parity-contract.md`](../matter-parity-contract.md); the per-ecosystem findings behind the caveats above are collected in [Matter Ecosystem Observations](https://github.com/SukramJ/go-fabric/blob/main/docs/matter-ecosystem-observations.md).
+For the technical contract behind the Matter mapping, see [`docs/matter-parity-contract.md`](../matter-parity-contract.md); the per-ecosystem findings behind the caveats above are collected in [Matter Ecosystem Observations](https://github.com/thingfabric/go-fabric/blob/main/docs/matter-ecosystem-observations.md).
 
 ## Where to go next
 
 - [Getting started](../getting-started.md) — install and first run.
 - [Core concepts](concepts.md) — devices, channels, and data points.
 - [Configuration](../admin/configuration.md) — full Matter and daemon settings.
-- [Glossary](https://sukramj.github.io/go-fabric/reference/glossary/) — the Matter terms and the terms of the go-fabric family, in go-fabric's documentation.
+- [Glossary](https://docs.thingfabric.dev/reference/glossary/) — the Matter terms and the terms of the go-fabric family, in go-fabric's documentation.

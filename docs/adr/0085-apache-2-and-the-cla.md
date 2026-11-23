@@ -9,7 +9,7 @@
   (DCO only, no CLA — August 2026)
 - **Related**: [ADR 0003 — Embed openccu-data metadata artifacts](./0003-embed-occu-extracts.md),
   [ADR 0084 — the Matter profiles on go-fabric's device layer](./0084-matter-device-layer-and-node-facade.md),
-  go-fabric [ADR 0023 — Apache License 2.0 and a contributor licence agreement](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0023-apache-2-and-the-cla.md)
+  go-fabric [ADR 0023 — Apache License 2.0 and a contributor licence agreement](https://github.com/thingfabric/go-fabric/blob/main/docs/adr/0023-apache-2-and-the-cla.md)
 
 ## Context
 

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/cluster/alarm"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	"thingfabric.dev/go-fabric/cluster/alarm"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"

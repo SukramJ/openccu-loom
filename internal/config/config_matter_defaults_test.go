@@ -6,7 +6,7 @@ package config
 import (
 	"testing"
 
-	"github.com/SukramJ/go-fabric/secure/spake2"
+	"thingfabric.dev/go-fabric/secure/spake2"
 )
 
 // TestNorthMatter_WithDefaults_ZeroValue verifies that every documented

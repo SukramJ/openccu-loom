@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )

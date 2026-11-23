@@ -11,7 +11,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/parity"
+	"thingfabric.dev/go-fabric/parity"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )

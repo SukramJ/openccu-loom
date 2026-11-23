@@ -35,7 +35,7 @@ test.describe('Licenses', () => {
     // Table rows from the fixture: one npm package, one Go module.
     await expect(page.getByText('svelte', { exact: true })).toBeVisible();
     await expect(page.getByText('5.16.0', { exact: true })).toBeVisible();
-    await expect(page.getByText('github.com/SukramJ/go-fabric', { exact: true })).toBeVisible();
+    await expect(page.getByText('thingfabric.dev/go-fabric', { exact: true })).toBeVisible();
 
     // Download link carries ?download=1.
     const downloadLink = page.getByRole('link', { name: 'Download SBOM' });

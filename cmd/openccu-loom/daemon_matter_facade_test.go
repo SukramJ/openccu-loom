@@ -4,7 +4,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
@@ -14,38 +16,68 @@ import (
 	"testing"
 	"time"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
-	"github.com/SukramJ/go-fabric/secure/spake2"
-	matterstore "github.com/SukramJ/go-fabric/store"
+	matterbridge "thingfabric.dev/go-fabric/bridge"
+	mattersetup "thingfabric.dev/go-fabric/secure/setup"
+	"thingfabric.dev/go-fabric/secure/spake2"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
 // TestMatterCommissioningCredentialsKeepAConfiguredPasscode: a valid
-// configured passcode and salt reach the node verbatim and count as
-// configured.
+// configured passcode and the iterations reach the node verbatim and count
+// as configured; the salt is a random one of the PBKDF size, since the
+// node draws its own for every window.
 func TestMatterCommissioningCredentialsKeepAConfiguredPasscode(t *testing.T) {
 	t.Parallel()
-	cm := config.NorthMatterCommissioning{Passcode: 20202021, Salt: "openccu-loom-dev0", Iterations: 1000}
+	cm := config.NorthMatterCommissioning{Passcode: 20202021, Iterations: 1000}
 	passcode, salt, iterations, configured, err := matterCommissioningCredentials(cm, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("matterCommissioningCredentials: %v", err)
 	}
-	if passcode != 20202021 || string(salt) != "openccu-loom-dev0" || iterations != 1000 || !configured {
-		t.Fatalf("got passcode=%d salt=%q iterations=%d configured=%v; want the configured values, configured", passcode, salt, iterations, configured)
+	if passcode != 20202021 || iterations != 1000 || !configured {
+		t.Fatalf("got passcode=%d iterations=%d configured=%v; want the configured values, configured", passcode, iterations, configured)
+	}
+	if len(salt) < spake2.PBKDFMinSaltSize || len(salt) > spake2.PBKDFMaxSaltSize {
+		t.Fatalf("salt is %d bytes, want %d..%d", len(salt), spake2.PBKDFMinSaltSize, spake2.PBKDFMaxSaltSize)
+	}
+}
+
+// TestMatterCommissioningCredentialsNameTheRetiredSalt: a configuration
+// that still sets north.matter.commissioning.salt is named in the log at
+// the bridge's build, and one without it is not.
+func TestMatterCommissioningCredentialsNameTheRetiredSalt(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		section string
+		warn    bool
+	}{
+		{`{"passcode":20202021,"salt":"openccu-loom-dev0"}`, true},
+		{`{"passcode":20202021}`, false},
+	} {
+		var cm config.NorthMatterCommissioning
+		if err := json.Unmarshal([]byte(tc.section), &cm); err != nil {
+			t.Fatalf("decode %s: %v", tc.section, err)
+		}
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+		if _, _, _, _, err := matterCommissioningCredentials(cm, logger); err != nil {
+			t.Fatalf("matterCommissioningCredentials: %v", err)
+		}
+		if got := strings.Contains(buf.String(), "matter.bridge.pase.salt_retired"); got != tc.warn {
+			t.Errorf("section %s: salt_retired logged = %v, want %v (log: %s)", tc.section, got, tc.warn, buf.String())
+		}
 	}
 }
 
 // TestMatterCommissioningCredentialsSubstituteWhatTheFacadeRefuses: the
 // facade will not build without a valid passcode and a salt of spake2's
-// size, the daemon runs without either — so a missing passcode becomes a
-// random valid one that is NOT reported as configured, and a short salt
-// becomes a random one of a valid size.
+// size, the daemon runs without a passcode — so a missing passcode becomes
+// a random valid one that is NOT reported as configured.
 func TestMatterCommissioningCredentialsSubstituteWhatTheFacadeRefuses(t *testing.T) {
 	t.Parallel()
-	cm := config.NorthMatterCommissioning{Passcode: 0, Salt: "short", Iterations: 1000}
+	cm := config.NorthMatterCommissioning{Passcode: 0, Iterations: 1000}
 	passcode, salt, _, configured, err := matterCommissioningCredentials(cm, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("matterCommissioningCredentials: %v", err)

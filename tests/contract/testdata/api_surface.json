@@ -1,5 +1,5 @@
 {
- "api_version": "17.0.0",
+ "api_version": "18.0.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -660,7 +660,8 @@
    "walktest_active:boolean"
   ],
   "Applied": [
-   "applied:integer"
+   "applied:integer",
+   "reassembled:boolean"
   ],
   "Area": [
    "id:string",
@@ -1360,6 +1361,7 @@
    "event_hex:string",
    "name:string",
    "number:integer",
+   "number_str:string",
    "priority:$ref:NodeEventPriority"
   ],
   "EventRecordList": [
@@ -1837,7 +1839,9 @@
    "passcode:integer",
    "qr_code:string",
    "source:$ref:NodePairingSource",
-   "window_open:boolean"
+   "window_match:boolean",
+   "window_open:boolean",
+   "window_remaining_seconds:integer"
   ],
   "PairingAnswer": [
    "expires_in:integer",
@@ -2470,7 +2474,8 @@
    "surface:object",
    "warnings:array\u003c$ref:NodeWarning\u003e",
    "window_deadline:string",
-   "window_kind:$ref:NodeWindowKind"
+   "window_kind:$ref:NodeWindowKind",
+   "window_remaining_seconds:integer"
   ],
   "StructuralEndpoint": [
    "device_types:array\u003c$ref:EndpointDeviceType\u003e",

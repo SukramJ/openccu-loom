@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/im"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	thermostatspec "thingfabric.dev/go-fabric/cluster/spec/thermostat"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"

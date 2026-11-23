@@ -10,9 +10,9 @@ import (
 	"io"
 	"testing"
 
-	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	"github.com/SukramJ/go-fabric/im"
-	"github.com/SukramJ/go-fabric/tlv"
+	matterbridge "thingfabric.dev/go-fabric/bridge"
+	"thingfabric.dev/go-fabric/im"
+	"thingfabric.dev/go-fabric/tlv"
 )
 
 // TestSubscribeInitial_WireTruth_StrictTLV asserts that every
@@ -105,18 +105,22 @@ func TestSubscribeInitial_WireTruth_StrictTLV(t *testing.T) {
 	}
 }
 
-// TestSubscribeInitial_WireTruth_EmptyReports asserts the keepalive
-// shape — an empty AttributeReports Array with SuppressResponse=true
-// — still satisfies the strict TLV and matter.js TlvDataReport shape.
-// matter.js's ServerSubscription emits this on every heartbeat tick
-// when no attribute has changed; Apple's MTRDevice MUST accept it.
+// TestSubscribeInitial_WireTruth_EmptyReports asserts the keep-alive
+// shape — a ReportData with no attribute report — satisfies the strict TLV
+// and carries no AttributeReports field at all: matter.js leaves the
+// optional field out when it has nothing to report
+// (packages/types/src/protocol/messages/TlvDataReport.ts, the
+// attributeReports field; InteractionMessenger.ts sendDataReport), and
+// go-fabric encodes it the same way since 0.23.0.
+// connectedhomeip's ReadClient accepts an absent array as an empty one.
+// The keep-alive asks for the subscriber's StatusResponse
+// (SuppressResponse false), as matter.js's ServerSubscription sends it.
 func TestSubscribeInitial_WireTruth_EmptyReports(t *testing.T) {
 	t.Parallel()
 	rd := im.ReportData{
-		SubscriptionID:   0xAABBCCDD,
-		HasSubscription:  true,
-		SuppressResponse: true,
-		Reports:          nil,
+		SubscriptionID:  0xAABBCCDD,
+		HasSubscription: true,
+		Reports:         nil,
 	}
 	wire, err := matterbridge.EncodeReportData(rd)
 	if err != nil {
@@ -126,8 +130,11 @@ func TestSubscribeInitial_WireTruth_EmptyReports(t *testing.T) {
 		t.Fatalf("tlv.Validate keepalive rejected: %v\nwire=% X", vErr, wire)
 	}
 	saw := walkTopLevelTags(t, wire)
-	if !saw[1] {
-		t.Errorf("keepalive ReportData missing AttributeReports array (must be present even when empty)")
+	if saw[1] {
+		t.Errorf("keep-alive ReportData carries an AttributeReports field (context-tag 1); matter.js leaves it out when there is no attribute report")
+	}
+	if !saw[0] {
+		t.Errorf("keep-alive ReportData missing SubscriptionId (context-tag 0)")
 	}
 }
 

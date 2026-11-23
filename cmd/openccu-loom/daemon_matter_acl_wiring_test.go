@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/im"
-	matterstore "github.com/SukramJ/go-fabric/store"
+	"thingfabric.dev/go-fabric/im"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"

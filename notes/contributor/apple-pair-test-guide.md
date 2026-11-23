@@ -275,7 +275,7 @@ matter.js HEAD spec 1.5.1 schema refresh).
 
 For the live status of every Matter parity finding — open vs. closed,
 per-release — see
-[go-fabric `notes/parity/matter_behaviour_findings.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/parity/matter_behaviour_findings.md),
+[go-fabric `notes/parity/matter_behaviour_findings.md`](https://github.com/thingfabric/go-fabric/blob/main/notes/parity/matter_behaviour_findings.md),
 which supersedes the point-in-time "Track A/B" audit counts this
 section used to carry. The TLV codec remains byte-exact against the
 pinned matter.js HEAD (go-fabric `tlv/testdata/tlv-wire-fixtures.json`),

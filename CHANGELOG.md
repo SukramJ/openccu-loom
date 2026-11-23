@@ -6,6 +6,70 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking for API users (REST API 18.0.0): the Matter node routes read
+  with admin rights only.** go-fabric-ui 0.10 put 43 reading operations
+  under `/api/v1/node` (endpoints, fabrics, sessions, mDNS, compatibility,
+  surface, topology, the selection and the event traces) behind the admin
+  gate. A request has admin rights there when the user holds the admin role
+  **and** it carries the header `X-Fabric-UI: 1`; without it the answer is
+  403 `forbidden`. The Web UI sends the header itself. `GET /node/status`
+  and the node stream stay open and answer a non-admin with less detail.
+  Further contract changes: write bodies need `Content-Type:
+  application/json` (else 415) and may not exceed the size limit (413);
+  `Status` and `Pairing` gain `window_remaining_seconds`, `Pairing`
+  `window_match`, `EventRecord` `number_str` and the selection's apply
+  answer `reassembled`.
+- **The Matter pages answer only under a known host name.** go-fabric-ui
+  0.10 refuses a request whose `Host` is a DNS name it was not given
+  (403 `host_not_allowed`), its defence against DNS rebinding; loopback
+  names and IP addresses always pass. The daemon gives it the host of
+  `north.rest.public_url` and `<hostname>.local`. Reaching the daemon under
+  another name — a local DNS name, a reverse proxy's name — needs
+  `north.rest.public_url` set to that name. Home Assistant's Ingress needs
+  nothing: a request the Supervisor proxied (its network and the
+  `X-Ingress-Path` header) is admitted under any name. Behind a reverse
+  proxy that rewrites `Host`, the node routes take `X-Forwarded-Host` as
+  the host the browser addressed, as the WebSocket handler already does,
+  so the admin routes' Origin check matches.
+- **`north.matter.commissioning.salt` is retired.** go-fabric draws a fresh
+  PBKDF salt for every commissioning window, as matter.js does, so a
+  configured salt never reached a commissioner. The field is gone from the
+  configuration, the Web UI and the documentation; a config file or a
+  stored section that still sets it loads as before, and the bridge start
+  logs `matter.bridge.pase.salt_retired` once. (#1122)
+- **`north.matter.node_label` is limited to 32 bytes**, the constraint of
+  Matter's BasicInformation.NodeLabel, which the node now enforces at
+  start. A longer label is refused when it is saved instead of keeping the
+  bridge from starting; an umlaut counts as two bytes. (#1122)
+- **go-fabric v0.22.2 → v0.25.0**, now under the module path
+  `thingfabric.dev/go-fabric` (repository `github.com/thingfabric/go-fabric`,
+  documentation at docs.thingfabric.dev). v0.23.0 is go-fabric's second
+  full review against matter.js and connectedhomeip; what reaches the
+  bridge includes a keep-alive that asks for the controller's
+  StatusResponse and ends a subscription the controller no longer knows, a
+  report without attribute data that leaves the AttributeReports field out
+  as matter.js does, a fresh salt for every commissioning window, reports
+  to a subscriber no more often than every 2 s (matter.js's minimum send
+  interval), a window covering whose position the CCU has not reported yet
+  that answers no position (null) instead of fully open, and the matter.js
+  schema pin moved to b25ed960. A bridged device keeps its address as its
+  SerialNumber: the node now serves one only when the host states it, so
+  the daemon states it. The Matter store gains go-fabric's
+  schema steps v8 to v12 (a fabric's commit state and VID verification
+  data, the session parameters of a resumption record, the fabric events
+  owed to a controller, the seal mark of every stored secret, the
+  resumption record's role): a database migration carries them, and the
+  bridge start runs go-fabric's store upgrade, which moves the VID
+  verification data an earlier release kept as settings into its columns.
+  (#1125)
+- **go-fabric-ui v0.9.2 → v0.13.0** (the Go module and
+  `@sukramj/fabric-ui`): the admin gate on reading routes, the Host and
+  Origin checks and the contract changes above; the controller family's
+  onboarding inventory (v0.13.0) is not served here, since the daemon
+  runs no controller.
+
 ## [0.107.1] - 2026-11-23
 
 ### Fixed

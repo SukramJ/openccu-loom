@@ -7,9 +7,9 @@ import (
 	"context"
 	"slices"
 
-	onoffdef "github.com/SukramJ/go-fabric/cluster/spec/onoff"
-	smokecoalarmdef "github.com/SukramJ/go-fabric/cluster/spec/smokecoalarm"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	onoffdef "thingfabric.dev/go-fabric/cluster/spec/onoff"
+	smokecoalarmdef "thingfabric.dev/go-fabric/cluster/spec/smokecoalarm"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"

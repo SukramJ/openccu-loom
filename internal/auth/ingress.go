@@ -85,11 +85,21 @@ func ingressTrusted(t IngressTrust, r *http.Request) bool {
 	if _, ok := IdentityFrom(r.Context()); ok {
 		return false // a real Bearer/session/basic identity wins
 	}
-	if r.Header.Get("X-Ingress-Path") == "" {
+	return SupervisorProxied(t.TrustedCIDR, r)
+}
+
+// SupervisorProxied reports whether r came through Home Assistant's
+// Ingress proxy: it carries the Supervisor's X-Ingress-Path header and its
+// real TCP peer (RemoteAddr, never X-Forwarded-For) lies inside cidr, the
+// Supervisor's network. It says where the request came from, not who sent
+// it — the passthrough above adds the identity on top. A nil cidr admits
+// nothing.
+func SupervisorProxied(cidr *net.IPNet, r *http.Request) bool {
+	if cidr == nil || r.Header.Get("X-Ingress-Path") == "" {
 		return false
 	}
 	ip := remotePeerIP(r) // real TCP peer only — X-Forwarded-For is ignored on purpose
-	return ip != nil && t.TrustedCIDR.Contains(ip)
+	return ip != nil && cidr.Contains(ip)
 }
 
 // remotePeerIP parses the request's real transport peer from RemoteAddr.

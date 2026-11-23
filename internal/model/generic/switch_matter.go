@@ -6,7 +6,7 @@ package generic
 import (
 	"context"
 
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"

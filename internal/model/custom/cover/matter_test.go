@@ -11,19 +11,19 @@ import (
 	"testing/synctest"
 	"time"
 
-	mattercluster "github.com/SukramJ/go-fabric/cluster"
-	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
-	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
-	"github.com/SukramJ/go-fabric/contract"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	mattercluster "thingfabric.dev/go-fabric/cluster"
+	closuredef "thingfabric.dev/go-fabric/cluster/spec/closurecontrol"
+	clusterwire "thingfabric.dev/go-fabric/cluster/wire"
+	"thingfabric.dev/go-fabric/contract"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
-	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+	windowcoveringspec "thingfabric.dev/go-fabric/cluster/spec/windowcovering"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
+	"thingfabric.dev/go-fabric/cluster/spec"
 
-	fabriccover "github.com/SukramJ/go-fabric/cluster/cover"
+	fabriccover "thingfabric.dev/go-fabric/cluster/cover"
 
-	"github.com/SukramJ/go-fabric/im"
+	"thingfabric.dev/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -497,16 +497,17 @@ func TestBlindFeatureMapIncludesTilt(t *testing.T) {
 	}
 }
 
-// TestPositionUnobservedReportsOpen: the server carries no null
-// position — a cover whose CCU position is not yet observed starts
-// fully open (0), as matter.js's WindowCoveringServer initialises the
-// attributes from their defaults, and the first confirmed LEVEL
-// replaces it.
-func TestPositionUnobservedReportsOpen(t *testing.T) {
+// TestPositionUnobservedReportsUnknown: a cover whose CCU position is
+// not yet observed reports no position — CurrentPositionLiftPercent100ths
+// reads null, the attribute's default in matter.js's WindowCovering model
+// (window-covering-cluster.element.ts, default null) — and the first
+// confirmed LEVEL replaces it. Reporting fully open instead would tell a
+// controller a position nobody measured.
+func TestPositionUnobservedReportsUnknown(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := windowCoveringServer(t, c)
-	if got := readU16(t, srv, windowcoveringspec.AttrCurrentPositionLiftPercent100ths); got != 0 {
-		t.Fatalf("unobserved CurrentPositionLift = %d, want 0 (open)", got)
+	if got, ok := srv.MatterRead(windowcoveringspec.AttrCurrentPositionLiftPercent100ths); !ok || got != nil {
+		t.Fatalf("unobserved CurrentPositionLift = (%v, %v), want (null, true)", got, ok)
 	}
 	c.OnLevel(0.25)
 	if got := readU16(t, srv, windowcoveringspec.AttrCurrentPositionLiftPercent100ths); got != 7500 {

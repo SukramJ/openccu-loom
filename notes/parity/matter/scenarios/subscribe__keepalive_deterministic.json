@@ -1,6 +1,6 @@
 {
   "name": "subscribe__keepalive_deterministic",
-  "description": "Deterministic counterpart to subscribe__max_interval_keepalive: instead of waiting for the heartbeat to fire by wall-clock, the harness drives the engine via engine_tick_at to a synthetic clock 2000 ms past subscription admission. With MaxIntervalCeiling=2 the matter.js-aligned sendInterval formula produces a 1.6 s heartbeat (max(MinIntervalFloor, maxInterval × 0.8)); the engine then ships an empty-payload ReportData. Locks the same heartbeat cadence as Phase P but in <50 ms of test time, demonstrating the clock-injection seam.",
+  "description": "Deterministic counterpart to subscribe__max_interval_keepalive: instead of waiting for the heartbeat to fire by wall-clock, the harness drives the engine via engine_tick_at to a synthetic clock 2500 ms past the harness's start, which it takes before the subscription is admitted. With MaxIntervalCeiling=2 the matter.js-aligned send interval is 2 s — maxInterval × 0.8 = 1.6 s, raised to matter.js's MIN_INTERVAL of 2 s (ServerSubscription.ts) — and a keep-alive is due 2 s after the admission; the engine then ships a ReportData without attribute data. Locks the same heartbeat cadence as Phase P but in <50 ms of test time, demonstrating the clock-injection seam.",
   "tags": ["matter", "subscribe", "cadence", "keepalive", "clock-injection"],
   "given": {
     "subscriptions": [
@@ -18,7 +18,7 @@
     {
       "actor": "bridge",
       "kind": "engine_tick_at",
-      "at_millis": 2000
+      "at_millis": 2500
     },
     {
       "actor": "bridge",

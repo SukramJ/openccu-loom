@@ -7,8 +7,8 @@ import (
 	"context"
 	"unicode/utf8"
 
-	msdef "github.com/SukramJ/go-fabric/cluster/spec/modeselect"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	msdef "thingfabric.dev/go-fabric/cluster/spec/modeselect"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )

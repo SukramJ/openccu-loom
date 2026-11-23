@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/cluster/onoff"
 )
 
 // TestParityMatterJS_SwitchDataVersionBumpsOnInvoke verifies that an

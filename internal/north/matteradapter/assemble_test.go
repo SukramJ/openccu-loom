@@ -7,7 +7,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/SukramJ/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )

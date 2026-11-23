@@ -6,7 +6,7 @@ the full workflow.
 
 Two things live here now: the schema **pin**, and the **scenario corpus**. The
 wire-fixture generators moved to
-[go-fabric](https://github.com/SukramJ/go-fabric/tree/main/notes/parity/matter)
+[go-fabric](https://github.com/thingfabric/go-fabric/tree/main/notes/parity/matter)
 along with the Matter stack — the tests that consume their output are that
 module's, and a generator whose output nothing here reads was a copy waiting to
 go stale.
@@ -57,5 +57,5 @@ JSON files they produced now live in go-fabric, with the `testdata/` copies
 next to the tests as the masters. The by-design divergences those fixtures
 record — fixed-width SubscriptionId / MaxInterval encoding, always-emitted
 empty optional arrays, decode-only message types — are documented in
-[go-fabric's `by_design.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/parity/by_design.md)
+[go-fabric's `by_design.md`](https://github.com/thingfabric/go-fabric/blob/main/notes/parity/by_design.md)
 together with the rest of the Matter divergence catalogue.

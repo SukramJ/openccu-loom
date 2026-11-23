@@ -24,7 +24,7 @@ import (
 
 	gomqtt "github.com/SukramJ/go-mqtt"
 
-	"github.com/SukramJ/go-fabric/secure/spake2"
+	"thingfabric.dev/go-fabric/secure/spake2"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -1122,12 +1122,6 @@ type NorthMatterCommissioning struct {
 	// the PASE builder accept exactly the same set.
 	Passcode uint32 `yaml:"passcode" json:"passcode" cfg:"secret"`
 
-	// Salt is the PBKDF2 salt persisted alongside the passcode
-	// (16..32 bytes per Spec §3.10). Empty, or outside that range, is
-	// replaced by a random per-process salt; a commissioner cannot
-	// tell, the salt travels in PBKDFParamResponse.
-	Salt string `yaml:"salt" json:"salt" cfg:"secret"`
-
 	// Iterations is the PBKDF2 iteration count (1000..100000 per
 	// Spec §3.10). Defaults to 1000 when 0.
 	Iterations int `yaml:"iterations" json:"iterations" cfg:"expert"`
@@ -1149,6 +1143,35 @@ type NorthMatterCommissioning struct {
 	// runs on the node facade's basic window with the fresh
 	// credentials; the configured ones return when it closes.
 	EphemeralWindow bool `yaml:"ephemeral_window" json:"ephemeral_window" cfg:"basic"`
+
+	// retiredSalt records that the source still set `salt`, a key the
+	// daemon no longer reads: go-fabric draws a fresh PBKDF salt for every
+	// commissioning window it opens, as matter.js does, so a configured
+	// salt never reached a commissioner. A file or a stored section that
+	// still carries it loads as before — the key is dropped — and the
+	// bridge start names it ([NorthMatterCommissioning.SetsRetiredSalt]).
+	retiredSalt bool
+}
+
+// SetsRetiredSalt reports whether the source this value was decoded from
+// still set the retired `salt` key.
+func (c NorthMatterCommissioning) SetsRetiredSalt() bool { return c.retiredSalt }
+
+// UnmarshalYAML decodes the block and notes a retired `salt` key, which
+// the YAML decoder would otherwise drop without a trace.
+func (c *NorthMatterCommissioning) UnmarshalYAML(value *yaml.Node) error {
+	type alias NorthMatterCommissioning
+	if err := value.Decode((*alias)(c)); err != nil {
+		return err
+	}
+	if value.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(value.Content); i += 2 {
+			if value.Content[i].Value == "salt" && value.Content[i+1].Value != "" {
+				c.retiredSalt = true
+			}
+		}
+	}
+	return nil
 }
 
 // UnmarshalJSON tolerates a JSON string for `passcode` in addition to a
@@ -1159,8 +1182,8 @@ type NorthMatterCommissioning struct {
 // ... of type uint32". Every other field keeps strict decoding, including
 // rejection of unknown keys, to match the section-validation contract.
 //
-// JSON only: YAML loading is unaffected (yaml.v3 does not call this), so
-// config.yaml continues to use a plain numeric passcode.
+// JSON only: yaml.v3 calls [NorthMatterCommissioning.UnmarshalYAML]
+// instead, so config.yaml continues to use a plain numeric passcode.
 //
 // The shadow field is seeded with the receiver's current passcode so an
 // omitted `passcode` key keeps the stored value, exactly as every field
@@ -1174,6 +1197,9 @@ func (c *NorthMatterCommissioning) UnmarshalJSON(data []byte) error {
 	type alias NorthMatterCommissioning
 	aux := &struct {
 		Passcode flexUint32 `json:"passcode"`
+		// Salt takes the retired key a section stored by an earlier
+		// release still carries, which the strict decode would refuse.
+		Salt *string `json:"salt"`
 		*alias
 	}{Passcode: flexUint32(c.Passcode), alias: (*alias)(c)}
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -1182,6 +1208,9 @@ func (c *NorthMatterCommissioning) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	c.Passcode = uint32(aux.Passcode)
+	if aux.Salt != nil && *aux.Salt != "" {
+		c.retiredSalt = true
+	}
 	return nil
 }
 

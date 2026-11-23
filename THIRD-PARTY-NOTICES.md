@@ -130,7 +130,7 @@ the matter.js `path:function` they mirror.
 - No matter.js source code is reproduced verbatim. What does ship inside every
   binary is the parity schema snapshot — the matter.js element model extracted
   from HEAD. Since the Matter wire stack moved out in 0.74.0 it is embedded by
-  the [go-fabric](https://github.com/SukramJ/go-fabric) module rather than by
+  the [go-fabric](https://github.com/thingfabric/go-fabric) module rather than by
   this repository: `parity/schema.json` (522,654 bytes), embedded by the
   `//go:embed` in go-fabric's `parity/parity.go` and reaching every binary
   built here through the module dependency in `go.mod`.
@@ -189,7 +189,7 @@ direct dependencies declared in [`go.mod`](./go.mod) include:
 | Module | License (family) |
 | --- | --- |
 | `filippo.io/nistec` | BSD-3-Clause |
-| `github.com/SukramJ/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.22.2) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
+| `thingfabric.dev/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.25.0) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
 | `github.com/SukramJ/go-fabric-ui` | Apache-2.0 — the node page family's HTTP handlers (`fabricui`), mounted under `/api/v1/node`; the module also carries its built standalone bundle, which this daemon does not serve |
 | `github.com/SukramJ/go-hamqtt` | MIT |
 | `github.com/SukramJ/go-ha-catalog` | MIT |

@@ -4,11 +4,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/node"
+	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -65,13 +66,16 @@ type matterNodeObserved interface {
 // WebSocket hub, one topic per event type, and records a removed fabric
 // in the audit ledger. It returns the unsubscribe function.
 //
-// The events arrive on two paths. The endpoint and exposure changes are
-// published into go-fabric-ui's event source (src) by the daemon and the
-// exposure route. The fabric, window and surface transitions are not: go-fabric-ui
+// The events arrive on three paths. The endpoint changes are published
+// into go-fabric-ui's event source (src) by the daemon's reassembly hook.
+// The fabric, window and surface transitions are not: go-fabric-ui
 // observes the node for each open SSE stream alone and puts nothing into
 // src, so the bridge observes the node itself (n) through go-fabric-ui's
 // own conversion, fabricui.NodeObservers — publishing them into src
-// instead would hand every SSE stream each transition twice.
+// instead would hand every SSE stream each transition twice. The exposure
+// changes reach the sink from the selection the exposure routes write
+// through ([exposureEvents]): go-fabric-ui publishes its own exposure
+// event into a hub of the handler's, which src does not see.
 //
 // A fabric removal is the one node write whose principal the ledger
 // cannot name: go-fabric-ui's routes (DELETE /node/fabrics/{index}, the
@@ -91,6 +95,32 @@ func wireMatterNodeEvents(src *fabricui.Events, n matterNodeObserved, hub *ws.Hu
 			u()
 		}
 	}
+}
+
+// exposureEvents is the selection go-fabric-ui's exposure routes write
+// through: every Apply that stored a change also reports it to sink as
+// fabricui.EventExposureChanged, so the WebSocket hub carries
+// `node.exposure_changed`. The handler publishes the same event into a hub
+// of its own, which a host's event source does not receive; reporting it
+// here, not into that source, keeps the admin SSE streams from seeing it
+// twice.
+type exposureEvents struct {
+	fabricui.ExposureProvider
+	sink func(fabricui.Event)
+}
+
+// Apply stores the updates and, when that succeeded, reports their keys.
+func (e exposureEvents) Apply(ctx context.Context, updates []fabricui.Update) (int, error) {
+	applied, err := e.ExposureProvider.Apply(ctx, updates)
+	if err != nil || len(updates) == 0 {
+		return applied, err
+	}
+	keys := make([]string, 0, len(updates))
+	for i := range updates {
+		keys = append(keys, updates[i].Key)
+	}
+	e.sink(fabricui.Event{Type: fabricui.EventExposureChanged, Data: fabricui.ExposureEvent{Keys: keys}})
+	return applied, nil
 }
 
 // matterNodeEventSink publishes one node event under its hub topic and

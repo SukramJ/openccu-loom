@@ -74,7 +74,7 @@ var compositionRootSeams = []compositionRootSeam{
 		minDecl:  12,
 	},
 	// The matterbridge.Config seam is not listed: the struct is declared in
-	// github.com/SukramJ/go-fabric/bridge, and this guard reads the
+	// thingfabric.dev/go-fabric/bridge, and this guard reads the
 	// declaration out of a repo-relative directory. It cannot see a
 	// declaration that lives in another module, and a seam entry that
 	// silently reads nothing is worse than no entry at all.

@@ -6,8 +6,8 @@ package cover
 import (
 	"testing"
 
-	closuredef "github.com/SukramJ/go-fabric/cluster/spec/closurecontrol"
-	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
+	closuredef "thingfabric.dev/go-fabric/cluster/spec/closurecontrol"
+	clusterwire "thingfabric.dev/go-fabric/cluster/wire"
 )
 
 // TestClosureMainStateFollowsTheModelsMotion pins the Matter MainState to the

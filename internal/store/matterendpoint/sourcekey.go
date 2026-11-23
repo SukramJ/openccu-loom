@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	fabricendpoint "thingfabric.dev/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )

@@ -9,7 +9,7 @@ required.
 Scenarios cover multi-message conversation behaviour. Their counterpart —
 the single-message wire shapes (`im-wire-fixtures.json`,
 `tlv-wire-fixtures.json`) — moved to
-[go-fabric `notes/parity/matter/`](https://github.com/SukramJ/go-fabric/tree/main/notes/parity/matter)
+[go-fabric `notes/parity/matter/`](https://github.com/thingfabric/go-fabric/tree/main/notes/parity/matter)
 with the wire stack, so an audit that wants both halves now walks two
 repositories.
 
@@ -22,7 +22,7 @@ make scenarios
 
 The harness implementation: `tests/scenario/scenario_*_test.go`.
 
-The Matter stack itself now lives in `github.com/SukramJ/go-fabric`; the
+The Matter stack itself now lives in `thingfabric.dev/go-fabric`; the
 corpus stayed here because the coverage gate
 (`tests/contract/matter_scenario_gate_test.go`) derives the required set
 from `internal/model/custom`. The harness therefore drives the bridge

@@ -1,6 +1,6 @@
 # The Matter boundary
 
-The Matter stack is not part of this repository. It is the external Go module [go-fabric](https://github.com/SukramJ/go-fabric), and this page describes where the line between the two runs, what stays on this side and why, and how a go-fabric release reaches the daemon.
+The Matter stack is not part of this repository. It is the external Go module [go-fabric](https://github.com/thingfabric/go-fabric), and this page describes where the line between the two runs, what stays on this side and why, and how a go-fabric release reaches the daemon.
 
 !!! info "Who this page is for"
     Contributors who change anything Matter-related — a device profile's projection, the bridge bring-up, the exposure allowlist — or who move the daemon onto a newer go-fabric. The user-facing view is [Matter](../user/matter.md); the binding parity rules are the [Matter parity contract](../matter-parity-contract.md).
@@ -62,7 +62,7 @@ go-fabric has its own SemVer lane — the arrangement [ADR 0050](../adr/0050-mqt
 2. Move the require and tidy:
 
     ```sh
-    go get github.com/SukramJ/go-fabric@<tag>   # a tag; a commit SHA also works and records a pseudo-version
+    go get thingfabric.dev/go-fabric@<tag>   # a tag; a commit SHA also works and records a pseudo-version
     go mod tidy
     ```
 

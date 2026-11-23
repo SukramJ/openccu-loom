@@ -256,18 +256,21 @@ func matterRestartRules() []RestartRule {
 		},
 		{
 			// The PASE acceptor is constructed from the whole commissioning
-			// block at bring-up (verifier derived from passcode + salt +
+			// block at bring-up (verifier derived from passcode and
 			// iterations), so every field in it is restart-required.
 			Path: "north.matter.commissioning",
 			Fields: []string{
 				"north.matter.commissioning.passcode",
-				"north.matter.commissioning.salt",
 				"north.matter.commissioning.iterations",
 				"north.matter.commissioning.concurrent_pairings",
 				"north.matter.commissioning.ephemeral_window",
 			},
 			Differs: func(b, e *Config) bool {
-				return !reflect.DeepEqual(b.North.Matter.WithDefaults().Commissioning, e.North.Matter.WithDefaults().Commissioning)
+				bc, ec := b.North.Matter.WithDefaults().Commissioning, e.North.Matter.WithDefaults().Commissioning
+				// A retired key the old source carried changes nothing
+				// the bridge runs on.
+				bc.retiredSalt, ec.retiredSalt = false, false
+				return !reflect.DeepEqual(bc, ec)
 			},
 		},
 		// The advertiser is built once in the bridge bring-up; switching

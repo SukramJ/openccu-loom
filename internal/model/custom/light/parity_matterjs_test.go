@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-	"github.com/SukramJ/go-fabric/cluster/wire"
+	"thingfabric.dev/go-fabric/cluster/levelcontrol"
+	"thingfabric.dev/go-fabric/cluster/onoff"
+	colorcontrol "thingfabric.dev/go-fabric/cluster/spec/colorcontrol"
 
-	matterparity "github.com/SukramJ/go-fabric/parity"
+	matterparity "thingfabric.dev/go-fabric/parity"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
@@ -205,7 +205,7 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 		// D-50: ColorControl is mounted on dimmable+colored lights via
 		// `matter_color.go` (go-fabric's ColorControlServer per colour variant).
 		// matter.js HEAD `color-control.element.ts` carries revision 9.
-		{wire.ColorControlClusterID, "ColorControl", colorClusterRevision(t)},
+		{colorcontrol.ClusterID, "ColorControl", colorClusterRevision(t)},
 	}
 
 	for _, c := range cases {

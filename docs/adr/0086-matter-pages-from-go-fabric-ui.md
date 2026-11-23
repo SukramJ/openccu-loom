@@ -5,7 +5,7 @@
 - **Related**: [ADR 0084 — the Matter profiles on go-fabric's device layer](./0084-matter-device-layer-and-node-facade.md),
   [ADR 0049 — Matter one endpoint per device](./0049-matter-one-endpoint-per-device.md),
   [ADR 0020 — External client wire contract](./0020-external-client-wire-contract.md),
-  go-fabric [concept v9 — fabric-ui](https://github.com/SukramJ/go-fabric/blob/main/docs/concept-v9-fabric-ui.md) (wave L1),
+  go-fabric [concept v9 — fabric-ui](https://github.com/thingfabric/go-fabric/blob/main/docs/concept-v9-fabric-ui.md) (wave L1),
   [go-fabric-ui](https://github.com/SukramJ/go-fabric-ui) `v0.1.1`
 
 ## Context

@@ -27,11 +27,11 @@ describe("parseSBOM", () => {
         {
           "bom-ref": "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0",
           type: "library",
-          name: "github.com/SukramJ/go-fabric",
+          name: "thingfabric.dev/go-fabric",
           version: "v0.0.0",
           purl: "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0?type=module",
           externalReferences: [
-            { type: "vcs", url: "https://github.com/SukramJ/go-fabric" },
+            { type: "vcs", url: "https://github.com/thingfabric/go-fabric" },
           ],
         },
       ],
@@ -61,12 +61,12 @@ describe("parseSBOM", () => {
     // rather than throw or fabricate a value.
     expect(rows[1]).toEqual({
       key: "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0",
-      name: "github.com/SukramJ/go-fabric",
+      name: "thingfabric.dev/go-fabric",
       version: "v0.0.0",
       license: "",
       purl: "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0?type=module",
       author: "",
-      links: [{ type: "vcs", url: "https://github.com/SukramJ/go-fabric" }],
+      links: [{ type: "vcs", url: "https://github.com/thingfabric/go-fabric" }],
     });
   });
 
@@ -155,7 +155,7 @@ describe("searchRows", () => {
         licenses: [{ license: { id: "MIT" } }],
       },
       {
-        name: "github.com/SukramJ/go-fabric",
+        name: "thingfabric.dev/go-fabric",
         version: "v0.0.0",
       },
     ],

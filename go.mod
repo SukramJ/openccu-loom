@@ -14,7 +14,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/oapi-codegen/runtime v1.8.0 // indirect
+	github.com/oapi-codegen/runtime v1.9.0 // indirect
 	github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
@@ -34,8 +34,7 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.22.2
-	github.com/SukramJ/go-fabric-ui v0.9.2
+	github.com/SukramJ/go-fabric-ui v0.13.0
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.40.0
 	github.com/SukramJ/go-mqtt v1.7.0
@@ -65,4 +64,5 @@ require (
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.62.0
+	thingfabric.dev/go-fabric v0.25.0
 )

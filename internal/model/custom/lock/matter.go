@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	doorlockdef "github.com/SukramJ/go-fabric/cluster/spec/doorlock"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	doorlockdef "thingfabric.dev/go-fabric/cluster/spec/doorlock"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"

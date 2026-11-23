@@ -7,8 +7,7 @@ import (
 	"context"
 	"testing"
 
-	colorcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
-	"github.com/SukramJ/go-fabric/cluster/wire"
+	colorcontrolspec "thingfabric.dev/go-fabric/cluster/spec/colorcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -65,7 +64,7 @@ func TestFixedColorLightMoveToHueAndSaturationSnapsToTheSlot(t *testing.T) {
 
 	// 100° (Matter 71) is in the GREEN band.
 	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: hueToMatter(100), Saturation: 254}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
 	if got := writtenValues(w)[hmenum.ParameterColor]; got != "GREEN" {
@@ -74,17 +73,17 @@ func TestFixedColorLightMoveToHueAndSaturationSnapsToTheSlot(t *testing.T) {
 	// The write's optimistic local update already reports the slot, so the
 	// command answers with the server settled on GREEN's reference colour,
 	// 120°: the controller learns where its colour landed.
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(120) {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != hueToMatter(120) {
 		t.Fatalf("CurrentHue right after the command = %d, want GREEN's %d", h, hueToMatter(120))
 	}
 
 	// The CCU's echo of the slot changes nothing and causes no second write.
 	writes := len(w.calls)
 	l.color.OnEvent(slotIndex(t, "GREEN"))
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(120) {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != hueToMatter(120) {
 		t.Fatalf("CurrentHue after the confirmed GREEN = %d, want %d", h, hueToMatter(120))
 	}
-	if s := readU8(t, srv, wire.ColorCtrlAttrCurrentSaturation); s != saturationToMatter(100) {
+	if s := readU8(t, srv, colorcontrolspec.AttrCurrentSaturation); s != saturationToMatter(100) {
 		t.Fatalf("CurrentSaturation after the confirmed GREEN = %d, want %d", s, saturationToMatter(100))
 	}
 	if len(w.calls) != writes {
@@ -101,7 +100,7 @@ func TestFixedColorLightLowSaturationWritesWhite(t *testing.T) {
 	srv := colorServer(t, l)
 
 	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: hueToMatter(240), Saturation: 5}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
 	if got := writtenValues(w)[hmenum.ParameterColor]; got != "WHITE" {
@@ -120,7 +119,7 @@ func TestFixedColorLightMoveToColorSnapsTheConvertedColour(t *testing.T) {
 
 	x, y := hmToXY(240, 100)
 	req := colorcontrolspec.MoveToColorRequest{ColorX: x, ColorY: y}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColor, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColor, req); err != nil {
 		t.Fatalf("MoveToColor: %v", err)
 	}
 	if got := writtenValues(w)[hmenum.ParameterColor]; got != "BLUE" {
@@ -137,7 +136,7 @@ func TestFixedColorLightGatedWhileOff(t *testing.T) {
 	srv := colorServer(t, l)
 
 	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 0, Saturation: 254}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("gated MoveToHueAndSaturation returned error: %v", err)
 	}
 	if _, written := writtenValues(w)[hmenum.ParameterColor]; written {
@@ -152,7 +151,7 @@ func TestFixedColorLightServerStartsFromTheObservedSlot(t *testing.T) {
 	l := newFixedColorLightForMatter(t, w)
 	l.color.OnEvent(slotIndex(t, "PURPLE"))
 	srv := colorServer(t, l)
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(300) {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != hueToMatter(300) {
 		t.Fatalf("initial CurrentHue = %d, want PURPLE's %d", h, hueToMatter(300))
 	}
 }

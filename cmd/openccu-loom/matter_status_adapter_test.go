@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
-	matterstore "github.com/SukramJ/go-fabric/store"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -145,8 +145,12 @@ func TestMatterStatusAdapter_Advertising_Propagated(t *testing.T) {
 
 // revokerBundle boots the bridge and returns it with the fabric indexes
 // of the node.fabric_removed frames the WebSocket bridge published — the
-// frames the SPA reads.
-func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, removed func() []uint8) {
+// frames the SPA reads. seed, when set, writes into the database before
+// the bridge starts: a fabric the node loads at its start is one the host
+// was told of, and only such a fabric's removal is reported to it — a row
+// written behind the running node is, to the node, the rolled-back row of
+// a failed AddNOC.
+func revokerBundle(t *testing.T, central string, seed func(context.Context, *matterstore.Store)) (bundle *matterBridgeBundle, removed func() []uint8) {
 	t.Helper()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
@@ -157,7 +161,11 @@ func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, re
 	reg := buildTestRegistry(t, central)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle = startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	db := openTestLoomDB(t)
+	if seed != nil {
+		seed(ctx, matterstore.New(db))
+	}
+	bundle = startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}
@@ -187,17 +195,20 @@ func revokerBundle(t *testing.T, central string) (bundle *matterBridgeBundle, re
 // the daemon restarted.
 func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 	t.Parallel()
-	bundle, removed := revokerBundle(t, "ccu-revoke")
-	ctx := context.Background()
-	idx, err := bundle.store.AddFabric(ctx, matterstore.FabricRecord{
-		FabricID:      0x1122,
-		NodeID:        0x3344,
-		RootPublicKey: make([]byte, 65),
-		CompressedID:  [8]byte{9, 8, 7, 6, 5, 4, 3, 2},
+	var idx uint8
+	bundle, removed := revokerBundle(t, "ccu-revoke", func(ctx context.Context, st *matterstore.Store) {
+		var err error
+		idx, err = st.AddFabric(ctx, matterstore.FabricRecord{
+			FabricID:      0x1122,
+			NodeID:        0x3344,
+			RootPublicKey: make([]byte, 65),
+			CompressedID:  [8]byte{9, 8, 7, 6, 5, 4, 3, 2},
+		})
+		if err != nil {
+			t.Fatalf("AddFabric: %v", err)
+		}
 	})
-	if err != nil {
-		t.Fatalf("AddFabric: %v", err)
-	}
+	ctx := context.Background()
 	if err := bundle.node.RemoveFabric(ctx, idx); err != nil {
 		t.Fatalf("RemoveFabric: %v", err)
 	}
@@ -214,7 +225,7 @@ func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 // fabric-removed to controllers that are still paired on other fabrics.
 func TestRevokeFabricOfAnUnknownIndexRunsNoFanOut(t *testing.T) {
 	t.Parallel()
-	bundle, removed := revokerBundle(t, "ccu-revoke-missing")
+	bundle, removed := revokerBundle(t, "ccu-revoke-missing", nil)
 	if err := bundle.node.RemoveFabric(context.Background(), 7); err == nil {
 		t.Fatal("RemoveFabric for an unknown index returned nil; want an error")
 	}

@@ -6,9 +6,9 @@ package matteradapter_test
 import (
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	msdef "github.com/SukramJ/go-fabric/cluster/spec/modeselect"
-	"github.com/SukramJ/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	msdef "thingfabric.dev/go-fabric/cluster/spec/modeselect"
+	"thingfabric.dev/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

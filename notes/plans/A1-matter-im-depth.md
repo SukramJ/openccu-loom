@@ -362,7 +362,7 @@ one are rejected (`CLAUDE.md`, `matter-parity-contract.md`).
 - **OTA Provider:** add `cluster/core/parity_matterjs_test.go` cases for
   the three command/response TLV shapes. Both halves of this now live in
   go-fabric: the TLV wire fixtures under
-  [`notes/parity/matter/`](https://github.com/SukramJ/go-fabric/tree/main/notes/parity/matter)
+  [`notes/parity/matter/`](https://github.com/thingfabric/go-fabric/tree/main/notes/parity/matter)
   (the `testdata/` copies beside the tests are the masters), and the cluster
   work itself. The schema snapshot
   `notes/parity/matter/matter-schema-snapshot.json` stays here — it is the

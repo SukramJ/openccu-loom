@@ -11699,6 +11699,8 @@ export interface components {
              * @description When the open window's timer closes it, on the node's clock; absent while no window is open.
              */
             window_deadline?: string;
+            /** @description Seconds until the open window's timer closes it, on the node's clock when the answer was written (0.10.0); absent while no window is open. */
+            window_remaining_seconds?: number;
             /** @description Whether the host serves a selection. */
             exposure: boolean;
             /** @description Why the host serves no selection, in the host's language; absent when it serves one or gives no reason (0.5.0). */
@@ -11787,6 +11789,10 @@ export interface components {
             source: components["schemas"]["NodePairingSource"];
             window_open: boolean;
             duration_seconds?: number;
+            /** @description As on `Status` (0.10.0): seconds until the open window's timer closes it; absent while no window is open. */
+            window_remaining_seconds?: number;
+            /** @description True: the open window admits the codes of this answer; false: a window is open on other credentials (0.10.0). Absent while no window is open. */
+            window_match?: boolean;
         };
         WindowRequest: {
             /** @description 180..900; 0 or absent is 900. */
@@ -12124,6 +12130,8 @@ export interface components {
         };
         Applied: {
             applied: number;
+            /** @description False: the selection is stored, the rebuild failed and it is not in effect (0.10.0). */
+            reassembled?: boolean;
         };
         FactoryResetRequest: {
             /** @constant */
@@ -12404,6 +12412,8 @@ export interface components {
         EventRecord: {
             /** @description The node-wide event number (Matter Core §7.14.2.1). */
             number: number;
+            /** @description The event number in decimal, exact (0.10.0). */
+            number_str?: string;
             priority: components["schemas"]["NodeEventPriority"];
             endpoint: number;
             cluster_hex: string;
@@ -19059,6 +19069,7 @@ export interface operations {
                     "application/json": components["schemas"]["Status"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
         };
     };
     listFabrics: {
@@ -19079,6 +19090,7 @@ export interface operations {
                     "application/json": components["schemas"]["FabricList"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19103,6 +19115,7 @@ export interface operations {
             };
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
+            404: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19154,6 +19167,8 @@ export interface operations {
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
             409: components["responses"]["NodeProblem"];
+            413: components["responses"]["NodeProblem"];
+            415: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19197,6 +19212,7 @@ export interface operations {
                     "application/json": components["schemas"]["EndpointList"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19222,6 +19238,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
             404: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
@@ -19254,6 +19271,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["NodeProblem"];
+            403: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19275,6 +19293,8 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceReport"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19296,6 +19316,7 @@ export interface operations {
                     "application/json": components["schemas"]["SessionList"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19317,6 +19338,7 @@ export interface operations {
                     "application/json": components["schemas"]["TopologyGraph"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19339,6 +19361,7 @@ export interface operations {
                     "application/json": components["schemas"]["Mdns"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19380,6 +19403,8 @@ export interface operations {
                     "application/json": components["schemas"]["Compatibility"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
+            500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19401,6 +19426,7 @@ export interface operations {
                     "application/json": components["schemas"]["DiagnosticEventList"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
     };
@@ -19422,6 +19448,7 @@ export interface operations {
                     "application/json": components["schemas"]["ExposureSchema"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19444,6 +19471,7 @@ export interface operations {
                     "application/json": components["schemas"]["ItemList"];
                 };
             };
+            403: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19479,6 +19507,8 @@ export interface operations {
             };
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
+            413: components["responses"]["NodeProblem"];
+            415: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19507,6 +19537,8 @@ export interface operations {
             };
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
+            413: components["responses"]["NodeProblem"];
+            415: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19554,6 +19586,8 @@ export interface operations {
             };
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
+            413: components["responses"]["NodeProblem"];
+            415: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
         };
@@ -19580,6 +19614,8 @@ export interface operations {
             };
             400: components["responses"]["NodeProblem"];
             403: components["responses"]["NodeProblem"];
+            413: components["responses"]["NodeProblem"];
+            415: components["responses"]["NodeProblem"];
             500: components["responses"]["NodeProblem"];
             501: components["responses"]["NodeProblem"];
             503: components["responses"]["NodeProblem"];
@@ -19603,6 +19639,8 @@ export interface operations {
                     "text/event-stream": string;
                 };
             };
+            403: components["responses"]["NodeProblem"];
+            503: components["responses"]["NodeProblem"];
         };
     };
     listVisibilityUnIgnore: {

@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	ccdef "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
+	ccdef "thingfabric.dev/go-fabric/cluster/spec/colorcontrol"
+	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"

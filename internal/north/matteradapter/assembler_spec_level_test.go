@@ -7,8 +7,8 @@ import (
 	"context"
 	"testing"
 
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/surface"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/surface"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"

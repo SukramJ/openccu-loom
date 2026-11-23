@@ -17,7 +17,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/secure/operational"
+	"thingfabric.dev/go-fabric/secure/operational"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"

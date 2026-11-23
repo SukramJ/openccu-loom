@@ -69,7 +69,6 @@ func TestOperatorWindowReplacesTheBootWindow(t *testing.T) {
 	t.Parallel()
 	bundle, opts := windowBundle(t, "ccu-boot-window", func(cfg *config.Config) {
 		cfg.North.Matter.Commissioning.Passcode = 20202021
-		cfg.North.Matter.Commissioning.Salt = "openccu-loom-dev0"
 	})
 	if w := bundle.node.Window(); !w.Open || !w.Own {
 		t.Skipf("the node did not open its own window at Start (open=%v own=%v)", w.Open, w.Own)

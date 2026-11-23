@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/contract"
-	"github.com/SukramJ/go-fabric/endpoint"
+	"thingfabric.dev/go-fabric/contract"
+	"thingfabric.dev/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -250,6 +250,13 @@ func TestAssemble_CustomDP_EndpointSource(t *testing.T) {
 	}
 	if sk.DPKey != dpParam {
 		t.Errorf("SourceKey.DPKey=%q, want %q", sk.DPKey, dpParam)
+	}
+
+	// The device's address is the bridged endpoint's SerialNumber: the
+	// node serves one only when the host states it, so without the
+	// statement every bridged device shows no serial at all.
+	if got := bridged.BridgedBasicInformation.SerialNumber; got == nil || *got != devAddr {
+		t.Errorf("bridged SerialNumber=%v, want the device address %q stated", got, devAddr)
 	}
 
 	// Bridge VID/PID propagate from Config → Topology → each bridged

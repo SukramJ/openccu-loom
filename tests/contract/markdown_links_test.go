@@ -188,16 +188,16 @@ func walkRepoMarkdown(t *testing.T, repoRoot string, visit func(path string, con
 	}
 }
 
-// goFabricURLRE matches every https://github.com/SukramJ/go-fabric reference in
+// goFabricURLRE matches every https://github.com/thingfabric/go-fabric reference in
 // a Markdown file, in link syntax or bare in prose. It is deliberately looser
 // than the `[text](url)` grammar [TestMarkdownLinksValid] uses: an extractor
 // that only accepts the well-formed shape never sees the malformed one, so this
 // one takes everything that starts with the repository URL and lets the parser
 // in [TestGoFabricDocLinksResolveInLocalCheckout] decide what is checkable.
-var goFabricURLRE = regexp.MustCompile("https://github\\.com/SukramJ/go-fabric(?:/[^\\s)\\]\"'`>|]*)?")
+var goFabricURLRE = regexp.MustCompile("https://github\\.com/thingfabric/go-fabric(?:/[^\\s)\\]\"'`>|]*)?")
 
 // TestGoFabricDocLinksResolveInLocalCheckout checks the path component of every
-// https://github.com/SukramJ/go-fabric/{blob,tree,raw}/main/<path> reference in
+// https://github.com/thingfabric/go-fabric/{blob,tree,raw}/main/<path> reference in
 // this repository's Markdown against a local go-fabric checkout, and fails when
 // such a reference names a path that checkout does not carry.
 //
@@ -310,7 +310,7 @@ func TestGoFabricDocLinksResolveInLocalCheckout(t *testing.T) {
 // `blob`/`tree`/`raw` reference to a ref other than `main` — see
 // [TestGoFabricDocLinksResolveInLocalCheckout] for why the ref is not guessed.
 func goFabricRepoPath(url string) (string, bool) {
-	const prefix = "https://github.com/SukramJ/go-fabric"
+	const prefix = "https://github.com/thingfabric/go-fabric"
 	tail := strings.TrimPrefix(url, prefix)
 	// A trailing sentence period or comma belongs to the prose, not the URL.
 	tail = strings.TrimRight(tail, ".,;:")
@@ -357,7 +357,7 @@ func goFabricCheckout(repoRoot string) (dir, why string) {
 	if err != nil {
 		return "", fmt.Sprintf("%s %q has no readable go.mod (%v)", source, candidate, err)
 	}
-	if !strings.Contains(string(gomod), "module github.com/SukramJ/go-fabric") {
+	if !strings.Contains(string(gomod), "module thingfabric.dev/go-fabric") {
 		return "", fmt.Sprintf("%s %q is not the go-fabric module", source, candidate)
 	}
 	return candidate, ""

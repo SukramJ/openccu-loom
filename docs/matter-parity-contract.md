@@ -8,10 +8,10 @@
 The Matter wire stack is no longer part of this repository. The TLV codec, the
 Interaction Model, PASE / CASE, MRP, DNS-SD, the cluster servers and the
 endpoint assembler live in the
-[go-fabric](https://github.com/SukramJ/go-fabric) module, which this daemon
+[go-fabric](https://github.com/thingfabric/go-fabric) module, which this daemon
 embeds — and so does the contract that governs them:
 
-> **[go-fabric — Matter Behavioural-Parity Contract](https://github.com/SukramJ/go-fabric/blob/main/docs/matter-parity-contract.md)**
+> **[go-fabric — Matter Behavioural-Parity Contract](https://github.com/thingfabric/go-fabric/blob/main/docs/matter-parity-contract.md)**
 >
 > Read it before your first Matter-side change, in either repository. It
 > defines what parity means, why *behaviour* parity (not just schema parity)
@@ -51,7 +51,7 @@ contract is about, and one its guards cannot see.
 
 Wire-level divergences — anything about the codec, the IM, sessions or the
 cluster servers themselves — are recorded in
-[go-fabric's `by_design.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/parity/by_design.md),
+[go-fabric's `by_design.md`](https://github.com/thingfabric/go-fabric/blob/main/notes/parity/by_design.md),
 not here.
 
 ## The aiohomematic relationship — different, on purpose

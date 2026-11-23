@@ -556,7 +556,7 @@ sync-matter-schema: ## refresh the pinned matter.js schema snapshot from the go-
 	# this target is run, which is the point — it forces the change into a
 	# diff someone reads.
 	install -m 0644 \
-		"$$($(GO) list -m -f '{{.Dir}}' github.com/SukramJ/go-fabric)/parity/schema.json" \
+		"$$($(GO) list -m -f '{{.Dir}}' thingfabric.dev/go-fabric)/parity/schema.json" \
 		notes/parity/matter/matter-schema-snapshot.json
 	@echo "-- schema pin refreshed from the go-fabric module; review the diff before committing --"
 

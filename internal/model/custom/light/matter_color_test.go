@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
-	fabriclight "github.com/SukramJ/go-fabric/cluster/light"
-	colorcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
-	"github.com/SukramJ/go-fabric/cluster/wire"
-	"github.com/SukramJ/go-fabric/contract"
+	fabriclight "thingfabric.dev/go-fabric/cluster/light"
+	colorcontrolspec "thingfabric.dev/go-fabric/cluster/spec/colorcontrol"
+	"thingfabric.dev/go-fabric/contract"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -199,7 +198,7 @@ func TestColorTempLightExposesOnOffLevelAndColorControl(t *testing.T) {
 	if fm != uint32(fabriclight.ColorFeatureColorTemperature) {
 		t.Fatalf("FeatureMap = %v, want CT only (0x%X)", fm, uint32(fabriclight.ColorFeatureColorTemperature))
 	}
-	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+	if got := readU8(t, srv, colorcontrolspec.AttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
 		t.Fatalf("ColorMode = %d, want 2 (ColorTemperature)", got)
 	}
 }
@@ -227,7 +226,7 @@ func TestColorTempServerMoveToColorTemperatureReachesTheCCU(t *testing.T) {
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
 	req := colorcontrolspec.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("MoveToColorTemperature: %v", err)
 	}
 	got, ok := writtenValues(w)[hmenum.ParameterColorTemperature]
@@ -237,7 +236,7 @@ func TestColorTempServerMoveToColorTemperatureReachesTheCCU(t *testing.T) {
 	if got != int32(4000) {
 		t.Fatalf("COLOR_TEMPERATURE written = %v, want 4000 K", got)
 	}
-	if m := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); m != 250 {
+	if m := readU16(t, srv, colorcontrolspec.AttrColorTemperatureMireds); m != 250 {
 		t.Fatalf("ColorTemperatureMireds after the command = %d, want 250", m)
 	}
 }
@@ -253,7 +252,7 @@ func TestColorTempServerMoveToColorTemperatureGatedWhileOff(t *testing.T) {
 	srv := colorServer(t, l)
 
 	req := colorcontrolspec.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("gated MoveToColorTemperature returned error: %v", err)
 	}
 	if _, written := writtenValues(w)[hmenum.ParameterColorTemperature]; written {
@@ -261,7 +260,7 @@ func TestColorTempServerMoveToColorTemperatureGatedWhileOff(t *testing.T) {
 	}
 
 	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("ExecuteIfOff MoveToColorTemperature returned error: %v", err)
 	}
 	if _, written := writtenValues(w)[hmenum.ParameterColorTemperature]; !written {
@@ -283,12 +282,12 @@ func TestColorTempServerConfirmedKelvinReachesTheServer(t *testing.T) {
 
 	l.kelvin.OnEvent(int32(4000))
 
-	if m := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); m != 250 {
+	if m := readU16(t, srv, colorcontrolspec.AttrColorTemperatureMireds); m != 250 {
 		t.Fatalf("ColorTemperatureMireds after the confirmed 4000 K = %d, want 250", m)
 	}
 	select {
 	case ids := <-reported:
-		if !containsAttr(ids, wire.ColorCtrlAttrColorTemperatureMireds) {
+		if !containsAttr(ids, colorcontrolspec.AttrColorTemperatureMireds) {
 			t.Fatalf("reported %v, want ColorTemperatureMireds", ids)
 		}
 	case <-time.After(2 * time.Second):
@@ -314,20 +313,20 @@ func containsAttr(ids []uint32, want uint32) bool {
 func TestColorTempServerPhysicalMiredsFollowTheLightsKelvinBounds(t *testing.T) {
 	l := newCTLight(t, &stubWriter{})
 	srv := colorServer(t, l)
-	if got := readU16(t, srv, wire.ColorCtrlAttrColorTempPhysicalMin); got != kelvinToMireds(ctMaxK) {
+	if got := readU16(t, srv, colorcontrolspec.AttrColorTempPhysicalMinMireds); got != kelvinToMireds(ctMaxK) {
 		t.Fatalf("ColorTempPhysicalMinMireds = %d, want %d", got, kelvinToMireds(ctMaxK))
 	}
-	if got := readU16(t, srv, wire.ColorCtrlAttrColorTempPhysicalMax); got != kelvinToMireds(ctMinK) {
+	if got := readU16(t, srv, colorcontrolspec.AttrColorTempPhysicalMaxMireds); got != kelvinToMireds(ctMinK) {
 		t.Fatalf("ColorTempPhysicalMaxMireds = %d, want %d", got, kelvinToMireds(ctMinK))
 	}
 
 	r := newRGBW(t, &stubWriter{})
 	r.MinKelvin, r.MaxKelvin = 2700, 6000
 	rs := colorServer(t, r)
-	if got := readU16(t, rs, wire.ColorCtrlAttrColorTempPhysicalMin); got != kelvinToMireds(6000) {
+	if got := readU16(t, rs, colorcontrolspec.AttrColorTempPhysicalMinMireds); got != kelvinToMireds(6000) {
 		t.Fatalf("RGBW ColorTempPhysicalMinMireds = %d, want %d", got, kelvinToMireds(6000))
 	}
-	if got := readU16(t, rs, wire.ColorCtrlAttrColorTempPhysicalMax); got != kelvinToMireds(2700) {
+	if got := readU16(t, rs, colorcontrolspec.AttrColorTempPhysicalMaxMireds); got != kelvinToMireds(2700) {
 		t.Fatalf("RGBW ColorTempPhysicalMaxMireds = %d, want %d", got, kelvinToMireds(2700))
 	}
 }
@@ -354,7 +353,7 @@ func TestColorLightColorModeIsHS(t *testing.T) {
 	if fm != uint32(fabriclight.ColorFeatureHueSaturation|fabriclight.ColorFeatureXY|fabriclight.ColorFeatureColorTemperature) {
 		t.Fatalf("FeatureMap = %v, want HS | XY | CT", fm)
 	}
-	for _, attr := range []uint32{wire.ColorCtrlAttrColorMode, wire.ColorCtrlAttrEnhancedColorMode} {
+	for _, attr := range []uint32{colorcontrolspec.AttrColorMode, colorcontrolspec.AttrEnhancedColorMode} {
 		if got := readU8(t, srv, attr); got != uint8(fabriclight.ColorModeHueSaturation) {
 			t.Fatalf("attr 0x%04X = %d, want 0 (HueSaturation)", attr, got)
 		}
@@ -370,7 +369,7 @@ func TestColorLightMoveToHueAndSaturationReachesTheCCU(t *testing.T) {
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
 	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
 	got := writtenValues(w)
@@ -380,7 +379,7 @@ func TestColorLightMoveToHueAndSaturationReachesTheCCU(t *testing.T) {
 	if got[hmenum.ParameterSaturation] != 1.0 {
 		t.Fatalf("SATURATION written = %v, want 1.0", got[hmenum.ParameterSaturation])
 	}
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != 127 {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != 127 {
 		t.Fatalf("CurrentHue after the command = %d, want 127", h)
 	}
 }
@@ -394,7 +393,7 @@ func TestColorLightMoveToHueAndSaturationGatedWhileOff(t *testing.T) {
 	srv := colorServer(t, l)
 
 	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("gated MoveToHueAndSaturation returned error: %v", err)
 	}
 	if _, written := writtenValues(w)[hmenum.ParameterHue]; written {
@@ -402,7 +401,7 @@ func TestColorLightMoveToHueAndSaturationGatedWhileOff(t *testing.T) {
 	}
 
 	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("ExecuteIfOff MoveToHueAndSaturation returned error: %v", err)
 	}
 	if _, written := writtenValues(w)[hmenum.ParameterHue]; !written {
@@ -420,10 +419,10 @@ func TestColorLightConfirmedColourReachesTheServer(t *testing.T) {
 	l.hue.OnEvent(int32(90))
 	l.saturation.OnEvent(0.5)
 
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(90) {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != hueToMatter(90) {
 		t.Fatalf("CurrentHue after the confirmed 90° = %d, want %d", h, hueToMatter(90))
 	}
-	if s := readU8(t, srv, wire.ColorCtrlAttrCurrentSaturation); s != saturationToMatter(50) {
+	if s := readU8(t, srv, colorcontrolspec.AttrCurrentSaturation); s != saturationToMatter(50) {
 		t.Fatalf("CurrentSaturation after the confirmed 0.5 = %d, want %d", s, saturationToMatter(50))
 	}
 	if len(w.calls) != 0 {
@@ -438,7 +437,7 @@ func TestColorLightServerStartsFromTheObservedColour(t *testing.T) {
 	l.hue.OnEvent(int32(180))
 	l.saturation.OnEvent(1.0)
 	srv := colorServer(t, l)
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(180) {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != hueToMatter(180) {
 		t.Fatalf("initial CurrentHue = %d, want %d", h, hueToMatter(180))
 	}
 }
@@ -499,7 +498,7 @@ func TestColorLightMoveToColorWritesTheConvertedHueAndSaturation(t *testing.T) {
 			srv := colorServer(t, l)
 
 			req := colorcontrolspec.MoveToColorRequest{ColorX: redX, ColorY: redY}
-			if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColor, req); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColor, req); err != nil {
 				t.Fatalf("MoveToColor: %v", err)
 			}
 			got := writtenValues(stub)
@@ -509,10 +508,10 @@ func TestColorLightMoveToColorWritesTheConvertedHueAndSaturation(t *testing.T) {
 			if s, _ := got[hmenum.ParameterSaturation].(float64); s < 0.99 {
 				t.Fatalf("SATURATION written = %v, want 1.0", got[hmenum.ParameterSaturation])
 			}
-			if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeXY) {
+			if m := readU8(t, srv, colorcontrolspec.AttrColorMode); m != uint8(fabriclight.ColorModeXY) {
 				t.Fatalf("ColorMode after MoveToColor = %d, want 1 (XY)", m)
 			}
-			if x, y := readU16(t, srv, wire.ColorCtrlAttrCurrentX), readU16(t, srv, wire.ColorCtrlAttrCurrentY); x != redX || y != redY {
+			if x, y := readU16(t, srv, colorcontrolspec.AttrCurrentX), readU16(t, srv, colorcontrolspec.AttrCurrentY); x != redX || y != redY {
 				t.Fatalf("CurrentX/Y after MoveToColor = %d/%d, want %d/%d", x, y, redX, redY)
 			}
 		})
@@ -529,25 +528,25 @@ func TestColorLightConfirmedColourKeepsTheServersXYMode(t *testing.T) {
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
 	req := colorcontrolspec.MoveToColorRequest{ColorX: redX, ColorY: redY}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColor, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColor, req); err != nil {
 		t.Fatalf("MoveToColor: %v", err)
 	}
 	// The CCU's late echo of the write: red in the device's colour space.
 	l.hue.OnEvent(int32(0))
 	l.saturation.OnEvent(1.0)
-	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeXY) {
+	if m := readU8(t, srv, colorcontrolspec.AttrColorMode); m != uint8(fabriclight.ColorModeXY) {
 		t.Fatalf("ColorMode after the confirmed echo = %d, want 1 (XY kept)", m)
 	}
-	if x := readU16(t, srv, wire.ColorCtrlAttrCurrentX); x != redX {
+	if x := readU16(t, srv, colorcontrolspec.AttrCurrentX); x != redX {
 		t.Fatalf("CurrentX after the confirmed echo = %d, want %d (target kept)", x, redX)
 	}
 	// A colour of the device's own: the server follows it in HS.
 	l.hue.OnEvent(int32(120))
 	l.saturation.OnEvent(0.5)
-	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeHueSaturation) {
+	if m := readU8(t, srv, colorcontrolspec.AttrColorMode); m != uint8(fabriclight.ColorModeHueSaturation) {
 		t.Fatalf("ColorMode after a device-originated colour = %d, want 0 (HS)", m)
 	}
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(120) {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != hueToMatter(120) {
 		t.Fatalf("CurrentHue after the device-originated colour = %d, want %d", h, hueToMatter(120))
 	}
 }
@@ -561,7 +560,7 @@ func TestColorLightXYStartsFromTheObservedColour(t *testing.T) {
 	l.hue.OnEvent(int32(0))
 	l.saturation.OnEvent(1.0)
 	srv := colorServer(t, l)
-	x, y := readU16(t, srv, wire.ColorCtrlAttrCurrentX), readU16(t, srv, wire.ColorCtrlAttrCurrentY)
+	x, y := readU16(t, srv, colorcontrolspec.AttrCurrentX), readU16(t, srv, colorcontrolspec.AttrCurrentY)
 	if x < redX-2 || x > redX+2 || y < redY-2 || y > redY+2 {
 		t.Fatalf("initial CurrentX/Y = %d/%d, want sRGB red %d/%d (±2)", x, y, redX, redY)
 	}
@@ -601,7 +600,7 @@ func TestRGBWLightMoveToColorTemperatureWritesOnlyTheColourTemperature(t *testin
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
 	req := colorcontrolspec.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToColorTemperature, req); err != nil {
 		t.Fatalf("MoveToColorTemperature: %v", err)
 	}
 	got := writtenValues(w)
@@ -613,7 +612,7 @@ func TestRGBWLightMoveToColorTemperatureWritesOnlyTheColourTemperature(t *testin
 			t.Fatalf("%s was written by a colour-temperature command; writes: %v", p, got)
 		}
 	}
-	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+	if got := readU8(t, srv, colorcontrolspec.AttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
 		t.Fatalf("ColorMode after MoveToColorTemperature = %d, want 2", got)
 	}
 }
@@ -627,7 +626,7 @@ func TestRGBWLightMoveToHueWritesTheColour(t *testing.T) {
 	l.OnLevel(onLevel)
 	srv := colorServer(t, l)
 	req := colorcontrolspec.MoveToHueRequest{Hue: 127}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHue, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHue, req); err != nil {
 		t.Fatalf("MoveToHue: %v", err)
 	}
 	got := writtenValues(w)
@@ -662,7 +661,7 @@ func TestRGBWLightColorModeFollowsDeviceOperatingMode(t *testing.T) {
 				l.recordMode(tc.modeWire)
 			}
 			srv := colorServer(t, l)
-			for _, attr := range []uint32{wire.ColorCtrlAttrColorMode, wire.ColorCtrlAttrEnhancedColorMode} {
+			for _, attr := range []uint32{colorcontrolspec.AttrColorMode, colorcontrolspec.AttrEnhancedColorMode} {
 				if got := readU8(t, srv, attr); got != uint8(tc.want) {
 					t.Fatalf("attr 0x%04X mode=%q: got %d, want %d", attr, tc.modeWire, got, tc.want)
 				}
@@ -687,15 +686,15 @@ func TestRGBWLightOperatingModeChangeMovesTheServer(t *testing.T) {
 	defer unsub()
 
 	l.recordMode("2_TUNABLE_WHITE")
-	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+	if got := readU8(t, srv, colorcontrolspec.AttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
 		t.Fatalf("ColorMode after the switch to TUNABLE_WHITE = %d, want 2", got)
 	}
-	if m := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); m != 250 {
+	if m := readU16(t, srv, colorcontrolspec.AttrColorTemperatureMireds); m != 250 {
 		t.Fatalf("ColorTemperatureMireds after the switch = %d, want 250", m)
 	}
 	select {
 	case ids := <-reported:
-		if !containsAttr(ids, wire.ColorCtrlAttrColorMode) {
+		if !containsAttr(ids, colorcontrolspec.AttrColorMode) {
 			t.Fatalf("reported %v, want ColorMode", ids)
 		}
 	case <-time.After(2 * time.Second):
@@ -703,7 +702,7 @@ func TestRGBWLightOperatingModeChangeMovesTheServer(t *testing.T) {
 	}
 
 	l.recordMode("RGB")
-	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeHueSaturation) {
+	if got := readU8(t, srv, colorcontrolspec.AttrColorMode); got != uint8(fabriclight.ColorModeHueSaturation) {
 		t.Fatalf("ColorMode after the switch back to RGB = %d, want 0", got)
 	}
 }
@@ -749,26 +748,26 @@ func TestRGBWCombinedLightColorModeFollowsTheConfirmedAxis(t *testing.T) {
 	l.saturation.OnEvent(0.5)
 	l.kelvin.OnEvent(int32(4000))
 	srv := colorServer(t, l)
-	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeColorTemperature) {
+	if m := readU8(t, srv, colorcontrolspec.AttrColorMode); m != uint8(fabriclight.ColorModeColorTemperature) {
 		t.Fatalf("ColorMode with the CT axis active = %d, want 2 (CT)", m)
 	}
 
 	req := colorcontrolspec.MoveToHueAndSaturationRequest{Hue: 20, Saturation: 254}
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), colorcontrolspec.CmdMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
-	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeHueSaturation) {
+	if m := readU8(t, srv, colorcontrolspec.AttrColorMode); m != uint8(fabriclight.ColorModeHueSaturation) {
 		t.Fatalf("ColorMode after the echoed MoveToHueAndSaturation = %d, want 0 (HS)", m)
 	}
-	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != 20 {
+	if h := readU8(t, srv, colorcontrolspec.AttrCurrentHue); h != 20 {
 		t.Fatalf("CurrentHue after the echoed MoveToHueAndSaturation = %d, want 20", h)
 	}
 
 	l.kelvin.OnEvent(int32(3000)) // the wall remote turns the white axis
-	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeColorTemperature) {
+	if m := readU8(t, srv, colorcontrolspec.AttrColorMode); m != uint8(fabriclight.ColorModeColorTemperature) {
 		t.Fatalf("ColorMode after a confirmed COLOR_TEMPERATURE = %d, want 2 (CT)", m)
 	}
-	if mireds := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); mireds != kelvinToMireds(3000) {
+	if mireds := readU16(t, srv, colorcontrolspec.AttrColorTemperatureMireds); mireds != kelvinToMireds(3000) {
 		t.Fatalf("ColorTemperatureMireds = %d, want %d", mireds, kelvinToMireds(3000))
 	}
 }
@@ -780,5 +779,5 @@ func TestLightCloseQuiescesTheColourServer(t *testing.T) {
 	l.Close()
 	srv := colorServer(t, l)
 	l.Close()
-	readU8(t, srv, wire.ColorCtrlAttrColorMode)
+	readU8(t, srv, colorcontrolspec.AttrColorMode)
 }

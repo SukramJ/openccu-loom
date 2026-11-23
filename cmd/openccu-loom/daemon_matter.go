@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/SukramJ/go-fabric-ui/fabricui"
-	"github.com/SukramJ/go-fabric/bootid"
-	"github.com/SukramJ/go-fabric/node"
-	matterstore "github.com/SukramJ/go-fabric/store"
-	"github.com/SukramJ/go-fabric/surface"
+	"thingfabric.dev/go-fabric/bootid"
+	"thingfabric.dev/go-fabric/node"
+	matterstore "thingfabric.dev/go-fabric/store"
+	"thingfabric.dev/go-fabric/surface"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
@@ -239,40 +239,28 @@ func matterLocales(locale string) []string {
 // all. A missing or invalid passcode becomes a random one for this
 // process: the node's own window at first boot then runs on credentials
 // nobody holds, and the operator's window runs on fresh credentials of its
-// own (configured is false). A salt outside the PBKDF
-// bounds becomes a random one, which changes nothing a commissioner sees:
-// the salt travels in PBKDFParamResponse, and the verifier is recomputed
-// from passcode and salt at every boot.
+// own (configured is false). The salt is always a random one: the node
+// draws a fresh salt for every window it opens, as matter.js does, so the
+// value only satisfies the facade's build check; a configuration that
+// still sets the retired north.matter.commissioning.salt is named once.
 func matterCommissioningCredentials(cm config.NorthMatterCommissioning, logger *slog.Logger) (passcode uint32, salt []byte, iterations int, configured bool, err error) {
-	passcode, configured = cm.Passcode, true
-	salt = []byte(cm.Salt)
-	validPasscode := passcode != 0 && passcode <= matterSetupPasscodeMax && node.ValidateSetupPIN(passcode) == nil
-	validSalt := len(salt) >= node.PBKDFSaltMin && len(salt) <= node.PBKDFSaltMax
-	if validPasscode && validSalt {
-		return passcode, salt, cm.Iterations, configured, nil
+	if cm.SetsRetiredSalt() {
+		logger.Warn("matter.bridge.pase.salt_retired",
+			slog.String("hint", "north.matter.commissioning.salt is no longer read: every commissioning window draws a fresh salt; delete the key"))
 	}
 	fresh, err := node.NewCommissioningCredentials()
 	if err != nil {
 		return 0, nil, 0, false, fmt.Errorf("random credentials: %w", err)
 	}
-	if !validPasscode {
+	passcode, configured = cm.Passcode, true
+	if passcode == 0 || passcode > matterSetupPasscodeMax || node.ValidateSetupPIN(passcode) != nil {
 		if cm.Passcode != 0 {
 			logger.Warn("matter.bridge.pase.passcode_invalid",
 				slog.String("hint", "north.matter.commissioning.passcode is out of range or on the trivially-guessable list; the configured-credentials window is disabled until it is fixed"))
 		}
 		passcode, configured = fresh.Passcode, false
 	}
-	if !validSalt {
-		if cm.Salt != "" {
-			logger.Warn("matter.bridge.pase.salt_invalid",
-				slog.Int("len", len(salt)),
-				slog.Int("min", node.PBKDFSaltMin),
-				slog.Int("max", node.PBKDFSaltMax),
-				slog.String("hint", "a random salt is used for this process; the commissioner receives it in PBKDFParamResponse"))
-		}
-		salt = fresh.Salt
-	}
-	return passcode, salt, cm.Iterations, configured, nil
+	return passcode, fresh.Salt, cm.Iterations, configured, nil
 }
 
 // matterAttestation is the device attestation the node is built with:
@@ -343,6 +331,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return nil
 	}
 
+	// The daemon's migrations carry go-fabric's DDL; store.Upgrade does the
+	// steps DDL cannot: data a release before it kept elsewhere (the VID
+	// verification settings that move into their fabric's columns) and a
+	// table rebuild for a changed constraint. Each step detects whether it
+	// is due, so it runs on every start and does nothing on a current
+	// database. A database it cannot bring up to date would fail the
+	// store's queries later, mid-session, so the bridge does not start.
+	if err := matterstore.Upgrade(ctx, db); err != nil {
+		logger.Error("matter.bridge.store_upgrade_failed", slog.String("error", err.Error()))
+		return nil
+	}
 	// The credential store is built on the daemon's shared handle: the
 	// daemon carries go-fabric's schema in its own migrations, so the node
 	// is handed the store rather than the handle it would apply the schema
@@ -444,7 +443,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Attestation:         attest,
 		Health:              matterHealth(healthTracker),
 		Locales:             matterLocales(cfg.Locale),
-		SupportedFabrics:    matterSupportedFabrics,
+		Limits:              node.Limits{SupportedFabrics: matterSupportedFabrics},
 		TimeSynchronization: node.TimeSynchronization{Off: !mc.TimeSyncEnabled()},
 		Surface:             surfacePolicies,
 		Logger:              logger,
@@ -1004,7 +1003,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	candidates := &matterCandidateProviderAdapter{reg: reg, cfg: cfg, build: bundle.build}
 	wiring.nodeUI = fabricui.Options{
 		Node: matterNodeSource{bundle.node},
-		Exposure: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{
+		Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec), ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{
 			Candidates: candidates.MatterCandidates,
 			Store:      mids,
 			Labels:     matterParameterLabels{labels},
@@ -1016,7 +1015,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 				return ""
 			},
 			Audit: auditRec,
-		}),
+		})},
 		Reassemble:       matterReassembler(bundle.sync, auditRec),
 		Events:           bundle.events,
 		Logger:           logger,

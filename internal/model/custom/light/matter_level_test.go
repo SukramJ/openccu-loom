@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-	"github.com/SukramJ/go-fabric/cluster/spec"
-	levelcontroldef "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
-	"github.com/SukramJ/go-fabric/im"
+	"thingfabric.dev/go-fabric/cluster/levelcontrol"
+	"thingfabric.dev/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/cluster/spec"
+	levelcontroldef "thingfabric.dev/go-fabric/cluster/spec/levelcontrol"
+	"thingfabric.dev/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -480,7 +480,7 @@ func TestLevelMoveZeroRateIsInvalidCommand(t *testing.T) {
 		l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 		l.OnLevel(0.5)
 		srv := levelServer(t, l)
-		before := srv.MatterDataVersion()
+		changes := levelChanges(t, srv)
 		_, err := srv.MatterInvoke(context.Background(), cmd, levelcontroldef.MoveRequest{MoveMode: levelcontroldef.MoveModeUp, Rate: spec.Nullable[uint8]{Value: 0}})
 		var sc im.StatusCodeError
 		if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusInvalidCommand {
@@ -489,8 +489,8 @@ func TestLevelMoveZeroRateIsInvalidCommand(t *testing.T) {
 		if calls := w.snapshot(); len(calls) != 0 {
 			t.Fatalf("cmd 0x%02X Rate=0 reached the CCU: %+v", cmd, calls)
 		}
-		if srv.MatterDataVersion() != before {
-			t.Fatalf("cmd 0x%02X Rate=0 bumped the data version", cmd)
+		if changes() != 0 {
+			t.Fatalf("cmd 0x%02X Rate=0 committed a change", cmd)
 		}
 	}
 }
@@ -605,15 +605,15 @@ func TestLevelCurrentLevelIsNotWritable(t *testing.T) {
 	l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 	l.OnLevel(0.5)
 	srv := levelServer(t, l)
-	before := srv.MatterDataVersion()
+	changes := levelChanges(t, srv)
 	if err := srv.MatterWrite(context.Background(), levelcontrol.AttrCurrentLevel, uint64(200)); err == nil {
 		t.Fatal("MatterWrite(CurrentLevel) succeeded, want a refusal")
 	}
 	if calls := w.snapshot(); len(calls) != 0 {
 		t.Fatalf("a refused CurrentLevel write reached the CCU: %+v", calls)
 	}
-	if srv.MatterDataVersion() != before {
-		t.Fatal("a refused CurrentLevel write bumped the data version")
+	if changes() != 0 {
+		t.Fatal("a refused CurrentLevel write committed a change")
 	}
 }
 

@@ -1,7 +1,7 @@
 # ADR 0066 — Relicense to AGPL-3.0-only with a commercial exception
 
 > **Historical paths.** Since 0.74.0 the Matter stack is a dependency, not a
-> subtree: it lives in the [go-fabric](https://github.com/SukramJ/go-fabric)
+> subtree: it lives in the [go-fabric](https://github.com/thingfabric/go-fabric)
 > module and `internal/north/matter/` no longer exists in this repository. The
 > paths below are left as they were when the decision was made — a record
 > rewritten to match today's tree stops being a record. For where each piece

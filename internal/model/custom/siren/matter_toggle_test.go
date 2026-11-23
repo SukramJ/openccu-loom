@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"thingfabric.dev/go-fabric/cluster/onoff"
 )
 
 // TestSirenOnOffToggleIsAdvertised pins Toggle onto the siren's OnOff

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/SukramJ/go-fabric/contract"
-	fabricdevice "github.com/SukramJ/go-fabric/device"
-	"github.com/SukramJ/go-fabric/eligibility"
+	"thingfabric.dev/go-fabric/contract"
+	fabricdevice "thingfabric.dev/go-fabric/device"
+	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"

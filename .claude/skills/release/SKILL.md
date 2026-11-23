@@ -9,7 +9,7 @@ A release touches three version-carrying files and three changelogs. `release.ym
 `config.yaml` versions against the tag, so a missed one fails the workflow
 after the tag is already pushed — bump them all in one commit.
 
-`github.com/SukramJ/go-fabric` is **not** one of the carriers. It is a
+`thingfabric.dev/go-fabric` is **not** one of the carriers. It is a
 dependency with its own cadence — see [Following go-fabric](#following-go-fabric)
 at the end.
 
@@ -113,7 +113,7 @@ raised there.
 
 ## Following go-fabric
 
-The Matter bridge stack lives in `github.com/SukramJ/go-fabric` and has an
+The Matter bridge stack lives in `thingfabric.dev/go-fabric` and has an
 independent SemVer lane — the same arrangement ADR 0050 set up for `go-mqtt`,
 and the point of the extraction: a Matter fix reaches a consumer without a
 daemon release.
@@ -131,7 +131,7 @@ How a go-fabric change reaches loom:
 2. Bump the require in loom and run the gate:
 
    ```sh
-   go get github.com/SukramJ/go-fabric@<ref>   # <ref> is a tag or a commit SHA
+   go get thingfabric.dev/go-fabric@<ref>   # <ref> is a tag or a commit SHA
    go mod tidy
    make lint && make test && make contract
    ```
@@ -141,7 +141,7 @@ How a go-fabric change reaches loom:
    version.
 
 **Tags.** go-fabric publishes SemVer tags (`v0.x`); pin a tag
-(`go get github.com/SukramJ/go-fabric@vX.Y.Z`). A tag keeps the pin readable
+(`go get thingfabric.dev/go-fabric@vX.Y.Z`). A tag keeps the pin readable
 and lets Dependabot propose the bump. `@<commit-sha>` still works for an
 unreleased fix and records a pseudo-version — replace it with the tag once
 one is cut.

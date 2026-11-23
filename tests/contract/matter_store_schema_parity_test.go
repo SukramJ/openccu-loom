@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	matterstore "github.com/SukramJ/go-fabric/store"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
@@ -77,7 +77,9 @@ func TestLoomMigrationsMatchGoFabricMatterTableShapes(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = loom.Close() })
 
-	ref, err := sql.Open("sqlite", ":memory:")
+	// store.Apply refuses a handle with PRAGMA foreign_keys off, SQLite's
+	// default; the daemon's own DSN sets it on every connection.
+	ref, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open reference sqlite: %v", err)
 	}

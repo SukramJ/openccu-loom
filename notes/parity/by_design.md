@@ -1036,9 +1036,9 @@ scheduler-event wrapper that duplicated the job instrumentation in
 ## Matter / matter.js Divergences
 
 > **Matter divergences moved.** The Matter wire stack lives in the
-> [go-fabric](https://github.com/SukramJ/go-fabric) module, and the entries
+> [go-fabric](https://github.com/thingfabric/go-fabric) module, and the entries
 > that describe *its* behaviour moved with it, to
-> [`notes/parity/by_design.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/parity/by_design.md).
+> [`notes/parity/by_design.md`](https://github.com/thingfabric/go-fabric/blob/main/notes/parity/by_design.md).
 > What stays below is the host half: how this repository's device model
 > projects onto Matter — which HomeMatic device becomes which device type,
 > which data point becomes which cluster attribute. A code comment here that

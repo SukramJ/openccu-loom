@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+	fabricendpoint "thingfabric.dev/go-fabric/endpoint"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
