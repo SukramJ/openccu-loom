@@ -56,6 +56,9 @@ type configInputs struct {
 	// NoCentral writes an empty central list: the first-boot state the
 	// add-on auto-onboarding acts on.
 	NoCentral bool
+	// Matter writes an enabled north.matter block; false writes none,
+	// leaving the bridge off, which is the daemon default.
+	Matter bool
 	// DelayNewDeviceCreation writes behavior.delay_new_device_creation
 	// on the central. Nil omits the key, leaving the daemon default.
 	DelayNewDeviceCreation *bool
@@ -209,6 +212,12 @@ func buildConfigYAML(in configInputs) string {
 	fmt.Fprintf(&b, "  discovery:\n    mdns:\n      enabled: false\n    ssdp:\n      enabled: false\n")
 	fmt.Fprintf(&b, "%s", mqttBlock)
 	fmt.Fprintf(&b, "%s", in.Measurements.yaml())
+	if in.Matter {
+		// ":0" lets the OS choose the UDP port, the value the field's
+		// documentation names for tests; "noop" keeps DNS-SD in memory,
+		// so parallel daemons send no multicast and need no commissioner.
+		fmt.Fprintf(&b, "  matter:\n    enabled: true\n    listen: \":0\"\n    mdns_advertise: noop\n")
+	}
 	if in.NoCentral {
 		fmt.Fprintf(&b, "centrals: []\n")
 		return b.String()

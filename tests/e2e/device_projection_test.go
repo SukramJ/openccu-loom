@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -529,4 +531,164 @@ func TestRESTProjectionIsWhatTheListCarries(t *testing.T) {
 		t.Errorf("%d data points are in the list and in no projection:\n  %s", len(unexplained), strings.Join(unexplained, "\n  "))
 	}
 	t.Logf("%d data points shown, %d withheld", shownTotal, withheld)
+}
+
+// TestMatterProjectionIsWhatTheBridgeHolds is the round trip of the Matter
+// plane: the endpoints the running bridge holds (GET /api/v1/node/endpoints,
+// each with the source key it was built from) are compared, in both
+// directions, with what each device's projection calls published, and each
+// published entry's endpoint number with the bridge's.
+//
+// It runs twice, on the two paths that bring a source onto the bridge. First
+// the CCU boots not ready, turns ready, and the exposures are switched on:
+// the apply reassembles the bridge. Then the daemon restarts on the same data
+// directory with the CCU not ready again: the exposures are now persisted, the
+// bridge starts empty, and only the reassembly on the central's ready event
+// brings them back.
+func TestMatterProjectionIsWhatTheBridgeHolds(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{EnableMatter: true, StartCCUNotReady: true, AuthMode: harness.AuthSession})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	h.CCU().V().SetReady(true)
+	awaitCentralReady(t, h, harness.CentralName)
+	if n := h.EnableAllExposures(t); n == 0 {
+		t.Fatal("the node offers no source to expose; the comparison would hold vacuously")
+	}
+	first := matterRoundTrip(t, h, "exposures applied")
+
+	h.CCU().V().SetReady(false)
+	h.Restart(t)
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login after restart: %v", err)
+	}
+	if held := h.NodeEndpoints(t); len(held) != 0 {
+		t.Fatalf("the bridge holds %d endpoints before the CCU is ready; the restart would not measure "+
+			"the reassembly on the ready event", len(held))
+	}
+	h.CCU().V().SetReady(true)
+	awaitCentralReady(t, h, harness.CentralName)
+	second := matterRoundTrip(t, h, "after a restart with persisted exposures")
+
+	for key, ep := range first {
+		if second[key] != ep {
+			t.Errorf("%s: endpoint %s before the restart, %q after", key, ep, second[key])
+		}
+	}
+	for key := range second {
+		if _, ok := first[key]; !ok {
+			t.Errorf("%s: on the bridge only after the restart", key)
+		}
+	}
+}
+
+// matterRoundTrip waits until the bridge's endpoint set has settled, then
+// compares it with the devices' Matter projections in both directions. It
+// returns the bridge's endpoint numbers by source key.
+func matterRoundTrip(t *testing.T, h *harness.Harness, phase string) map[string]string {
+	t.Helper()
+	onBridge := settledBridgeEndpoints(t, h, 5*time.Second, 90*time.Second)
+
+	shown := map[string]string{}
+	withheld, folded := 0, 0
+	for _, raw := range getJSONArray(t, h, "/api/v1/devices", "items") {
+		dev, _ := raw.(map[string]any)
+		addr, _ := dev["address"].(string)
+		status, out := getProjection(t, h, "/api/v1/devices/"+addr+"/projection?plane=matter")
+		if status != http.StatusOK || len(out.Planes) != 1 {
+			t.Fatalf("%s: %s: status %d, planes %+v", phase, addr, status, out.Planes)
+		}
+		if out.Planes[0].State != "active" {
+			t.Fatalf("%s: %s: plane %s / %q; want active", phase, addr, out.Planes[0].State, out.Planes[0].Reason)
+		}
+		for _, rawEntry := range out.Planes[0].Entries {
+			var e measurementEntry
+			if err := json.Unmarshal(rawEntry, &e); err != nil {
+				t.Fatalf("decode entry: %v", err)
+			}
+			switch e.Verdict {
+			case "published":
+				key := e.Identity["source_key"]
+				if key == "" {
+					t.Fatalf("%s: %s: published entry %d/%s without a source key: %v", phase, addr, e.Channel, e.Key, e.Identity)
+				}
+				shown[key] = e.Identity["endpoint_id"]
+			case "folded":
+				folded++
+			case "withheld":
+				withheld++
+				if e.Reason == "" {
+					t.Errorf("%s: %s: entry %d/%s is withheld without a reason", phase, addr, e.Channel, e.Key)
+				}
+			}
+		}
+	}
+	if len(shown) == 0 {
+		t.Fatalf("%s: no projection calls anything published; the comparison would hold vacuously", phase)
+	}
+	if withheld == 0 {
+		t.Errorf("%s: no projection withholds anything; the fleet does not exercise a single reason", phase)
+	}
+
+	var missing, unexplained, renumbered []string
+	for key, ep := range shown {
+		held, ok := onBridge[key]
+		switch {
+		case !ok:
+			missing = append(missing, key)
+		case ep != held:
+			renumbered = append(renumbered, fmt.Sprintf("%s: projection says endpoint %q, bridge holds %s", key, ep, held))
+		}
+	}
+	for key := range onBridge {
+		if _, ok := shown[key]; !ok {
+			unexplained = append(unexplained, key)
+		}
+	}
+	slices.Sort(missing)
+	slices.Sort(unexplained)
+	slices.Sort(renumbered)
+	if len(missing) > 0 {
+		t.Errorf("%s: %d sources are called published and are not on the bridge:\n  %s", phase, len(missing), strings.Join(missing, "\n  "))
+	}
+	if len(unexplained) > 0 {
+		t.Errorf("%s: %d endpoints are on the bridge and in no projection:\n  %s", phase, len(unexplained), strings.Join(unexplained, "\n  "))
+	}
+	if len(renumbered) > 0 {
+		t.Errorf("%s: %d published entries name another endpoint than the bridge:\n  %s", phase, len(renumbered), strings.Join(renumbered, "\n  "))
+	}
+	t.Logf("%s: %d sources published, %d endpoints on the bridge, %d folded, %d withheld entries",
+		phase, len(shown), len(onBridge), folded, withheld)
+	return onBridge
+}
+
+// settledBridgeEndpoints polls the bridge's endpoints until the set has been
+// non-empty and unchanged for quiet, and fails after limit. An endpoint no
+// source stands behind fails the test: every bridged endpoint of this host
+// is built from a source.
+func settledBridgeEndpoints(t *testing.T, h *harness.Harness, quiet, limit time.Duration) map[string]string {
+	t.Helper()
+	deadline := time.Now().Add(limit)
+	var last map[string]string
+	stableSince := time.Now()
+	for {
+		cur := map[string]string{}
+		for _, ep := range h.NodeEndpoints(t) {
+			key := ep.SourceKey()
+			if key == "" {
+				t.Fatalf("bridged endpoint %d (%s) carries no source key", ep.EndpointID, ep.DeviceTypeName)
+			}
+			cur[key] = strconv.FormatUint(uint64(ep.EndpointID), 10)
+		}
+		if len(cur) == 0 || !maps.Equal(cur, last) {
+			last, stableSince = cur, time.Now()
+		} else if time.Since(stableSince) >= quiet {
+			return cur
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the bridge's endpoints did not settle within %s (last %d endpoints)", limit, len(last))
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 }

@@ -26,10 +26,11 @@ import (
 //   - No 5xx in any of the node/* endpoints that do not require a
 //     running Matter stack.
 //
-// The full Matter boot (Endpoint 0 ServerList, BasicInformation.Reachable,
-// Aggregator with ≥1 Bridged-Device) is deferred to Phase F because it
-// requires enabling Matter in the harness config plus a Matter
-// commissioner — both are out of scope for the hermetic E2E suite.
+// The enabled bridge runs in this suite too (harness.Options.EnableMatter,
+// without DNS-SD and without a commissioner):
+// TestMatterProjectionIsWhatTheBridgeHolds compares its endpoints with the
+// devices' projections. What a commissioner reads over the wire is the
+// chip-tool suite's.
 func TestE2EMatterBoot(t *testing.T) {
 	t.Parallel()
 

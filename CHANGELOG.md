@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The Matter plane of a device's projection is held by a round trip
+  against a running bridge.** The black-box suite now runs the bridge
+  (`harness.Options.EnableMatter`: an OS-chosen UDP port, DNS-SD off, no
+  commissioner) and compares, in both directions, the endpoints
+  `GET /api/v1/node/endpoints` lists with what
+  `GET /devices/{addr}/projection?plane=matter` calls published, endpoint
+  numbers included. It runs on both paths that bring a source onto the
+  bridge: switching exposures on after the CCU turned ready, and a daemon
+  restart with the CCU booting not ready, where only the reassembly on the
+  central's ready event brings the persisted exposures back; the endpoint
+  numbers must survive the restart. Matter was the last plane without such
+  a round trip. (#1092)
+
 ### Changed
 
 - **Breaking for API users (REST API 18.0.0): the Matter node routes read
