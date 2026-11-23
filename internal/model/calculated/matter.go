@@ -68,8 +68,10 @@ func (s *VaporConcentrationSensor) MatterMeasurementClass() interfaces.MatterMea
 	return interfaces.MatterMeasurementNone
 }
 
-// MatterMeasurementClass for OperatingVoltageLevelSensor: derived
-// battery percentage → PowerSource (0x002F) BatPercentRemaining (P1).
+// MatterMeasurementClass for OperatingVoltageLevelSensor: the derived
+// battery percentage is a battery reading. The Matter bridge serves no
+// endpoint for it; the device's PowerSource (0x002F) is fed from its
+// generic battery data point.
 func (s *OperatingVoltageLevelSensor) MatterMeasurementClass() interfaces.MatterMeasurementClass {
 	return interfaces.MatterMeasurementBattery
 }

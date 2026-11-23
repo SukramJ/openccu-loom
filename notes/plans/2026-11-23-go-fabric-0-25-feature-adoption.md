@@ -390,3 +390,55 @@ Branch `claude/matter-bridged-identity`, from `main` at 3dc2682f (#1166 merged).
 - F12: the battery source states `BatteryReplaceabilityUnspecified`.
 - Known limit: a firmware change while the daemon is stopped raises no version at the next start (no
   stored values to compare; MJ does not raise on its own either).
+
+## 13. Slice 3: measurements, verified facts and decisions (2026-11-23)
+
+Measured (`TestMatterFallbackCensus`, `-tags=integration`, whole embedded godevccu fleet,
+`IncludeMeasurements`, no allow-list): 401 devices → 2021 bridged endpoints (2258 with
+`ExposeSecondaryChannels`). Hand-built (not through the device layer): 59, every one a
+calculated `OperatingVoltageLevelSensor` (class `MeasurementBattery`) served as its own
+endpoint with device type 0x0000. Device type missing from the layer or composition refused: 0.
+
+Verified facts (Fable note, load-bearing lines re-read at GF v0.25.0):
+
+- Binding is by type: `deviceseam.Attach` binds whatever promotes `base() *Device`
+  (`GF/device/lifecycle.go:49-64`); `&specEndpoint{spec}` is never bound.
+- `Replace` with the same pointer is a no-op (`GF/node/aggregator.go:496-497`); a new device
+  starts reachable, so the seed `SetReachable` precedes `Add`/`Replace`.
+- `SetReachable` notifies only on a change (`GF/device/lifecycle.go:240-244`).
+- `HostStatement` carries Name and addresses only (`GF/device/lifecycle.go:326-329`); stated
+  BDBI strings and the battery are construction-time (`fabricdevice.Measurement`,
+  `GF/device/measurement.go:48-52`; bdbidef `Initial`).
+- `NotifyDeviceReachable` addresses every endpoint of the device without a duplicate check
+  (`GF/bridge/receive.go:935-952`): beside `SetReachable` it would fire twice.
+- Defect: the calculated branch of `channelSpecs` has no battery fold, and
+  `attachPowerSource` walks generic data points only; a type-0 endpoint is served as
+  `[BridgedNode]`, not refused. Whether production reaches it without an operator's
+  exposure: UNVERIFIED.
+
+Owner decisions (wizard):
+
+- **Kept devices (first answer, superseded):** a go-fabric issue for a BDBI host statement.
+  Re-decided on new facts (below): **a firmware change is a rebuild, as a reboot is.** The
+  source builds a new go-fabric device with the new stated strings, the reconciler hands it
+  over with `Aggregator.Replace` under the same key (the endpoint number stays), and the
+  ConfigurationVersion is raised. No go-fabric change. Slice 3 splits: **3a** (battery fold
+  fix, census as guard, one reachability seam, `by_design` row for `RevokeWindow`), **3b**
+  (construction-time declarations, binding, `SetReachable`, rebuild on firmware change,
+  specEndpoint gone). 3b measures first: does the physical device restart on a CCU firmware
+  update (UNVERIFIED), and what `Replace` does to a running subscription (UNVERIFIED).
+- **Facts behind the re-decision** (Fable note `.scratch/fable-bdbi-facts.md` of the slice-3
+  worktree, re-read): SoftwareVersion/-String are quality F (MJ
+  `model/src/standard/elements/basic-information.element.ts:51-57`); chip keeps them in
+  `const FixedData mFixedData` (`src/app/clusters/bridged-device-basic-information-server/BridgedDeviceBasicInformationCluster.h:229`);
+  ConfigurationVersion rises when the bridge deems a change a configuration change
+  (MJ `types/dist/esm/clusters/bridged-device-basic-information.d.ts:177-186`); a controller
+  using WildcardSkipFixedAttributes may never re-read an F attribute
+  (MJ `node/src/node/integration/ProtocolService.ts:502-503`).
+- **D2:** the hand-built fallback is removed; a type the layer lacks or a refused composition
+  is withheld with a finding. The census becomes a guard: zero hand-built endpoints.
+- **Battery fix:** fold only — the calculated level never becomes an endpoint; PowerSource
+  keeps today's choice (generic). Feeding the percentage into PowerSource is a measured
+  follow-up.
+- **Base:** slice 3 is stacked on #1168 (`claude/matter-bridged-identity`), rebased onto main
+  after its merge.

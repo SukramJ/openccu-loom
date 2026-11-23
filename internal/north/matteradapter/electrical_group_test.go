@@ -13,6 +13,7 @@ import (
 	"thingfabric.dev/go-fabric/contract"
 	"thingfabric.dev/go-fabric/endpoint"
 
+	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -284,5 +285,46 @@ func TestBatteryRidesOnADeviceEndpointRatherThanItsOwn(t *testing.T) {
 	// endpoint would show the operator several battery levels for one device.
 	if carriers != 1 {
 		t.Errorf("PowerSource (0x002F) is served on %d endpoints, want exactly 1", carriers)
+	}
+}
+
+// TestCalculatedBatteryLevelRidesOnADeviceEndpointRatherThanItsOwn is the
+// calculated twin of [TestBatteryRidesOnADeviceEndpointRatherThanItsOwn]: the
+// derived battery level (OPERATING_VOLTAGE_LEVEL) is a battery reading too, so
+// it never becomes an endpoint of its own; it is withheld, and the
+// PowerSource keeps reading the generic battery data point. Served as an
+// endpoint it would have no device type, which the bridge serves as
+// DeviceTypeList=[BridgedNode] alone; handed to the device layer it would be
+// refused, and the Matter pages would warn about a device that is fine.
+func TestCalculatedBatteryLevelRidesOnADeviceEndpointRatherThanItsOwn(t *testing.T) {
+	dev := buildMeteringPlug(t)
+	// Measurements on: with them off the calculated level is withheld before
+	// the battery question is ever asked, and the test would pass blind.
+	a := matteradapter.New(matteradapter.Config{IncludeMeasurements: true}, slog.New(slog.DiscardHandler))
+	assemble := func() *endpoint.Topology {
+		top, err := assembleDevicesWith(context.Background(), a, newFakeStore(), testEndpointConfig(), []matteradapter.DeviceSnapshot{
+			{CentralName: "c", Devices: []*device.Device{dev}},
+		})
+		if err != nil {
+			t.Fatalf("assemble: %v", err)
+		}
+		return top
+	}
+	before := len(assemble().Bridged())
+
+	ch0 := dev.Channel("0001PSM01:0")
+	ch0.AttachCalculatedDataPoint(calculated.NewOperatingVoltageLevelSensorWithIdentity("ccu", ch0.Address))
+
+	top := assemble()
+	for _, ep := range top.Bridged() {
+		if ep.DeviceType == 0 {
+			t.Errorf("EP %d has device type 0; its DeviceTypeList would be [BridgedNode] alone", ep.ID)
+		}
+	}
+	if got := len(top.Bridged()); got != before {
+		t.Errorf("bridged endpoints = %d, want %d: the calculated battery level spawned an endpoint", got, before)
+	}
+	if f := a.Findings(); len(f) != 0 {
+		t.Errorf("findings = %+v, want none: the calculated battery level reached the device layer", f)
 	}
 }

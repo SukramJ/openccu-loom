@@ -108,6 +108,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   has no source for how a battery is replaced, so the bridge says it does
   not know, as matter.js does. On paired fabrics these attributes change
   once. (#1167)
+- **Every bridged Matter endpoint is a device of go-fabric's device layer.**
+  A selected source whose device type the layer does not carry, or whose
+  composition it refuses, no longer gets a hand-built endpoint in its place:
+  the bridge holds no endpoint for it, and it appears among the devices the
+  Matter status and selection pages name (`device_refused`). Over every
+  device model the simulator carries, no source takes this path. The
+  reachability forward to Matter is now wired once per central, for the
+  centrals present at boot and those added later alike. (#1027)
 
 ### Added
 
@@ -124,6 +132,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   commissioning windows that changed meanwhile. (#1056)
 - **A shutdown ends open Matter node event streams at once** instead of
   waiting for them until the shutdown deadline. (#1056)
+
+### Fixed
+
+- **A selected battery level no longer appears in Matter as a device of its
+  own.** The battery level the daemon derives from the operating voltage
+  could be selected for Matter, and was then served as an endpoint without a
+  device type of its own. It is no longer offered for selection and never
+  becomes an endpoint; the device's battery stays on its PowerSource, fed by
+  the device's low-battery data point as before. (#1027)
 
 ## [0.107.1] - 2026-11-23
 
