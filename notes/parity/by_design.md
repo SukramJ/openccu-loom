@@ -2718,7 +2718,17 @@ Measured on the developer's HmIP-BSL (`001A58A9A23DF5:9`, 2026-11-23; `putParams
 | `DURATION 31 / H` | 0 / 1 / 1 / 1 — on, and stays on |
 | `DURATION 31 / H` through `set_level` with `transition: 0.5`, after the fix | 0 / 1 / 1 / 1 |
 
-`set_level {"state":"OFF","transition":2}` after the fix sent `{LEVEL 0.0, DURATION 31 / H, RAMP_TIME 2 / S}` and the channel read LEVEL 0 from +0.5 s. Whether the CCU reports the target or the fading level was not separated. The plain-dimmer families (bare `ON_TIME` in seconds) still carry 111600 s, a real 31 h; nothing there was measured.
+`set_level {"state":"OFF","transition":2}` after the fix sent `{LEVEL 0.0, DURATION 31 / H, RAMP_TIME 2 / S}` and the channel read LEVEL 0 from +0.5 s. Whether the CCU reports the target or the fading level was not separated.
+
+The same day, after the fix, `set_level {"state":"ON","brightness":255,"transition":0.5}` and then `{"state":"OFF","transition":2}` through the daemon on three more owner-named channels, wire captured:
+
+| Channel | Switch-on bundle on the wire | LEVEL after the switch-on | After the switch-off |
+|---|---|---|---|
+| HmIP-WRC6-230 `00536409A5E82D:18` (`OPTICAL_SIGNAL_RECEIVER`) | `DURATION 31 / H`, `RAMP_TIME 50 / 10MS`, `COLOR GREEN`, `COLOR_BEHAVIOUR ON`, `LEVEL 1.0` | 1 at +1, +3, +8, +20 s | 0 from +0.5 s |
+| HmIP-MP3P LED `0015226998783B:6` | `DURATION 0 / S`, `RAMP_TIME 50 / 10MS`, `ON_TIME_LIST_1 PERMANENTLY_ON`, `REPETITIONS NO_REPETITION`, `COLOR BLUE`, `LEVEL 1.0` | 0.1 at +1 s, 1 at +3, +8, +20 s | 0.95 at +0.5 to +3 s, 0 at +6 s — the fade is visible in the reports |
+| HmIP-DRDI3 `00261D89BB7F7C:5` (bare `ON_TIME` / `RAMP_TIME`) | `ON_TIME 111600.0`, `RAMP_TIME 0.5`, `LEVEL 1.0` | 1 at +3, +8, +20 s | 0 from +0.5 s |
+
+So 31 / H keeps a second signal-light family on, and the plain-dimmer family takes the sentinel as 111600 s. The MP3P LED keeps its own bundle, which sends `DURATION 0 / S` with `ON_TIME_LIST_1 PERMANENTLY_ON` and stays on with a ramp — where the BSL, with `DURATION 0 / S` and a ramp but no `ON_TIME_LIST_1`, stayed dark. Not measured: HmIP-RGBW and HmIP-DRG-DALI (none on the developer's CCU); they share the value/unit encoder.
 
 Go path: `internal/model/custom/light/light.go::Light.TurnOn`, `internal/model/custom/duration_units.go::DurationUnits.Encode`.
 
