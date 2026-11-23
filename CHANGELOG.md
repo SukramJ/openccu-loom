@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.107.1] - 2026-11-23
+
 ### Fixed
 
 - **A sound play with a repeat count the device cannot take is refused
