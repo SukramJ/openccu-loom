@@ -160,12 +160,9 @@ test.describe('Device editor web component — embedding contract', () => {
   });
 
   test('the theme tokens reach the component', async ({ page }) => {
-    // The `--ha-*` tokens are declared on `:root` in @sukramj/fabric-ui and
-    // stay empty inside a shadow root; their `:host` forms land with
-    // SukramJ/go-fabric-ui#72. Until then the open list has no background.
-    // Marked as an expected failure so the release that fixes it turns
-    // this red ("expected to fail, but passed") and the marker goes.
-    test.fail(true, 'theme tokens have no :host form yet (SukramJ/go-fabric-ui#72)');
+    // The `--ha-*` tokens of @sukramj/fabric-ui carry a `:host` form beside
+    // `:root` (SukramJ/go-fabric-ui#72), so they reach the component's
+    // shadow root and the open list has a background.
     const info = fixture('info.json') as { capabilities: string[] };
     await page.route('**/api/v1/info', (route) =>
       route.fulfill({ json: { ...info, capabilities: [...info.capabilities, 'measurements.v1'] } }),
