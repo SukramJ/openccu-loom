@@ -74,7 +74,18 @@ func TestLightServicesAcceptTransition(t *testing.T) {
 		if err := l.Invoke(ctx, "set_level", params, hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("set_level: %v", err)
 		}
-		assertRampBundle(t, singlePut(t, w), 1.0, 50)
+		put := singlePut(t, w)
+		assertRampBundle(t, put, 1.0, 50)
+		// No on-time was commanded, so the pair says "permanently on" the way
+		// the CCU's own dialogs write it: 31 in hours. The 111600 h sentinel
+		// kept a live HmIP-BSL dark (notes/parity/by_design.md, A2-BD10).
+		hours := unitOrdinal(t, unitsWithTenMilliseconds, "H")
+		if v, _ := put[string(hmenum.ParameterDurationValue)].(int32); v != 31 {
+			t.Errorf("DURATION_VALUE = %v, want 31 (put %v)", put[string(hmenum.ParameterDurationValue)], put)
+		}
+		if u, _ := put[string(hmenum.ParameterDurationUnit)].(int32); u != hours {
+			t.Errorf("DURATION_UNIT = %v, want %d (H) (put %v)", put[string(hmenum.ParameterDurationUnit)], hours, put)
+		}
 	})
 
 	t.Run("set_level ON with brightness and seconds", func(t *testing.T) {

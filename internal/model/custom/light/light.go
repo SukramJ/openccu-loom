@@ -764,9 +764,10 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 	case cfg.OnTime != nil:
 		l.stageOnTimeParam(params, *cfg.OnTime)
 	case cfg.RampTime != nil:
-		// Ramp-without-on-time: the CCU otherwise treats the on-time as the
-		// implicit "back to off" timer, which the operator did not request.
-		// Send the [custom.TimerNotUsed] sentinel so RAMP_TIME runs stand-alone.
+		// Ramp-without-on-time: the CCU refuses a ramp pair without an
+		// on-time pair, and any real on-time would switch the light off
+		// again. The [custom.TimerNotUsed] sentinel is "permanently on" — 31 h,
+		// (31, H) on a value/unit pair — so the ramp runs and the light stays.
 		l.stageOnTimeParam(params, time.Duration(custom.TimerNotUsed*float64(time.Second)))
 	}
 	if cfg.RampTime != nil {

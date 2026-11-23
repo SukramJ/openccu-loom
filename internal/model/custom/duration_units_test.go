@@ -47,7 +47,7 @@ func TestDurationUnitsEncodeThresholds(t *testing.T) {
 		{"1000 h", 1000 * time.Hour, 1000, h},
 		{"zero", 0, 0, s},
 		{"negative", -time.Second, 0, s},
-		{"the disabled-timer sentinel", time.Duration(TimerNotUsed) * time.Second, int32(TimerNotUsed), h},
+		{"the disabled-timer sentinel is the firmware's permanent 31 h", time.Duration(TimerNotUsed) * time.Second, 31, h},
 	})
 }
 
@@ -102,7 +102,7 @@ func TestDurationUnitsReadTheOrdinalsFromTheList(t *testing.T) {
 		{"10MS at position 0", 500 * time.Millisecond, 50, 0},
 		{"S at position 3", 30 * time.Second, 30, 3},
 		{"M at position 2", 16344 * time.Second, 272, 2},
-		{"H at position 1 for the sentinel", time.Duration(TimerNotUsed) * time.Second, int32(TimerNotUsed), 1},
+		{"H at position 1 for the sentinel", time.Duration(TimerNotUsed) * time.Second, 31, 1},
 	})
 	for _, c := range []struct {
 		value float64

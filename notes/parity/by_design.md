@@ -2707,9 +2707,20 @@ The channel describes `DURATION_VALUE` as `INTEGER 0..16343` (read live), so 111
 
 Through the daemon after the change, on the same channel: a plain `turn_on` switched it on (LEVEL 1, COLOR kept). A plain `turn_on` sent 3 s after a `turn_on` with `seconds: 15` did not end that timer — the light was already on, so the state-change check skipped the command and nothing was written. That check preceded the sentinel before the change as well (and is the reference's `is_state_change` too), so the sentinel never reached this case; ending a running timer by a plain switch-on of a burning light is open.
 
-Not measured: an HmIP-BSL on the hardware, and the ramp paths (`TurnOnWith` with a ramp and no on-time, `TurnOffWithRamp`), which still send the sentinel beside RAMP_TIME.
+**The sentinel was mis-encoded, and the ramp paths now send it as the CCU does (#1156).** `TimerNotUsed` is 111600 s, which is 31 h. The value/unit encoder kept the seconds count and only switched the unit to hours, so the wire carried 111600 *hours* — past `DURATION_VALUE`'s MAX of 16343. The reference sends the same (`model/custom/mixins.py:324-325`). The CCU's own dialogs write "no time limit" on a `DURATION` pair as 31 with unit H (OpenCCU-Base `src/webui/www_source/webui/js/dialog/dimmerCombinedParamDialog.js:571-572`; help text "A value of 31 hours means 'permanently on'", `www/webui/js/lang/en/translate.lang.help.js:117`; the BSL / MP3P program default `L=100,DV=31,DU=2,RTV=0, RTU=1,C=7`, `www/rega/esp/side.inc:679`). The encoder now sends the sentinel as (31, H).
 
-Go path: `internal/model/custom/light/light.go::Light.TurnOn`.
+Measured on the developer's HmIP-BSL (`001A58A9A23DF5:9`, 2026-11-23; `putParamset` VALUES captured on the wire between the daemon and the CCU, LEVEL read back over JSON-RPC; the channel describes `DURATION_VALUE` as MIN 0, MAX 16343, DEFAULT 0, no SPECIAL):
+
+| Sent with `LEVEL 1.0`, `COLOR WHITE`, `RAMP_TIME 50 / 10MS` | LEVEL at +1 / +3 / +8 / +20 s |
+|---|---|
+| `DURATION 111600 / H` (the old encoding, through `set_level` with `transition: 0.5`) | 0 / 0 / 0 (not sampled at +20 s) — the light stays dark |
+| `DURATION 0 / S` | 0 / 0 / 0 / 0 — dark |
+| `DURATION 31 / H` | 0 / 1 / 1 / 1 — on, and stays on |
+| `DURATION 31 / H` through `set_level` with `transition: 0.5`, after the fix | 0 / 1 / 1 / 1 |
+
+`set_level {"state":"OFF","transition":2}` after the fix sent `{LEVEL 0.0, DURATION 31 / H, RAMP_TIME 2 / S}` and the channel read LEVEL 0 from +0.5 s. Whether the CCU reports the target or the fading level was not separated. The plain-dimmer families (bare `ON_TIME` in seconds) still carry 111600 s, a real 31 h; nothing there was measured.
+
+Go path: `internal/model/custom/light/light.go::Light.TurnOn`, `internal/model/custom/duration_units.go::DurationUnits.Encode`.
 
 ---
 
@@ -3581,7 +3592,7 @@ out a 50 s timer but does not resolve 0.5 s against 1 s. A ramp pair in
 `10MS` (`RAMP_TIME_VALUE=50`, `RAMP_TIME_UNIT=3`) sent with a 5 s on-time
 was accepted and the channel was off again at +8 s. The same ramp without
 the on-time pair is refused with `MISSING_NON_OPTIONAL_PARAMETER`, which is
-why the light paths always send the two together.
+why the light paths always send the two together. A light switched on with a ramp and no on-time carries the timer-not-used sentinel as (31, H), the CCU's own "permanently on" — see A2-BD10 for the measurement against the old (111600, H).
 
 **Guards.** `TestDurationUnitsRoundHalfUpToTheNearestStep`,
 `TestDurationUnitsUseTenMillisecondsWhereTheListOffersIt` and

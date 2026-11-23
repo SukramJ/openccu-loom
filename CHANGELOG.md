@@ -41,6 +41,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with the on-time pair the CCU requires beside it. `0` is an instant
   change, as in Home Assistant. REST, WebSocket, MCP and the MQTT command
   topic all take it. (#1156)
+- **A switch-on with a transition and no on-time keeps a signal light on.**
+  The "no timer" value beside a transition went out as 111600 hours on the
+  HmIP value/unit lights (signal lights, RGBW, DALI, the MP3P LED) — the
+  seconds count with the hour unit — and a live HmIP-BSL stayed dark. It is
+  now 31 hours, which the CCU's own dialogs write for "permanently on", and
+  the light comes on and stays on. (#1156)
 - **A light's `transition` capability says whether the device can fade.**
   It is now read from the channel's own parameters (`RAMP_TIME`, or
   `RAMP_TIME_VALUE`/`RAMP_TIME_UNIT`) instead of the device profile, which
