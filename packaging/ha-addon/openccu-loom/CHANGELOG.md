@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.107.1
+
+- **A sound with a repeat count the MP3 player cannot take is refused**
+  instead of played with the previous count. The device takes at most 14
+  repetitions; Home Assistant's `play_sound` offered up to 18.
+
 ## 0.107.0
 
 - **Lights fade over a transition on every light whose device can fade**,

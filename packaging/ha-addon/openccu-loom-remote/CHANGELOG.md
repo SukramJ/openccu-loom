@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.107.1
+
+- **Version follows OpenCCU-Loom 0.107.1**, which refuses a sound whose
+  repeat count the MP3 player cannot take instead of playing it with the
+  previous count; see the OpenCCU-Loom changelog. The proxy itself is
+  unchanged.
+
 # 0.107.0
 
 - **Version follows OpenCCU-Loom 0.107.0**, which lets lights fade over a
