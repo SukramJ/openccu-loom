@@ -13,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
@@ -92,12 +93,12 @@ func TestMatterCandidates_NilReceiver_ReturnsNil(t *testing.T) {
 func TestMatterCandidates_NilFields_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-one")
-	cfg := &config.Config{}
+	asm := matteradapter.New(matteradapter.Config{}, nil)
 
 	cases := map[string]*matterCandidateProviderAdapter{
-		"both nil": {},
-		"nil cfg":  {reg: reg},
-		"nil reg":  {cfg: cfg},
+		"both nil":      {},
+		"nil assembler": {reg: reg},
+		"nil reg":       {asm: asm},
 	}
 	for name, a := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -113,7 +114,7 @@ func TestMatterCandidates_NilFields_ReturnsNil(t *testing.T) {
 func TestMatterCandidates_EmptyRegistry_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-one", "ccu-two")
-	a := &matterCandidateProviderAdapter{reg: reg, cfg: &config.Config{}}
+	a := &matterCandidateProviderAdapter{reg: reg, asm: matteradapter.New(matteradapter.Config{}, nil)}
 
 	got := a.MatterCandidates(context.Background())
 	if len(got) != 0 {

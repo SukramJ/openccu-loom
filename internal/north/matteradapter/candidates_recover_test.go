@@ -56,7 +56,7 @@ func TestCollectCandidates_SkipsPanickingDevice(t *testing.T) {
 				t.Fatalf("CollectCandidates panicked on a broken device instead of skipping it: %v", r)
 			}
 		}()
-		got = matteradapter.CollectCandidates("central", []*device.Device{broken, healthy}, false, interfaces.MatterBuildOptions{})
+		got = matteradapter.New(matteradapter.Config{Build: interfaces.MatterBuildOptions{}}, nil).CollectCandidates("central", []*device.Device{broken, healthy})
 	}()
 
 	if len(got) != 1 {

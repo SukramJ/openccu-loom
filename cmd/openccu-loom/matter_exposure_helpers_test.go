@@ -10,7 +10,6 @@ import (
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
 // exposeEveryCandidate enables every mappable source of every registered
@@ -27,7 +26,7 @@ func exposeEveryCandidate(ctx context.Context, t *testing.T, bundle *matterBridg
 		if u == nil || u.ModelRegistry == nil {
 			continue
 		}
-		candidates := matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), true, bundle.build)
+		candidates := bundle.assembler.CollectCandidates(u.Name(), u.ModelRegistry.List())
 		for i := range candidates {
 			key := candidates[i].Key
 			if err := bundle.identity.UpsertExposure(ctx, matterendpoint.ExposureRecord{Key: key, Enabled: true, Actor: "test"}); err != nil {

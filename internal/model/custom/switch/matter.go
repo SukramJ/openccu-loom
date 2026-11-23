@@ -47,7 +47,8 @@ const matterDeviceTypeOnOffPlugInUnit = uint16(fabricdevice.OnOffPlugInUnitID)
 func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInUnit }
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: an
-// OnOffPlugInUnit with the OnOff cluster declared, built once per switch.
+// OnOffPlugInUnit with the OnOff cluster declared, held per switch and
+// rebuilt only when the host's facts change.
 // It shadows the embedded generic switch's device on purpose — the
 // profile's commands are group-state aware, the bare data point's are
 // not. The Groups + ScenesManagement clusters the Device Library makes
@@ -77,26 +78,25 @@ func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInU
 // empirically: bridge pair succeeds, sensors visible, the switch absent),
 // and the OnOff attribute is mandatory and non-nullable
 // (on-off.element.ts:29), so the server never reports null.
-func (s *Switch) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		on, _ := s.IsOn()
-		d, err := generic.NewMatterDevice(s, matterDeviceTypeOnOffPlugInUnit, opts,
-			generic.MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
-				if on {
-					return s.TurnOn(ctx, matterDispatchPriority)
-				}
-				return s.TurnOff(ctx, matterDispatchPriority)
-			}))
-		if err != nil {
-			return nil, err
-		}
-		_ = s.OnConfirmedUpdate(func(_, on bool) { generic.SetMatterOnOff(d, on) })
-		// A confirmation that landed between the initial read and the
-		// hook registration is not lost: the current value is stored
-		// again, which is a no-op when nothing changed.
-		if on, observed := s.IsOn(); observed {
-			generic.SetMatterOnOff(d, on)
-		}
-		return d, nil
+func (s *Switch) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return s.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			on, _ := s.IsOn()
+			return generic.NewMatterDevice(s, matterDeviceTypeOnOffPlugInUnit, req.Options,
+				append(host, generic.MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
+					if on {
+						return s.TurnOn(ctx, matterDispatchPriority)
+					}
+					return s.TurnOff(ctx, matterDispatchPriority)
+				}))...)
+		},
+		Bind: func() {
+			_ = s.OnConfirmedUpdate(func(_, on bool) { generic.SetMatterOnOff(s.matterDevice.Current(), on) })
+		},
+		Settle: func(d *fabricdevice.Device) {
+			if on, observed := s.IsOn(); observed {
+				generic.SetMatterOnOff(d, on)
+			}
+		},
 	})
 }

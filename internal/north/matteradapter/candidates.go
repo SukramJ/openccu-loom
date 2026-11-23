@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"thingfabric.dev/go-fabric/contract"
-	fabricdevice "thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -63,9 +62,12 @@ type Candidate struct {
 // (data_point), a channel-0 maintenance sensor — are always collected. This
 // is Matter-only; every other north-bound surface still enumerates all channels.
 //
-// build is the assembler's [Config.Build]: classifying a source builds its
-// device, and the source keeps the first one built.
-func CollectCandidates(centralName string, devices []*device.Device, exposeSecondary bool, build interfaces.MatterBuildOptions) []Candidate {
+// Secondary channels are listed when the assembler's
+// [Config.ExposeSecondaryChannels] is set. Classifying a source asks it for
+// its device with the request the walk passes ([Assembler.deviceRequest]),
+// so the listing never makes a source build anew.
+func (a *Assembler) CollectCandidates(centralName string, devices []*device.Device) []Candidate {
+	exposeSecondary := a.cfg.ExposeSecondaryChannels
 	var out []Candidate
 	for _, dev := range devices {
 		if dev == nil {
@@ -78,13 +80,13 @@ func CollectCandidates(centralName string, devices []*device.Device, exposeSecon
 			if !exposeSecondary && ch.IsCustomDPSecondaryChannel() {
 				continue
 			}
-			collectChannelCandidates(centralName, dev, ch, exposeSecondary, build, &out)
+			a.collectChannelCandidates(centralName, dev, ch, exposeSecondary, &out)
 		}
 	}
 	return out
 }
 
-func collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, exposeSecondary bool, build interfaces.MatterBuildOptions, out *[]Candidate) {
+func (a *Assembler) collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, exposeSecondary bool, out *[]Candidate) {
 	// Operator-hidden channels (G12) are dropped from Matter exposure
 	// entirely, mirroring the operation-list hide on the REST/SPA surface.
 	if ch.IsHidden() {
@@ -135,7 +137,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 			DPKind:        kind,
 			DPKey:         key,
 		}
-		v := classifyCandidate(source, sourceKey, displayName, build)
+		v := classifyCandidate(source, a.deviceRequest(sourceKey, displayName, dev, ch))
 		// Skip entries that are unmappable AND have no Matter projection
 		// hint (i.e. truly opaque sources). Sources with a real reason
 		// surface as ⛔ rows in the UI so the operator understands why.
@@ -189,10 +191,10 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 // nothing could be exposed, so no row is shown (a row would name a
 // reason the operator can do nothing about). source is any because the
 // walk probes every data point of a channel, whatever its type.
-func classifyCandidate(source any, key matterendpoint.SourceKey, name string, build interfaces.MatterBuildOptions) eligibility.Verdict {
+func classifyCandidate(source any, req interfaces.MatterDeviceRequest) eligibility.Verdict {
 	if _, own := source.(contract.EligibilitySource); !own {
 		if ds, ok := source.(interfaces.MatterDeviceSource); ok {
-			d, err := buildDevice(ds, fabricdevice.Options{StableKey: key, Name: name}, build)
+			d, err := ds.MatterDevice(req)
 			if err != nil {
 				return eligibility.Verdict{State: eligibility.StateUnmappable, Reason: err.Error()}
 			}

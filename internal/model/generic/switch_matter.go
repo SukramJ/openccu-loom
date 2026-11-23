@@ -55,29 +55,28 @@ func (s *Switch) MatterDeviceType() uint16 { return matterGenericSwitchDeviceTyp
 // [Switch.TurnOn] so a configured ON_TIME companion applies, Off through
 // [Switch.Set] — and the data point's confirmed-update hook feeds the
 // CCU's state back through [SetMatterOnOff].
-func (s *Switch) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+func (s *Switch) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
 	if s == nil || !matterGenericSwitchEligible(s.Parameter()) {
 		return nil, nil //nolint:nilnil // a switch that is not STATE projects no device
 	}
-	return s.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		on, _ := s.Value()
-		d, err := NewMatterDevice(s, matterGenericSwitchDeviceType, opts,
-			MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
-				if on {
-					return s.TurnOn(ctx, matterDispatchPriority)
-				}
-				return s.Set(ctx, false, matterDispatchPriority)
-			}))
-		if err != nil {
-			return nil, err
-		}
-		_ = s.OnConfirmedUpdate(func(_, on bool) { SetMatterOnOff(d, on) })
-		// A confirmation that landed between the initial read and the
-		// hook registration is not lost: the current value is stored
-		// again, which is a no-op when nothing changed.
-		if on, observed := s.Value(); observed {
-			SetMatterOnOff(d, on)
-		}
-		return d, nil
+	return s.matterDevice.Device(req, MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			on, _ := s.Value()
+			return NewMatterDevice(s, matterGenericSwitchDeviceType, req.Options,
+				append(host, MatterOnOffDeclaration(true, on, func(ctx context.Context, on bool) error {
+					if on {
+						return s.TurnOn(ctx, matterDispatchPriority)
+					}
+					return s.Set(ctx, false, matterDispatchPriority)
+				}))...)
+		},
+		Bind: func() {
+			_ = s.OnConfirmedUpdate(func(_, on bool) { SetMatterOnOff(s.matterDevice.Current(), on) })
+		},
+		Settle: func(d *fabricdevice.Device) {
+			if on, observed := s.Value(); observed {
+				SetMatterOnOff(d, on)
+			}
+		},
 	})
 }

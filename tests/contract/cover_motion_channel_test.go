@@ -35,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // coverMotionLevelDP attaches a LEVEL float to the channel.
@@ -126,7 +127,7 @@ func coverMotionBrollDevice(t *testing.T) (cov *cover.Cover, transmitter, receiv
 // cover's Matter server serves (global bits 0-1, lift bits 2-3).
 func coverOperationalStatus(t *testing.T, cov *cover.Cover) uint8 {
 	t.Helper()
-	d, err := cov.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("cover"), Name: "cover"})
+	d, err := cov.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("cover"), Name: "cover"}})
 	if err != nil || d == nil {
 		t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
 	}

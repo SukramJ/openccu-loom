@@ -35,13 +35,17 @@ import (
 // composition stored that no composition produces any more is forgotten
 // once the walk names it ([Described].Superseded).
 //
-// An endpoint is held as the spec the walk described, wrapped as the
-// Aggregator's endpoint; a described spec that differs from the held one
-// in what the wire sees (device type, name, source, parts, …) replaces
-// it under the same key, which keeps the endpoint number. The name and
-// the availability are therefore the model's at every sync, as they were
-// when the daemon assembled its own topology; a controller-written
-// NodeLabel is the node's persistence and overrides the name there.
+// An endpoint is held as the go-fabric device the walk described, which
+// the node binds. A described device that differs from the held one in
+// what the wire sees (device type, source, parts, stated identity, …), or
+// a model source's device built anew, replaces it under the same key,
+// which keeps the endpoint number. A changed name is stated on the held
+// device ([fabricdevice.Device.Update]) and served at once; a
+// controller-written NodeLabel is the node's persistence and wins over
+// it. Reachability has one input, [fabricdevice.Device.SetReachable]:
+// [Reconciler.SetReachable] forwards the model's flips to the held
+// devices of a physical device, and a device is stated the model's
+// availability before the node binds it.
 type Reconciler struct {
 	agg    *node.Aggregator
 	asm    *Assembler
@@ -63,6 +67,21 @@ type Reconciler struct {
 	// process, forgotten or found unstored; r.mu guards it. A key is
 	// looked up in the store once, not on every sync.
 	pruned map[string]struct{}
+
+	// reachMu guards reach and orders a reachability flip against a
+	// central's batch: [Reconciler.SetReachable] holds it while it tells
+	// the devices, and a sync holds it from the seed of the devices it
+	// binds until the index names the devices the node then serves. A flip
+	// therefore lands before the seed, which reads it, or after the index
+	// is current, and reaches exactly the device the node serves — during
+	// a Replace both the old and the new device are bound
+	// (node.Batch.Replace attaches the new one at once and detaches the old
+	// one after the reassembly), and each would report the flip. The bus's
+	// dispatch waits for at most one central's batch, never for a walk.
+	reachMu sync.Mutex
+	// reach indexes the devices a reachability flip of a physical device
+	// reaches: scope → device address → device.
+	reach map[string]map[string]map[*fabricdevice.Device]struct{}
 }
 
 // DeviceKeyLister finds the stored endpoint keys of one device of one
@@ -76,40 +95,36 @@ type DeviceKeyLister interface {
 // heldEndpoint is what the Aggregator holds for one key, with the
 // identity the next sync compares against.
 type heldEndpoint struct {
-	ep *specEndpoint
-	id endpointIdentity
+	dev     *fabricdevice.Device
+	key     fabricdevice.SourceKey
+	address string
+	name    string
+	id      endpointIdentity
 }
 
-// specEndpoint is a described endpoint as the Aggregator takes it: a
-// type with a Spec method (node.Endpoint, go-fabric ADR 0018 decision 4).
-// It is not a device the node binds, so the spec it carries is the walk's
-// whole statement about the endpoint.
-type specEndpoint struct{ spec endpoint.Spec }
-
-// Spec implements node.Endpoint.
-func (e *specEndpoint) Spec() endpoint.Spec { return e.spec }
-
 // endpointIdentity is what a sync compares to decide whether a held
-// endpoint must be replaced: the fields the wire sees that the walk may
-// change between two syncs. The source and the measurement are compared
-// by identity — a profile holds its device, so the source is stable while
-// the data point lives, and a sensor's measurement is the data point
-// itself; a sensor's device is rebuilt by every walk and is not part of
-// the identity.
+// device must be replaced: the fields the wire sees that the walk may
+// change between two syncs, the name excepted — a name is stated on the
+// held device. The source and the measurement are compared by identity —
+// a profile holds its device, so the source is stable while the data
+// point lives, and a sensor's measurement is the data point itself; a
+// device the walk builds itself is new on every walk and is not part of
+// the identity. A model source's device is: the source builds a new one
+// only when a fact the device is built with changed.
 type endpointIdentity struct {
 	deviceType     uint16
-	name           string
 	deviceAddress  string
 	channelAddress string
 	source         any
 	measurement    any
 	power          any
+	kept           *fabricdevice.Device
 	parts          int
 	stated         statedIdentity
 }
 
 // statedIdentity is what the walk states of the physical device in
-// BridgedDeviceBasicInformation (stateIdentity), the strings an endpoint
+// BridgedDeviceBasicInformation (deviceIdentity), the strings an endpoint
 // is replaced for when the CCU reports a new value — above all the
 // installed firmware after an update.
 type statedIdentity struct {
@@ -151,10 +166,9 @@ func (s statedIdentity) valueChanged(next statedIdentity) bool {
 		s.productLabel != next.productLabel
 }
 
-func identityOf(spec endpoint.Spec) endpointIdentity {
+func identityOf(e Endpoint, spec endpoint.Spec) endpointIdentity {
 	id := endpointIdentity{
 		deviceType:     spec.DeviceType,
-		name:           spec.FriendlyName,
 		deviceAddress:  spec.DeviceAddress,
 		channelAddress: spec.ChannelAddress,
 		parts:          len(spec.Parts),
@@ -167,6 +181,9 @@ func identityOf(spec endpoint.Spec) endpointIdentity {
 	}
 	if spec.PowerSource != nil {
 		id.power = spec.PowerSource
+	}
+	if e.Kept {
+		id.kept = e.Device
 	}
 	return id
 }
@@ -184,6 +201,72 @@ func NewReconciler(agg *node.Aggregator, asm *Assembler, keys DeviceKeyLister, l
 		held:   map[string]map[string]*heldEndpoint{},
 		forget: map[string]map[string]struct{}{},
 		pruned: map[string]struct{}{},
+		reach:  map[string]map[string]map[*fabricdevice.Device]struct{}{},
+	}
+}
+
+// SetReachable states whether the physical device address of centralName
+// is reachable on every bridged device the reconciler holds for it: the
+// BridgedDeviceBasicInformation Reachable attribute, and on a change the
+// ReachableChanged event ([fabricdevice.Device.SetReachable], which
+// reports nothing for a repeated value). It waits for a batch in progress,
+// not for a walk (see reachMu).
+func (r *Reconciler) SetReachable(ctx context.Context, centralName, address string, reachable bool) {
+	r.reachMu.Lock()
+	defer r.reachMu.Unlock()
+	for d := range r.reach[centralName][address] {
+		if err := d.SetReachable(ctx, reachable); err != nil && !errors.Is(err, fabricdevice.ErrNotBridged) {
+			r.logger.Warn("matter.reconciler.reachable",
+				slog.String("central", centralName), slog.String("device", address), slog.Any("err", err))
+		}
+	}
+}
+
+// seed states the model's availability on a device the node is about to
+// bind: a new device starts reachable, and the node reads the device's
+// reachability when it assembles it. The model's state changes before its
+// flip is published, so a seed under reachMu reads every flip the index
+// will not forward. r.reachMu is held.
+func (r *Reconciler) seed(ctx context.Context, scope, address string, e Endpoint) {
+	if e.Available == nil {
+		return
+	}
+	if err := e.Device.SetReachable(ctx, e.Available()); err != nil && !errors.Is(err, fabricdevice.ErrNotBridged) {
+		r.logger.Warn("matter.reconciler.reachable_seed",
+			slog.String("central", scope), slog.String("device", address), slog.Any("err", err))
+	}
+}
+
+// reindex sets the index of the physical devices addresses of scope to
+// the devices held for them, dropping a replaced or removed device. r.mu
+// and r.reachMu are held.
+func (r *Reconciler) reindex(scope string, addresses map[string]struct{}) {
+	if len(addresses) == 0 {
+		return
+	}
+	now := make(map[string]map[*fabricdevice.Device]struct{}, len(addresses))
+	for _, h := range r.held[scope] {
+		if _, ok := addresses[h.address]; !ok {
+			continue
+		}
+		set := now[h.address]
+		if set == nil {
+			set = map[*fabricdevice.Device]struct{}{}
+			now[h.address] = set
+		}
+		set[h.dev] = struct{}{}
+	}
+	devs := r.reach[scope]
+	if devs == nil {
+		devs = map[string]map[*fabricdevice.Device]struct{}{}
+		r.reach[scope] = devs
+	}
+	for addr := range addresses {
+		if set, ok := now[addr]; ok {
+			devs[addr] = set
+		} else {
+			delete(devs, addr)
+		}
 	}
 }
 
@@ -235,8 +318,8 @@ func (r *Reconciler) forgetDevices(ctx context.Context, scope string, devs map[s
 			}
 		}
 		for key, h := range held {
-			if h.ep.spec.DeviceAddress == addr {
-				keys[key] = h.ep.spec.StableKey
+			if h.address == addr {
+				keys[key] = h.key
 			}
 		}
 	}
@@ -257,6 +340,9 @@ func (r *Reconciler) forgetDevices(ctx context.Context, scope string, devs map[s
 	if err != nil {
 		errs = append(errs, err)
 	}
+	r.reachMu.Lock()
+	r.reindex(scope, devs)
+	r.reachMu.Unlock()
 	r.logger.Info("matter.reconciler.forget",
 		slog.String("central", scope), slog.Int("devices", len(devs)), slog.Int("keys", len(keys)))
 	return errors.Join(errs...)
@@ -362,58 +448,90 @@ func (r *Reconciler) forgetSuperseded(ctx context.Context, d Described) error {
 	return errors.Join(errs...)
 }
 
-// syncCentral applies one central's described endpoints to its partition.
-// An endpoint replaced because a stated device value changed (a firmware
-// update) raises its device's ConfigurationVersion once the batch is
-// applied, as matter.js leaves it to the bridge to decide which change is a
-// configuration change (BridgedDeviceBasicInformationServer
-// increaseConfigurationVersion). r.mu is held.
+// syncCentral applies one central's described devices to its partition.
+// A device the node is about to bind is first stated the model's
+// availability ([Reconciler.seed]); from the seed until the index names
+// the devices the node serves, reachMu holds every flip back. A device replaced because a stated
+// device value changed (a firmware update) raises its device's
+// ConfigurationVersion once the batch is applied, as matter.js leaves it
+// to the bridge to decide which change is a configuration change
+// (BridgedDeviceBasicInformationServer increaseConfigurationVersion). A
+// changed name is stated on the held device after the batch. r.mu is held.
 func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 	held := r.held[d.Scope]
 	if held == nil {
 		held = map[string]*heldEndpoint{}
 		r.held[d.Scope] = held
 	}
+	type change struct {
+		key     string
+		e       Endpoint
+		next    *heldEndpoint
+		replace bool
+		raise   bool
+	}
+	var (
+		changes []change
+		renames []*heldEndpoint
+		names   []string
+		touched = map[string]struct{}{}
+	)
+	seen := make(map[string]struct{}, len(d.Endpoints))
+	for _, e := range d.Endpoints {
+		if e.Device == nil {
+			continue
+		}
+		spec := e.Spec()
+		if spec.StableKey == nil {
+			continue
+		}
+		key := spec.StableKey.String()
+		seen[key] = struct{}{}
+		next := &heldEndpoint{
+			dev: e.Device, key: spec.StableKey, address: spec.DeviceAddress,
+			name: spec.FriendlyName, id: identityOf(e, spec),
+		}
+		switch h, ok := held[key]; {
+		case !ok:
+			changes = append(changes, change{key: key, e: e, next: next})
+		case h.id != next.id:
+			changes = append(changes, change{key: key, e: e, next: next, replace: true, raise: h.id.stated.valueChanged(next.id.stated)})
+		case h.name != next.name:
+			renames, names = append(renames, h), append(names, next.name)
+		default:
+			// Unchanged in what the wire sees; the held device stays.
+		}
+	}
+	r.reachMu.Lock()
+	for _, c := range changes {
+		r.seed(ctx, d.Scope, c.next.address, c.e)
+		touched[c.next.address] = struct{}{}
+	}
 	var raise []fabricdevice.SourceKey
 	part := r.agg.Partition(d.Scope)
 	err := part.Batch(ctx, func(b *node.Batch) error {
 		var errs []error
-		seen := make(map[string]struct{}, len(d.Endpoints))
-		for i := range d.Endpoints {
-			spec := &d.Endpoints[i]
-			if spec.StableKey == nil {
+		for _, c := range changes {
+			if c.replace {
+				if err := b.Replace(c.next.key, c.e.Device); err != nil {
+					errs = append(errs, fmt.Errorf("replace %s: %w", c.key, err))
+					continue
+				}
+				if c.raise {
+					raise = append(raise, c.next.key)
+				}
+			} else if err := b.Add(c.e.Device); err != nil {
+				errs = append(errs, fmt.Errorf("add %s: %w", c.key, err))
 				continue
 			}
-			key := spec.StableKey.String()
-			seen[key] = struct{}{}
-			id := identityOf(*spec)
-			switch h, ok := held[key]; {
-			case !ok:
-				ep := &specEndpoint{spec: *spec}
-				if err := b.Add(ep); err != nil {
-					errs = append(errs, fmt.Errorf("add %s: %w", key, err))
-					continue
-				}
-				held[key] = &heldEndpoint{ep: ep, id: id}
-			case h.id != id:
-				ep := &specEndpoint{spec: *spec}
-				if err := b.Replace(spec.StableKey, ep); err != nil {
-					errs = append(errs, fmt.Errorf("replace %s: %w", key, err))
-					continue
-				}
-				if h.id.stated.valueChanged(id.stated) {
-					raise = append(raise, spec.StableKey)
-				}
-				held[key] = &heldEndpoint{ep: ep, id: id}
-			default:
-				// Unchanged in what the wire sees; the held spec stays.
-			}
+			held[c.key] = c.next
 		}
 		for key, h := range held {
 			if _, ok := seen[key]; ok {
 				continue
 			}
-			if err := b.Remove(h.ep.spec.StableKey); err != nil {
+			touched[h.address] = struct{}{}
+			if err := b.Remove(h.key); err != nil {
 				errs = append(errs, fmt.Errorf("remove %s: %w", key, err))
 				continue
 			}
@@ -421,13 +539,26 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		}
 		return errors.Join(errs...)
 	})
-	if err != nil || len(raise) == 0 {
-		return err
+	r.reindex(d.Scope, touched)
+	r.reachMu.Unlock()
+	var errs []error
+	if err != nil {
+		errs = append(errs, err)
 	}
-	if err := r.agg.IncreaseConfigurationVersions(ctx, raise...); err != nil && !errors.Is(err, node.ErrNotStarted) {
-		return fmt.Errorf("raise configuration version: %w", err)
+	for i, h := range renames {
+		name := names[i]
+		if uerr := h.dev.Update(ctx, func(st *fabricdevice.HostStatement) { st.Name = name }); uerr != nil {
+			errs = append(errs, fmt.Errorf("rename %s: %w", h.key, uerr))
+			continue
+		}
+		h.name = name
 	}
-	return nil
+	if len(raise) > 0 {
+		if rerr := r.agg.IncreaseConfigurationVersions(ctx, raise...); rerr != nil && !errors.Is(rerr, node.ErrNotStarted) {
+			errs = append(errs, fmt.Errorf("raise configuration version: %w", rerr))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Retire drops every endpoint of the central scope and retires its
@@ -443,13 +574,16 @@ func (r *Reconciler) Retire(ctx context.Context, scope string) error {
 	// No later walk names the scope again, so its findings would never
 	// be pruned by one.
 	r.asm.findings.dropScope(scope)
+	r.reachMu.Lock()
+	delete(r.reach, scope)
+	r.reachMu.Unlock()
 	part := r.agg.Partition(scope)
 	var errs []error
 	if len(held) > 0 {
 		err := part.Batch(ctx, func(b *node.Batch) error {
 			var errs []error
 			for key, h := range held {
-				if err := b.Remove(h.ep.spec.StableKey); err != nil {
+				if err := b.Remove(h.key); err != nil {
 					errs = append(errs, fmt.Errorf("remove %s: %w", key, err))
 				}
 			}

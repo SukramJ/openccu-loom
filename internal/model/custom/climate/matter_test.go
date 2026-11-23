@@ -23,7 +23,7 @@ import (
 // matterServers returns the cluster servers of the device c projects.
 func matterServers(t *testing.T, c *Climate) []interfaces.MatterClusterServer {
 	t.Helper()
-	d, err := c.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("climate-test"), Name: "climate"})
+	d, err := c.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("climate-test"), Name: "climate"}})
 	if err != nil || d == nil {
 		t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
 	}

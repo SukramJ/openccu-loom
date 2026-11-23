@@ -45,8 +45,8 @@ type Siren struct {
 	// Service methods are registered in [New].
 	payload.ServiceRegistry
 
-	// matterDevice holds the device the Matter projection serves, built
-	// once per siren (matter.go).
+	// matterDevice holds the device the Matter projection serves (matter.go),
+	// built anew only when the host's facts about the physical device change.
 	matterDevice generic.MatterDeviceHolder
 
 	key    hmtypes.DataPointKey

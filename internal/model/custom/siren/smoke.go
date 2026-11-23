@@ -39,7 +39,7 @@ type SmokeSiren struct {
 	payload.ServiceRegistry
 
 	// matterDevice holds the SmokeCoAlarm device built on first assembly
-	// (matter.go).
+	// and rebuilt when the host's facts change (matter.go).
 	matterDevice generic.MatterDeviceHolder
 
 	key    hmtypes.DataPointKey

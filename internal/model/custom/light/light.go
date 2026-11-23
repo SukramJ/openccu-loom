@@ -69,8 +69,9 @@ type Light struct {
 
 	Capabilities custom.LightCapabilities
 
-	// matterDevice holds the device the Matter projection serves, built
-	// once per light (matter.go) — the OnOff and, on a dimmable light,
+	// matterDevice holds the device the Matter projection serves (matter.go),
+	// built anew only when the host's facts about the physical device
+	// change — the OnOff and, on a dimmable light,
 	// the LevelControl cluster, plus the ColorControl a colour variant
 	// declares (matter_color.go). It lives on the embedded Light so
 	// [Light.Close] quiesces it whichever variant built it.

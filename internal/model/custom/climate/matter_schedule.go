@@ -32,8 +32,6 @@ import (
 // ThermostatClusterSchedules.cpp, and the HM mapping is recorded in
 // notes/parity/by_design.md.
 
-var _ interfaces.MatterConfiguredDeviceSource = (*Climate)(nil)
-
 // MatterScheduleExtension is go-fabric's "Ahead of matter.js" register row
 // for MSCH (cluster/thermo/ahead.go, thermo.Ahead). go-fabric refuses a
 // Thermostat that selects MSCH unless the build's surface policies enable
@@ -42,7 +40,7 @@ var _ interfaces.MatterConfiguredDeviceSource = (*Climate)(nil)
 const MatterScheduleExtension = "BD-chip-Thermostat-Schedules"
 
 // matterExtras is what a Climate's Thermostat serves beyond the base
-// surface, decided once when the device is built.
+// surface, decided at every build of the device.
 type matterExtras struct {
 	// hold serves TemperatureSetpointHold: Off while the device follows
 	// its week program (HM AUTO), On otherwise.

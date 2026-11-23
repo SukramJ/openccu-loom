@@ -1267,8 +1267,9 @@ out and stayed in CT (measured on the chip-tool HmIP-LSC bridge and in
 
 ### BD-Matter-SmokeCoAlarm-PowerSourceOnEndpoint — the smoke alarm's battery is a cluster on its endpoint, not a PowerSource part
 
-**Where:** `internal/north/matteradapter/assembler.go` (`attachPowerSource`:
-the device's battery reading becomes `Spec.PowerSource` of one endpoint, so
+**Where:** `internal/north/matteradapter/assembler.go` (`describeDevice`:
+the device's battery reading is declared on one bridged device
+(`fabricdevice.Measurement`), so
 PowerSource 0x002F is served on that endpoint); `internal/model/custom/siren`
 (`SmokeSiren`, device type 0x0076).
 
@@ -1496,6 +1497,38 @@ closes the abandoned PASE session.
 (`cmd/openccu-loom/daemon_matter_window_cluster_wiring_test.go`), through the
 composition root: the operator's close and the replacement of the boot window
 both reach the PASE sessions.
+
+### BD-Matter-ReplaceAnnouncesNothing — a same-key Replace reports no changed attribute (go-fabric#589)
+
+**Where:** `internal/north/matteradapter/reconciler.go` (`Reconciler.syncCentral`,
+the same-key `node.Batch.Replace` of a rebuilt or changed bridged device).
+
+**go-fabric / matter.js behaviour:** matter.js gives a re-added endpoint a new
+DataVersion and announces every readable attribute as changed
+(`packages/node/src/behavior/state/managed/Datasource.ts:763`,
+`packages/node/src/node/integration/ProtocolService.ts:290-296` at local HEAD
+`61b1a41a`). go-fabric v0.25.0 announces only endpoints whose id is new
+(`bridge/bridge.go:1774`) and carries the DataVersions over by key
+(`endpoint/types.go:246-275`): measured with `fabrictest`, a same-key `Replace`
+whose device serves a different SoftwareVersionString and OnOff produces no
+report, and a read filtered by the pre-replace DataVersion omits the changed
+cluster. Handed over as thingfabric/go-fabric#589.
+
+**OpenCCU-Loom state:** a model source builds a new device only when a fact
+go-fabric takes at construction changes (a firmware update's
+SoftwareVersionString, the battery moving to another bridged device), and its
+servers start from the model's current values, so the attributes a controller
+caches are the old ones. The stated identity strings are covered by the
+ConfigurationVersion raise that follows a stated-value change, which bumps the
+BridgedDeviceBasicInformation DataVersion and tells the controller to re-read.
+A server-held value that differs between the replaced device and its
+replacement (a transition cut at the swap) stays unreported until it next
+changes. Lifted by the go-fabric release that closes #589.
+
+**Guard:** `TestReconcilerServesANewFirmwareAndRaisesTheConfigurationVersion`
+(`internal/north/matteradapter/reconciler_identity_test.go`): the raise of
+exactly one on a firmware change is what keeps a filtering controller correct
+for the stated strings until the bump.
 
 ## Appendix: Where are these items marked in the sources?
 

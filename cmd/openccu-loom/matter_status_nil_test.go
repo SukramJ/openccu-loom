@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
 // TestMatterCandidateProviderAdapter_NilFields_ReturnsNil verifies that
@@ -15,15 +15,15 @@ import (
 func TestMatterCandidateProviderAdapter_NilFields_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-one")
-	cfg := &config.Config{}
+	asm := matteradapter.New(matteradapter.Config{}, nil)
 
 	if got := (&matterCandidateProviderAdapter{}).MatterCandidates(context.Background()); got != nil {
-		t.Errorf("nil reg + nil cfg: expected nil candidates, got %v", got)
+		t.Errorf("nil reg + nil assembler: expected nil candidates, got %v", got)
 	}
 	if got := (&matterCandidateProviderAdapter{reg: reg}).MatterCandidates(context.Background()); got != nil {
-		t.Errorf("nil cfg: expected nil candidates, got %v", got)
+		t.Errorf("nil assembler: expected nil candidates, got %v", got)
 	}
-	if got := (&matterCandidateProviderAdapter{cfg: cfg}).MatterCandidates(context.Background()); got != nil {
+	if got := (&matterCandidateProviderAdapter{asm: asm}).MatterCandidates(context.Background()); got != nil {
 		t.Errorf("nil reg: expected nil candidates, got %v", got)
 	}
 }
@@ -46,7 +46,7 @@ func TestMatterCandidateProviderAdapter_NilReceiver_ReturnsNil(t *testing.T) {
 func TestMatterCandidateProviderAdapter_WalksRegistry_SkipsNilAndEmptyUnits(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-one", "ccu-two")
-	a := &matterCandidateProviderAdapter{reg: reg, cfg: &config.Config{}}
+	a := &matterCandidateProviderAdapter{reg: reg, asm: matteradapter.New(matteradapter.Config{}, nil)}
 
 	got := a.MatterCandidates(context.Background())
 	if len(got) != 0 {

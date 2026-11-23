@@ -15,6 +15,7 @@ import (
 	fabricdevice "thingfabric.dev/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 func TestSwitchMatter_EligibleOnlyForState(t *testing.T) {
@@ -48,7 +49,7 @@ type matterOnOffServer interface {
 // matterSwitchDevice returns the device a switch projects.
 func matterSwitchDevice(t *testing.T, s *Switch) *fabricdevice.Device {
 	t.Helper()
-	d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("switch"), Name: "switch"})
+	d, err := s.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("switch"), Name: "switch"}})
 	if err != nil {
 		t.Fatalf("MatterDevice: %v", err)
 	}
@@ -100,7 +101,7 @@ func TestSwitchMatter_MatterDevice_NonState_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterOnTime, hmenum.ParameterTypeBool,
 		hmenum.OperationsRead|hmenum.OperationsWrite))
-	if d, err := s.MatterDevice(fabricdevice.Options{}); d != nil || err != nil {
+	if d, err := s.MatterDevice(interfaces.MatterDeviceRequest{}); d != nil || err != nil {
 		t.Errorf("MatterDevice with ON_TIME: want (nil, nil), got (%v, %v)", d, err)
 	}
 }
@@ -108,7 +109,7 @@ func TestSwitchMatter_MatterDevice_NonState_ReturnsNil(t *testing.T) {
 func TestSwitchMatter_MatterDevice_Nil(t *testing.T) {
 	t.Parallel()
 	var s *Switch
-	if d, err := s.MatterDevice(fabricdevice.Options{}); d != nil || err != nil {
+	if d, err := s.MatterDevice(interfaces.MatterDeviceRequest{}); d != nil || err != nil {
 		t.Errorf("nil switch: MatterDevice must return (nil, nil), got (%v, %v)", d, err)
 	}
 }

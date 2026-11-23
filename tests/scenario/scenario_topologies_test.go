@@ -57,7 +57,7 @@ func newScenarioSnapshotter(snapshots []matteradapter.DeviceSnapshot) (bridge.Sn
 		}
 		snaps := make([]matterendpoint.Snapshot, 0, len(described))
 		for _, d := range described {
-			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: d.Endpoints})
+			snaps = append(snaps, matterendpoint.Snapshot{Scope: d.Scope, Endpoints: endpointSpecs(d.Endpoints)})
 		}
 		return inner.Assemble(ctx, snaps)
 	}, epStore, nil
@@ -514,4 +514,14 @@ func buildSingleTempSensorTopology() (*scenarioTopology, error) {
 		snapshotter: snap,
 		sources:     map[string]*scenarioFakeNotifier{chAddr + "/ACTUAL_TEMPERATURE": src},
 	}, nil
+}
+
+// endpointSpecs is the endpoint assembler's input for one described
+// scope: each described endpoint's spec.
+func endpointSpecs(eps []matteradapter.Endpoint) []matterendpoint.Spec {
+	out := make([]matterendpoint.Spec, 0, len(eps))
+	for _, e := range eps {
+		out = append(out, e.Spec())
+	}
+	return out
 }

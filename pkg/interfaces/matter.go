@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	bdbidef "thingfabric.dev/go-fabric/cluster/spec/bridgeddevicebasicinformation"
 	contract "thingfabric.dev/go-fabric/contract"
 	fabricdevice "thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/schema"
@@ -22,32 +23,100 @@ import (
 // code should name the contract symbol directly.
 
 // MatterEndpointSource is a compatibility alias for [contract.EndpointSource].
-type MatterEndpointSource = contract.EndpointSource
+type (
+	MatterEndpointSource = contract.EndpointSource
+	// MatterDeviceSource is a model source that is one bridged Matter device,
+	// built by the source itself from its cluster declarations
+	// (`<cluster>def.Declare`) through go-fabric's device kit. The source
+	// keeps the device it built: the device's servers hold the attribute
+	// values, the timers and the data versions a subscribed controller relies
+	// on, and the source feeds the CCU's state into them through their typed
+	// Set.
+	//
+	// MatterDevice returns the held device. The source builds it on the first
+	// call, and builds a new one when the request's [MatterHostFacts] differ
+	// from those the held device was built with: go-fabric takes them only at
+	// construction (a stated BridgedDeviceBasicInformation value, a battery
+	// measurement), so a changed fact is a new device the host replaces under
+	// the same key. Every other part of the request is read on a build only;
+	// the host states a changed name on the device itself (Device.Update). A
+	// source that projects nothing returns a nil device and a nil error.
+	MatterDeviceSource interface {
+		// MatterDeviceType is the advertised Device Library type.
+		MatterDeviceType() uint16
+		// MatterDevice is the source's device for req.
+		MatterDevice(req MatterDeviceRequest) (*fabricdevice.Device, error)
+	}
+)
 
-// MatterDeviceSource is a model source that is one bridged Matter device,
-// built by the source itself from its cluster declarations
-// (`<cluster>def.Declare`) through go-fabric's device kit. The source
-// builds the device once and keeps it for as long as it lives: the
-// device's servers hold the attribute values, the timers and the data
-// versions a subscribed controller relies on, and the source feeds the
-// CCU's state into them through their typed Set.
-//
-// MatterDevice returns the held device, building it with opts on the
-// first call; later calls return the same device whatever opts carry,
-// so the caller applies a changed name on the device's Spec. A source
-// that projects nothing returns a nil device and a nil error.
-type MatterDeviceSource interface {
-	// MatterDeviceType is the advertised Device Library type.
-	MatterDeviceType() uint16
-	// MatterDevice is the source's device.
-	MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error)
+// MatterDeviceRequest is what a host asks a [MatterDeviceSource] for: the
+// device's options, the bridge settings it is built under and the facts
+// the host states about the physical device. Every caller that asks one
+// source passes the same request, so the source never rebuilds for a
+// difference between two callers.
+type MatterDeviceRequest struct {
+	Options fabricdevice.Options
+	Build   MatterBuildOptions
+	Host    MatterHostFacts
+}
+
+// MatterHostFacts are the facts about the physical device that the host
+// states on one bridged device and that go-fabric takes only when the
+// device is built.
+type MatterHostFacts struct {
+	// Battery is the device's battery reading, served as the PowerSource
+	// of exactly one of its bridged devices (fabricdevice.Measurement); nil
+	// on every other. It is a model data point, compared by identity.
+	Battery contract.MeasurementSource
+	// Identity is what the host states in BridgedDeviceBasicInformation.
+	Identity MatterStatedIdentity
+}
+
+// MatterStatedIdentity are the BridgedDeviceBasicInformation strings the
+// host states; an empty string states nothing. Each value has already
+// been held to the attribute's constraint: go-fabric refuses the device
+// on a value that does not fit.
+type MatterStatedIdentity struct {
+	SerialNumber          string
+	ProductName           string
+	ProductLabel          string
+	SoftwareVersionString string
+}
+
+// Declarations are the device-kit declarations that state f: the
+// BridgedDeviceBasicInformation patch of the non-empty strings and the
+// battery measurement. A source appends them to its own.
+func (f MatterHostFacts) Declarations() []fabricdevice.Declaration {
+	var out []fabricdevice.Declaration
+	var patch bdbidef.Patch
+	stated := false
+	for _, s := range []struct {
+		field **string
+		value string
+	}{
+		{&patch.SerialNumber, f.Identity.SerialNumber},
+		{&patch.ProductName, f.Identity.ProductName},
+		{&patch.ProductLabel, f.Identity.ProductLabel},
+		{&patch.SoftwareVersionString, f.Identity.SoftwareVersionString},
+	} {
+		if s.value == "" {
+			continue
+		}
+		v := s.value
+		*s.field = &v
+		stated = true
+	}
+	if stated {
+		out = append(out, bdbidef.Declare{Initial: patch})
+	}
+	if f.Battery != nil {
+		out = append(out, fabricdevice.Measurement(f.Battery))
+	}
+	return out
 }
 
 // MatterBuildOptions are the bridge settings a device source builds its
-// device under. The source keeps the device it built first, so every
-// path that builds one — the assembly and the eligibility listing —
-// passes the same options; the zero value is the surface without any
-// opt-in.
+// device under. The zero value is the surface without any opt-in.
 type MatterBuildOptions struct {
 	// ThermostatHoldAndRunningState serves a thermostat's running state
 	// and its setpoint hold. Mirrors
@@ -66,14 +135,6 @@ type MatterBuildOptions struct {
 	// other ones, and a device that selects an ahead-of-matter.js feature
 	// whose register row they do not enable is refused at build.
 	Surface surface.Policies
-}
-
-// MatterConfiguredDeviceSource is a [MatterDeviceSource] whose device
-// depends on [MatterBuildOptions]. A builder that knows the options calls
-// MatterDeviceWith; MatterDevice builds with the zero options.
-type MatterConfiguredDeviceSource interface {
-	MatterDeviceSource
-	MatterDeviceWith(opts fabricdevice.Options, build MatterBuildOptions) (*fabricdevice.Device, error)
 }
 
 // ClimateScheduleWriter writes one week program of a thermostat to its

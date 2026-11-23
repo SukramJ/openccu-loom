@@ -42,7 +42,8 @@ const matterDeviceTypeSpeaker = uint16(fabricdevice.SpeakerID)
 func (sp *SoundPlayer) MatterDeviceType() uint16 { return matterDeviceTypeSpeaker }
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: a Speaker
-// with OnOff and LevelControl declared, built once per player.
+// with OnOff and LevelControl declared, held per player and rebuilt only
+// when the host's facts change.
 //
 // OnOff is go-fabric's server without the LT feature: the Speaker device
 // type (speaker.element.ts:18-19) reads OnOff as mute / unmute, mandates no
@@ -68,33 +69,33 @@ func (sp *SoundPlayer) MatterDeviceType() uint16 { return matterDeviceTypeSpeake
 // The OO feature is selected as the server advertised it before, so the
 // kit couples the "with On/Off" commands to the OnOff server
 // (notes/parity/by_design.md BD-Matter-LevelControl-NativeRamp).
-func (sp *SoundPlayer) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return sp.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		playing, _ := sp.IsPlaying()
-		d, err := generic.NewMatterDevice(sp, matterDeviceTypeSpeaker, opts,
-			generic.MatterOnOffDeclaration(false, playing, func(ctx context.Context, on bool) error {
-				if on {
-					return sp.matterPlay(ctx)
-				}
-				return sp.StopSound(ctx, matterDispatchPriority)
-			}),
-			levelcontroldef.Declare{Ramp: soundRamp{sp: sp}, Features: levelcontroldef.FeatureOnOff})
-		if err != nil {
-			return nil, err
-		}
-		if sp.direction != nil {
-			_ = sp.direction.OnConfirmedUpdate(func(_, _ int32) {
-				playing, _ := sp.IsPlaying()
+func (sp *SoundPlayer) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	return sp.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			playing, _ := sp.IsPlaying()
+			return generic.NewMatterDevice(sp, matterDeviceTypeSpeaker, req.Options,
+				append(host,
+					generic.MatterOnOffDeclaration(false, playing, func(ctx context.Context, on bool) error {
+						if on {
+							return sp.matterPlay(ctx)
+						}
+						return sp.StopSound(ctx, matterDispatchPriority)
+					}),
+					levelcontroldef.Declare{Ramp: soundRamp{sp: sp}, Features: levelcontroldef.FeatureOnOff})...)
+		},
+		Bind: func() {
+			if sp.direction != nil {
+				_ = sp.direction.OnConfirmedUpdate(func(_, _ int32) {
+					playing, _ := sp.IsPlaying()
+					generic.SetMatterOnOff(sp.matterDevice.Current(), playing)
+				})
+			}
+		},
+		Settle: func(d *fabricdevice.Device) {
+			if playing, observed := sp.IsPlaying(); observed {
 				generic.SetMatterOnOff(d, playing)
-			})
-		}
-		// A confirmation that landed between the initial read and the
-		// hook registration is not lost: the current value is stored
-		// again, which is a no-op when nothing changed.
-		if playing, observed := sp.IsPlaying(); observed {
-			generic.SetMatterOnOff(d, playing)
-		}
-		return d, nil
+			}
+		},
 	})
 }
 

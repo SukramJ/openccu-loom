@@ -116,6 +116,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   device model the simulator carries, no source takes this path. The
   reachability forward to Matter is now wired once per central, for the
   centrals present at boot and those added later alike. (#1027)
+- **A bridged device's reachability is go-fabric's device state.** The node
+  now binds each bridged device itself instead of a copy of its description,
+  and a CCU device going unreachable or coming back is stated on it once
+  (`Device.SetReachable`): controllers read the new Reachable value and get
+  exactly one ReachableChanged event per change, none for a repeated value.
+  A device the bridge brings up while the CCU reports it unreachable is
+  served unreachable from the start. A renamed device keeps its endpoint and
+  its device and is renamed in place. A firmware update builds the bridged
+  device anew under the same endpoint number, with the new version and the
+  current reachability. (#1027)
 
 ### Added
 

@@ -77,7 +77,7 @@ func TestReconcilerForgetsSupersededPerPressRows(t *testing.T) {
 	if err != nil || len(described) != 1 || len(described[0].Endpoints) == 0 {
 		t.Fatalf("describe the donor: %v", err)
 	}
-	donor := described[0].Endpoints[0]
+	donor := described[0].Endpoints[0].Spec()
 
 	legacy := matterendpoint.SourceKey{
 		CentralName: "ccu1", DeviceAddress: "BTN0001", ChannelNo: 1,

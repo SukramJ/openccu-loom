@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"thingfabric.dev/go-fabric/endpoint"
-
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 )
 
@@ -20,62 +18,44 @@ func identityDevice(model, firmware string) *device.Device {
 	})
 }
 
-// TestStateIdentityLeavesAnEmptyFirmwareUnstated pins that a device whose
+// TestDeviceIdentityLeavesAnEmptyFirmwareUnstated pins that a device whose
 // firmware the CCU has not reported states no SoftwareVersionString: the
 // attribute's minimum length is 1, so an empty string would refuse the
-// whole endpoint.
-func TestStateIdentityLeavesAnEmptyFirmwareUnstated(t *testing.T) {
+// whole device.
+func TestDeviceIdentityLeavesAnEmptyFirmwareUnstated(t *testing.T) {
 	t.Parallel()
-	var spec endpoint.Spec
-	stateIdentity(&spec, identityDevice("HmIP-PSM", ""))
-	if got := spec.BridgedBasicInformation.SoftwareVersionString; got != nil {
-		t.Fatalf("SoftwareVersionString=%q, want unstated for an empty firmware", *got)
+	id := deviceIdentity(identityDevice("HmIP-PSM", ""))
+	if id.SoftwareVersionString != "" {
+		t.Fatalf("SoftwareVersionString=%q, want unstated for an empty firmware", id.SoftwareVersionString)
 	}
-	if got := spec.BridgedBasicInformation.ProductName; got == nil || *got != "HmIP-PSM" {
-		t.Fatalf("ProductName=%v, want the model stated", got)
+	if id.ProductName != "HmIP-PSM" {
+		t.Fatalf("ProductName=%q, want the model stated", id.ProductName)
 	}
 }
 
-// TestStateIdentityLeavesAnEmptyModelUnstated pins that a device without a
+// TestDeviceIdentityLeavesAnEmptyModelUnstated pins that a device without a
 // model states neither name: ProductName and ProductLabel have no minimum
 // length, so only the emptiness check keeps an empty string off the wire.
-func TestStateIdentityLeavesAnEmptyModelUnstated(t *testing.T) {
+func TestDeviceIdentityLeavesAnEmptyModelUnstated(t *testing.T) {
 	t.Parallel()
-	var spec endpoint.Spec
-	stateIdentity(&spec, identityDevice("", "1.0.0"))
-	st := spec.BridgedBasicInformation
-	if st.ProductName != nil || st.ProductLabel != nil {
-		t.Fatalf("ProductName=%v ProductLabel=%v, want both unstated for an empty model", st.ProductName, st.ProductLabel)
+	id := deviceIdentity(identityDevice("", "1.0.0"))
+	if id.ProductName != "" || id.ProductLabel != "" {
+		t.Fatalf("ProductName=%q ProductLabel=%q, want both unstated for an empty model", id.ProductName, id.ProductLabel)
 	}
 }
 
-// TestStateIdentityDropsAValueThatBreaksItsConstraint pins that a model
+// TestDeviceIdentityDropsAValueThatBreaksItsConstraint pins that a model
 // longer than ProductName's 32 bytes leaves ProductName unstated while
 // ProductLabel (64 bytes) still carries it.
-func TestStateIdentityDropsAValueThatBreaksItsConstraint(t *testing.T) {
+func TestDeviceIdentityDropsAValueThatBreaksItsConstraint(t *testing.T) {
 	t.Parallel()
 	model := strings.Repeat("M", 33)
-	var spec endpoint.Spec
-	stateIdentity(&spec, identityDevice(model, "1.0.0"))
-	st := spec.BridgedBasicInformation
-	if st.ProductName != nil {
-		t.Errorf("ProductName=%q, want unstated for a 33-byte model", *st.ProductName)
+	id := deviceIdentity(identityDevice(model, "1.0.0"))
+	if id.ProductName != "" {
+		t.Errorf("ProductName=%q, want unstated for a 33-byte model", id.ProductName)
 	}
-	if st.ProductLabel == nil || *st.ProductLabel != model {
-		t.Errorf("ProductLabel=%v, want the 33-byte model stated (limit 64)", st.ProductLabel)
-	}
-}
-
-// TestStateIdentityKeepsAnAlreadyStatedValue pins that a value the spec
-// already states is not overwritten by the device model.
-func TestStateIdentityKeepsAnAlreadyStatedValue(t *testing.T) {
-	t.Parallel()
-	own := "Custom name"
-	var spec endpoint.Spec
-	spec.BridgedBasicInformation.ProductName = &own
-	stateIdentity(&spec, identityDevice("HmIP-PSM", "1.0.0"))
-	if got := spec.BridgedBasicInformation.ProductName; got == nil || *got != own {
-		t.Fatalf("ProductName=%v, want the pre-stated %q kept", got, own)
+	if id.ProductLabel != model {
+		t.Errorf("ProductLabel=%q, want the 33-byte model stated (limit 64)", id.ProductLabel)
 	}
 }
 

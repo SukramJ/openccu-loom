@@ -41,7 +41,7 @@ func matterServers(t *testing.T, src any) []interfaces.MatterClusterServer {
 	t.Helper()
 	switch s := src.(type) {
 	case interfaces.MatterDeviceSource:
-		d, err := s.MatterDevice(fabricdevice.Options{StableKey: fabricdevice.StringKey("siren-test"), Name: "siren"})
+		d, err := s.MatterDevice(interfaces.MatterDeviceRequest{Options: fabricdevice.Options{StableKey: fabricdevice.StringKey("siren-test"), Name: "siren"}})
 		if err != nil || d == nil {
 			t.Fatalf("MatterDevice = (%v, %v), want a device", d, err)
 		}

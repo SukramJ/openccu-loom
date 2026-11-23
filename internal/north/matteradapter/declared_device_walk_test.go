@@ -49,11 +49,11 @@ func genericSwitchDevice(addr string, p hmenum.Parameter) *device.Device {
 // nothing of it could be exposed, so no row names a reason.
 func TestCandidatesOfAGenericSwitch(t *testing.T) {
 	t.Parallel()
-	state := matteradapter.CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000201", hmenum.ParameterState)}, false, interfaces.MatterBuildOptions{})
+	state := matteradapter.New(matteradapter.Config{}, nil).CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000201", hmenum.ParameterState)})
 	if len(state) != 1 || state[0].Verdict.State != eligibility.StateMappable || state[0].Verdict.DeviceType != 0x010A {
 		t.Fatalf("STATE candidates = %+v, want one mappable OnOffPlugInUnit row", state)
 	}
-	if other := matteradapter.CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000202", hmenum.ParameterOnTime)}, false, interfaces.MatterBuildOptions{}); len(other) != 0 {
+	if other := matteradapter.New(matteradapter.Config{}, nil).CollectCandidates("c", []*device.Device{genericSwitchDevice("VCU0000202", hmenum.ParameterOnTime)}); len(other) != 0 {
 		t.Fatalf("ON_TIME candidates = %+v, want none: a switch on a parameter other than STATE projects no device", other)
 	}
 }
@@ -67,7 +67,12 @@ func (r *refusingSwitch) DataPointKey() hmtypes.DataPointKey { return r.key }
 func (r *refusingSwitch) Name() string                       { return "refusing" }
 func (r *refusingSwitch) MatterDeviceType() uint16           { return 0x010A }
 
-func (r *refusingSwitch) MatterDevice(fabricdevice.Options) (*fabricdevice.Device, error) {
+// refusingSwitch must stay a device source: a fake that drifts from the
+// interface is never asked for its device, and the refusal tests pass
+// for the wrong reason.
+var _ interfaces.MatterDeviceSource = (*refusingSwitch)(nil)
+
+func (r *refusingSwitch) MatterDevice(interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
 	return nil, errors.New("refused on purpose")
 }
 

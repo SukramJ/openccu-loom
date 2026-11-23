@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // togglingSwitch is a custom data point whose device the kit refuses while
@@ -36,11 +37,11 @@ func (s *togglingSwitch) DataPointKey() hmtypes.DataPointKey { return s.key }
 func (s *togglingSwitch) Name() string                       { return "toggling" }
 func (s *togglingSwitch) MatterDeviceType() uint16           { return s.inner.MatterDeviceType() }
 
-func (s *togglingSwitch) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
+func (s *togglingSwitch) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
 	if s.refuse.Load() {
 		return nil, errors.New("refused on purpose")
 	}
-	return s.inner.MatterDevice(opts)
+	return s.inner.MatterDevice(req)
 }
 
 // togglingDevice returns a device whose channel 1 carries a togglingSwitch

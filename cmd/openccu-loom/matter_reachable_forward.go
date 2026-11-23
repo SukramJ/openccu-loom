@@ -11,8 +11,9 @@ import (
 )
 
 // wireMatterReachableForward forwards every central's device-availability
-// signal into the bridge, so the matching bridged endpoints fire the §9.13.6
-// ReachableChanged event (see [matterbridge.Bridge.NotifyDeviceReachable]).
+// signal to notify, which states it on the physical device's bridged devices
+// (matteradapter.Reconciler.SetReachable): their Reachable attribute, and on
+// a change the §9.13.6 ReachableChanged event.
 //
 // It rides the registry observer, which replays over the centrals present at
 // boot and runs for every one adopted later: the forward used to be wired

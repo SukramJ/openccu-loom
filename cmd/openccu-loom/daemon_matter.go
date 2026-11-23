@@ -143,10 +143,10 @@ type matterBridgeBundle struct {
 	sync      func(context.Context) error
 	retire    func(ctx context.Context, centralName string) error
 	forget    func(centralName, address string)
-	// build is what every device source builds its Matter device under;
-	// the assembler and the eligibility listing take the same value,
-	// since a source keeps the device it built first.
-	build interfaces.MatterBuildOptions
+	// reconciler holds the bridged devices; the reachability forward
+	// states a physical device's flips on them
+	// (matteradapter.Reconciler.SetReachable).
+	reconciler *matteradapter.Reconciler
 	// events is go-fabric-ui's event source: the daemon publishes its own
 	// reassemblies into it, and the handler's SSE stream and the WebSocket
 	// bridge (wireMatterNodeEvents) read from it. The node's fabric and
@@ -594,7 +594,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		sync:                    syncModel,
 		retire:                  reconciler.Retire,
 		forget:                  reconciler.QueueForget,
-		build:                   matterBuild,
+		reconciler:              reconciler,
 		events:                  uiEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
@@ -938,15 +938,19 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	wiring.forget = bundle.forget
 
 	// Wire CCU device-availability → BridgedDeviceBasicInformation
-	// Reachable. WireDeviceAvailability (above) publishes a
-	// DeviceLifecycleEvent{AvailabilityChanged} on each central's bus
-	// whenever a device's effective availability flips (interface
-	// disconnect, STICKY_UNREACH, reconnect). The Reachable attribute
-	// itself reads the endpoint's Availability — the assembler hands it
-	// dev.Available — on every materialise (go-fabric
-	// endpoint/materialize.go:201-204); the forward supplies the push half,
-	// so active subscriptions are notified, not just polled reads.
-	closers = append(closers, wireMatterReachableForward(reg, mb.NotifyDeviceReachable))
+	// Reachable. Each central's bus carries a
+	// DeviceLifecycleEvent{AvailabilityChanged} whenever a device's
+	// effective availability flips: the device's own UNREACH report
+	// (EventBridge.refreshDeviceAvailability) and the interface's
+	// disconnect and reconnect (adapter.WireDeviceAvailability). The
+	// forward states it on the
+	// bridged devices the reconciler holds, through go-fabric's one
+	// reachability input (Device.SetReachable). A device the reconciler
+	// binds later is stated the model's availability before the node binds
+	// it, so the forward carries only the flips.
+	closers = append(closers, wireMatterReachableForward(reg, func(centralName, address string, ok bool) {
+		bundle.reconciler.SetReachable(ctx, centralName, address, ok)
+	}))
 	// Reassemble the topology once each central's initial device load
 	// completes: the boot-time assembly (the facade's Start) runs before
 	// the async CCU load, so the persisted exposures would otherwise not
@@ -1003,7 +1007,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// while it is open. A broken attestation chain refuses every window
 	// through the facade (node.ErrCommissioningBlocked), as it refuses a
 	// commissioner's AdministratorCommissioning.
-	candidates := &matterCandidateProviderAdapter{reg: reg, cfg: cfg, build: bundle.build}
+	candidates := &matterCandidateProviderAdapter{reg: reg, asm: bundle.assembler}
 	wiring.nodeUI = fabricui.Options{
 		Node: matterNodeSource{bundle.node},
 		Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec), ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{

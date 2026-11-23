@@ -141,7 +141,12 @@ func (c *Climate) matterThermoFeatures() thermostatspec.Feature {
 }
 
 // MatterDevice implements [interfaces.MatterDeviceSource]: a Thermostat
-// with two declared clusters, built once per Climate.
+// with two declared clusters, held per Climate and rebuilt only when the
+// host's facts change. With the request's ThermostatHoldAndRunningState
+// build option the Thermostat also serves the running state and the
+// setpoint hold, with ThermostatSchedules the week programs
+// (matter_schedule.go); without either the surface is the one described
+// here.
 //
 // Thermostat (0x0201) runs on the Climate as its Sink. The absolute
 // limits are the descriptor's MIN / MAX (the capability fallback in
@@ -192,64 +197,70 @@ func (c *Climate) matterThermoFeatures() thermostatspec.Feature {
 // after reading those reports. The Schedules infrastructure stays in
 // the wire package for revival once a canonical Matter Schedules cluster
 // ships in matter.js or the spec.
-func (c *Climate) MatterDevice(opts fabricdevice.Options) (*fabricdevice.Device, error) {
-	return c.MatterDeviceWith(opts, interfaces.MatterBuildOptions{})
-}
-
-// MatterDeviceWith implements [interfaces.MatterConfiguredDeviceSource]:
-// [Climate.MatterDevice] under the bridge's build options. With
-// ThermostatHoldAndRunningState the Thermostat also serves the running
-// state and the setpoint hold, with ThermostatSchedules the week programs
-// (matter_schedule.go); without either the surface is the one
-// [Climate.MatterDevice] describes.
-func (c *Climate) MatterDeviceWith(opts fabricdevice.Options, build interfaces.MatterBuildOptions) (*fabricdevice.Device, error) {
-	return c.matterDevice.Device(func() (*fabricdevice.Device, error) {
-		var initial thermostatspec.Patch
-		features := c.matterThermoFeatures()
-		cool := features&thermostatspec.FeatureCooling != 0
-		minSP, maxSP := celsiusToMatter(c.MinTemp()), celsiusToMatter(c.MaxTemp())
-		if minSP < maxSP {
-			initial.AbsMinHeatSetpointLimit, initial.AbsMaxHeatSetpointLimit = &minSP, &maxSP
-			if cool {
-				initial.AbsMinCoolSetpointLimit, initial.AbsMaxCoolSetpointLimit = &minSP, &maxSP
-			}
-			if sp, observed := c.Setpoint(); observed {
-				v := min(max(celsiusToMatter(sp), minSP), maxSP)
-				initial.OccupiedHeatingSetpoint = &v
+func (c *Climate) MatterDevice(req interfaces.MatterDeviceRequest) (*fabricdevice.Device, error) {
+	// extras is what the device this call builds serves; Bind and Settle
+	// run within the same call, after New.
+	var extras *matterExtras
+	return c.matterDevice.Device(req, generic.MatterDeviceBuild{
+		New: func(host []fabricdevice.Declaration) (*fabricdevice.Device, error) {
+			var initial thermostatspec.Patch
+			features := c.matterThermoFeatures()
+			cool := features&thermostatspec.FeatureCooling != 0
+			minSP, maxSP := celsiusToMatter(c.MinTemp()), celsiusToMatter(c.MaxTemp())
+			if minSP < maxSP {
+				initial.AbsMinHeatSetpointLimit, initial.AbsMaxHeatSetpointLimit = &minSP, &maxSP
 				if cool {
-					initial.OccupiedCoolingSetpoint = &v
+					initial.AbsMinCoolSetpointLimit, initial.AbsMaxCoolSetpointLimit = &minSP, &maxSP
+				}
+				if sp, observed := c.Setpoint(); observed {
+					v := min(max(celsiusToMatter(sp), minSP), maxSP)
+					initial.OccupiedHeatingSetpoint = &v
+					if cool {
+						initial.OccupiedCoolingSetpoint = &v
+					}
 				}
 			}
-		}
-		decl := thermostatspec.Declare{
-			Features: features,
-			Initial:  initial,
-			Sink:     climateThermoSink{c: c},
-		}
-		extras := c.matterExtrasFor(build)
-		c.applyMatterExtras(extras, &decl)
-		d, err := generic.NewMatterDevice(c, matterDeviceTypeThermostat, opts, decl, tuidef.Declare{})
-		if err != nil {
-			return nil, err
-		}
-		c.matterServes.Store(extras)
-		srv := thermostatInboundOf(d)
-		if c.setpoint != nil {
-			_ = c.setpoint.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterSetpoint(srv) })
-		}
-		if c.actualTemperature != nil {
-			_ = c.actualTemperature.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterLocalTemperature(srv) })
-		}
+			decl := thermostatspec.Declare{
+				Features: features,
+				Initial:  initial,
+				Sink:     climateThermoSink{c: c},
+			}
+			x := c.matterExtrasFor(req.Build)
+			c.applyMatterExtras(x, &decl)
+			d, err := generic.NewMatterDevice(c, matterDeviceTypeThermostat, req.Options, append(host, decl, tuidef.Declare{})...)
+			if err != nil {
+				return nil, err
+			}
+			extras = x
+			c.matterServes.Store(x)
+			return d, nil
+		},
+		Bind: func() {
+			// The hooks resolve the Thermostat server when they fire, so
+			// they feed the device the holder holds after a rebuild.
+			if c.setpoint != nil {
+				_ = c.setpoint.OnConfirmedUpdate(func(_, _ float64) {
+					c.syncMatterSetpoint(thermostatInboundOf(c.matterDevice.Current()))
+				})
+			}
+			if c.actualTemperature != nil {
+				_ = c.actualTemperature.OnConfirmedUpdate(func(_, _ float64) {
+					c.syncMatterLocalTemperature(thermostatInboundOf(c.matterDevice.Current()))
+				})
+			}
+			c.wireMatterExtras(extras)
+		},
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current values are stored
 		// again, which is a no-op when nothing changed. Without usable
 		// bounds this is also where the observed setpoint arrives,
 		// clamped to the server's default limits.
-		c.syncMatterSetpoint(srv)
-		c.syncMatterLocalTemperature(srv)
-		c.syncMatterModeTo(srv)
-		c.wireMatterExtras(extras)
-		return d, nil
+		Settle: func(d *fabricdevice.Device) {
+			srv := thermostatInboundOf(d)
+			c.syncMatterSetpoint(srv)
+			c.syncMatterLocalTemperature(srv)
+			c.syncMatterModeTo(srv)
+		},
 	})
 }
 

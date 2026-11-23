@@ -109,8 +109,8 @@ type Lock struct {
 	// Service methods are registered in [New].
 	payload.ServiceRegistry
 
-	// matterDevice holds the device the Matter projection serves, built
-	// once per lock (matter.go).
+	// matterDevice holds the device the Matter projection serves, rebuilt
+	// only when the host's facts change (matter.go).
 	matterDevice generic.MatterDeviceHolder
 
 	// key is the composite data-point key used by [DataPointKey] to
