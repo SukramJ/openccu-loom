@@ -153,13 +153,18 @@ func TestBasicInformation_VendorName_NonEmpty(t *testing.T) {
 }
 
 // TestBridgedDeviceBasicInformation_PerEndpoint walks every bridged
-// endpoint and reads NodeLabel + UniqueID + Reachable from BDBI.
+// endpoint and reads NodeLabel, UniqueID, Reachable and the device identity
+// the daemon states from the CCU from BDBI.
 //
 // Assertions:
 //   - NodeLabel non-empty
 //   - UniqueID non-empty AND distinct across endpoints (duplicate
 //     fingerprints cause Apple Home pair-abort)
 //   - Reachable reported (TRUE for godevccu's never-stale fleet)
+//   - SerialNumber, ProductName and SoftwareVersionString non-empty, and
+//     ProductName distinct from SerialNumber: the node serves none of them
+//     unless the host states them, and without the model statement the
+//     product name falls back to the device address, the serial.
 func TestBridgedDeviceBasicInformation_PerEndpoint(t *testing.T) {
 	b := requireBridge(t)
 	// Three wildcard reads (endpoint 0xFFFF) replace ~N × 3 per-endpoint
@@ -200,6 +205,19 @@ func TestBridgedDeviceBasicInformation_PerEndpoint(t *testing.T) {
 	}
 	reach := harness.FindAttrBoolPerEndpoint(reOut, "Reachable")
 
+	identity := map[string]map[uint16]string{}
+	for _, a := range []struct{ attr, label string }{
+		{"serial-number", "SerialNumber"},
+		{"product-name", "ProductName"},
+		{"software-version-string", "SoftwareVersionString"},
+	} {
+		out, err := b.SharedCtl.ReadAttr(ctx, t, "bridgeddevicebasicinformation", a.attr, 0xFFFF)
+		if err != nil {
+			t.Fatalf("wildcard read BDBI.%s: %v", a.label, err)
+		}
+		identity[a.label] = harness.FindAttrStringPerEndpoint(out, a.label)
+	}
+
 	seenUIDs := make(map[string]uint16, len(eps))
 	for _, ep := range eps {
 		label, hasLabel := labels[ep]
@@ -217,6 +235,14 @@ func TestBridgedDeviceBasicInformation_PerEndpoint(t *testing.T) {
 		seenUIDs[uid] = ep
 		if _, hasReach := reach[ep]; !hasReach {
 			t.Errorf("EP %d: BDBI.Reachable marker missing (wildcard read produced %d reach values total)", ep, len(reach))
+		}
+		for _, label := range []string{"SerialNumber", "ProductName", "SoftwareVersionString"} {
+			if v := identity[label][ep]; v == "" {
+				t.Errorf("EP %d: BDBI.%s empty or unparsed (wildcard read produced %d values total)", ep, label, len(identity[label]))
+			}
+		}
+		if name, serial := identity["ProductName"][ep], identity["SerialNumber"][ep]; name != "" && name == serial {
+			t.Errorf("EP %d: BDBI.ProductName %q equals the SerialNumber — the device address fallback, not the model the CCU reports", ep, name)
 		}
 	}
 }

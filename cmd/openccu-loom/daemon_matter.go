@@ -773,6 +773,12 @@ func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func(), forg
 		// step made it publishable. Without this it reaches no controller
 		// until the daemon restarts.
 		u.EventBus.Subscribe(func(hmevent.DeviceReleasedEvent) { fire() }),
+		// A bridged device states its installed firmware as its
+		// SoftwareVersionString; without this a device updated through the
+		// CCU keeps serving the old version until the daemon restarts. The
+		// sync that follows replaces the endpoint and raises the device's
+		// ConfigurationVersion (matteradapter.Reconciler).
+		u.EventBus.Subscribe(func(hmevent.DeviceFirmwareChangedEvent) { fire() }),
 	}
 }
 

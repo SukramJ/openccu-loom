@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -230,6 +231,60 @@ func TestApplyFirmwareFromDescriptions_DeviceWithoutDescriptionUntouched(t *test
 	info := dev.Firmware().Info()
 	if info.Current != "9.9.9" || info.UpdateState != hmenum.DeviceFirmwareStateUpToDate {
 		t.Errorf("firmware info changed for a device without a description: %+v", info)
+	}
+}
+
+// TestApplyFirmwareFromDescriptions_PublishesInstalledVersionChange pins the
+// bus event behind the planes that state a device's installed firmware: the
+// Matter bridge serves it as the bridged device's SoftwareVersionString and
+// reassembles on this event. A device whose installed version moves publishes
+// one event with both versions; a device whose update state alone moves
+// publishes none, since nothing a plane states of it changed.
+func TestApplyFirmwareFromDescriptions_PublishesInstalledVersionChange(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-apply-event"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	var got []hmevent.DeviceFirmwareChangedEvent
+	unsub := c.EventBus.Subscribe(func(e hmevent.DeviceFirmwareChangedEvent) { got = append(got, e) })
+	t.Cleanup(unsub)
+
+	updated := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0006ABCD",
+		Model:       "HmIP-PSM",
+		Firmware:    device.FirmwareInfo{Current: "1.2.2", UpdateState: hmenum.DeviceFirmwareStatePerformingUpdate},
+	})
+	stateOnly := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0007ABCD",
+		Model:       "HmIP-PSM",
+		Firmware:    device.FirmwareInfo{Current: "1.4.10", UpdateState: hmenum.DeviceFirmwareStateUpToDate},
+	})
+	c.ModelRegistry.Put(updated)
+	c.ModelRegistry.Put(stateOnly)
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
+		Address: "0006ABCD", Type: "HmIP-PSM",
+		Firmware: "1.4.10", AvailableFirmware: "1.4.10", FirmwareUpdateState: "UP_TO_DATE",
+	})
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
+		Address: "0007ABCD", Type: "HmIP-PSM",
+		Firmware: "1.4.10", AvailableFirmware: "1.6.0", FirmwareUpdateState: "NEW_FIRMWARE_AVAILABLE",
+	})
+
+	applyFirmwareFromDescriptions(c)
+
+	if len(got) != 1 {
+		t.Fatalf("published %d DeviceFirmwareChangedEvent(s), want 1 (only the device whose installed version moved): %+v", len(got), got)
+	}
+	e := got[0]
+	if e.CentralName != "ccu-apply-event" || e.InterfaceID != "HmIP-RF" || e.Address != "0006ABCD" ||
+		e.Previous != "1.2.2" || e.Current != "1.4.10" {
+		t.Errorf("event = %+v, want central ccu-apply-event, HmIP-RF, 0006ABCD, 1.2.2 → 1.4.10", e)
 	}
 }
 

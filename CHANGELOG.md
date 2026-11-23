@@ -98,6 +98,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   next restart. The value is now fixed on the first start of this release
   — derived as before from the label configured then, so an unchanged
   installation keeps the serial it served — and no longer changes.
+- **Matter controllers show each bridged device's model and firmware.** A
+  bridged device now states the model the CCU reports as its product name
+  and product label (both showed the device address before) and its
+  installed firmware as its software version string. A firmware update the CCU
+  reports reaches the bridge without a restart and raises the device's
+  configuration version, so controllers read the new version. A battery
+  power source no longer claims a battery the user replaces: the daemon
+  has no source for how a battery is replaced, so the bridge says it does
+  not know, as matter.js does. On paired fabrics these attributes change
+  once. (#1167)
 
 ### Added
 

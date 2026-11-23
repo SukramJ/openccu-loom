@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"sync"
 
+	fabricdevice "thingfabric.dev/go-fabric/device"
 	"thingfabric.dev/go-fabric/endpoint"
 	"thingfabric.dev/go-fabric/node"
 
@@ -104,6 +105,50 @@ type endpointIdentity struct {
 	measurement    any
 	power          any
 	parts          int
+	stated         statedIdentity
+}
+
+// statedIdentity is what the walk states of the physical device in
+// BridgedDeviceBasicInformation (stateIdentity), the strings an endpoint
+// is replaced for when the CCU reports a new value — above all the
+// installed firmware after an update.
+type statedIdentity struct {
+	serialNumber    string
+	productName     string
+	productLabel    string
+	softwareVersion string
+}
+
+func statedOf(spec endpoint.Spec) statedIdentity {
+	deref := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	st := spec.BridgedBasicInformation
+	return statedIdentity{
+		serialNumber:    deref(st.SerialNumber),
+		productName:     deref(st.ProductName),
+		productLabel:    deref(st.ProductLabel),
+		softwareVersion: deref(st.SoftwareVersionString),
+	}
+}
+
+// valueChanged reports whether a stated string changed in a way the node
+// cannot see in the endpoint's surface, so the reconciler raises the
+// device's ConfigurationVersion itself. A serial number or software version
+// that appears or disappears changes the cluster's AttributeList, and the
+// node raises the version for that surface drift on its own; only a change
+// from one value to another is left to the reconciler. A product name or
+// label the host does not state falls back to the device address and stays
+// listed, so every change of it, stated or not, is a value change.
+func (s statedIdentity) valueChanged(next statedIdentity) bool {
+	both := func(a, b string) bool { return a != "" && b != "" && a != b }
+	return both(s.serialNumber, next.serialNumber) ||
+		both(s.softwareVersion, next.softwareVersion) ||
+		s.productName != next.productName ||
+		s.productLabel != next.productLabel
 }
 
 func identityOf(spec endpoint.Spec) endpointIdentity {
@@ -113,6 +158,7 @@ func identityOf(spec endpoint.Spec) endpointIdentity {
 		deviceAddress:  spec.DeviceAddress,
 		channelAddress: spec.ChannelAddress,
 		parts:          len(spec.Parts),
+		stated:         statedOf(spec),
 	}
 	if spec.Measurement != nil {
 		id.measurement = spec.Measurement
@@ -317,15 +363,20 @@ func (r *Reconciler) forgetSuperseded(ctx context.Context, d Described) error {
 }
 
 // syncCentral applies one central's described endpoints to its partition.
-// r.mu is held.
+// An endpoint replaced because a stated device value changed (a firmware
+// update) raises its device's ConfigurationVersion once the batch is
+// applied, as matter.js leaves it to the bridge to decide which change is a
+// configuration change (BridgedDeviceBasicInformationServer
+// increaseConfigurationVersion). r.mu is held.
 func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 	held := r.held[d.Scope]
 	if held == nil {
 		held = map[string]*heldEndpoint{}
 		r.held[d.Scope] = held
 	}
+	var raise []fabricdevice.SourceKey
 	part := r.agg.Partition(d.Scope)
-	return part.Batch(ctx, func(b *node.Batch) error {
+	err := part.Batch(ctx, func(b *node.Batch) error {
 		var errs []error
 		seen := make(map[string]struct{}, len(d.Endpoints))
 		for i := range d.Endpoints {
@@ -350,6 +401,9 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 					errs = append(errs, fmt.Errorf("replace %s: %w", key, err))
 					continue
 				}
+				if h.id.stated.valueChanged(id.stated) {
+					raise = append(raise, spec.StableKey)
+				}
 				held[key] = &heldEndpoint{ep: ep, id: id}
 			default:
 				// Unchanged in what the wire sees; the held spec stays.
@@ -367,6 +421,13 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		}
 		return errors.Join(errs...)
 	})
+	if err != nil || len(raise) == 0 {
+		return err
+	}
+	if err := r.agg.IncreaseConfigurationVersions(ctx, raise...); err != nil && !errors.Is(err, node.ErrNotStarted) {
+		return fmt.Errorf("raise configuration version: %w", err)
+	}
+	return nil
 }
 
 // Retire drops every endpoint of the central scope and retires its

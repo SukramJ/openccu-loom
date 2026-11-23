@@ -6,6 +6,8 @@ package calculated
 import (
 	"testing"
 
+	contract "thingfabric.dev/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -93,5 +95,22 @@ func TestDerivedBinarySmokeAlarmMatterClassNone(t *testing.T) {
 	s := NewDerivedBinarySensor(hmenum.CalculatedParameterSmokeAlarm, []string{"PRIMARY_ALARM"}, []string{"IDLE_OFF"})
 	if got := s.MatterMeasurementClass(); got != interfaces.MatterMeasurementNone {
 		t.Fatalf("SmokeAlarm: got %v, want MatterMeasurementNone (siren.SmokeSiren handles SmokeCOAlarm)", got)
+	}
+}
+
+// TestOperatingVoltageLevelSensorStatesUnspecifiedBatteryReplaceability pins
+// what the derived battery percentage tells the Matter node about its
+// battery: the CCU does not report how it is replaced, so the source says
+// it does not know. Without the statement the node serves the selection's
+// zero value, a battery the user replaces.
+func TestOperatingVoltageLevelSensorStatesUnspecifiedBatteryReplaceability(t *testing.T) {
+	t.Parallel()
+	var src any = NewOperatingVoltageLevelSensor()
+	sel, ok := src.(contract.PowerSourceSelectionSource)
+	if !ok {
+		t.Fatal("OperatingVoltageLevelSensor states no PowerSourceSelection; the node serves a user-replaceable battery")
+	}
+	if got := sel.MatterPowerSourceSelection(); got.Wired || got.BatteryReplaceability != contract.BatteryReplaceabilityUnspecified {
+		t.Errorf("selection = %+v, want a battery with BatteryReplaceabilityUnspecified", got)
 	}
 }

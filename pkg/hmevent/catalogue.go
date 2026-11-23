@@ -49,6 +49,12 @@ const (
 	// north-bound footprint (MQTT HA-discovery name/suggested_area, Matter
 	// NodeLabel).
 	EventTypeDeviceMetadataChanged EventType = "device.metadata_changed"
+	// EventTypeDeviceFirmwareChanged fires when a device's installed
+	// firmware version changes in the model: an update completed, or the
+	// CCU reports a different version than the one the model held. A
+	// change of the update lifecycle state or of the available version
+	// alone does not fire it.
+	EventTypeDeviceFirmwareChanged EventType = "device.firmware_changed"
 	// EventTypeDeviceRefreshed fires when a device's VALUES data was
 	// observed from the CCU — a pushed event or a targeted read, changed
 	// or not, never the bulk reseed — throttled to one event per device per short window. It is the
@@ -424,6 +430,24 @@ type DeviceMetadataChangedEvent struct {
 
 // Type implements Event.
 func (DeviceMetadataChangedEvent) Type() EventType { return EventTypeDeviceMetadataChanged }
+
+// DeviceFirmwareChangedEvent fires when a device's installed firmware
+// version changes in the model ([EventTypeDeviceFirmwareChanged]). The
+// north-bound planes that state the version — the Matter bridge serves it
+// as a bridged device's SoftwareVersionString — re-materialise the device
+// from the model; Previous and Current carry the two versions for logging
+// and audit.
+type DeviceFirmwareChangedEvent struct {
+	Base
+	CentralName string
+	InterfaceID string
+	Address     string
+	Previous    string
+	Current     string
+}
+
+// Type implements Event.
+func (DeviceFirmwareChangedEvent) Type() EventType { return EventTypeDeviceFirmwareChanged }
 
 // HubChannelsAssignedEvent fires when the device-association pass changes the
 // device link of at least one system variable or program on a central (a

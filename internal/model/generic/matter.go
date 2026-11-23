@@ -4,6 +4,8 @@
 package generic
 
 import (
+	contract "thingfabric.dev/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -26,6 +28,21 @@ var (
 	_ interfaces.MatterFloatMeasurementSource = (*Sensor[float64])(nil)
 	_ interfaces.MatterBoolMeasurementSource  = (*BinarySensor)(nil)
 )
+
+// MatterPowerSourceSelection implements [contract.PowerSourceSelectionSource]
+// for a low-battery alert (LOWBAT / LOW_BAT), the reading the bridge rolls up
+// onto the device's PowerSource cluster.
+// The device model carries no battery replaceability, and the daemon keeps
+// no static device database to look it up, so the source says it does not
+// know (BatteryReplaceabilityUnspecified) — the value matter.js serves for a
+// battery power source that states none (matter.js
+// packages/node/src/behaviors/power-source/PowerSourceServer.ts:48-54).
+// Without it the node serves the selection's zero value, a battery the
+// user replaces, which nothing here established. Only a source of class
+// MeasurementBattery is asked for it.
+func (b *BinarySensor) MatterPowerSourceSelection() contract.PowerSourceSelection {
+	return contract.PowerSourceSelection{BatteryReplaceability: contract.BatteryReplaceabilityUnspecified}
+}
 
 // matterMeasurementForParameter is the central wire-parameter →
 // Matter measurement class lookup used by both Sensor[T] and

@@ -334,34 +334,56 @@ func specChannelNo(spec endpoint.Spec) int {
 func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel, sink DecisionSink) ([]endpoint.Spec, error) {
 	specs, err := a.channelSpecsOf(ctx, centralName, names, dev, ch, sink)
 	for i := range specs {
-		stateSerialNumber(&specs[i])
+		stateIdentity(&specs[i], dev)
 	}
 	return specs, err
 }
 
-// stateSerialNumber states the device's own address as the bridged
-// endpoint's BridgedDeviceBasicInformation SerialNumber: the hardware serial
-// printed on the device (an HmIP or BidCos address such as 0001D8A991F2DC),
-// which controllers show beside the product. The node serves a bridged
-// SerialNumber only when the host states it, as matter.js does, and derives
-// none from the address itself. It stays distinct from UniqueID, which a
-// controller keys the accessory by. An address beyond the attribute's
-// constraint in the generated definition is not stated: the assembly would
-// refuse the endpoint, and a missing serial is the lesser loss. A value the
-// spec already states wins.
-func stateSerialNumber(spec *endpoint.Spec) {
-	if spec.BridgedBasicInformation.SerialNumber != nil || spec.DeviceAddress == "" {
+// stateIdentity states what the CCU knows of the physical device as the
+// bridged endpoint's BridgedDeviceBasicInformation. The node serves
+// SerialNumber only when the host states it, and ProductName and
+// ProductLabel fall back to the device address otherwise; matter.js leaves
+// all three to the bridge:
+//
+//   - SerialNumber: the device's address, the hardware serial printed on the
+//     device (an HmIP or BidCos address such as 0001D8A991F2DC). It stays
+//     distinct from UniqueID, which a controller keys the accessory by.
+//   - ProductName and ProductLabel: the device model the CCU reports
+//     (HmIP-BROLL-2). matter.js's bridge example states one value for both;
+//     a friendlier product label would need a static device database, and
+//     the device's own name is already the NodeLabel.
+//   - SoftwareVersionString: the installed firmware, when the CCU has
+//     reported one; the attribute's constraint has a minimum length of 1.
+//
+// Each value is held to the attribute's constraint in the generated
+// definition and left unstated when it does not fit: the assembly would
+// refuse the endpoint, and a missing attribute is the lesser loss. A value
+// the spec already states wins.
+func stateIdentity(spec *endpoint.Spec, dev *device.Device) {
+	stated := &spec.BridgedBasicInformation
+	stateString(&stated.SerialNumber, bdbidef.AttrSerialNumber, spec.DeviceAddress)
+	if dev == nil {
+		return
+	}
+	stateString(&stated.ProductName, bdbidef.AttrProductName, dev.Model)
+	stateString(&stated.ProductLabel, bdbidef.AttrProductLabel, dev.Model)
+	stateString(&stated.SoftwareVersionString, bdbidef.AttrSoftwareVersionString, dev.SwVersion())
+}
+
+// stateString sets *field to value when nothing is stated yet, value is not
+// empty and it meets attribute attr's constraint.
+func stateString(field **string, attr uint32, value string) {
+	if *field != nil || value == "" {
 		return
 	}
 	inst, err := bridgedBasicInformationChecks()
 	if err != nil {
 		return
 	}
-	if _, err := inst.CheckValue(bdbidef.AttrSerialNumber, spec.DeviceAddress, nil); err != nil {
+	if _, err := inst.CheckValue(attr, value, nil); err != nil {
 		return
 	}
-	serial := spec.DeviceAddress
-	spec.BridgedBasicInformation.SerialNumber = &serial
+	*field = &value
 }
 
 // bridgedBasicInformationChecks holds a value to the generated

@@ -351,3 +351,42 @@ Branch `claude/matter-node-page-options-1056`, from `main` at 1a41379e (slice 0,
   SerialNumber over `GET /api/v1/node/endpoints/0`, across a restart. Bite proofs: dropping
   `deps.SetMatterNodeLabeler` or the section applier's `matterLabelSection` turns the save's `applied`
   false.
+
+## 12. Slice 2: decisions and verified facts (2026-11-23)
+
+Branch `claude/matter-bridged-identity`, from `main` at 3dc2682f (#1166 merged).
+
+**Fable note, spot-checked by the coordinator.** GF = go-fabric v0.25.0, MJ = matter.js HEAD 61b1a41a
+(equality with GF's pins b25ed960 / db021da0 not checked).
+
+- GF serves stated ProductName / ProductLabel / SoftwareVersionString (`endpoint/materialize.go:146-260`,
+  `applyStatedBridgedInfo` `:590-621`); unstated ProductName and ProductLabel both fall back to the device
+  address. Constraints: ProductName max 32, SoftwareVersionString 1 to 64, ProductLabel max 64, all quality
+  Fixed (`cluster/spec/bridgeddevicebasicinformation/definition_gen.go:460-555`).
+- ConfigurationVersion: MJ raises only through `increaseConfigurationVersion`
+  (`packages/node/src/behaviors/bridged-device-basic-information/BridgedDeviceBasicInformationServer.ts:61-91`);
+  what counts as a configuration change is the bridge's call (`bridged-device-basic-information.resource.ts:100-110`).
+  GF raises by itself on surface drift (AttributeList etc., no values) at Start and after a reassemble
+  (`node/surface_stability.go:163-228`); a string attribute is listed only when non-empty
+  (`cluster/core/bridged_device_basic_information.go:285-300`). A value-only change needs
+  `Aggregator.IncreaseConfigurationVersions` (`node/aggregator.go:620-659`).
+- No live firmware path existed: `applyFirmwareFromDescriptions` (`internal/central/adapter/firmware_domain.go:135`)
+  reaches only per-device `Firmware.OnChange` handlers (MQTT); the Matter triggers are Created, Removed,
+  MetadataChanged, Released (`cmd/openccu-loom/daemon_matter.go:758-775`); `identityOf` compared no
+  BridgedBasicInformation (`internal/north/matteradapter/reconciler.go:98-126`).
+- F12: GF takes the battery replaceability from the optional `contract.PowerSourceSelectionSource`, else
+  the zero value `BatteryUserReplaceable` (`cluster/measurement/materializers.go:146-164`,
+  `contract/matter.go:818-852`); MJ serves Unspecified when undefined
+  (`packages/node/src/behaviors/power-source/PowerSourceServer.ts:48-54`).
+
+**Owner decisions (wizard 2026-11-23).**
+
+- ProductLabel = CCU model, same as ProductName (the MJ bridge example states one value for both,
+  `examples/device-bridge-onoff/src/BridgedDevicesNode.ts:94-96`).
+- Firmware live, with a version raise: a new bus event `hmevent.DeviceFirmwareChangedEvent`, published by
+  `applyFirmwareFromDescriptions` when the current version changes; the Matter reassembly debounce
+  subscribes; the stated strings join `endpointIdentity`; a value-only change of a stated string raises
+  the device's ConfigurationVersion. Empty ↔ non-empty is surface drift that GF raises itself.
+- F12: the battery source states `BatteryReplaceabilityUnspecified`.
+- Known limit: a firmware change while the daemon is stopped raises no version at the next start (no
+  stored values to compare; MJ does not raise on its own either).
