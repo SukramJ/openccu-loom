@@ -574,8 +574,10 @@ type (
 		SupportsEffects   bool
 		// Transition reports that the channel carries a writable RAMP_TIME,
 		// i.e. the light can be commanded to fade over a given time. The
-		// discovery builder in light/payload.go turns this into the
-		// transition field.
+		// light's constructor sets it from the channel's own parameters,
+		// whatever the profile passed, and the services accept a
+		// `transition` exactly when it is set. The discovery builder in
+		// light/payload.go turns this into the transition field.
 		Transition bool
 	}
 

@@ -5952,7 +5952,14 @@ export interface components {
              *     the same call: switch `turn_on_for`, valve `open`, light
              *     `turn_on` and `set_level` (the last two since
              *     `cdp.bounded_on.v1`). The device writes the on-time together
-             *     with the switch-on.
+             *     with the switch-on. A transition is always `transition`, in
+             *     seconds: `0` or absent is an instant change, a negative or
+             *     non-numeric value is refused. A light's `turn_on` and
+             *     `set_level` take it on a switch-on and on the switch-off
+             *     `set_level {"state":"OFF"}` when the light's capabilities
+             *     report `transition`, and a light reporting false refuses it;
+             *     the sound player's `turn_on` takes its fade-in under the same
+             *     key (both since `cdp.transition.v1`).
              */
             params?: {
                 [key: string]: unknown;
@@ -6726,7 +6733,12 @@ export interface components {
              *     system: `system_type: openccu-lite`), `cdp.bounded_on.v1`
              *     (every custom-data-point switch-on that can be bounded takes
              *     the duration in the same command as `seconds`: switch
-             *     `turn_on_for`, valve `open`, light `turn_on` and `set_level`).
+             *     `turn_on_for`, valve `open`, light `turn_on` and `set_level`),
+             *     `cdp.transition.v1` (every transition is taken in seconds as
+             *     `transition`: a light whose capabilities report `transition`
+             *     on `turn_on` and `set_level`, the switch-off included — one
+             *     that reports false refuses it — and the sound player's
+             *     `turn_on`).
              *     Conditional entries surface only when configured:
              *     `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
              *     `auth.oidc.v1`, `auth.ccu.v1`, `auth.basic.v1`,

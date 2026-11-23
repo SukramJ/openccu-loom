@@ -6,6 +6,7 @@ package light
 import (
 	"context"
 	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -57,6 +58,11 @@ func newLightRig(t *testing.T, address string, w Writer, caps custom.LightCapabi
 		Writer: w,
 	})
 	ch.Put(level)
+	if caps.Transition {
+		// The light derives its transition from the channel, so a rig that
+		// asks for one carries the plain dimmer's bare RAMP_TIME.
+		putWritableFloat(ch, address, hmenum.ParameterRampTime, w)
+	}
 	l := New(Config{Channel: ch, Writer: w, Capabilities: caps})
 	return l, level
 }
@@ -122,7 +128,7 @@ func TestLightTurnOnRestoresLastLevel(t *testing.T) {
 
 func TestLightTurnOnWithAtomicPutParamset(t *testing.T) {
 	w := &putWriter{}
-	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true})
+	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true}, hmenum.ParameterRampTime)
 	on := 5 * time.Second
 	ramp := 6 * time.Second
 	br := 0.10980392156862745
@@ -177,7 +183,7 @@ func TestLightSetTimerThenTurnOnAtomicPutParamset(t *testing.T) {
 
 func TestLightTurnOffWithRampAtomicPutParamset(t *testing.T) {
 	w := &putWriter{}
-	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true})
+	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true}, hmenum.ParameterRampTime)
 	if err := l.TurnOffWithRamp(context.Background(), 6*time.Second, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +204,10 @@ func TestLightTurnOffWithRampAtomicPutParamset(t *testing.T) {
 	}
 }
 
-func newLightRigPut(t *testing.T, address string, w *putWriter, caps custom.LightCapabilities) (*Light, *generic.Float) {
+// newLightRigPut builds a light whose channel carries LEVEL plus every
+// parameter in `extra` as a writable FLOAT — a plain dimmer's bare RAMP_TIME,
+// for one, which the light probes at construction.
+func newLightRigPut(t *testing.T, address string, w *putWriter, caps custom.LightCapabilities, extra ...hmenum.Parameter) (*Light, *generic.Float) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel(address, 1, "DIMMER", hmenum.ParamsetKeyValues)
@@ -215,6 +224,12 @@ func newLightRigPut(t *testing.T, address string, w *putWriter, caps custom.Ligh
 		Writer: w,
 	})
 	ch.Put(level)
+	if caps.Transition && !slices.Contains(extra, hmenum.ParameterRampTime) {
+		extra = append(extra, hmenum.ParameterRampTime)
+	}
+	for _, p := range extra {
+		putWritableFloat(ch, address, p, w)
+	}
 	l := New(Config{Channel: ch, Writer: w, Capabilities: caps})
 	return l, level
 }

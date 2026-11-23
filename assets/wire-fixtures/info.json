@@ -9,6 +9,7 @@
   "central.features.v1",
   "south.openccu_lite.v1",
   "cdp.bounded_on.v1",
+  "cdp.transition.v1",
   "projection.v1"
  ],
  "commit": "none",

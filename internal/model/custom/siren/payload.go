@@ -450,8 +450,14 @@ func (sp *SoundPlayer) registerSoundPlayerServices() {
 		if d, err := payload.ParamFloat64(params, "duration"); err == nil {
 			cfg.Duration = time.Duration(d * float64(time.Second))
 		}
-		if d, err := payload.ParamFloat64(params, "ramp_time"); err == nil {
-			cfg.RampTime = time.Duration(d * float64(time.Second))
+		// The fade-in takes the key every custom data point takes a
+		// transition under; a value the player could not run is refused.
+		transition, err := payload.ParamTransition(params)
+		if err != nil {
+			return err
+		}
+		if transition != nil {
+			cfg.RampTime = *transition
 		}
 		if idx, err := payload.ParamInt32(params, "repetitions_index"); err == nil {
 			cfg.RepetitionsIndex = int(idx)

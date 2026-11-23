@@ -139,6 +139,8 @@ func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 		// openccu-loom-client switches the light's bounded switch-on from
 		// the set_timer_on_time stage to `seconds` on this token.
 		CapabilityCDPBoundedOn: true,
+		// and sends a transition as `transition` on this one.
+		CapabilityCDPTransition: true,
 	}
 	for _, c := range body.Capabilities {
 		delete(want, c)

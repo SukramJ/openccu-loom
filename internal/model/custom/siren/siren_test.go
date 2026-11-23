@@ -5,6 +5,7 @@ package siren
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -1178,6 +1179,18 @@ func TestSoundPlayerStatePayload(t *testing.T) {
 	}
 }
 
+// TestSoundPlayerTurnOnRefusesANegativeTransition holds the sound player's
+// fade-in to the rule every transition follows (payload.ParamTransition).
+func TestSoundPlayerTurnOnRefusesANegativeTransition(t *testing.T) {
+	t.Parallel()
+	sp, _ := newSoundPlayerRig(t)
+	params := map[string]any{"soundfile_index": int32(1), "transition": float64(-1)}
+	err := sp.Invoke(context.Background(), "turn_on", params, hmenum.CommandPriorityHigh)
+	if !errors.Is(err, payload.ErrServiceInvalidParam) {
+		t.Fatalf("err = %v, want ErrServiceInvalidParam", err)
+	}
+}
+
 func TestSoundPlayerServicesTurnOnOff(t *testing.T) {
 	t.Parallel()
 
@@ -1187,7 +1200,7 @@ func TestSoundPlayerServicesTurnOnOff(t *testing.T) {
 		"soundfile_index":   int32(1),
 		"volume":            float64(0.8),
 		"duration":          float64(5),
-		"ramp_time":         float64(1),
+		"transition":        float64(1),
 		"repetitions_index": int32(0),
 	}
 	if err := sp.Invoke(context.Background(), "turn_on", params, hmenum.CommandPriorityHigh); err != nil {
