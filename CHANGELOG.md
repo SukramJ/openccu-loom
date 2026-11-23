@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A sound play with a repeat count the device cannot take is refused
+  instead of played.** The MP3 player's REPETITIONS list ends at 14
+  repetitions (plus none and infinite), but a play with
+  `repetitions_index` 15–18 (Home Assistant's `play_sound` offers up to
+  18) was accepted: the daemon left REPETITIONS out, the device played
+  with its previous repeat count, and the call reported success. Such a
+  play, and one asking for a count the device's own list has no slot for,
+  now fails with "invalid repetitions index" and writes nothing. Leaving
+  the index out still plays without touching REPETITIONS. (#1161)
+
 ## [0.107.0] - 2026-11-23
 
 ### Fixed
