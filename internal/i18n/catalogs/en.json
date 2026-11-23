@@ -135,6 +135,8 @@
   "matter.tab.expose": "Expose",
   "matter.tab.fabrics": "Fabrics",
   "matter.tab.pair": "Pair",
+  "matter.warning.device_refused": "{name} ({address}) is not on the bridge: the Matter device layer refused it ({error}).",
+  "matter.warning.device_withheld": "{name} ({address}) is not on the bridge: the configured specification level (north.matter.spec_level) withholds it.",
   "message.code.ADJUSTING_RANGE_TO_SMALL": "Adjustment range too small",
   "message.code.CLUTCH_FAILURE": "Clutch failed",
   "message.code.CONFIG_PENDING": "Config Pending",

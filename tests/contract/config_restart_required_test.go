@@ -107,6 +107,10 @@ var configLeavesAppliedWithoutRestart = map[string]string{
 	"north.mqtt.retain_cleanup_window_ms": "boot-only inside an otherwise live block: it bounds the " +
 		"retain scrub that runs once at boot, so a new value applies to the next boot's scrub and there " +
 		"is nothing a restart would make happen sooner",
+	"north.matter.node_label": "applied to the running node by matterNodeLabeler " +
+		"(cmd/openccu-loom/matter_node_label.go): on a north.matter save through the section applier " +
+		"(section_apply.go), on a file reload through hotReloadHandler (reload.go), and before Start for " +
+		"a change made while the bridge was off; the pairing advertisement's name follows at the next start",
 	"addon_update.include_prereleases": "read at the start of every add-on release check through " +
 		"addonUpdateChannelResolver (cmd/openccu-loom/addon_update_wiring.go), which overlays the " +
 		"stored section onto the YAML base per call",

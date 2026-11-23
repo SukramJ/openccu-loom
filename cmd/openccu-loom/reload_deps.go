@@ -57,6 +57,11 @@ type reloadDeps struct {
 	// as applied — and before this it was not.
 	bringUp atomic.Pointer[adapter.BringUpManager]
 
+	// nodeLabel carries north.matter.node_label to the running Matter node,
+	// for the config save and the file watcher alike. Nil while the bridge
+	// is disabled or has not started.
+	nodeLabel atomic.Pointer[matterNodeLabeler]
+
 	// onNorthBridges is a test-only observation hook invoked once during
 	// boot, after every north-bound surface has been registered on the
 	// registry and before the late StartAll. It lets a wiring test assert
@@ -223,6 +228,24 @@ func (d *reloadDeps) SetBringUpManager(m *adapter.BringUpManager) {
 		return
 	}
 	d.bringUp.Store(m)
+}
+
+// SetMatterNodeLabeler binds the running Matter node's labeler. Called once
+// the bridge has started; nil (bridge disabled) leaves the slot empty.
+func (d *reloadDeps) SetMatterNodeLabeler(l *matterNodeLabeler) {
+	if d == nil {
+		return
+	}
+	d.nodeLabel.Store(l)
+}
+
+// MatterNodeLabeler returns the bound labeler, or nil without a running
+// bridge.
+func (d *reloadDeps) MatterNodeLabeler() *matterNodeLabeler {
+	if d == nil {
+		return nil
+	}
+	return d.nodeLabel.Load()
 }
 
 // BringUpManager returns the bound manager, or nil before the south-bound

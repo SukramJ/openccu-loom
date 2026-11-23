@@ -17,7 +17,7 @@ import { loomFetch } from "$lib/api/client";
 import type { EventEnvelope } from "$lib/api/types";
 import { catalogs } from "$lib/i18n";
 import { confirmStore } from "./confirm.svelte";
-import { subscribe as subscribeHub } from "./events.svelte";
+import { onResync as onHubResync, subscribe as subscribeHub } from "./events.svelte";
 import { prefs } from "./preferences.svelte";
 import { toastStore } from "./toast.svelte";
 
@@ -66,9 +66,25 @@ export const fabricUI = createFabricUI({
   },
   confirm: (o) => confirmStore.ask(o),
   routes: matterRoutes,
-  subscribe: (onEvent) =>
-    subscribeHub((ev) => {
-      const node = nodeEventFromEnvelope(ev);
-      if (node) onEvent(node);
-    }),
+  subscribe: nodeSubscription,
 });
+
+/**
+ * The node store's event subscription over loom's WebSocket hub: the
+ * node.* envelopes as the package's stream events, and the hub's resync
+ * signal as the store's onResync. The hub signals a resync when the stream
+ * has a gap it cannot replay (a daemon restart, a connection that fell too
+ * far behind); without it the Matter pages would keep showing fabrics and
+ * windows that changed during the gap.
+ */
+export function nodeSubscription(onEvent: (ev: StreamEvent) => void, onResync?: () => void): () => void {
+  const offEvents = subscribeHub((ev) => {
+    const node = nodeEventFromEnvelope(ev);
+    if (node) onEvent(node);
+  });
+  const offResync = onResync ? onHubResync(onResync) : undefined;
+  return () => {
+    offEvents();
+    offResync?.();
+  };
+}

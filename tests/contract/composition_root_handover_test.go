@@ -90,6 +90,7 @@ var compositionRootSeams = []compositionRootSeam{
 		fillFile: "cmd/openccu-loom/daemon_matter.go",
 		minDecl:  5,
 		notFilled: map[string]string{
+			"Now":          "nil selects the wall clock that stamps a finding's first-seen time (internal/north/matteradapter/findings.go); the field exists for tests that need a fixed clock",
 			"NameResolver": "nil selects the model-backed resolver the assembler builds from the walked devices (internal/north/matteradapter/assembler.go), which is the daemon's own naming path — the field exists for an owner substituting a different model",
 		},
 	},

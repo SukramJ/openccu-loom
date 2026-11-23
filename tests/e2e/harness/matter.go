@@ -138,6 +138,72 @@ func (h *Harness) nodeRequest(ctx context.Context, method, path string, payload 
 	return req, nil
 }
 
+// RootAttribute reads the value of one attribute the node's root endpoint
+// serves, as GET /api/v1/node/endpoints/0 reports it (clusters[].attributes[]
+// by numeric id). It fails the test when the endpoint does not carry it.
+func (h *Harness) RootAttribute(t *testing.T, cluster, attribute uint32) json.RawMessage {
+	t.Helper()
+	var ep struct {
+		Clusters []struct {
+			ID         int64 `json:"id"`
+			Attributes []struct {
+				ID    int64           `json:"id"`
+				Value json.RawMessage `json:"value"`
+			} `json:"attributes"`
+		} `json:"clusters"`
+	}
+	if status, body := h.nodeDo(t, http.MethodGet, "/api/v1/node/endpoints/0", nil, &ep); status != http.StatusOK {
+		t.Fatalf("GET /api/v1/node/endpoints/0 = %d: %s", status, body)
+	}
+	for _, c := range ep.Clusters {
+		if c.ID != int64(cluster) {
+			continue
+		}
+		for _, a := range c.Attributes {
+			if a.ID == int64(attribute) {
+				return a.Value
+			}
+		}
+	}
+	t.Fatalf("the root endpoint serves no attribute 0x%04X of cluster 0x%04X", attribute, cluster)
+	return nil
+}
+
+// SaveMatterSection saves the north.matter section the way the Web UI does:
+// the effective section (GET /api/v1/config/effective), changed by edit,
+// then PUT /api/v1/config/sections/north.matter. It returns the save's
+// applied and restart_required answers.
+func (h *Harness) SaveMatterSection(t *testing.T, edit func(section map[string]any)) (applied, restartRequired bool) {
+	t.Helper()
+	var eff struct {
+		Config struct {
+			North struct {
+				Matter map[string]any `json:"matter"`
+			} `json:"north"`
+		} `json:"config"`
+	}
+	if status, body := h.nodeDo(t, http.MethodGet, "/api/v1/config/effective", nil, &eff); status != http.StatusOK {
+		t.Fatalf("GET /api/v1/config/effective = %d: %s", status, body)
+	}
+	section := eff.Config.North.Matter
+	if section == nil {
+		t.Fatal("the effective config carries no north.matter section")
+	}
+	edit(section)
+	payload, err := json.Marshal(section)
+	if err != nil {
+		t.Fatalf("encode north.matter: %v", err)
+	}
+	var res struct {
+		Applied         bool `json:"applied"`
+		RestartRequired bool `json:"restart_required"`
+	}
+	if status, body := h.nodeDo(t, http.MethodPut, "/api/v1/config/sections/north.matter", payload, &res); status != http.StatusOK {
+		t.Fatalf("PUT /api/v1/config/sections/north.matter = %d: %s", status, body)
+	}
+	return res.Applied, res.RestartRequired
+}
+
 // adminAuthorization is the Authorization header that authenticates the
 // harness's admin under the given mode. Session mode enables Basic as
 // well (buildConfigYAML), so Basic serves both.

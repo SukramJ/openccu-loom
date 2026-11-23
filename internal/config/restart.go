@@ -324,14 +324,6 @@ func matterEndpointRestartRules() []RestartRule {
 			},
 		},
 		{
-			// Defaulted view: the empty label resolves to the compiled-in
-			// name, so unset → that same name is not a change.
-			Path: "north.matter.node_label",
-			Differs: func(b, e *Config) bool {
-				return b.North.Matter.WithDefaults().NodeLabel != e.North.Matter.WithDefaults().NodeLabel
-			},
-		},
-		{
 			Path: "north.matter.expose_secondary_channels",
 			Differs: func(b, e *Config) bool {
 				return b.North.Matter.ExposeSecondaryChannels != e.North.Matter.ExposeSecondaryChannels

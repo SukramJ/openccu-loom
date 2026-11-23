@@ -36,6 +36,7 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 		{"the reassemble hook", "Reassemble: matterReassembler(bundle.sync, auditRec),"},
 		{"the event source", "Events: bundle.events,"},
 		{"the configuration the status page shows", "NodeConfig: matterNodeConfigView(mcfg),"},
+		{"the assembler's findings as host warnings", "Warnings: matterWarnings(bundle.assembler, catalogs, cfg.Locale),"},
 	} {
 		if !strings.Contains(matter, want.expr) {
 			t.Errorf("wireMatterRuntime never hands go-fabric-ui %s (%q)", want.what, want.expr)
@@ -60,6 +61,14 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 	}
 	if !strings.Contains(mount, "IsAdmin: func(r *http.Request) bool {") || !strings.Contains(mount, "return ok && id.HasRole(auth.RoleAdmin)") {
 		t.Error("the router's IsAdmin is not derived from the request's identity — go-fabric-ui's writes and the pairing codes are then either open to every caller or refused to every caller")
+	}
+	// The node streams end when the server begins its shutdown: Done is
+	// handed to go-fabric-ui and closed from the server's shutdown hook.
+	// Without it an open stream holds the graceful shutdown until its
+	// deadline (TestServerShutdownEndsOpenNodeStreams measures the effect).
+	if !strings.Contains(mount, "deps.NodeUI.Done = nodeStreamsDone") ||
+		!strings.Contains(mount, "restServer.RegisterOnShutdown(sync.OnceFunc(func() { close(nodeStreamsDone) }))") {
+		t.Error("the node page family's Done is not closed from the REST server's shutdown hook — an open node stream holds every graceful shutdown until its deadline")
 	}
 	if !strings.Contains(mount, "Matter: d.matter.status,") {
 		t.Error("the MCP status seam is not fed from the daemon's status adapter")

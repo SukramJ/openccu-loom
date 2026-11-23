@@ -379,6 +379,9 @@ func (r *Reconciler) Retire(ctx context.Context, scope string) error {
 	defer r.mu.Unlock()
 	held := r.held[scope]
 	delete(r.held, scope)
+	// No later walk names the scope again, so its findings would never
+	// be pruned by one.
+	r.asm.findings.dropScope(scope)
 	part := r.agg.Partition(scope)
 	var errs []error
 	if len(held) > 0 {

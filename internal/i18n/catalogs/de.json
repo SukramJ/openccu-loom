@@ -135,6 +135,8 @@
   "matter.tab.expose": "Verfügbar machen",
   "matter.tab.fabrics": "Fabrics",
   "matter.tab.pair": "Koppeln",
+  "matter.warning.device_refused": "{name} ({address}) ist nicht auf der Bridge: Die Matter-Geräteschicht hat es abgelehnt ({error}).",
+  "matter.warning.device_withheld": "{name} ({address}) ist nicht auf der Bridge: Die eingestellte Spezifikationsstufe (north.matter.spec_level) hält es zurück.",
   "message.code.ADJUSTING_RANGE_TO_SMALL": "Stellbereich zu klein",
   "message.code.CLUTCH_FAILURE": "Einkuppeln fehlgeschlagen",
   "message.code.CONFIG_PENDING": "Konfiguration ausstehend",
