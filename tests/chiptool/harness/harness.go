@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/go-fabric-ui/fabricui"
 )
 
 // EnableMDNSDiscoveryEnv is the env var that opt-in enables the
@@ -477,6 +479,7 @@ func (b *Bridge) MatterStatus(t *testing.T) MatterStatusResponse {
 		t.Fatalf("build matter/status request: %v", err)
 	}
 	req.Header.Set("Authorization", b.AuthHeader())
+	req.Header.Set(fabricui.RequestHeader, "1")
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("matter/status: %v", err)
@@ -508,6 +511,7 @@ func (b *Bridge) RESTPost(t *testing.T, path string, payload any) (body []byte, 
 		t.Fatalf("build request: %v", err)
 	}
 	req.Header.Set("Authorization", b.AuthHeader())
+	req.Header.Set(fabricui.RequestHeader, "1")
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
@@ -563,6 +567,7 @@ func (b *Bridge) EnableAllExposures(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("build batch request: %w", err)
 	}
 	putReq.Header.Set("Authorization", b.AuthHeader())
+	putReq.Header.Set(fabricui.RequestHeader, "1")
 	putReq.Header.Set("Content-Type", "application/json")
 	putResp, err := (&http.Client{Timeout: 10 * time.Second}).Do(putReq)
 	if err != nil {
@@ -592,6 +597,7 @@ func (b *Bridge) restGetCtx(ctx context.Context, t *testing.T, path string, into
 		t.Fatalf("build request: %v", err)
 	}
 	req.Header.Set("Authorization", b.AuthHeader())
+	req.Header.Set(fabricui.RequestHeader, "1")
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", path, err)
@@ -656,6 +662,7 @@ func (b *Bridge) waitForMatterListening(deadline time.Duration) error {
 	for {
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 		req.Header.Set("Authorization", b.AuthHeader())
+		req.Header.Set(fabricui.RequestHeader, "1")
 		resp, err := hc.Do(req)
 		if err == nil {
 			body, _ := io.ReadAll(resp.Body)
