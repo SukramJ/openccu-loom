@@ -48,6 +48,15 @@ var ErrInvalidSoundfileIndex = fmt.Errorf("siren: soundfile index out of range (
 // loom:reachable:reason="wrapped and returned by PlaySound in this package when a caller names a tone the device does not offer, and exported so a caller can match it with errors.Is; the analyzer does not follow sentinel-var references"
 var ErrUnknownSoundfile = errors.New("siren: unknown soundfile")
 
+// ErrInvalidRepetitionsIndex is returned when a caller asks for a repeat
+// count the device cannot take: an index outside -1..[maxRepetitionsIndex]
+// other than [RepetitionsIndexNotSet], or one the device's own REPETITIONS
+// list has no slot for. It is an error rather than a silent skip for the
+// reason [ErrUnknownSoundfile] is: a dropped REPETITIONS leaves the
+// device's previous setting in place and the play looks like success.
+// loom:reachable:reason="wrapped and returned by PlaySound in this package when a caller asks for a repeat count the device cannot take, and exported so a caller can match it with errors.Is; the analyzer does not follow sentinel-var references"
+var ErrInvalidRepetitionsIndex = errors.New("siren: invalid repetitions index")
+
 // nonPlayableSoundfiles are the SOUNDFILE VALUE_LIST members that are
 // link-profile sentinels rather than playable files: OLD_VALUE restores
 // the previous selection and DO_NOT_CARE is the "leave untouched" slot.
@@ -277,7 +286,8 @@ const maxRepetitionsIndex = custom.MaxRepetitions
 // that means "do not write the REPETITIONS parameter". Use this when the caller
 // wants to trigger playback without overriding the device's current repetitions
 // setting. Values in the range -1..[maxRepetitionsIndex] are valid write
-// targets; any other value is treated as RepetitionsIndexNotSet.
+// targets; [PlaySound] refuses any other value with
+// [ErrInvalidRepetitionsIndex].
 const RepetitionsIndexNotSet = -2
 
 // ConvertPlayRepetitionsIndex maps the logical repetitions integer to the
@@ -345,8 +355,11 @@ type PlayConfig struct {
 	// RepetitionsIndex controls how often the sound repeats:
 	//   -1 → play indefinitely (unlimited repetitions)
 	//    0 → play once, no repeat
-	//  1..18 → play N+1 times
-	// Values outside -1..18 are ignored (no REPETITIONS write).
+	//  1..[maxRepetitionsIndex] → play N+1 times
+	//  [RepetitionsIndexNotSet] → leave REPETITIONS untouched
+	// Any other value, or one the device's REPETITIONS list has no slot
+	// for, makes PlaySound return [ErrInvalidRepetitionsIndex] without
+	// writing anything.
 	// When Loop is true, RepetitionsIndex is overridden to -1 (infinite).
 	RepetitionsIndex int
 	// Loop requests unlimited repetitions. When true, the effective
@@ -401,10 +414,22 @@ func (sp *SoundPlayer) PlaySound(
 	if cfg.Loop {
 		repIdx = -1
 	}
-	if repIdx >= -1 && repIdx <= maxRepetitionsIndex {
-		if label, err := ConvertPlayRepetitionsIndex(repIdx, sp.availableRep); err == nil {
-			params[hmenum.ParameterRepetitions] = label
+	// Only the not-set sentinel leaves REPETITIONS out on purpose. Any
+	// other index the device cannot take is refused, because a dropped
+	// REPETITIONS plays with the device's previous repeat count and reports
+	// success. The slot check is skipped only when the device list is
+	// unknown (no REPETITIONS data point on the channel) — the same rule as
+	// the soundfile membership check above.
+	switch {
+	case repIdx == RepetitionsIndexNotSet:
+	case repIdx < -1 || repIdx > maxRepetitionsIndex:
+		return fmt.Errorf("%w: %d is outside -1..%d", ErrInvalidRepetitionsIndex, repIdx, maxRepetitionsIndex)
+	case len(sp.availableRep) > 0:
+		label, convErr := ConvertPlayRepetitionsIndex(repIdx, sp.availableRep)
+		if convErr != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidRepetitionsIndex, convErr)
 		}
+		params[hmenum.ParameterRepetitions] = label
 	}
 	// DURATION is only included when the caller explicitly requests it — the
 	// device has its own default on-time and overriding it unconditionally
