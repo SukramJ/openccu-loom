@@ -102,7 +102,7 @@ func newRestartFixture(ctx context.Context, t *testing.T, dbName string) *restar
 	// orchestrator's own forget, both ending in the reconciler's forget,
 	// which the fixture records. The reassemble is a no-op; the hook
 	// subscribes nothing without one.
-	f.orch.setMatterCentralHook(newMatterCentralHook(func() {}, f.forget, nil))
+	f.orch.setMatterCentralHook(newMatterCentralHook(func() {}, f.forget))
 	f.orch.setMatterDeviceForgetter(f.forget)
 	f.orch.sbDeps.visibilityUnIgnoreStore = f.visibility
 	f.orch.setMatterExposureStore(f.exposures)

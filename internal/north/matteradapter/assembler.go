@@ -134,13 +134,10 @@ type Assembler struct {
 	exposures ExposureChecker
 	cfg       Config
 	logger    *slog.Logger
-	// fallbackTypes records, once each, a device type the generated
-	// device layer does not carry, so the hand-built Spec path is visible
-	// in the log rather than silent; findings holds, once each, a source
-	// the kit refused or the specification level withholds — the record
-	// behind both that log line and [Assembler.Findings].
-	fallbackTypes sync.Map
-	findings      findingRegistry
+	// findings holds, once each, a source the kit refused or the
+	// specification level withholds — the record behind both the log line
+	// and [Assembler.Findings].
+	findings findingRegistry
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -517,6 +514,14 @@ func (a *Assembler) channelSpecsOf(ctx context.Context, centralName string, name
 		}
 		if !allowed {
 			withheld(matterendpoint.DPKindCalculated, key, WithheldNotOnAllowList)
+			continue
+		}
+		if meas.MatterMeasurementClass() == contract.MeasurementBattery {
+			// A battery has no device type, so it never becomes an endpoint
+			// of its own (see attachPowerSource). The derived level does not
+			// feed the PowerSource either: that reads the device's generic
+			// battery data point, so this source projects nothing.
+			withheld(matterendpoint.DPKindCalculated, key, WithheldNoMapping)
 			continue
 		}
 		if spec, ok := a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas); ok {
@@ -1118,30 +1123,18 @@ type specInput struct {
 // revisions, FeatureMaps and the UniqueID input are unchanged; what the
 // device adds is device-type validation and the type's client clusters.
 //
-// A device type the generated layer does not carry, or a composition it
-// refuses, falls back to the hand-built Spec and is logged once per
-// type, so the assembly never loses an endpoint over a conformance
-// finding — the finding is reported through the bridge's device-type
-// validator, which judges the hand-built Spec too. A device the
-// specification level withholds yields no endpoint (false): the
-// hand-built Spec carries no surface report, so the node would serve it
-// past the level.
+// Every bridged endpoint is a device of that layer. A device type the
+// generated layer does not carry, or a composition it refuses, yields no
+// endpoint (false) and a [FindingDeviceRefused] the operator sees on the
+// node page; a device the specification level withholds yields a
+// [FindingDeviceWithheld]. A hand-built Spec in their place would be the
+// one endpoint no go-fabric device stands behind: no device-type
+// validation, no surface report and no [fabricdevice.Device.SetReachable].
 func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
-	handBuilt := endpoint.Spec{
-		StableKey:      in.key,
-		DeviceAddress:  in.dev.Address,
-		DeviceType:     in.deviceType,
-		VendorName:     bridgedVendorName,
-		FriendlyName:   in.friendlyName,
-		ChannelAddress: in.ch.Address,
-		Availability:   in.dev.Available,
-		Source:         in.source,
-		Measurement:    in.measurement,
-	}
 	t, ok := fabricdevice.Lookup(uint32(in.deviceType))
 	if !ok {
-		a.logFallback(in.deviceType, "device type not in the generated device layer", nil)
-		return handBuilt, true
+		a.recordFinding(in, FindingDeviceRefused, fmt.Errorf("%w: 0x%04X", errDeviceTypeNotInLayer, in.deviceType))
+		return endpoint.Spec{}, false
 	}
 	opts := fabricdevice.Options{
 		StableKey:      in.key,
@@ -1167,17 +1160,15 @@ func (a *Assembler) deviceSpec(in specInput) (endpoint.Spec, bool) {
 		decls = append(decls, fabricdevice.Measurement(in.measurement))
 	}
 	d, err := fabricdevice.New(t, opts, decls...)
-	if errors.Is(err, surface.ErrWithheld) {
-		a.recordFinding(in, FindingDeviceWithheld, err)
+	if err != nil {
+		code := FindingDeviceRefused
+		if errors.Is(err, surface.ErrWithheld) {
+			code = FindingDeviceWithheld
+		}
+		a.recordFinding(in, code, err)
 		return endpoint.Spec{}, false
 	}
-	// Built, or fell back to the hand-built Spec: either way the source
-	// is served, so it is no longer withheld.
 	a.findings.clear(in.key.String())
-	if err != nil {
-		a.logFallback(in.deviceType, "device layer refused the composition", err)
-		return handBuilt, true
-	}
 	spec := d.Spec()
 	spec.Availability = in.dev.Available
 	return spec, true
@@ -1202,17 +1193,9 @@ func (a *Assembler) logRefused(deviceType uint16, key string, err error) {
 		slog.String("err", err.Error()))
 }
 
-// logFallback reports a hand-built Spec once per device type.
-func (a *Assembler) logFallback(deviceType uint16, reason string, err error) {
-	if _, seen := a.fallbackTypes.LoadOrStore(deviceType, struct{}{}); seen {
-		return
-	}
-	attrs := []any{slog.String("device_type", fmt.Sprintf("0x%04X", deviceType)), slog.String("reason", reason)}
-	if err != nil {
-		attrs = append(attrs, slog.String("err", err.Error()))
-	}
-	a.logger.Warn("matter.assembler.device_layer_fallback", attrs...)
-}
+// errDeviceTypeNotInLayer is the refusal of a device type go-fabric's
+// generated device layer does not carry.
+var errDeviceTypeNotInLayer = errors.New("device type not in the generated device layer")
 
 // measurementDeviceType is a thin alias for
 // [contract.MeasurementClassDeviceType], the canonical

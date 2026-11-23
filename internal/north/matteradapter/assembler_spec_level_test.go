@@ -14,24 +14,22 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
-// TestAssemble_SpecLevelWithholdsAHandBuiltFallback pins that an endpoint
-// the specification level withholds is not served through the hand-built
-// fallback. A cluster-serving source is built through the device layer,
-// and a composition the layer refuses falls back to a hand-built Spec;
-// that Spec carries no surface report, so go-fabric's node would serve it
-// past the level. The stub advertises Closure (0x0230), a device type
-// levels below 1.5.1 do not know (go-fabric schema.DeviceTypeLevels),
-// and serves none of its clusters: without a level the layer refuses it
-// and the fallback serves it; at 1.4.2 the level withholds it first.
-func TestAssemble_SpecLevelWithholdsAHandBuiltFallback(t *testing.T) {
+// TestAssemble_UnbuildableSourceIsAFindingNotAnEndpoint pins that a source
+// the device layer cannot build yields no endpoint, only a finding — there is
+// no hand-built Spec standing in for it, so the node serves nothing no
+// go-fabric device stands behind. The stub advertises Closure (0x0230), a
+// device type levels below 1.5.1 do not know (go-fabric
+// schema.DeviceTypeLevels), and serves none of its clusters: without a level
+// the layer refuses the composition; at 1.4.2 the level withholds it first.
+// The two are distinct findings, because one is the operator's choice and
+// the other is not.
+func TestAssemble_UnbuildableSourceIsAFindingNotAnEndpoint(t *testing.T) {
 	for _, tc := range []struct {
-		level     surface.Level
-		endpoints int
+		level surface.Level
+		code  matteradapter.FindingCode
 	}{
-		// root + aggregator + the hand-built Closure
-		{"", 3},
-		// root + aggregator
-		{"1.4.2", 2},
+		{"", matteradapter.FindingDeviceRefused},
+		{"1.4.2", matteradapter.FindingDeviceWithheld},
 	} {
 		t.Run("level="+string(tc.level), func(t *testing.T) {
 			dev := newDevice("GAR0001", "Garage")
@@ -49,8 +47,13 @@ func TestAssemble_SpecLevelWithholdsAHandBuiltFallback(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Assemble: %v", err)
 			}
-			if len(top.Endpoints) != tc.endpoints {
-				t.Fatalf("endpoints = %d, want %d", len(top.Endpoints), tc.endpoints)
+			// root + aggregator only
+			if len(top.Endpoints) != 2 {
+				t.Fatalf("endpoints = %d, want 2", len(top.Endpoints))
+			}
+			findings := a.Findings()
+			if len(findings) != 1 || findings[0].Code != tc.code {
+				t.Fatalf("findings = %+v, want one %q", findings, tc.code)
 			}
 		})
 	}

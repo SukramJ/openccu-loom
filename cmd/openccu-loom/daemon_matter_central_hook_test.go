@@ -14,30 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// reachableRecorder captures NotifyDeviceReachable-shaped forwards.
-type reachableRecorder struct {
-	mu    sync.Mutex
-	calls []reachableCall
-}
-
-type reachableCall struct {
-	central   string
-	address   string
-	reachable bool
-}
-
-func (r *reachableRecorder) notify(centralName, address string, reachable bool) {
-	r.mu.Lock()
-	r.calls = append(r.calls, reachableCall{central: centralName, address: address, reachable: reachable})
-	r.mu.Unlock()
-}
-
-func (r *reachableRecorder) snapshot() []reachableCall {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]reachableCall(nil), r.calls...)
-}
-
 // TestMatterCentralHook_AdoptedCentralReadyEventReassembles drives the
 // live-adopt shape: an adopted central firing its CentralSouthboundReadyEvent
 // must run the reassemble callback through the shared debounce pipeline, or
@@ -57,7 +33,7 @@ func TestMatterCentralHook_AdoptedCentralReadyEventReassembles(t *testing.T) {
 		return nil
 	}, 20*time.Millisecond, discardLogger())
 
-	hook := newMatterCentralHook(trigger, nil, nil)
+	hook := newMatterCentralHook(trigger, nil)
 	adopted, _ := reg.Get("ccu-adopted")
 	unwire := hook(adopted)
 	if unwire == nil {
@@ -91,7 +67,7 @@ func TestMatterCentralHook_KicksAnAlreadyReadyCentral(t *testing.T) {
 	adopted.MarkSouthboundReady() // ready before the hook exists
 
 	var triggers atomic.Int32
-	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil, nil)
+	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -103,59 +79,16 @@ func TestMatterCentralHook_KicksAnAlreadyReadyCentral(t *testing.T) {
 	}
 }
 
-// TestMatterCentralHook_ForwardsAvailabilityChanges verifies the hook wires
-// the device-availability → Reachable forward for an adopted central: only
-// AVAILABILITY_CHANGED lifecycle events reach the bridge notifier, carrying
-// the central name, device address and new availability.
-func TestMatterCentralHook_ForwardsAvailabilityChanges(t *testing.T) {
-	t.Parallel()
-	reg := buildTestRegistry(t, "ccu-adopted")
-	adopted, _ := reg.Get("ccu-adopted")
-
-	rec := &reachableRecorder{}
-	hook := newMatterCentralHook(nil, nil, rec.notify)
-	unwire := hook(adopted)
-	if unwire == nil {
-		t.Fatal("hook returned nil unwire")
-	}
-	t.Cleanup(unwire)
-
-	adopted.EventBus.Publish(hmevent.DeviceLifecycleEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "ccu-adopted",
-		Address:     "VCU0000001",
-		Subtype:     hmenum.DeviceLifecycleSubtypeAvailabilityChanged,
-		Available:   false,
-	})
-	// A non-availability subtype must not forward.
-	adopted.EventBus.Publish(hmevent.DeviceLifecycleEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "ccu-adopted",
-		Address:     "VCU0000002",
-		Subtype:     hmenum.DeviceLifecycleSubtypeCreated,
-	})
-
-	calls := rec.snapshot()
-	if len(calls) != 1 {
-		t.Fatalf("reachable forwards = %d, want 1 (availability change only)", len(calls))
-	}
-	want := reachableCall{central: "ccu-adopted", address: "VCU0000001", reachable: false}
-	if calls[0] != want {
-		t.Errorf("forwarded call = %+v, want %+v", calls[0], want)
-	}
-}
-
 // TestMatterCentralHook_UnwireStopsSubscriptions verifies live-remove
 // hygiene: after the unwire runs, neither a late ready event nor a late
-// lifecycle event reaches the reassemble pipeline or the reachable notifier.
+// lifecycle event reaches the reassemble pipeline.
 func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-adopted")
 	adopted, _ := reg.Get("ccu-adopted")
 
 	var triggers atomic.Int32
-	rec := &reachableRecorder{}
-	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil, rec.notify)
+	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -176,9 +109,6 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 	if got := triggers.Load(); got != 0 {
 		t.Errorf("reassemble trigger fired %d times after unwire, want 0", got)
 	}
-	if got := rec.snapshot(); len(got) != 0 {
-		t.Errorf("reachable forwards after unwire = %v, want none", got)
-	}
 }
 
 // TestMatterCentralHook_NilUnitIsNoop pins nil-safety: the adopt path calls
@@ -186,7 +116,7 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 // without an event bus) must yield a nil unwire instead of panicking.
 func TestMatterCentralHook_NilUnitIsNoop(t *testing.T) {
 	t.Parallel()
-	hook := newMatterCentralHook(func() {}, nil, nil)
+	hook := newMatterCentralHook(func() {}, nil)
 	if unwire := hook(nil); unwire != nil {
 		t.Error("hook(nil unit) returned a non-nil unwire, want nil")
 	}
@@ -206,7 +136,7 @@ func TestMatterCentralHook_ForgetsADeviceTheCCUDeleted(t *testing.T) {
 		mu.Lock()
 		forgotten = append(forgotten, centralName+"|"+address)
 		mu.Unlock()
-	}, nil)
+	})
 	adopted, _ := reg.Get("ccu-adopted")
 	unwire := hook(adopted)
 	if unwire == nil {

@@ -14,7 +14,8 @@ import (
 type FindingCode string
 
 const (
-	// FindingDeviceRefused is a source whose own device the kit refused;
+	// FindingDeviceRefused is a source go-fabric's device kit refused or
+	// does not carry the device type of;
 	// the source yields no endpoint.
 	FindingDeviceRefused FindingCode = "device_refused"
 	// FindingDeviceWithheld is a source the configured specification level

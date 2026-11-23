@@ -1471,6 +1471,31 @@ cancellation, per-axis independence on Blind, real-timer smoke test) and
 `TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite` (target
 readable at invoke return, CCU write only after the debounce window).
 
+### BD-Matter-NodePageCloseRevokes — the node page's "close window" revokes it instead of `node.CloseWindow`
+
+**Where:** `cmd/openccu-loom/daemon_matter.go` (`matterNodeSource.CloseWindow`,
+the `fabricui.NodeSource` go-fabric-ui's node pages call).
+
+**go-fabric / matter.js behaviour:** `node.Node.CloseWindow` ends
+commissioning as matter.js `DeviceCommissioner.endCommissioning` does: the
+PASE acceptor goes and the commissionable record is withdrawn, while a PASE
+session already established and an armed fail-safe are left to their
+commissioner (go-fabric v0.25.0 `node/commissioning.go:718-748`).
+`CommissioningWindow.RevokeWindow` is the AdministratorCommissioning
+RevokeCommissioning path: it closes the PASE sessions and expires a fail-safe
+armed over PASE before it closes the window (`bridge/commissioning_window.go:851-900`,
+Matter §11.19.7.3 step 1).
+
+**OpenCCU-Loom state:** the node page's close revokes. An operator who closes
+or replaces a window there abandons the pairing on it; a PASE session or a
+fail-safe left behind answers the retry's commissioner Busy until the
+fail-safe expires.
+
+**Guard:** `TestMatterNodePagesRevokeTheWindowTheyCloseOrReplace`
+(`cmd/openccu-loom/daemon_matter_window_cluster_wiring_test.go`), through the
+composition root: the operator's close and the replacement of the boot window
+both reach the PASE sessions.
+
 ## Appendix: Where are these items marked in the sources?
 
 The items in this file originate from the following audit sources. These files are historical and do NOT serve as the source of truth for open gaps — for that, the current `parity_audit_v4.md` and `/tmp/parity_v4_a*.md` apply.

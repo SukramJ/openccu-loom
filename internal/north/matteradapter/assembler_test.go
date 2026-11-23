@@ -48,6 +48,11 @@ func (s *stubMeasurementSource) MatterMeasurementClass() contract.MeasurementCla
 	return s.class
 }
 
+// MatterFloatValue makes the stub the reading every float measurement of
+// the model is: go-fabric's device layer refuses a measurement whose class
+// materialises no cluster from its source.
+func (s *stubMeasurementSource) MatterFloatValue() (float64, bool) { return 21.5, true }
+
 // ─── helpers ─────────────────────────────────────────────────────────
 
 func validConfig() matteradapter.Config {
@@ -333,7 +338,10 @@ func TestAssemble_CalculatedDP_EndpointSource(t *testing.T) {
 	const devAddr = "SMOKE0001"
 	const chAddr = "SMOKE0001:1"
 	const dpParam = "SMOKE_CO_ALARM"
-	const wantDeviceType = uint16(0x0076)
+	// ContactSensor: a type the device layer builds from its own defaults,
+	// so the stub needs no cluster servers. SmokeCoAlarm would need a
+	// feature selection the stub cannot state.
+	const wantDeviceType = uint16(0x0015)
 
 	dev := newDevice(devAddr, "Rauchmelder")
 	ch := addChannel(dev, chAddr, 1)
@@ -428,8 +436,8 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	if srcKey(t, bridged).DPKind != matterendpoint.DPKindCalculated {
 		t.Errorf("DPKind=%q, want calculated", srcKey(t, bridged).DPKind)
 	}
-	if bridged.Source != nil {
-		t.Error("Source should be nil for measurement-only endpoint")
+	if _, ok := bridged.Source.(interface{ Spec() endpoint.Spec }); !ok {
+		t.Errorf("Source = %T, want the device layer's device", bridged.Source)
 	}
 	if bridged.Measurement == nil {
 		t.Error("Measurement should be non-nil for measurement endpoint")

@@ -35,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -866,12 +867,32 @@ func releasedDevicesOf(u *central.Unit) []*device.Device {
 	return out
 }
 
-// wireMatterDeviceReachableForward forwards one central's device-availability
-// lifecycle signal into the bridge so the matching bridged endpoints fire the
-// §9.13.6 ReachableChanged event (see [matterbridge.Bridge.NotifyDeviceReachable]
-// for the full rationale). Shared by the boot-time wiring and the live-adopt
-// hook. Returns nil when there is nothing to wire.
-func wireMatterDeviceReachableForward(u *central.Unit, notify func(centralName, address string, reachable bool)) func() {
+// wireMatterReachableForward forwards every central's device-availability
+// signal into the bridge, so the matching bridged endpoints fire the §9.13.6
+// ReachableChanged event (see [matterbridge.Bridge.NotifyDeviceReachable]).
+//
+// It rides the registry observer, which replays over the centrals present at
+// boot and runs for every one adopted later: the forward used to be wired
+// twice, by a boot walk and again by the live-adopt hook. The returned remove
+// drops every subscription.
+func wireMatterReachableForward(reg *central.Registry, notify func(centralName, address string, reachable bool)) (remove func()) {
+	if reg == nil || notify == nil {
+		return func() {}
+	}
+	return reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "matter.reachable_forward",
+		Collaborator: "subscribeMatterDeviceReachable",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "a CCU device going unreachable, or coming back, never reaches a subscribed Matter controller: the ReachableChanged event and the Reachable report are pushed only by this forward",
+	}, func(u *central.Unit) func() {
+		return subscribeMatterDeviceReachable(u, notify)
+	})
+}
+
+// subscribeMatterDeviceReachable forwards one central's AvailabilityChanged
+// lifecycle events to notify. It returns the unsubscribe closure, or nil when
+// the central has no bus to subscribe to.
+func subscribeMatterDeviceReachable(u *central.Unit, notify func(centralName, address string, reachable bool)) func() {
 	if u == nil || u.EventBus == nil || notify == nil {
 		return nil
 	}
@@ -885,13 +906,12 @@ func wireMatterDeviceReachableForward(u *central.Unit, notify func(centralName, 
 }
 
 // matterCentralHook wires one central into the running Matter bridge:
-// reassemble-on-ready onto the shared debounce pipeline, hot-plug device
-// lifecycle, and the device-availability →
-// BridgedDeviceBasicInformation.Reachable forward. The live-adopt
-// orchestrator invokes it for runtime-added centrals so an adopted central is
-// wired into the bridge exactly like a boot-time one; the returned unwire
-// drops the subscriptions on live remove. Nil when the Matter bridge is
-// disabled.
+// reassemble-on-ready onto the shared debounce pipeline and hot-plug device
+// lifecycle. The live-adopt orchestrator invokes it for runtime-added centrals
+// so an adopted central is wired into the bridge exactly like a boot-time one;
+// the returned unwire drops the subscriptions on live remove. Nil when the
+// Matter bridge is disabled. The reachability forward is not part of it: that
+// rides the registry observer ([wireMatterReachableForward]).
 type matterCentralHook func(u *central.Unit) (unwire func())
 
 // newMatterCentralHook builds the per-central Matter wiring hook from the
@@ -899,7 +919,6 @@ type matterCentralHook func(u *central.Unit) (unwire func())
 func newMatterCentralHook(
 	reassembleTrigger func(),
 	forget func(centralName, address string),
-	notifyReachable func(centralName, address string, reachable bool),
 ) matterCentralHook {
 	return func(u *central.Unit) func() {
 		if u == nil || u.EventBus == nil {
@@ -917,9 +936,6 @@ func newMatterCentralHook(
 		// would have triggered it is gone.
 		if reassembleTrigger != nil && u.IsSouthboundReady() {
 			reassembleTrigger()
-		}
-		if unsub := wireMatterDeviceReachableForward(u, notifyReachable); unsub != nil {
-			unsubs = append(unsubs, unsub)
 		}
 		if len(unsubs) == 0 {
 			return nil
@@ -965,19 +981,12 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// Reachable. WireDeviceAvailability (above) publishes a
 	// DeviceLifecycleEvent{AvailabilityChanged} on each central's bus
 	// whenever a device's effective availability flips (interface
-	// disconnect, STICKY_UNREACH, reconnect). Forward that to the
-	// bridge so the matching bridged endpoint fires the §9.13.6
-	// ReachableChanged event — without this Apple/Google always see
-	// every bridged device as reachable even when the CCU device is
-	// dead. The Reachable attribute itself reads the endpoint's
-	// Availability hook — the assembler hands it dev.Available — live
-	// per dispatch (go-fabric endpoint/materialize.go:198); this supplies the push
-	// half so active subscriptions are notified, not just polled reads.
-	for _, u := range reg.List() {
-		if unsub := wireMatterDeviceReachableForward(u, mb.NotifyDeviceReachable); unsub != nil {
-			closers = append(closers, unsub)
-		}
-	}
+	// disconnect, STICKY_UNREACH, reconnect). The Reachable attribute
+	// itself reads the endpoint's Availability — the assembler hands it
+	// dev.Available — on every materialise (go-fabric
+	// endpoint/materialize.go:201-204); the forward supplies the push half,
+	// so active subscriptions are notified, not just polled reads.
+	closers = append(closers, wireMatterReachableForward(reg, mb.NotifyDeviceReachable))
 	// Reassemble the topology once each central's initial device load
 	// completes: the boot-time assembly (the facade's Start) runs before
 	// the async CCU load, so the persisted exposures would otherwise not
@@ -998,9 +1007,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		closers = append(closers, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger, bundle.forget)...)
 	}
 	// Per-central hook for the live-adopt orchestrator: a runtime-added
-	// central gets the same reassemble-on-ready and reachable-forward
-	// wiring as the boot-time centrals above.
-	wiring.centralHook = newMatterCentralHook(reassembleTrigger, bundle.forget, mb.NotifyDeviceReachable)
+	// central gets the same reassemble-on-ready and hot-plug wiring as the
+	// boot-time centrals above.
+	wiring.centralHook = newMatterCentralHook(reassembleTrigger, bundle.forget)
 
 	// Every reassembly — the ready trigger, hot-plug, the operator's
 	// selection, the maintenance route — ends in the event source, so the
