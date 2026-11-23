@@ -16,10 +16,11 @@ import (
 // both the config save (section applier) and the file watcher (reload
 // deps). Drop either hand-over and the save answers "applied" for nothing,
 // or the label waits for a restart behind a surface that says it does not.
-// The effect is measured in cmd/openccu-loom
-// (TestMatterNodeLabelFollowsTheConfiguration,
-// TestHotReloadHandlerAppliesAChangedNodeLabel); this pin holds the lines
-// those tests construct themselves.
+// The effect is measured end to end by
+// TestE2EMatterNodeLabelSaveReachesTheRunningBridge (tests/e2e, the built
+// daemon) and in cmd/openccu-loom (TestMatterNodeLabelFollowsTheConfiguration,
+// TestHotReloadHandlerAppliesAChangedNodeLabel); this pin names the lines in
+// the ordinary test run, which does not build the daemon.
 func TestMatterNodeLabelIsWiredThroughTheCompositionRoot(t *testing.T) {
 	t.Parallel()
 

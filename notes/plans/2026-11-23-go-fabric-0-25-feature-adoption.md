@@ -346,6 +346,8 @@ Branch `claude/matter-node-page-options-1056`, from `main` at 1a41379e (slice 0,
 - **U4 resync:** `nodeSubscription` passes the hub's `replay_lost` resync to the node store.
 - **U6 Operation tab: declined** (D6). **U9 `NodeEcosystemHints`: nothing to do**, `Pair.svelte` renders
   it (GU `ui/src/lib/pages/node/Pair.svelte:20,244-246`).
-- **Follow-up once #1165 is merged:** an e2e round trip (config save → served root NodeLabel) through
-  the harness' `EnableMatter`; today the effect is measured in `cmd/openccu-loom` through
-  `startMatterBridge` plus source pins for the composition-root lines.
+- **e2e round trip (after #1165 merged):** `TestE2EMatterNodeLabelSaveReachesTheRunningBridge` saves
+  `north.matter` through the REST API of the built daemon and reads the served root NodeLabel /
+  SerialNumber over `GET /api/v1/node/endpoints/0`, across a restart. Bite proofs: dropping
+  `deps.SetMatterNodeLabeler` or the section applier's `matterLabelSection` turns the save's `applied`
+  false.
