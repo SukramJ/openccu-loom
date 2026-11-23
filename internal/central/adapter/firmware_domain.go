@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -131,7 +132,11 @@ func (r modelFirmwareStateReader) DeviceFirmwareStates(iface hmtypes.WireInterfa
 // move; the Updatable capability is bound at device materialisation (it
 // gates whether the update entity exists at all) and stays untouched.
 // Firmware.Set fires the registered OnChange handlers, so the MQTT update
-// entity republishes automatically on an effective change.
+// entity republishes automatically on an effective change. A change of the
+// installed version is also published as [hmevent.DeviceFirmwareChangedEvent]:
+// the planes that state the version (the Matter bridge) re-materialise the
+// device from the model. A device whose version was not known before (empty)
+// publishes too, since the version becomes stated for the first time.
 func applyFirmwareFromDescriptions(u *central.Unit) {
 	if u.ModelRegistry == nil || u.DescRegistry == nil {
 		return
@@ -155,6 +160,16 @@ func applyFirmwareFromDescriptions(u *central.Unit) {
 			Updatable:   prev.Updatable,
 			UpdateState: hmenum.DeviceFirmwareState(dd.FirmwareUpdateState),
 		})
+		if prev.Current != dd.Firmware && u.EventBus != nil {
+			u.EventBus.Publish(hmevent.DeviceFirmwareChangedEvent{
+				Base:        hmevent.NewBase(),
+				CentralName: u.Name(),
+				InterfaceID: dev.InterfaceID,
+				Address:     dev.Address,
+				Previous:    prev.Current,
+				Current:     dd.Firmware,
+			})
+		}
 	}
 }
 

@@ -176,6 +176,40 @@ func TestAssemble_EmptyDeviceList_RootOnly(t *testing.T) {
 	}
 }
 
+// ─── Assemble — bridged identity ─────────────────────────────────────
+
+// TestAssemble_StatesTheDeviceModelAndFirmwareOnTheBridgedEndpoint pins that
+// the assembled endpoint states the CCU's model as ProductName and
+// ProductLabel and its installed firmware as SoftwareVersionString; the node
+// serves none of the three unless the host states them.
+func TestAssemble_StatesTheDeviceModelAndFirmwareOnTheBridgedEndpoint(t *testing.T) {
+	t.Parallel()
+	dev := device.New(device.Config{
+		Address:  "ABC0002",
+		Name:     "Lampe",
+		Model:    "HmIP-BROLL-2",
+		Firmware: device.FirmwareInfo{Current: "1.4.6"},
+	})
+	ch := addChannel(dev, "ABC0002:1", 1)
+	ch.SetCustomDataPoint(&stubEndpointSource{key: dpKey("ABC0002:1", "RGBW_LIGHT"), deviceType: 0x0101})
+
+	top, err := assembleDevicesWith(context.Background(), matteradapter.New(validConfig(), nil), newFakeStore(), testEndpointConfig(),
+		[]matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	st := top.Endpoints[2].BridgedBasicInformation
+	want := func(name string, got *string, value string) {
+		t.Helper()
+		if got == nil || *got != value {
+			t.Errorf("bridged %s=%v, want %q stated", name, got, value)
+		}
+	}
+	want("ProductName", st.ProductName, "HmIP-BROLL-2")
+	want("ProductLabel", st.ProductLabel, "HmIP-BROLL-2")
+	want("SoftwareVersionString", st.SoftwareVersionString, "1.4.6")
+}
+
 // ─── Assemble — custom DP (MatterEndpointSource) ─────────────────────
 
 func TestAssemble_CustomDP_EndpointSource(t *testing.T) {

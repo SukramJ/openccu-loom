@@ -75,9 +75,8 @@ func TestSubscribeMatterDeviceLifecycleTrigger_NotReadyUnitSkipsTrigger(t *testi
 }
 
 // TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring verifies
-// teardown: the function returns exactly two unsubscribe closers (one per
-// subscribed event type), and calling all of them stops any further trigger
-// invocation.
+// teardown: the function returns one unsubscribe closer per subscribed event
+// type, and calling all of them stops any further trigger invocation.
 func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-a")
@@ -86,8 +85,8 @@ func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing
 
 	fired := 0
 	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ }, nil)
-	if len(unsubs) != 4 {
-		t.Fatalf("unsubs = %d, want 4 (DeviceCreated + DeviceRemoved + DeviceMetadataChanged + DeviceReleased)", len(unsubs))
+	if len(unsubs) != 5 {
+		t.Fatalf("unsubs = %d, want 5 (DeviceCreated + DeviceRemoved + DeviceMetadataChanged + DeviceReleased + DeviceFirmwareChanged)", len(unsubs))
 	}
 
 	for _, unsub := range unsubs {
@@ -155,5 +154,38 @@ func TestSubscribeMatterDeviceLifecycleTrigger_FiresOnRename(t *testing.T) {
 	if fired != 1 {
 		t.Errorf("fired = %d after a rename, want 1 — a renamed device keeps its old "+
 			"NodeLabel in every Matter controller until the daemon restarts", fired)
+	}
+}
+
+// TestSubscribeMatterDeviceLifecycleTrigger_FiresOnFirmwareChange pins the
+// firmware arm. A bridged device states its installed firmware as its
+// SoftwareVersionString; without the reassembly a device updated through the
+// CCU keeps serving the old version to every Matter controller until the
+// daemon restarts.
+func TestSubscribeMatterDeviceLifecycleTrigger_FiresOnFirmwareChange(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-a")
+	unit, _ := reg.Get("ccu-a")
+	unit.MarkSouthboundReady()
+
+	fired := 0
+	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ }, nil)
+	t.Cleanup(func() {
+		for _, unsub := range unsubs {
+			unsub()
+		}
+	})
+
+	unit.EventBus.Publish(hmevent.DeviceFirmwareChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "ccu-a",
+		InterfaceID: "HmIP-RF",
+		Address:     "0001ABCD",
+		Previous:    "1.0.2",
+		Current:     "1.2.4",
+	})
+	if fired != 1 {
+		t.Errorf("fired = %d after a firmware change, want 1 — the bridged device keeps "+
+			"serving its old SoftwareVersionString until the daemon restarts", fired)
 	}
 }

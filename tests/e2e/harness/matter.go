@@ -139,9 +139,21 @@ func (h *Harness) nodeRequest(ctx context.Context, method, path string, payload 
 }
 
 // RootAttribute reads the value of one attribute the node's root endpoint
-// serves, as GET /api/v1/node/endpoints/0 reports it (clusters[].attributes[]
-// by numeric id). It fails the test when the endpoint does not carry it.
+// serves, as GET /api/v1/node/endpoints/0 reports it. It fails the test when
+// the endpoint does not carry it.
 func (h *Harness) RootAttribute(t *testing.T, cluster, attribute uint32) json.RawMessage {
+	t.Helper()
+	v, ok := h.EndpointAttribute(t, 0, cluster, attribute)
+	if !ok {
+		t.Fatalf("the root endpoint serves no attribute 0x%04X of cluster 0x%04X", attribute, cluster)
+	}
+	return v
+}
+
+// EndpointAttribute reads the value of one attribute endpoint id serves, as
+// GET /api/v1/node/endpoints/{id} reports it (clusters[].attributes[] by
+// numeric id). ok is false when the endpoint does not carry it.
+func (h *Harness) EndpointAttribute(t *testing.T, id uint16, cluster, attribute uint32) (value json.RawMessage, ok bool) {
 	t.Helper()
 	var ep struct {
 		Clusters []struct {
@@ -152,8 +164,9 @@ func (h *Harness) RootAttribute(t *testing.T, cluster, attribute uint32) json.Ra
 			} `json:"attributes"`
 		} `json:"clusters"`
 	}
-	if status, body := h.nodeDo(t, http.MethodGet, "/api/v1/node/endpoints/0", nil, &ep); status != http.StatusOK {
-		t.Fatalf("GET /api/v1/node/endpoints/0 = %d: %s", status, body)
+	path := fmt.Sprintf("/api/v1/node/endpoints/%d", id)
+	if status, body := h.nodeDo(t, http.MethodGet, path, nil, &ep); status != http.StatusOK {
+		t.Fatalf("GET %s = %d: %s", path, status, body)
 	}
 	for _, c := range ep.Clusters {
 		if c.ID != int64(cluster) {
@@ -161,12 +174,11 @@ func (h *Harness) RootAttribute(t *testing.T, cluster, attribute uint32) json.Ra
 		}
 		for _, a := range c.Attributes {
 			if a.ID == int64(attribute) {
-				return a.Value
+				return a.Value, true
 			}
 		}
 	}
-	t.Fatalf("the root endpoint serves no attribute 0x%04X of cluster 0x%04X", attribute, cluster)
-	return nil
+	return nil, false
 }
 
 // SaveMatterSection saves the north.matter section the way the Web UI does:

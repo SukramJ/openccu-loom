@@ -4,6 +4,8 @@
 package calculated
 
 import (
+	contract "thingfabric.dev/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -70,6 +72,20 @@ func (s *VaporConcentrationSensor) MatterMeasurementClass() interfaces.MatterMea
 // battery percentage → PowerSource (0x002F) BatPercentRemaining (P1).
 func (s *OperatingVoltageLevelSensor) MatterMeasurementClass() interfaces.MatterMeasurementClass {
 	return interfaces.MatterMeasurementBattery
+}
+
+// MatterPowerSourceSelection implements [contract.PowerSourceSelectionSource]
+// for the derived battery percentage.
+// The device model carries no battery replaceability, and the daemon keeps
+// no static device database to look it up, so the source says it does not
+// know (BatteryReplaceabilityUnspecified) — the value matter.js serves for a
+// battery power source that states none (matter.js
+// packages/node/src/behaviors/power-source/PowerSourceServer.ts:48-54).
+// Without it the node serves the selection's zero value, a battery the
+// user replaces, which nothing here established. Only a source of class
+// MeasurementBattery is asked for it.
+func (s *OperatingVoltageLevelSensor) MatterPowerSourceSelection() contract.PowerSourceSelection {
+	return contract.PowerSourceSelection{BatteryReplaceability: contract.BatteryReplaceabilityUnspecified}
 }
 
 // MatterMeasurementClass for DerivedBinarySensor dispatches on the
