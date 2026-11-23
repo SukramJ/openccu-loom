@@ -68,7 +68,12 @@ type Options struct {
 	// MQTT bridge. Off by default — most tests do not need it.
 	EnableMQTT bool
 
-	// EnableMatter is reserved for v1.1; no-op today.
+	// EnableMatter turns the Matter bridge on: a north.matter block with
+	// an OS-chosen UDP port and DNS-SD switched off ("noop"), so the
+	// node runs without multicast and without a commissioner. Start
+	// returns once GET /api/v1/node/status reports the node listening.
+	// The bridge exposes nothing until a test enables exposures
+	// ([Harness.EnableAllExposures]).
 	EnableMatter bool
 
 	// StartupDeadline overrides the default 60 s budget for start-up —
@@ -150,6 +155,14 @@ type Harness struct {
 	stdoutBuf *syncBuffer
 	stderrBuf *syncBuffer
 
+	// opts and binPath are what [Harness.Restart] launches the next
+	// daemon process with.
+	opts    Options
+	binPath string
+	// earlierLogs is the output of the daemon processes a Restart
+	// replaced, kept for the failure dump.
+	earlierLogs strings.Builder
+
 	rest *RESTClient
 	mqtt MQTTBroker
 	op   MockOP
@@ -196,12 +209,13 @@ func Start(t *testing.T, opts Options) *Harness {
 
 	h := &Harness{
 		t:         t,
+		opts:      opts,
 		stdoutBuf: newSyncBuffer(),
 		stderrBuf: newSyncBuffer(),
 	}
 	t.Cleanup(h.Stop)
 
-	binPath := locateDaemonBinary(t)
+	h.binPath = locateDaemonBinary(t)
 
 	south := southInputs{Host: "127.0.0.1"}
 	if opts.NoCentral {
@@ -267,13 +281,46 @@ func Start(t *testing.T, opts Options) *Harness {
 		PublicURL:               opts.PublicURL,
 		DelayNewDeviceCreation:  opts.DelayNewDeviceCreation,
 		Measurements:            opts.Measurements,
+		Matter:                  opts.EnableMatter,
 	})
 	if err := os.WriteFile(h.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		t.Fatalf("write config.yaml: %v", err)
 	}
 
+	h.launch(t)
+	return h
+}
+
+// Restart stops the daemon process and starts a new one on the same
+// config file and data directory, against the same simulated CCU and
+// sidecars. It returns once the new process is healthy (and, with
+// EnableMatter, its node listening).
+//
+// It is a daemon restart, not a fresh install: the database the first
+// process seeded from config.yaml wins on the second boot, so the
+// second process reaches the same CCU only because that CCU keeps its
+// ports. Flip the CCU's readiness before the call
+// (h.CCU().V().SetReady(false)) to put the restart through the
+// readiness-gated bring-up. The REST client is replaced, so a session
+// login has to be repeated.
+func (h *Harness) Restart(t *testing.T) {
+	t.Helper()
+	h.stopProcess()
+	h.earlierLogs.WriteString(h.stdoutBuf.String())
+	h.earlierLogs.WriteString(h.stderrBuf.String())
+	h.stdoutBuf = newSyncBuffer()
+	h.stderrBuf = newSyncBuffer()
+	h.rest = nil
+	h.launch(t)
+}
+
+// launch starts one daemon process on h.cfgPath and waits until it has
+// reported its REST address and turned healthy.
+func (h *Harness) launch(t *testing.T) {
+	t.Helper()
+	opts := h.opts
 	ctx, cancel := context.WithCancel(context.Background())
-	h.cmd = exec.CommandContext(ctx, binPath, "run", "--config", h.cfgPath) //nolint:gosec // G204: launching the locally built daemon binary is the harness's purpose
+	h.cmd = exec.CommandContext(ctx, h.binPath, "run", "--config", h.cfgPath) //nolint:gosec // G204: launching the locally built daemon binary is the harness's purpose
 	h.cmd.Stdout = h.stdoutBuf
 	h.cmd.Stderr = h.stderrBuf
 	if len(opts.Env) > 0 {
@@ -287,10 +334,13 @@ func Start(t *testing.T, opts Options) *Harness {
 		cancel()
 		t.Fatalf("start openccu-loom: %v", err)
 	}
-	h.cmdDone = make(chan struct{})
+	// The goroutine holds this process's cmd and channel, not h's fields:
+	// a Restart replaces those for the next process.
+	cmd, done := h.cmd, make(chan struct{})
+	h.cmdDone = done
 	go func() {
-		h.cmdErr = h.cmd.Wait()
-		close(h.cmdDone)
+		h.cmdErr = cmd.Wait()
+		close(done)
 		cancel()
 	}()
 
@@ -310,7 +360,13 @@ func Start(t *testing.T, opts Options) *Harness {
 		t.Logf("daemon stderr:\n%s", h.stderrBuf.String())
 		t.Fatalf("daemon did not become healthy within %s: %v", deadline, err)
 	}
-	return h
+	if opts.EnableMatter {
+		if err := h.waitForMatterListening(deadline); err != nil {
+			t.Logf("daemon stdout:\n%s", h.stdoutBuf.String())
+			t.Logf("daemon stderr:\n%s", h.stderrBuf.String())
+			t.Fatalf("Matter node did not come up within %s: %v", deadline, err)
+		}
+	}
 }
 
 // southInputs is where the daemon's central points: the simulated CCU's
@@ -329,20 +385,30 @@ func (h *Harness) Stop() {
 		return
 	}
 	h.stopOnce.Do(func() {
-		if h.cmd != nil && h.cmd.Process != nil {
-			_ = h.cmd.Process.Signal(syscall.SIGTERM)
-			select {
-			case <-h.cmdDone:
-			case <-time.After(5 * time.Second):
-				_ = h.cmd.Process.Kill()
-				<-h.cmdDone
-			}
-		}
+		h.stopProcess()
 		if h.t != nil && h.t.Failed() {
+			if h.earlierLogs.Len() > 0 {
+				h.t.Logf("output of the daemon processes a restart replaced:\n%s", h.earlierLogs.String())
+			}
 			h.t.Logf("daemon stdout:\n%s", h.stdoutBuf.String())
 			h.t.Logf("daemon stderr:\n%s", h.stderrBuf.String())
 		}
 	})
+}
+
+// stopProcess signals the current daemon process and waits for it to
+// exit. It is a no-op once the process has exited.
+func (h *Harness) stopProcess() {
+	if h.cmd == nil || h.cmd.Process == nil {
+		return
+	}
+	_ = h.cmd.Process.Signal(syscall.SIGTERM)
+	select {
+	case <-h.cmdDone:
+	case <-time.After(5 * time.Second):
+		_ = h.cmd.Process.Kill()
+		<-h.cmdDone
+	}
 }
 
 // REST returns a client targeting the daemon's REST listener.
