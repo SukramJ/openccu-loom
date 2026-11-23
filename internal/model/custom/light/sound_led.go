@@ -195,7 +195,11 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 // trip its duplicate-registration panic at device-discovery time.
 func (l *SoundPlayerLED) registerSoundPlayerLEDServices() {
 	l.OverrideService("turn_on", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
-		return l.TurnOn(ctx, ledOnConfigFromParams(params), l.Writer, l.Address(), priority)
+		cfg, err := l.ledOnConfigFromParams(params)
+		if err != nil {
+			return err
+		}
+		return l.TurnOn(ctx, cfg, l.Writer, l.Address(), priority)
 	})
 	l.OverrideService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return l.TurnOff(ctx, l.Writer, l.Address(), priority)
@@ -204,9 +208,20 @@ func (l *SoundPlayerLED) registerSoundPlayerLEDServices() {
 		if state, ok := params["state"].(string); ok {
 			switch strings.ToUpper(state) {
 			case "OFF":
+				transition, err := l.commandedTransition(params)
+				if err != nil {
+					return err
+				}
+				if transition != nil {
+					return l.turnOffWithTransition(ctx, *transition, l.Writer, l.Address(), priority)
+				}
 				return l.TurnOff(ctx, l.Writer, l.Address(), priority)
 			case "ON":
-				if err := l.TurnOn(ctx, ledOnConfigFromParams(params), l.Writer, l.Address(), priority); err != nil {
+				cfg, err := l.ledOnConfigFromParams(params)
+				if err != nil {
+					return err
+				}
+				if err := l.TurnOn(ctx, cfg, l.Writer, l.Address(), priority); err != nil {
 					return err
 				}
 				// `color` is consumed by the atomic write above; the
@@ -225,17 +240,37 @@ func (l *SoundPlayerLED) registerSoundPlayerLEDServices() {
 // ledOnConfigFromParams builds a [LedOnConfig] from a service method's
 // params. Every field is optional, matching LedOnConfig's own documented
 // zero-value defaults (0 brightness → full, nil HSColor → keep the
-// current colour, 0 on/ramp time → no timer, 0 repetitions → none, 0
-// flash time → PERMANENTLY_ON); a param that is present but the wrong
-// type is ignored rather than rejected, so a caller that only wants a
-// plain turn-on can omit all of them.
+// current colour, no timer, 0 repetitions → none, 0 flash time →
+// PERMANENTLY_ON), so a caller that only wants a plain turn-on can omit
+// all of them.
+//
+// The two timers take the keys every light takes — `seconds` for the
+// on-time, `transition` for the fade time — and follow the same rules
+// ([payload.ParamTransition]): a value the device could not run is refused,
+// because a timer the command names and the device does not run is a
+// command half carried out.
+// The remaining keys keep their lenient reading: a wrong type is ignored.
 //
 // Both colour spellings are read: the flat `hue` / `saturation` pair a
 // REST or SPA caller sends, and the `color:{"h":…,"s":…}` object of an HA
 // JSON-schema light command. Reading only the flat pair would drop the
 // colour of every HA colour pick on this LED.
-func ledOnConfigFromParams(p map[string]any) LedOnConfig {
+func (l *SoundPlayerLED) ledOnConfigFromParams(p map[string]any) (LedOnConfig, error) {
 	var cfg LedOnConfig
+	onFor, err := boundedOnTime(p)
+	if err != nil {
+		return LedOnConfig{}, err
+	}
+	if onFor != nil {
+		cfg.OnTime = onFor.Seconds()
+	}
+	transition, err := l.commandedTransition(p)
+	if err != nil {
+		return LedOnConfig{}, err
+	}
+	if transition != nil {
+		cfg.RampTime = transition.Seconds()
+	}
 	if raw, ok := p["brightness"]; ok {
 		if f, err := toNumber(raw); err == nil {
 			cfg.Brightness = uint8(min(max(f, 0), 255))
@@ -256,16 +291,6 @@ func ledOnConfigFromParams(p map[string]any) LedOnConfig {
 			cfg.HSColor = &[2]float64{float64(hue), sat}
 		}
 	}
-	if raw, ok := p["on_time"]; ok {
-		if f, err := toNumber(raw); err == nil {
-			cfg.OnTime = f
-		}
-	}
-	if raw, ok := p["ramp_time"]; ok {
-		if f, err := toNumber(raw); err == nil {
-			cfg.RampTime = f
-		}
-	}
 	if raw, ok := p["repetitions"]; ok {
 		if n, err := toNumber(raw); err == nil {
 			cfg.Repetitions = int(n)
@@ -276,7 +301,7 @@ func ledOnConfigFromParams(p map[string]any) LedOnConfig {
 			cfg.FlashTimeMS = int(n)
 		}
 	}
-	return cfg
+	return cfg, nil
 }
 
 // ActivityState returns the LED channel's current DIRECTION /
@@ -306,19 +331,35 @@ func (l *SoundPlayerLED) AvailableRepetitions() []string {
 // ON_TIME), mirroring CustomDpSoundPlayerLed's CombinedTimerField in
 // light.py.
 func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr string, priority hmenum.CommandPriority) error {
+	return l.turnOff(ctx, nil, w, addr, priority)
+}
+
+// turnOffWithTransition is [SoundPlayerLED.TurnOff] with the ramp pair
+// beside the switch-off bundle, so the LED fades out over `transition`.
+func (l *SoundPlayerLED) turnOffWithTransition(ctx context.Context, transition time.Duration, w custom.Writer, addr string, priority hmenum.CommandPriority) error {
+	return l.turnOff(ctx, &transition, w, addr, priority)
+}
+
+func (l *SoundPlayerLED) turnOff(ctx context.Context, transition *time.Duration, w custom.Writer, addr string, priority hmenum.CommandPriority) error {
 	if w == nil {
 		return errors.New("soundplayer-led: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
+	params := l.withSoundLEDOnTime(map[hmenum.Parameter]any{
+		hmenum.ParameterLevel: 0.0,
+		hmenum.ParameterColor: fixedColorNames[FixedColorBlack],
+	}, 0)
+	if transition != nil {
+		rampValue, rampUnit := l.rampTimeUnits.Encode(*transition)
+		params[hmenum.ParameterRampTimeValue] = rampValue
+		params[hmenum.ParameterRampTimeUnit] = rampUnit
+	}
 	// Anything staged on the collector only reaches the wire in the
 	// flush, so its error is part of this command's result.
 	return generic.FlushCollector(ctx, coll,
-		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, l.withSoundLEDOnTime(map[hmenum.Parameter]any{
-			hmenum.ParameterLevel: 0.0,
-			hmenum.ParameterColor: fixedColorNames[FixedColorBlack],
-		}, 0), priority))
+		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority))
 }
 
 // withSoundLEDTimers stages the LED channel's two timers into params in

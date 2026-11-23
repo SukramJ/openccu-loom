@@ -138,7 +138,7 @@ func TestLightSubDataPointKeysNilFloat(t *testing.T) {
 // that TurnOn includes it in the put_paramset.
 func TestLightSetTimerRampTime(t *testing.T) {
 	w := &putWriter{}
-	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true})
+	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true}, hmenum.ParameterRampTime)
 	l.SetTimerRampTime(3 * time.Second)
 	if err := l.TurnOn(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)

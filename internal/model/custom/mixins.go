@@ -164,9 +164,9 @@ const timeUnitThreshold = 16343
 
 // TimerNotUsed is the sentinel duration, in seconds, that marks a timer
 // parameter of the ON_TIME / RAMP_TIME / DURATION family as "not used".
-// When this exact float64 is encoded the result is (111600, H) — the value
-// stays unchanged and the unit is forced to hours, so the device can
-// distinguish "timer disabled" from any ordinary duration.
+// 111600 s is 31 h: a bare seconds parameter (ON_TIME) carries it as is, and
+// a value/unit pair carries it as (31, H), the CCU's own "permanently on"
+// (see [DurationUnits.Encode]).
 //
 // It is deliberately out of band rather than a range maximum: across the
 // device corpus the parameters carrying it declare MAX 108000.0, so 111600.0
@@ -574,8 +574,10 @@ type (
 		SupportsEffects   bool
 		// Transition reports that the channel carries a writable RAMP_TIME,
 		// i.e. the light can be commanded to fade over a given time. The
-		// discovery builder in light/payload.go turns this into the
-		// transition field.
+		// light's constructor sets it from the channel's own parameters,
+		// whatever the profile passed, and the services accept a
+		// `transition` exactly when it is set. The discovery builder in
+		// light/payload.go turns this into the transition field.
 		Transition bool
 	}
 

@@ -136,7 +136,7 @@ func TestParityAtomicOnTimePutParamset(t *testing.T) {
 	t.Parallel()
 
 	w := &putWriter{}
-	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true})
+	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true}, hmenum.ParameterRampTime)
 	on := 5 * time.Second
 	ramp := 6 * time.Second
 	br := float64(28) / 255.0
@@ -166,7 +166,7 @@ func TestParityTurnOffWithRampAtomicPutParamset(t *testing.T) {
 	t.Parallel()
 
 	w := &putWriter{}
-	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true})
+	l, _ := newLightRigPut(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true}, hmenum.ParameterRampTime)
 	if err := l.TurnOffWithRamp(context.Background(), 6*time.Second, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}

@@ -33,9 +33,44 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nearest minute or hour instead of cut off, so 16373 s is 273 minutes, not
   272. A device or client reporting a timer in `10MS` now reads back as
   that duration instead of a hundred times longer. (#1144)
+- **Lights fade over a transition on every plane, not only over Matter.** A
+  light's `turn_on` and `set_level` take a transition in seconds as
+  `transition` — the key Home Assistant's MQTT JSON light already sent,
+  which was dropped — and the switch-off `set_level {"state":"OFF"}` fades
+  out with it. The transition goes out in the same write as the switch-on,
+  with the on-time pair the CCU requires beside it. `0` is an instant
+  change, as in Home Assistant. REST, WebSocket, MCP and the MQTT command
+  topic all take it. (#1156)
+- **A switch-on with a transition and no on-time keeps a signal light on.**
+  The "no timer" value beside a transition went out as 111600 hours on the
+  HmIP value/unit lights (signal lights, RGBW, DALI, the MP3P LED) — the
+  seconds count with the hour unit — and a live HmIP-BSL stayed dark. It is
+  now 31 hours, which the CCU's own dialogs write for "permanently on", and
+  the light comes on and stays on. (#1156)
+- **A light's `transition` capability says whether the device can fade.**
+  It is now read from the channel's own parameters (`RAMP_TIME`, or
+  `RAMP_TIME_VALUE`/`RAMP_TIME_UNIT`) instead of the device profile, which
+  set it for almost no light. Matter level commands with a transition time
+  now fade on the device for every light that can. A light that cannot
+  reports `transition: false`, refuses a transition instead of sending a
+  parameter the CCU faults, and tells Home Assistant `transition: false`
+  in its MQTT discovery instead of leaving the key out, which Home
+  Assistant reads as true. (#1156)
 
 ### Changed
 
+- **Breaking: every transition is named `transition`.** The HmIP-MP3P
+  status LED takes `seconds` and `transition` for its on-time and fade on
+  `turn_on` and `set_level`, like every other light, instead of `on_time`
+  and `ramp_time`; the sound player's `turn_on` takes its fade-in as
+  `transition` instead of `ramp_time`. The old keys are no longer read. A
+  value the device could not run (a negative transition, a non-numeric
+  value) is refused instead of ignored, and `set_level {"state":"OFF"}`
+  with a `transition` fades the LED out. (#1156)
+- **REST API 17.0.0:** the always-on capability `cdp.transition.v1` says
+  every transition is taken as `transition` — a light's `turn_on` and
+  `set_level`, the sound player's `turn_on`; the renamed keys above are the
+  breaking part. (#1156)
 - **REST API 16.7.0:** `AddonUpdateStatus` (`GET /system/addon-update`,
   the `addon_update.state_changed` broadcast and the MCP tool
   `get_addon_update_status`) gains `error_code` (`rate_limited`) and

@@ -125,13 +125,15 @@ func TestLightDimmableTransitionHASchemaJSON(t *testing.T) {
 }
 
 // TestLightDimmableNoTransitionHASchemaJSON verifies that transition is
-// absent when not supported.
+// stated false when the light cannot ramp. Left out, Home Assistant's
+// JSON-schema light defaults it to true and sends a transition the light
+// refuses.
 func TestLightDimmableNoTransitionHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
-	if _, ok := body["transition"]; ok {
-		t.Error("transition must be absent when Capabilities.Transition is false")
+	if v, ok := body["transition"].(bool); !ok || v {
+		t.Errorf("transition = %v, want an explicit false when the light has no ramp", body["transition"])
 	}
 }
 

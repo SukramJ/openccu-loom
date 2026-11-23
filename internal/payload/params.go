@@ -4,6 +4,9 @@
 package payload
 
 import (
+	"fmt"
+	"time"
+
 	hapayload "github.com/SukramJ/go-hamqtt/payload"
 )
 
@@ -60,6 +63,39 @@ func ParamFloat64(params map[string]any, key string) (float64, error) {
 // float64 IS truncated, which the shared doc comment now says outright.
 func ParamInt32(params map[string]any, key string) (int32, error) {
 	return hapayload.ParamInt32(params, key)
+}
+
+// TransitionKey is the key under which every custom data point's service
+// methods take a transition time: the light's turn_on and set_level, the
+// sound player's turn_on. It is the key Home Assistant's JSON-schema light
+// sends on the MQTT command topic
+// (homeassistant/components/mqtt/light/schema_json.py), so one name serves
+// every plane.
+const TransitionKey = "transition"
+
+// ParamTransition decodes the optional transition of a service call, in
+// seconds. Absent or zero is no transition — Home Assistant clamps the value
+// to 0..6553 and sends 0 for an instant change
+// (homeassistant/components/light/const.py, VALID_TRANSITION). A negative or
+// non-numeric value is [ErrServiceInvalidParam]: a command that names a
+// transition the device would not run is refused rather than half carried
+// out.
+func ParamTransition(params map[string]any) (*time.Duration, error) {
+	if _, ok := params[TransitionKey]; !ok {
+		return nil, nil //nolint:nilnil // absent is a valid, distinct answer: no transition
+	}
+	secs, err := ParamFloat64(params, TransitionKey)
+	if err != nil {
+		return nil, err
+	}
+	if secs < 0 {
+		return nil, fmt.Errorf("%w: %q must not be negative, got %v", ErrServiceInvalidParam, TransitionKey, secs)
+	}
+	if secs == 0 {
+		return nil, nil //nolint:nilnil // zero is an instant change: no transition
+	}
+	d := time.Duration(secs * float64(time.Second))
+	return &d, nil
 }
 
 // ParamString decodes a required string param. The implementation is

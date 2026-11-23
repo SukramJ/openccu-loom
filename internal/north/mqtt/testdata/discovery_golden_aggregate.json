@@ -722,6 +722,7 @@
       "supported_color_modes": [
         "brightness"
       ],
+      "transition": true,
       "unique_id": "loom_0001bdt00001_4_light"
     }
   },

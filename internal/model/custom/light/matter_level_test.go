@@ -87,6 +87,11 @@ func newLevelRig(t *testing.T, caps custom.LightCapabilities, rampStop bool) (*L
 		},
 		Writer: w,
 	}))
+	if caps.Transition {
+		// The light derives its transition from the channel, so a rig that
+		// asks for one carries the plain dimmer's bare RAMP_TIME.
+		putWritableFloat(ch, address, hmenum.ParameterRampTime, w)
+	}
 	if rampStop {
 		ch.Put(generic.NewAction(generic.Spec{
 			Key: hmtypes.DataPointKey{

@@ -18,7 +18,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "16.7.0"
+const APIVersion = "17.0.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -84,6 +84,14 @@ const (
 	// set_timer_on_time stage, whose pending timer another plane's
 	// switch-on could consume; one that does not falls back to it.
 	CapabilityCDPBoundedOn = "cdp.bounded_on.v1"
+	// CapabilityCDPTransition says every custom-data-point transition is
+	// taken in seconds as `transition` — the key Home Assistant's JSON-schema
+	// light sends: a light's turn_on and set_level, the switch-off
+	// set_level {"state":"OFF"} included, and the sound player's turn_on
+	// fade-in. A light accepts it exactly when its capabilities report
+	// `transition`; one that reports false refuses it. A client that sees it
+	// sends `transition` where it sent `ramp_time` before.
+	CapabilityCDPTransition = "cdp.transition.v1"
 	// CapabilitySupervisedRestart is surfaced when the daemon
 	// detects that something (systemd, Docker, k8s) will bring it
 	// back up after a clean shutdown. The SPA reads this capability
@@ -294,6 +302,7 @@ func capabilities(d CapabilityDetector) []string {
 		CapabilityCentralFeatures,
 		CapabilitySouthOpenCCULite,
 		CapabilityCDPBoundedOn,
+		CapabilityCDPTransition,
 		CapabilityProjection,
 	}
 	if d == nil {

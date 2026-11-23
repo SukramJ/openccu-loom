@@ -119,8 +119,14 @@ func (u DurationUnits) ordinal(s durationStep, decoding bool) (int32, bool) {
 // Every unit rounds half-up to its nearest step — 16373 s is (273, M) — and a
 // positive duration is at least one step, so a short timer never collapses to
 // a zero count. Zero and negative durations are (0, S). The disabled-timer
-// sentinel [TimerNotUsed] is (111600, H) unchanged, so the device can tell it
-// from any real duration.
+// sentinel [TimerNotUsed] — 111600 s, which is 31 h — is (31, H): the pair
+// the CCU's own dialogs write for "permanently on" when the time limit is
+// unchecked (OpenCCU-Base
+// src/webui/www_source/webui/js/dialog/dimmerCombinedParamDialog.js:571-572;
+// the help text, www/webui/js/lang/en/translate.lang.help.js:117, reads "A
+// value of 31 hours means 'permanently on'"). Sent as the seconds count with
+// the hour unit, 111600 h, it is past DURATION_VALUE's MAX of 16343 and kept
+// a signal light dark (notes/parity/by_design.md, A2-BD10).
 //
 // Rationale and divergence from the reference:
 // notes/parity/by_design.md, entry BD-Timer-RoundsToNearestStep.
@@ -132,7 +138,7 @@ func (u DurationUnits) Encode(d time.Duration) (value, unit int32) {
 	}
 	if d == timerNotUsedDuration {
 		ord, _ := u.ordinal(durationSteps[3], false)
-		return int32(TimerNotUsed), ord
+		return int32(timerNotUsedDuration / time.Hour), ord
 	}
 	var count int64
 	var ord int32

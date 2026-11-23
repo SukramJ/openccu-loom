@@ -281,37 +281,78 @@ func boundedOnTime(params map[string]any) (*time.Duration, error) {
 	return &d, nil
 }
 
-// turnOnFor is [Light.TurnOn], bounded by `onFor` when one is given.
-func (l *Light) turnOnFor(ctx context.Context, onFor *time.Duration, priority hmenum.CommandPriority) error {
-	if onFor != nil {
-		return l.TurnOnFor(ctx, *onFor, nil, priority)
+// commandedTransition reads the optional transition of a light command (see
+// [payload.ParamTransition]). A light whose channel describes no ramp
+// parameter refuses a transition rather than switching without one, because
+// its capabilities do not offer it.
+func (l *Light) commandedTransition(params map[string]any) (*time.Duration, error) {
+	transition, err := payload.ParamTransition(params)
+	if err != nil || transition == nil {
+		return transition, err
 	}
-	return l.TurnOn(ctx, priority)
+	if !l.Capabilities.Transition {
+		return nil, fmt.Errorf("%w: %q: this light has no transition", payload.ErrServiceInvalidParam, payload.TransitionKey)
+	}
+	return transition, nil
 }
 
-// setLevelFor writes `level`, bounded by `onFor` when one is given and the
-// level switches the light on. A bound on a switch-off has nothing to bound.
-func (l *Light) setLevelFor(ctx context.Context, level float64, onFor *time.Duration, priority hmenum.CommandPriority) error {
-	if onFor != nil && level > 0 {
-		return l.TurnOnFor(ctx, *onFor, &level, priority)
+// commandTimers are the timers a light service command carries itself: the
+// on-time (`seconds`) and the transition (`transition`).
+type commandTimers struct {
+	onFor, transition *time.Duration
+}
+
+// readCommandTimers reads both timers of a light service command.
+func (l *Light) readCommandTimers(params map[string]any) (commandTimers, error) {
+	onFor, err := boundedOnTime(params)
+	if err != nil {
+		return commandTimers{}, err
+	}
+	transition, err := l.commandedTransition(params)
+	if err != nil {
+		return commandTimers{}, err
+	}
+	return commandTimers{onFor: onFor, transition: transition}, nil
+}
+
+// turnOnTimed is [Light.TurnOn], carrying the command's own timers when it
+// names any.
+func (l *Light) turnOnTimed(ctx context.Context, t commandTimers, priority hmenum.CommandPriority) error {
+	if t.onFor == nil && t.transition == nil {
+		return l.TurnOn(ctx, priority)
+	}
+	return l.turnOnWithTimers(ctx, t.onFor, t.transition, nil, priority)
+}
+
+// setLevelTimed writes `level` with the command's own timers. An on-time
+// bounds only a switch-on; a transition applies in both directions, a
+// switch-off fading out through [Light.TurnOffWithRamp].
+func (l *Light) setLevelTimed(ctx context.Context, level float64, t commandTimers, priority hmenum.CommandPriority) error {
+	switch {
+	case level > 0 && (t.onFor != nil || t.transition != nil):
+		return l.turnOnWithTimers(ctx, t.onFor, t.transition, &level, priority)
+	case level <= 0 && t.transition != nil:
+		return l.TurnOffWithRamp(ctx, *t.transition, priority)
 	}
 	return l.SetLevel(ctx, level, priority)
 }
 
 // applyTurnOn is the `turn_on` service method: a switch-on at the
-// remembered level, bounded by the optional `seconds`.
+// remembered level, bounded by the optional `seconds` and faded in over the
+// optional `transition`.
 func (l *Light) applyTurnOn(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
-	onFor, err := boundedOnTime(params)
+	t, err := l.readCommandTimers(params)
 	if err != nil {
 		return err
 	}
-	return l.turnOnFor(ctx, onFor, priority)
+	return l.turnOnTimed(ctx, t, priority)
 }
 
 // registerLightServices registers the base light service methods (turn_on,
 // turn_off, set_level) onto the ServiceRegistry inherited from
 // *generic.Float. turn_on and set_level take an optional `seconds` that
-// bounds the switch-on in the same write.
+// bounds the switch-on and an optional `transition` that fades it in, both
+// in the same write; set_level's switch-off takes `transition` as well.
 func (l *Light) registerLightServices() {
 	l.RegisterService("turn_on", l.applyTurnOn)
 	l.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
@@ -346,6 +387,10 @@ func (l *Light) registerLightServices() {
 //	{"state":"ON","effect":"<label>"}       — pick an effect
 //	{"level":<0-1>}                         — legacy scalar form
 //
+// Every shape takes an optional `seconds` (the on-time of a switch-on) and
+// an optional `transition` (the fade time, on a switch-on and a switch-off),
+// as Home Assistant's JSON-schema light sends it.
+//
 // The colour / colour-temperature / effect keys travel on the same topic
 // as on/off and brightness, so this handler has to apply them as well:
 // dropping them makes a colour pick silently do nothing but toggle the
@@ -357,7 +402,7 @@ func (l *Light) registerLightServices() {
 func (l *Light) applyHASetLevel(
 	ctx context.Context, params map[string]any, priority hmenum.CommandPriority,
 ) error {
-	onFor, err := boundedOnTime(params)
+	t, err := l.readCommandTimers(params)
 	if err != nil {
 		return err
 	}
@@ -366,17 +411,20 @@ func (l *Light) applyHASetLevel(
 		switch strings.ToUpper(s) {
 		case "OFF":
 			// Colour / effect keys are irrelevant for a switch-off.
+			if t.transition != nil {
+				return l.TurnOffWithRamp(ctx, *t.transition, priority)
+			}
 			return l.TurnOff(ctx, priority)
 		case "ON":
 			if br, hasBr := params["brightness"]; hasBr {
 				if f, err := toNumber(br); err == nil {
-					if err := l.setLevelFor(ctx, f/255.0, onFor, priority); err != nil {
+					if err := l.setLevelTimed(ctx, f/255.0, t, priority); err != nil {
 						return err
 					}
 					return l.applyHALightAttributes(ctx, params, priority)
 				}
 			}
-			if err := l.turnOnFor(ctx, onFor, priority); err != nil {
+			if err := l.turnOnTimed(ctx, t, priority); err != nil {
 				return err
 			}
 			return l.applyHALightAttributes(ctx, params, priority)
@@ -384,17 +432,17 @@ func (l *Light) applyHASetLevel(
 	}
 	if br, hasBr := params["brightness"]; hasBr {
 		if f, err := toNumber(br); err == nil {
-			if err := l.setLevelFor(ctx, f/255.0, onFor, priority); err != nil {
+			if err := l.setLevelTimed(ctx, f/255.0, t, priority); err != nil {
 				return err
 			}
 			return l.applyHALightAttributes(ctx, params, priority)
 		}
 	}
 	if hasHALightAttributes(params) {
-		// A bound needs a switch-on to carry it; the attributes follow it,
+		// A timer needs a switch-on to carry it; the attributes follow it,
 		// as they follow the switch-on of the "ON" branch.
-		if onFor != nil {
-			if err := l.TurnOnFor(ctx, *onFor, nil, priority); err != nil {
+		if t.onFor != nil || t.transition != nil {
+			if err := l.turnOnWithTimers(ctx, t.onFor, t.transition, nil, priority); err != nil {
 				return err
 			}
 		}
@@ -411,7 +459,7 @@ func (l *Light) applyHASetLevel(
 	if v < 0 || v > 1 {
 		return fmt.Errorf("%w: %q value %v out of range [0, 1]", payload.ErrServiceInvalidParam, "level", v)
 	}
-	return l.setLevelFor(ctx, v, onFor, priority)
+	return l.setLevelTimed(ctx, v, t, priority)
 }
 
 // --- ColorLight ---
@@ -1070,12 +1118,14 @@ func (l *Light) HADiscoveryEntity() hamodel.Entity {
 		// HA JSON-Schema brightness scale is 0-255 — StatePayload pre-scales
 		// the raw 0..1 LEVEL float to that range.
 		fields.BrightnessScale = new(255)
-		if l.Capabilities.Transition {
-			fields.Transition = new(true)
-		}
 	} else {
 		fields.SupportedColorModes = []string{"onoff"}
 	}
+	// Always stated, never left out: Home Assistant's JSON-schema light
+	// offers a transition unless the config says false
+	// (homeassistant/components/mqtt/light/schema_json.py, DEFAULT_TRANSITION),
+	// and set_level refuses `transition` on a light that cannot fade.
+	fields.Transition = new(l.Capabilities.Transition)
 	entity.Fields = fields
 	return entity
 }

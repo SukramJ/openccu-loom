@@ -147,9 +147,16 @@ func New(cfg Config) *Light {
 	level := custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel))
 	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
 	rampTimeValueParam, rampTimeUnitParam := resolveRampTimeParams(cfg.Channel)
+	caps := cfg.Capabilities
+	if cfg.Channel != nil {
+		// A light offers a transition exactly when its channel describes a
+		// ramp: the services accept `transition` on that condition, so the
+		// declared capability and the accepted key are the same set.
+		caps.Transition = rampTimeValueParam != ""
+	}
 	l := &Light{
 		Float:                level,
-		Capabilities:         cfg.Capabilities,
+		Capabilities:         caps,
 		onTimeValueParam:     onTimeValueParam,
 		onTimeUnitParam:      onTimeUnitParam,
 		rampTimeValueParam:   rampTimeValueParam,
@@ -628,11 +635,25 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 // inherit it. A staged on-time is superseded and dropped; a staged ramp still
 // applies to this switch-on.
 func (l *Light) TurnOnFor(ctx context.Context, d time.Duration, level *float64, priority hmenum.CommandPriority) error {
+	return l.turnOnWithTimers(ctx, &d, nil, level, priority)
+}
+
+// turnOnWithTimers switches the light on in one write carrying the timers a
+// command names, at `level` (0..1) when given and at the remembered level
+// otherwise. Each commanded timer supersedes its staged counterpart (see
+// [SetTimerOnTime], [SetTimerRampTime]); a staged timer the command does not
+// name still applies to this switch-on. Both stages are consumed.
+func (l *Light) turnOnWithTimers(ctx context.Context, onFor, transition *time.Duration, level *float64, priority hmenum.CommandPriority) error {
 	l.timerMu.Lock()
-	ramp := l.pendingRamp
+	if onFor == nil {
+		onFor = l.pendingOn
+	}
+	if transition == nil {
+		transition = l.pendingRamp
+	}
 	l.pendingOn, l.pendingRamp = nil, nil
 	l.timerMu.Unlock()
-	return l.TurnOnWith(ctx, OnConfig{OnTime: &d, RampTime: ramp, Brightness: level}, priority)
+	return l.TurnOnWith(ctx, OnConfig{OnTime: onFor, RampTime: transition, Brightness: level}, priority)
 }
 
 // SetTimerOnTime stores `d` for the next [TurnOn] call. The next TurnOn
@@ -743,9 +764,10 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 	case cfg.OnTime != nil:
 		l.stageOnTimeParam(params, *cfg.OnTime)
 	case cfg.RampTime != nil:
-		// Ramp-without-on-time: the CCU otherwise treats the on-time as the
-		// implicit "back to off" timer, which the operator did not request.
-		// Send the [custom.TimerNotUsed] sentinel so RAMP_TIME runs stand-alone.
+		// Ramp-without-on-time: the CCU refuses a ramp pair without an
+		// on-time pair, and any real on-time would switch the light off
+		// again. The [custom.TimerNotUsed] sentinel is "permanently on" — 31 h,
+		// (31, H) on a value/unit pair — so the ramp runs and the light stays.
 		l.stageOnTimeParam(params, time.Duration(custom.TimerNotUsed*float64(time.Second)))
 	}
 	if cfg.RampTime != nil {
@@ -868,11 +890,10 @@ func resolveOnTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Param
 	if ch.Parameter(hmenum.ParameterDurationValue) != nil && ch.Parameter(hmenum.ParameterDurationUnit) != nil {
 		return hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit
 	}
-	// ON_TIME is the fallback rather than a third probe: it is write-only on
-	// most families, and this lookup only sees materialised VALUES data points,
-	// so a probe would report "no timer" on every channel whose write-only
-	// parameters were not materialised — disabling the timer far more widely
-	// than any device warrants.
+	// ON_TIME is kept as the default rather than probed. Write-only VALUES
+	// parameters are materialised (resolveWritable in
+	// internal/central/adapter/datapoint_resolver.go), so a probe would see
+	// it wherever the channel describes it.
 	return hmenum.ParameterOnTime, ""
 }
 
@@ -880,8 +901,15 @@ func resolveOnTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Param
 // [resolveOnTimeParams]: the HmIP value/unit families (HmIP-BSL:8/12,
 // HmIP-RGBW:1, HmIP-DRG-DALI:1, HmIP-MP3P:6) describe the ramp as
 // RAMP_TIME_VALUE/RAMP_TIME_UNIT and carry no bare RAMP_TIME; the plain
-// dimmer families carry only the bare RAMP_TIME in seconds, which stays
-// the fallback for the same reason ON_TIME does above.
+// dimmer families carry the bare RAMP_TIME in seconds. A channel that
+// describes neither has no ramp, and an empty value parameter says so: a
+// RAMP_TIME the channel does not know faults the whole putParamset.
+//
+// Unlike the on-time, the ramp is probed rather than defaulted. Every VALUES
+// parameter of a channel becomes a data point, write-only ones included
+// (resolveWritable in internal/central/adapter/datapoint_resolver.go), so a
+// missing ramp data point is a ramp the device does not describe. Without a
+// channel to read there is nothing to probe, and the bare RAMP_TIME stays.
 func resolveRampTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Parameter) {
 	if ch == nil {
 		return hmenum.ParameterRampTime, ""
@@ -889,7 +917,10 @@ func resolveRampTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Par
 	if ch.Parameter(hmenum.ParameterRampTimeValue) != nil && ch.Parameter(hmenum.ParameterRampTimeUnit) != nil {
 		return hmenum.ParameterRampTimeValue, hmenum.ParameterRampTimeUnit
 	}
-	return hmenum.ParameterRampTime, ""
+	if ch.Parameter(hmenum.ParameterRampTime) != nil {
+		return hmenum.ParameterRampTime, ""
+	}
+	return "", ""
 }
 
 // SetOnTime sets the light's on-time timer, encoding the duration into
@@ -1092,8 +1123,12 @@ func (l *Light) commandedOnTime() (float64, bool)         { _ = l; return 0, fal
 func (l *Light) commandedRampTime() (float64, bool)       { _ = l; return 0, false }
 
 // stageRampTimeParam writes d into params using the ramp-time shape this
-// light's channel describes (see [resolveRampTimeParams]).
+// light's channel describes (see [resolveRampTimeParams]), and writes nothing
+// when it describes none.
 func (l *Light) stageRampTimeParam(params map[hmenum.Parameter]any, d time.Duration) {
+	if l.rampTimeValueParam == "" {
+		return
+	}
 	if l.rampTimeUnitParam == "" {
 		params[l.rampTimeValueParam] = d.Seconds()
 		return
