@@ -1,5 +1,25 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.107.0
+
+- **Lights fade over a transition on every light whose device can fade**,
+  over MQTT and the API as well, not only over Matter; the Home Assistant
+  integration follows with its next client update. A light that cannot
+  fade now tells Home Assistant so in its MQTT discovery.
+- **Short ramp and on-times reach the device as set.** Half a second
+  no longer arrives as zero, and 1.5 s no longer as 1 s; long durations
+  are rounded instead of cut off.
+- **A signal light switched on with a transition stays on** instead of
+  staying dark.
+- **Breaking for API users:** the MP3P status LED and sound player take
+  their fade as `transition` (and the LED its on-time as `seconds`), like
+  every other light; the old names `ramp_time` and `on_time` are no longer
+  read there.
+- **Removing an interface from a CCU frees its Matter numbers**, e.g.
+  CUxD after moving to openccu-lite.
+- **The update check explains GitHub's request limit** with the time it
+  clears, instead of showing "unexpected status 403".
+
 ## 0.106.2
 
 - **The CCU no longer logs a failed virtual-device update each time the

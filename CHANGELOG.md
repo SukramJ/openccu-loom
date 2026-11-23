@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.107.0] - 2026-11-23
+
 ### Fixed
 
 - **A central that drops an interface frees that interface's Matter

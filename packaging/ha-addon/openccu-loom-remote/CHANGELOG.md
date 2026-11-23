@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.107.0
+
+- **Version follows OpenCCU-Loom 0.107.0**, which lets lights fade over a
+  transition on every plane and sends sub-second ramp and on-times to the
+  device as set; see the OpenCCU-Loom changelog. The proxy itself is
+  unchanged.
+
 # 0.106.2
 
 - **Version follows OpenCCU-Loom 0.106.2**, which stops an interface a
