@@ -6143,7 +6143,7 @@ paths:
                 $ref: "#/components/schemas/SystemRestartResponse"
 
   # ---------------------------------------------------------------------
-  # The node page family (go-fabric-ui, github.com/thingfabric/go-fabric-ui):
+  # The node page family (go-fabric-ui, github.com/SukramJ/go-fabric-ui):
   # the Matter bridge's status, pairing, fabrics, endpoints, sessions,
   # mDNS, compatibility, trace, the exposure selection and maintenance.
   # The daemon mounts go-fabric-ui's handler under /api/v1/node
