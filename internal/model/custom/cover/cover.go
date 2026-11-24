@@ -319,10 +319,29 @@ func (c *Cover) Position() (custom.Position, bool) {
 	if !ok {
 		return custom.Position{}, false
 	}
+	return c.levelToPosition(v), true
+}
+
+// writtenPosition returns the position of the channel a command writes,
+// ignoring the group-channel override, and whether it has been observed.
+func (c *Cover) writtenPosition() (custom.Position, bool) {
+	if c.Float == nil {
+		return custom.Position{}, false
+	}
+	v, ok := c.Value()
+	if !ok {
+		return custom.Position{}, false
+	}
+	return c.levelToPosition(v), true
+}
+
+// levelToPosition maps a wire LEVEL to the domain position, resolving the
+// window-drive remap and the inverted-control quirk.
+func (c *Cover) levelToPosition(v float64) custom.Position {
 	if c.windowDrive {
 		// HM-Sec-Win level → domain remap. Mirrors
-		// `CustomDpWindowDrive.current_position`
-		// (`model/custom/cover.py:254-262`).
+		// `CustomDpWindowDrive._channel_position`
+		// (`model/custom/cover.py`).
 		//
 		// What the two wire values are, per the device's own descriptor:
 		// LEVEL is FLOAT MIN 0.0 / MAX 1.0 with SPECIAL {LOCKED: -0.005}. So
@@ -343,7 +362,7 @@ func (c *Cover) Position() (custom.Position, bool) {
 	if c.Capabilities.InvertedControl {
 		v = 1 - v
 	}
-	return custom.NewPosition(v), true
+	return custom.NewPosition(v)
 }
 
 // observedLevel returns the effective LEVEL: group LEVEL when the
@@ -550,17 +569,18 @@ func (c *Cover) IsClosed() bool {
 
 // IsStateChange reports whether the desired position differs from the last
 // observed position. Returns true when no position has been observed yet, when
-// the state is currently uncertain, or when target differs from the current
-// level.
+// the state is currently uncertain, or when target differs from the written
+// channel or from the reported position (see [Cover.IsStateChangeArgs]).
 func (c *Cover) IsStateChange(target float64) bool {
 	if c.IsOptimistic() {
 		return true
 	}
-	pos, ok := c.Position()
+	written, ok := c.writtenPosition()
 	if !ok {
 		return true
 	}
-	return pos.Level() != target
+	shown, _ := c.Position()
+	return written.Level() != target || shown.Level() != target
 }
 
 // StateChangeArgs is the kwargs-equivalent for [Cover.IsStateChangeArgs]
@@ -609,18 +629,29 @@ func (c *Cover) IsStateChangeArgs(args StateChangeArgs) bool {
 	if !wantsPos {
 		return false
 	}
-	pos, observed := c.Position()
+	// Dropped only when the written channel ([Cover.writtenPosition]) and
+	// the reported position ([Cover.Position], the group channel when it is
+	// used) both show the target. The group channel reports the combined
+	// result of the virtual channels and can equal the target while the own
+	// channel holds another level; the group
+	// channel stays in the comparison for a move the own channel does not
+	// reflect. Without the group channel both are the own channel.
+	written, observed := c.writtenPosition()
 	if !observed {
 		return true
 	}
-	if args.Open != nil && *args.Open && !pos.Open() {
-		return true
-	}
-	if args.Close != nil && *args.Close && !pos.Closed() {
-		return true
-	}
-	if args.Position != nil && *args.Position != pos.Level() {
-		return true
+	// Position is observed whenever the own channel is: it falls back to it.
+	shown, _ := c.Position()
+	for _, pos := range [...]custom.Position{written, shown} {
+		if args.Open != nil && *args.Open && !pos.Open() {
+			return true
+		}
+		if args.Close != nil && *args.Close && !pos.Closed() {
+			return true
+		}
+		if args.Position != nil && *args.Position != pos.Level() {
+			return true
+		}
 	}
 	return false
 }

@@ -522,18 +522,25 @@ func (b *Blind) IsStateChangeArgs(args StateChangeArgs) bool {
 	if !wantsTilt {
 		return false
 	}
-	tilt, observed := b.TiltPosition()
+	// Dropped only when the written channel and the reported tilt (the
+	// group channel when it is used) both show the target, as the position
+	// axis in [Cover.IsStateChangeArgs].
+	written, observed := b.CurrentChannelTiltPosition()
 	if !observed {
 		return true
 	}
-	if args.TiltOpen != nil && *args.TiltOpen && !tilt.Open() {
-		return true
-	}
-	if args.TiltClose != nil && *args.TiltClose && !tilt.Closed() {
-		return true
-	}
-	if args.TiltPosition != nil && tiltChanged(*args.TiltPosition, tilt.Level()) {
-		return true
+	// TiltPosition is observed whenever the own channel is: it falls back to it.
+	shown, _ := b.TiltPosition()
+	for _, tilt := range [...]custom.Position{written, shown} {
+		if args.TiltOpen != nil && *args.TiltOpen && !tilt.Open() {
+			return true
+		}
+		if args.TiltClose != nil && *args.TiltClose && !tilt.Closed() {
+			return true
+		}
+		if args.TiltPosition != nil && tiltChanged(*args.TiltPosition, tilt.Level()) {
+			return true
+		}
 	}
 	return false
 }
