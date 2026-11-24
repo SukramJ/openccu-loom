@@ -161,6 +161,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   commands of blinds are now dropped only when the own channel and the group
   channel both show the target; the reported position still follows the
   group channel. (homematicip_local#1393)
+- **A blind command for one axis holds the other axis at the own channel's
+  value.** A tilt-only command sent the height of the group channel along,
+  and a position-only command its tilt, so with virtual channels the group
+  value overwrote the own channel. The held axis now comes from the own
+  channel, and from the group channel only while the own value is
+  unobserved.
 
 ## [0.107.1] - 2026-11-23
 

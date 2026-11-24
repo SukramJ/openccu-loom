@@ -156,3 +156,51 @@ func TestBlindTiltDroppedOnlyWhenBothChannelsAtTarget(t *testing.T) {
 		t.Fatalf("SetTilt(0.8) wrote %d time(s) in total with the own tilt at 0.8, want 1", n)
 	}
 }
+
+// A single-axis command holds the other axis at the written channel's
+// value, not the group channel's: the group value would overwrite the
+// own channel.
+func TestBlindSingleAxisHoldsWrittenChannel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	rig := func(t *testing.T) (*Blind, *putWriter) {
+		t.Helper()
+		w := &putWriter{}
+		b := newBlindRig(t, "GRP0003:4", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		b.OnEvent(0.25)
+		b.level2.OnEvent(0.2)
+		group := newGroupLevelFloat(t, "GRP0003:3")
+		group.OnEvent(0.0)
+		b.SetGroupLevel(group, true)
+		group2 := newGroupLevelFloat(t, "GRP0003:3")
+		group2.OnEvent(0.5)
+		b.SetGroupLevel2(group2)
+		return b, w
+	}
+
+	t.Run("tilt_only_holds_own_level", func(t *testing.T) {
+		t.Parallel()
+		b, w := rig(t)
+		if err := b.SetTilt(ctx, 0.8, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("SetTilt: %v", err)
+		}
+		cc := w.combinedCalls()
+		// level 0.25 → 50 = 0x32; tilt 0.8 → 160 = 0xa0.
+		if len(cc) != 1 || cc[0].value != "0x32,0xa0" {
+			t.Fatalf("LEVEL_COMBINED calls=%v, want one 0x32,0xa0", cc)
+		}
+	})
+
+	t.Run("position_only_holds_own_tilt", func(t *testing.T) {
+		t.Parallel()
+		b, w := rig(t)
+		if err := b.SetPosition(ctx, 0.5, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("SetPosition: %v", err)
+		}
+		cc := w.combinedCalls()
+		// level 0.5 → 100 = 0x64; tilt 0.2 → 40 = 0x28.
+		if len(cc) != 1 || cc[0].value != "0x64,0x28" {
+			t.Fatalf("LEVEL_COMBINED calls=%v, want one 0x64,0x28", cc)
+		}
+	})
+}
