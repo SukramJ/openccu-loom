@@ -126,6 +126,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its device and is renamed in place. A firmware update builds the bridged
   device anew under the same endpoint number, with the new version and the
   current reachability. (#1027)
+- **gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4.** The
+  pseudo-version carries the fix for GO-2026-6278, which `hmcli`'s event
+  stream reaches; no tagged release after v1.5.3 exists. (#1171)
 
 ### Added
 
