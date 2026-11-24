@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/eligibility"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"

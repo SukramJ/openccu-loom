@@ -770,7 +770,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Matter node (the @sukramj/fabric-ui pages). The diagnostics page reads
+  // Matter node (the @thingfabric/fabric-ui pages). The diagnostics page reads
   // five sibling endpoints whose shapes differ from the status document,
   // so one handler branches on the path below /node/ rather than layering
   // overlapping page.route patterns — those work only in the right

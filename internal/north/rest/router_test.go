@@ -18,11 +18,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"

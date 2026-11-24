@@ -6,7 +6,7 @@ package main
 import (
 	"context"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"

@@ -34,7 +34,6 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric-ui v0.13.0
 	github.com/SukramJ/go-ha-catalog v0.3.1
 	github.com/SukramJ/go-hamqtt v0.40.0
 	github.com/SukramJ/go-mqtt v1.7.0
@@ -64,5 +63,6 @@ require (
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.62.0
-	thingfabric.dev/go-fabric v0.25.0
+	thingfabric.dev/go-fabric v0.26.0
+	thingfabric.dev/go-fabric-ui v0.14.1
 )

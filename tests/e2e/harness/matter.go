@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 // The node API (/api/v1/node/*) is go-fabric-ui's. It admits a request

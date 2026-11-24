@@ -190,7 +190,7 @@ direct dependencies declared in [`go.mod`](./go.mod) include:
 | --- | --- |
 | `filippo.io/nistec` | BSD-3-Clause |
 | `thingfabric.dev/go-fabric` | MIT up to v0.4.0; Apache-2.0 from v0.5.0 (this daemon pins v0.25.0) — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
-| `github.com/SukramJ/go-fabric-ui` | Apache-2.0 — the node page family's HTTP handlers (`fabricui`), mounted under `/api/v1/node`; the module also carries its built standalone bundle, which this daemon does not serve |
+| `thingfabric.dev/go-fabric-ui` | Apache-2.0 — the node page family's HTTP handlers (`fabricui`), mounted under `/api/v1/node`; the module also carries its built standalone bundle, which this daemon does not serve |
 | `github.com/SukramJ/go-hamqtt` | MIT |
 | `github.com/SukramJ/go-ha-catalog` | MIT |
 | `github.com/SukramJ/godevccu` | MIT |
@@ -250,13 +250,13 @@ Matter pages; the exact versions are pinned in
 
 | Package | License (family) |
 | --- | --- |
-| `@sukramj/fabric-ui` | Apache-2.0 — the Matter node pages (status, pairing, fabrics, selection, endpoints and the endpoint page, surface, diagnostics), their UI kit, the `--ha-*` design tokens and the theme helpers; shipped as Svelte / TypeScript sources and compiled by the SPA build |
-| `@lucide/svelte` | ISC — `@sukramj/fabric-ui` pins its own copy alongside the SPA's |
+| `@thingfabric/fabric-ui` | Apache-2.0 — the Matter node pages (status, pairing, fabrics, selection, endpoints and the endpoint page, surface, diagnostics), their UI kit, the `--ha-*` design tokens and the theme helpers; shipped as Svelte / TypeScript sources and compiled by the SPA build |
+| `@lucide/svelte` | ISC — `@thingfabric/fabric-ui` pins its own copy alongside the SPA's |
 | `clsx` | MIT |
 | `qrcode` | MIT — draws the pairing QR code |
 | `tailwind-merge` | MIT |
 
-- `@sukramj/fabric-ui` source: <https://github.com/SukramJ/go-fabric-ui>
+- `@thingfabric/fabric-ui` source: <https://github.com/thingfabric/go-fabric-ui>
   (`ui/`), copyright SukramJ; license text at
   [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
 - The MIT texts are covered by [`licenses/MIT.txt`](./licenses/MIT.txt); the

@@ -31,7 +31,7 @@ import (
 // are listed in contentColourFiles with the reason.
 
 // Each selector may carry its shadow-root twin (`:root, :host`,
-// `html.dark, :host(.dark)`, …), which @sukramj/fabric-ui's tokens.css
+// `html.dark, :host(.dark)`, …), which @thingfabric/fabric-ui's tokens.css
 // adds so the tokens also apply inside a custom element.
 var themeBlockRes = map[string]*regexp.Regexp{
 	":root":                regexp.MustCompile(`(?s)(?:^|\n):root(?:,\s*:host)?\s*\{([^}]*)\}`),
@@ -49,7 +49,7 @@ func themeTokensIn(block string) map[string]bool {
 }
 
 // loadThemeBlocks reads the token blocks of the two stylesheets the SPA
-// is built from: loom's app.css and the tokens.css of @sukramj/fabric-ui,
+// is built from: loom's app.css and the tokens.css of @thingfabric/fabric-ui,
 // which carries the --ha-* consumption tokens, the HA skin and the
 // palette remap since the Matter pages moved into that package (app.css
 // imports it). The package file is read from the go-fabric-ui Go module
@@ -63,7 +63,7 @@ func loadThemeBlocks(t *testing.T) map[string]map[string]bool {
 	}
 	tokens, err := os.ReadFile(filepath.Join(goFabricUIModuleDir(t), "ui", "src", "lib", "theme", "tokens.css"))
 	if err != nil {
-		t.Fatalf("read @sukramj/fabric-ui tokens.css from the go-fabric-ui module: %v", err)
+		t.Fatalf("read @thingfabric/fabric-ui tokens.css from the go-fabric-ui module: %v", err)
 	}
 	css := string(tokens) + "\n" + string(raw)
 	blocks := make(map[string]map[string]bool)

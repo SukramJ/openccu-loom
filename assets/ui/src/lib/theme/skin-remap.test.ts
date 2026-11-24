@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 // reliable check is therefore against the stylesheet source itself — this
 // still fails the moment the palette-remap block or the refreshed HA
 // fallbacks regress or get deleted. The tokens live in
-// @sukramj/fabric-ui's tokens.css, which app.css imports; checking the
+// @thingfabric/fabric-ui's tokens.css, which app.css imports; checking the
 // pinned package file catches a package bump that changes the skin. Paths
 // resolve against the Vite/vitest project root (assets/ui/), not
 // import.meta.url, because the test file is transformed and does not keep
@@ -18,7 +18,7 @@ const appCssSource = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8"
 // Comments are stripped: the package's header comment names the selectors
 // it holds, which would otherwise match as the start of a block.
 const appCss = readFileSync(
-  resolve(process.cwd(), "node_modules/@sukramj/fabric-ui/src/lib/theme/tokens.css"),
+  resolve(process.cwd(), "node_modules/@thingfabric/fabric-ui/src/lib/theme/tokens.css"),
   "utf-8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -47,7 +47,7 @@ function extractSkinHaBlocks(css: string): string[] {
 
 describe("HA skin palette remap (fabric-ui tokens.css)", () => {
   it("is imported by app.css", () => {
-    expect(appCssSource).toContain('@import "@sukramj/fabric-ui/theme/tokens.css";');
+    expect(appCssSource).toContain('@import "@thingfabric/fabric-ui/theme/tokens.css";');
   });
 
   const haBlocks = extractSkinHaBlocks(appCss);

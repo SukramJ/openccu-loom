@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"

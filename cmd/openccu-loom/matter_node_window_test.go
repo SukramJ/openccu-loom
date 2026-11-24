@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"

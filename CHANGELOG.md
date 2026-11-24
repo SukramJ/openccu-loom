@@ -58,7 +58,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Matter's BasicInformation.NodeLabel, which the node now enforces at
   start. A longer label is refused when it is saved instead of keeping the
   bridge from starting; an umlaut counts as two bytes. (#1122)
-- **go-fabric v0.22.2 → v0.25.0**, now under the module path
+- **go-fabric v0.22.2 → v0.26.0**, now under the module path
   `thingfabric.dev/go-fabric` (repository `github.com/thingfabric/go-fabric`,
   documentation at docs.thingfabric.dev). v0.23.0 is go-fabric's second
   full review against matter.js and connectedhomeip; what reaches the
@@ -78,12 +78,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resumption record's role): a database migration carries them, and the
   bridge start runs go-fabric's store upgrade, which moves the VID
   verification data an earlier release kept as settings into its columns.
-  (#1125)
-- **go-fabric-ui v0.9.2 → v0.13.0** (the Go module and
+  v0.26.0 announces a bridged device replaced under the same endpoint — a
+  firmware update, a battery moving to another endpoint — as matter.js
+  announces a re-added endpoint: its clusters get new data versions and a
+  subscribed controller is sent every readable attribute, so a controller's
+  cached values no longer hide the new device's. It also judges a batch of
+  bridge changes when it commits; after a batch that failed, the daemon
+  takes the set of devices the bridge holds as what it holds, so a refused
+  change is tried again on the next sync instead of being taken for
+  served. (#1125)
+- **go-fabric-ui v0.9.2 → v0.14.1**, now under the module path
+  `thingfabric.dev/go-fabric-ui` and the npm package
+  `@thingfabric/fabric-ui` (before `github.com/SukramJ/go-fabric-ui` and
   `@sukramj/fabric-ui`): the admin gate on reading routes, the Host and
   Origin checks and the contract changes above; the controller family's
   onboarding inventory (v0.13.0) is not served here, since the daemon
-  runs no controller.
+  runs no controller. The problem `type` URIs of the node routes moved to
+  `https://thingfabric.dev/go-fabric-ui/problems#problem-<code>`; a client
+  that matches a problem by its `code` is not affected.
 - **`north.matter.node_label` takes effect without a restart.** A saved
   label reaches the running bridge at once, through the Web UI's save and
   through a config-file edit alike; a label changed while the bridge was

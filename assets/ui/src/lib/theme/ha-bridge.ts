@@ -8,12 +8,12 @@
 // [data-skin="ha"] (imported by app.css) apply.
 
 // The pure helpers (the variable list, colour parsing, luminance) come from
-// @sukramj/fabric-ui, which ported them from this file. The frame detection
+// @thingfabric/fabric-ui, which ported them from this file. The frame detection
 // and everything that reads it stay here: the package's isEmbedded does not
 // know the openccu-lite shell, and its resolveSkin / startHaBridge call that
 // isEmbedded internally, so re-exporting them would dress the lite shell as
 // Home Assistant.
-import { HA_THEME_VARS, parseRgb, relativeLuminance } from "@sukramj/fabric-ui/theme";
+import { HA_THEME_VARS, parseRgb, relativeLuminance } from "@thingfabric/fabric-ui/theme";
 import { liteShell } from "./lite-shell.svelte";
 
 // The path segment Home Assistant's Supervisor serves an add-on's Ingress
