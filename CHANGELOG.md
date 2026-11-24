@@ -126,6 +126,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its device and is renamed in place. A firmware update builds the bridged
   device anew under the same endpoint number, with the new version and the
   current reachability. (#1027)
+- **gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4.** The
+  pseudo-version carries the fix for GO-2026-6278, which `hmcli`'s event
+  stream reaches; no tagged release after v1.5.3 exists. (#1171)
 
 ### Added
 
@@ -151,6 +154,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   device type of its own. It is no longer offered for selection and never
   becomes an endpoint; the device's battery stays on its PowerSource, fed by
   the device's low-battery data point as before. (#1027)
+- **A cover command is no longer dropped when only the group channel
+  already shows the target.** With `use_group_channel_for_cover_state` a
+  cover reports the position of the group channel, but a command writes the
+  own channel. The check whether a command changes anything compared the
+  target with the group channel alone, so with several virtual channels a
+  command to the position the group channel showed was dropped while the own
+  channel held another level. Open, close, set position and the tilt
+  commands of blinds are now dropped only when the own channel and the group
+  channel both show the target; the reported position still follows the
+  group channel. (homematicip_local#1393)
+- **A blind command for one axis holds the other axis at the own channel's
+  value.** A tilt-only command sent the height of the group channel along,
+  and a position-only command its tilt, so with virtual channels the group
+  value overwrote the own channel. The held axis now comes from the own
+  channel, and from the group channel only while the own value is
+  unobserved.
 
 ## [0.107.1] - 2026-11-23
 

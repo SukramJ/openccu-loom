@@ -4,8 +4,10 @@
 package cover
 
 import (
+	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -58,4 +60,147 @@ func TestCoverPositionFollowsGroupChannelToggle(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A command is dropped only when the written channel and the group channel
+// both show the target: the group channel reports the combined result of
+// the virtual channels and can equal the target while the own channel
+// holds another level, and the own channel can
+// miss a move it did not command.
+func TestCoverCommandDroppedOnlyWhenBothChannelsAtTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := &countWriter{}
+	c, _, ownLevel := newRig(t, "GRP0001:4", w, CoverCaps)
+	ownLevel.OnEvent(0.25)
+	group := newGroupLevelFloat(t, "GRP0001:3")
+	group.OnEvent(0.0)
+	c.SetGroupLevel(group, true)
+
+	if pos, ok := c.Position(); !ok || pos.Level() != 0.0 {
+		t.Fatalf("Position=%v ok=%v, want the group level 0", pos.Level(), ok)
+	}
+
+	if err := c.SetPosition(ctx, 0.0, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetPosition: %v", err)
+	}
+	if w.count != 1 {
+		t.Fatalf("SetPosition(0) wrote %d time(s) with the own channel at 0.25, want 1", w.count)
+	}
+
+	ownLevel.OnEvent(0.25)
+	if err := c.Close(ctx, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if w.count != 2 {
+		t.Fatalf("Close wrote %d time(s) in total with the own channel at 0.25, want 2", w.count)
+	}
+
+	// A move the own channel does not reflect (e.g. a button on the
+	// device): the group channel is off the target, so the command is
+	// sent although the own channel already holds it.
+	ownLevel.OnEvent(1.0)
+	group.OnEvent(0.5)
+	if err := c.SetPosition(ctx, 1.0, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetPosition: %v", err)
+	}
+	if w.count != 3 {
+		t.Fatalf("SetPosition(1) wrote %d time(s) in total with the group channel at 0.5, want 3", w.count)
+	}
+
+	// Both channels at the target: nothing to send.
+	ownLevel.OnEvent(1.0)
+	group.OnEvent(1.0)
+	if err := c.Open(ctx, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := c.SetPosition(ctx, 1.0, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetPosition: %v", err)
+	}
+	if w.count != 3 {
+		t.Fatalf("Open/SetPosition(1) wrote %d time(s) in total with both channels open, want 3", w.count)
+	}
+}
+
+// The tilt axis follows the same rule as the position axis.
+func TestBlindTiltDroppedOnlyWhenBothChannelsAtTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := &putWriter{}
+	b := newBlindRig(t, "GRP0002:4", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+	b.OnEvent(0.1)
+	b.level2.OnEvent(0.2)
+	group := newGroupLevelFloat(t, "GRP0002:3")
+	group.OnEvent(0.1)
+	b.SetGroupLevel(group, true)
+	group2 := newGroupLevelFloat(t, "GRP0002:3")
+	group2.OnEvent(0.8)
+	b.SetGroupLevel2(group2)
+
+	if tilt, ok := b.TiltPosition(); !ok || tilt.Level() != 0.8 {
+		t.Fatalf("TiltPosition=%v ok=%v, want the group level 0.8", tilt.Level(), ok)
+	}
+
+	if err := b.SetTilt(ctx, 0.8, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetTilt: %v", err)
+	}
+	if n := len(w.combinedCalls()); n != 1 {
+		t.Fatalf("SetTilt(0.8) wrote %d time(s) with the own tilt at 0.2, want 1", n)
+	}
+
+	b.level2.OnEvent(0.8)
+	if err := b.SetTilt(ctx, 0.8, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetTilt: %v", err)
+	}
+	if n := len(w.combinedCalls()); n != 1 {
+		t.Fatalf("SetTilt(0.8) wrote %d time(s) in total with the own tilt at 0.8, want 1", n)
+	}
+}
+
+// A single-axis command holds the other axis at the written channel's
+// value, not the group channel's: the group value would overwrite the
+// own channel.
+func TestBlindSingleAxisHoldsWrittenChannel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	rig := func(t *testing.T) (*Blind, *putWriter) {
+		t.Helper()
+		w := &putWriter{}
+		b := newBlindRig(t, "GRP0003:4", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		b.OnEvent(0.25)
+		b.level2.OnEvent(0.2)
+		group := newGroupLevelFloat(t, "GRP0003:3")
+		group.OnEvent(0.0)
+		b.SetGroupLevel(group, true)
+		group2 := newGroupLevelFloat(t, "GRP0003:3")
+		group2.OnEvent(0.5)
+		b.SetGroupLevel2(group2)
+		return b, w
+	}
+
+	t.Run("tilt_only_holds_own_level", func(t *testing.T) {
+		t.Parallel()
+		b, w := rig(t)
+		if err := b.SetTilt(ctx, 0.8, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("SetTilt: %v", err)
+		}
+		cc := w.combinedCalls()
+		// level 0.25 → 50 = 0x32; tilt 0.8 → 160 = 0xa0.
+		if len(cc) != 1 || cc[0].value != "0x32,0xa0" {
+			t.Fatalf("LEVEL_COMBINED calls=%v, want one 0x32,0xa0", cc)
+		}
+	})
+
+	t.Run("position_only_holds_own_tilt", func(t *testing.T) {
+		t.Parallel()
+		b, w := rig(t)
+		if err := b.SetPosition(ctx, 0.5, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("SetPosition: %v", err)
+		}
+		cc := w.combinedCalls()
+		// level 0.5 → 100 = 0x64; tilt 0.2 → 40 = 0x28.
+		if len(cc) != 1 || cc[0].value != "0x64,0x28" {
+			t.Fatalf("LEVEL_COMBINED calls=%v, want one 0x64,0x28", cc)
+		}
+	})
 }

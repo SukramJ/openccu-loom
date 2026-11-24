@@ -213,8 +213,12 @@ func (b *Blind) SetGroupLevel2(dp custom.GroupLevelDataPoint) {
 // `pending` to decide whether the device is still moving and needs a
 // STOP before it accepts new coordinates.
 //
-// The held level itself comes from [Blind.Position], which already
-// blends (highest priority first) an active optimistic write, the
+// The held level itself comes from the written channel
+// ([Cover.writtenPosition]), not from the group channel: with virtual
+// channels the group level would overwrite the own channel. Only while
+// the own channel is unobserved does [Blind.Position] stand in. The own
+// channel's value already blends (highest priority first) an active
+// optimistic write, the
 // CCU-unconfirmed value [Blind.sendCombined] stages on every combined
 // write, and the last CCU-confirmed observation (see [DataPoint.Value]).
 // Staging the just-sent value on every combined write is what lets the
@@ -227,6 +231,9 @@ func (b *Blind) levelForCommand() (level float64, pending bool) {
 	if b.Cover != nil && b.Float != nil {
 		pending = b.IsOptimistic()
 	}
+	if pos, ok := b.writtenPosition(); ok {
+		return pos.Level(), pending
+	}
 	if pos, ok := b.Position(); ok {
 		return pos.Level(), pending
 	}
@@ -237,6 +244,9 @@ func (b *Blind) levelForCommand() (level float64, pending bool) {
 func (b *Blind) tiltForCommand() (tilt float64, pending bool) {
 	if b.level2 != nil {
 		pending = b.level2.IsOptimistic()
+	}
+	if pos, ok := b.CurrentChannelTiltPosition(); ok {
+		return pos.Level(), pending
 	}
 	if pos, ok := b.TiltPosition(); ok {
 		return pos.Level(), pending
@@ -522,18 +532,25 @@ func (b *Blind) IsStateChangeArgs(args StateChangeArgs) bool {
 	if !wantsTilt {
 		return false
 	}
-	tilt, observed := b.TiltPosition()
+	// Dropped only when the written channel and the reported tilt (the
+	// group channel when it is used) both show the target, as the position
+	// axis in [Cover.IsStateChangeArgs].
+	written, observed := b.CurrentChannelTiltPosition()
 	if !observed {
 		return true
 	}
-	if args.TiltOpen != nil && *args.TiltOpen && !tilt.Open() {
-		return true
-	}
-	if args.TiltClose != nil && *args.TiltClose && !tilt.Closed() {
-		return true
-	}
-	if args.TiltPosition != nil && tiltChanged(*args.TiltPosition, tilt.Level()) {
-		return true
+	// TiltPosition is observed whenever the own channel is: it falls back to it.
+	shown, _ := b.TiltPosition()
+	for _, tilt := range [...]custom.Position{written, shown} {
+		if args.TiltOpen != nil && *args.TiltOpen && !tilt.Open() {
+			return true
+		}
+		if args.TiltClose != nil && *args.TiltClose && !tilt.Closed() {
+			return true
+		}
+		if args.TiltPosition != nil && tiltChanged(*args.TiltPosition, tilt.Level()) {
+			return true
+		}
 	}
 	return false
 }
