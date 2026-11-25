@@ -1,5 +1,5 @@
 <!-- The Matter area: loom's page frame and readiness gate around the node
-     pages of @sukramj/fabric-ui. The pages read the fabric-ui context
+     pages of @thingfabric/fabric-ui. The pages read the fabric-ui context
      provided here; the tabs map them onto loom's hash routes. -->
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
@@ -14,7 +14,7 @@
     NodeSurface,
     NodeTopology,
     provideFabricUI,
-  } from "@sukramj/fabric-ui";
+  } from "@thingfabric/fabric-ui";
   import { fabricUI, matterRoutes } from "$lib/stores/fabric-node.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { t } from "$lib/i18n";

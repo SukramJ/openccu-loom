@@ -119,15 +119,15 @@ func TestNodeContractMatchesPinnedGoFabricUI(t *testing.T) {
 // sources live there beside the Go code.
 func goFabricUIModuleDir(t *testing.T) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "go", "list", "-m", "-f", "{{.Dir}}", "github.com/SukramJ/go-fabric-ui")
+	cmd := exec.CommandContext(context.Background(), "go", "list", "-m", "-f", "{{.Dir}}", "thingfabric.dev/go-fabric-ui")
 	cmd.Dir = repoRoot(t)
 	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("go list -m github.com/SukramJ/go-fabric-ui: %v", err)
+		t.Fatalf("go list -m thingfabric.dev/go-fabric-ui: %v", err)
 	}
 	dir := strings.TrimSpace(string(out))
 	if dir == "" {
-		t.Fatal("go list reported no directory for github.com/SukramJ/go-fabric-ui")
+		t.Fatal("go list reported no directory for thingfabric.dev/go-fabric-ui")
 	}
 	return dir
 }

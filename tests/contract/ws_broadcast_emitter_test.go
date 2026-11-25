@@ -33,7 +33,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )

@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 // ExposureItem is one row of go-fabric-ui's selection list

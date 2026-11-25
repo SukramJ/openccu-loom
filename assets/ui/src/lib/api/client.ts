@@ -198,7 +198,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 
 /**
  * A fetch with the SPA's session semantics, for clients that build their
- * own URLs (the @sukramj/fabric-ui Matter pages): same-origin credentials,
+ * own URLs (the @thingfabric/fabric-ui Matter pages): same-origin credentials,
  * the double-submit CSRF header on mutating methods and the stale-session
  * hand-off on a 401 — the same three things request() does. Status
  * handling and body parsing stay with the caller.

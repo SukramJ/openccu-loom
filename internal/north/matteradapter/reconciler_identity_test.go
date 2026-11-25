@@ -25,6 +25,7 @@ import (
 // pairedSite is a started, commissioned node with a reconciler over its
 // Aggregator and the controller pair that reads what the node serves.
 type pairedSite struct {
+	site *fabrictest.Site
 	pair *fabrictest.Pair
 	rec  *matteradapter.Reconciler
 	ctx  context.Context
@@ -38,7 +39,7 @@ func newPairedSite(t *testing.T) *pairedSite {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	rec := matteradapter.NewReconciler(pair.Device.Node().Aggregator(), asm, nil, slog.New(slog.DiscardHandler))
-	return &pairedSite{pair: pair, rec: rec, ctx: ctx}
+	return &pairedSite{site: site, pair: pair, rec: rec, ctx: ctx}
 }
 
 func (s *pairedSite) sync(t *testing.T, dev *device.Device) {

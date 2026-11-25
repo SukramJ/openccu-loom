@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 // TestServerShutdownEndsOpenNodeStreams: an open go-fabric-ui node event

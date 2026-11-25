@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/eligibility"
 	"thingfabric.dev/go-fabric/node"
 	"thingfabric.dev/go-fabric/surface"

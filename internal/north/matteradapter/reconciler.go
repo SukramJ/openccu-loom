@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 
 	fabricdevice "thingfabric.dev/go-fabric/device"
@@ -463,13 +464,7 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		held = map[string]*heldEndpoint{}
 		r.held[d.Scope] = held
 	}
-	type change struct {
-		key     string
-		e       Endpoint
-		next    *heldEndpoint
-		replace bool
-		raise   bool
-	}
+	type change = syncChange
 	var (
 		changes []change
 		renames []*heldEndpoint
@@ -508,6 +503,7 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		touched[c.next.address] = struct{}{}
 	}
 	var raise []fabricdevice.SourceKey
+	before := maps.Clone(held)
 	part := r.agg.Partition(d.Scope)
 	err := part.Batch(ctx, func(b *node.Batch) error {
 		var errs []error
@@ -539,6 +535,9 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		}
 		return errors.Join(errs...)
 	})
+	if err != nil {
+		raise = r.resettle(d.Scope, part, before, changes, raise)
+	}
 	r.reindex(d.Scope, touched)
 	r.reachMu.Unlock()
 	var errs []error
@@ -559,6 +558,64 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// syncChange is one key a sync adds or replaces.
+type syncChange struct {
+	key     string
+	e       Endpoint
+	next    *heldEndpoint
+	replace bool
+	raise   bool
+}
+
+// resettle sets what the reconciler holds for scope to the partition's
+// set, after a batch returned an error. A batch refusal may arrive at the
+// commit, after the call that changed the key returned nil, and the commit
+// undoes what it refuses — an Add leaves the set, a Replace puts the
+// replaced device back, and an undone Replace has the batch's other takes
+// judged again (node.Batch, go-fabric 0.26) — so which changes stayed is
+// known from the set alone. A key is held with the device the partition
+// holds under it: the new one, the one held before the batch, or none, in
+// which case the next sync adds it again. A ConfigurationVersion is raised
+// only for a replacement the partition holds. r.mu and r.reachMu are
+// held.
+func (r *Reconciler) resettle(scope string, part *node.Partition, before map[string]*heldEndpoint, changes []syncChange, raise []fabricdevice.SourceKey) []fabricdevice.SourceKey {
+	served := map[node.Endpoint]struct{}{}
+	for _, ep := range part.Endpoints() {
+		served[ep] = struct{}{}
+	}
+	isServed := func(d *fabricdevice.Device) bool {
+		_, ok := served[node.Endpoint(d)]
+		return ok
+	}
+	held := r.held[scope]
+	keys := make(map[string]struct{}, len(before)+len(changes))
+	next := make(map[string]*heldEndpoint, len(changes))
+	for k := range before {
+		keys[k] = struct{}{}
+	}
+	for _, c := range changes {
+		keys[c.key] = struct{}{}
+		next[c.key] = c.next
+	}
+	for k := range keys {
+		switch {
+		case next[k] != nil && isServed(next[k].dev):
+			held[k] = next[k]
+		case before[k] != nil && isServed(before[k].dev):
+			held[k] = before[k]
+		default:
+			delete(held, k)
+		}
+	}
+	kept := raise[:0]
+	for _, k := range raise {
+		if h := held[k.String()]; h != nil && next[k.String()] == h {
+			kept = append(kept, k)
+		}
+	}
+	return kept
 }
 
 // Retire drops every endpoint of the central scope and retires its

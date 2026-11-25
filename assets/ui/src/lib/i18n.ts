@@ -8427,7 +8427,7 @@ const DE: Catalog = {
 };
 
 // Exported for hosts of translated components that take catalogues rather
-// than `t` (the @sukramj/fabric-ui translator layers them over its own).
+// than `t` (the @thingfabric/fabric-ui translator layers them over its own).
 export const catalogs: Record<string, Catalog> = { en: EN, de: DE };
 
 function format(s: string, vars?: Record<string, string | number>): string {

@@ -1,4 +1,4 @@
-// The @sukramj/fabric-ui context for the Matter area, one per SPA session.
+// The @thingfabric/fabric-ui context for the Matter area, one per SPA session.
 //
 // The Matter pages (status, pairing, fabrics, selection, endpoints,
 // surface, diagnostics) come from the package and read this context; the Matter
@@ -11,7 +11,7 @@
 // CSRF header, the Ingress-aware API root, loom's catalogues layered over
 // the package's, the shared toast and confirm stores, and the WebSocket hub
 // in place of the package's own event stream.
-import { createClient, createFabricUI, createTranslator, type StreamEvent, type Translate } from "@sukramj/fabric-ui";
+import { createClient, createFabricUI, createTranslator, type StreamEvent, type Translate } from "@thingfabric/fabric-ui";
 import { apiBase } from "$lib/api/base";
 import { loomFetch } from "$lib/api/client";
 import type { EventEnvelope } from "$lib/api/types";

@@ -160,8 +160,8 @@ test.describe('Device editor web component — embedding contract', () => {
   });
 
   test('the theme tokens reach the component', async ({ page }) => {
-    // The `--ha-*` tokens of @sukramj/fabric-ui carry a `:host` form beside
-    // `:root` (SukramJ/go-fabric-ui#72), so they reach the component's
+    // The `--ha-*` tokens of @thingfabric/fabric-ui carry a `:host` form beside
+    // `:root` (thingfabric/go-fabric-ui#72), so they reach the component's
     // shadow root and the open list has a background.
     const info = fixture('info.json') as { capabilities: string[] };
     await page.route('**/api/v1/info', (route) =>

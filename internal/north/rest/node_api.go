@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 )
 
 // NodeAPI mounts go-fabric-ui's node routes under o.Prefix on a mux of

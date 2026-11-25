@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/go-fabric-ui/fabricui"
+	"thingfabric.dev/go-fabric-ui/fabricui"
 	"thingfabric.dev/go-fabric/node"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
