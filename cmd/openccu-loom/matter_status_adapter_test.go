@@ -166,7 +166,7 @@ func revokerBundle(t *testing.T, central string, seed func(context.Context, *mat
 	if seed != nil {
 		seed(ctx, matterstore.New(db))
 	}
-	bundle = startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle = startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}

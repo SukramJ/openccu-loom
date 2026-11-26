@@ -142,7 +142,7 @@ func TestMatterRuntimeWiresTheReachableForward(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-boot")
 	ctx, cancel := context.WithCancel(context.Background())
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
+		ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil, nil,
 	)
 	t.Cleanup(func() {

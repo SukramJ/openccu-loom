@@ -53,6 +53,10 @@ type auditOverlay struct {
 	// (ADR 0027 resilient fallback); the daemon surfaces this on /health and
 	// as a metric. Only meaningful when db != nil.
 	secretsAvailable bool
+	// cipher is the master-key cipher the boot resolved (ADR 0027); the
+	// Matter bridge derives its store's sealing key from it (ADR 0092).
+	// Unavailable when no key resolved; nil when the database did not open.
+	cipher *secret.Cipher
 
 	// overlayErr holds the failure of the boot-time DB-tier overlay, if any.
 	// A failed overlay leaves the daemon running on the config file alone —
@@ -86,6 +90,15 @@ type auditOverlay struct {
 	dbOpenErr error
 }
 
+// effectiveDataDir is the data directory the daemon works in: the
+// configured one, else ./var.
+func effectiveDataDir(cfg *config.Config) string {
+	if cfg == nil || cfg.DataDir == "" {
+		return "./var"
+	}
+	return cfg.DataDir
+}
+
 // openLoomDB opens the single shared <DataDir>/openccu-loom.db database used
 // by every persistence-backed subsystem in the composition root (audit,
 // session recorder, incident recorder, Matter bridge). Centralising the open
@@ -107,11 +120,7 @@ func openLoomDB(cfg *config.Config, logger *slog.Logger) (db *gosql.DB, err erro
 	if cfg == nil {
 		return nil, nil
 	}
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = "./var"
-	}
-	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
+	dsn := sqlitestore.FileDSN(filepath.Join(effectiveDataDir(cfg), "openccu-loom.db"))
 	openCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err = sqlitestore.Open(openCtx, dsn)
@@ -204,6 +213,7 @@ func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Confi
 			cipher = &secret.Cipher{}
 		}
 		ov.secretsAvailable = cipher.Available()
+		ov.cipher = cipher
 		// The two handovers that make a stored secret a secret. Declared
 		// because their absence is the quietest failure in the daemon: the
 		// stores accept every write, the SPA reports success, and the CCU

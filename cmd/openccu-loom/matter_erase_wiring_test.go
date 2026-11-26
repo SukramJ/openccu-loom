@@ -62,7 +62,7 @@ func eraseRuntime(t *testing.T, central string) (matterWiring, http.Handler, *ws
 	db := openTestLoomDB(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	mw, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, db, health.NewTracker(), nil, nil, nil,
+		ctx, cfg, reg, db, nil, health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), hub, nil,
 	)
 	// One cleanup, cancel first: see TestMatterBootEventsAreReadableAfterWiring.

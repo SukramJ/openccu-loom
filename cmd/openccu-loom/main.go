@@ -18,6 +18,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/datalock"
 )
 
 func main() {
@@ -43,6 +44,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runBackup(args[1:], stdout, stderr)
 	case "config":
 		return runConfigCLI(args[1:], stdout, stderr)
+	case "secret":
+		return runSecretCLI(args[1:], stdout, stderr)
+	case "matter":
+		return runMatterCLI(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
@@ -125,6 +130,15 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		}
 		cfg = loaded
 	}
+	// The data directory is this process's while it runs: the offline
+	// commands that rewrite the database (`secret rotate`, `matter reset`)
+	// take the same lock and refuse while the daemon holds it (ADR 0092),
+	// and a second daemon on the same directory does not start.
+	lock, err := datalock.Acquire(effectiveDataDir(cfg))
+	if err != nil {
+		return fmt.Errorf("openccu-loom: data directory %s: %w", effectiveDataDir(cfg), err)
+	}
+	defer func() { _ = lock.Release() }()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	// Pass the config path so the daemon can install a [config.Watcher]
@@ -149,6 +163,8 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  run        start the daemon")
 	_, _ = fmt.Fprintln(w, "  backup     create or restore a backup archive")
 	_, _ = fmt.Fprintln(w, "  config     export or import config sections and centrals")
+	_, _ = fmt.Fprintln(w, "  secret     rotate the master key (daemon stopped)")
+	_, _ = fmt.Fprintln(w, "  matter     reset the Matter bridge's credentials (daemon stopped)")
 	_, _ = fmt.Fprintln(w, "  version    print version, commit, build date")
 	_, _ = fmt.Fprintln(w, "  help       show this help")
 }

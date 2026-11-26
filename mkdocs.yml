@@ -197,6 +197,7 @@ nav:
           - ADR 0089 — The editor component reaches the daemon through the integration: adr/0089-editor-component-transport.md
           - ADR 0090 — Warnings as openccu-lite add-on notices: adr/0090-warnings-as-box-notices.md
           - ADR 0091 — The remote add-on pairs with an openccu-lite box: adr/0091-remote-addon-box-pairing.md
+          - ADR 0092 — Matter secrets sealed at rest under the master key: adr/0092-matter-secrets-sealed-at-rest.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

@@ -159,6 +159,9 @@ type Harness struct {
 	// daemon process with.
 	opts    Options
 	binPath string
+	// bridgeMayStayDown skips the wait for the Matter node on the next
+	// launch: a test that expects the bridge to stay off.
+	bridgeMayStayDown bool
 	// earlierLogs is the output of the daemon processes a Restart
 	// replaced, kept for the failure dump.
 	earlierLogs strings.Builder
@@ -309,6 +312,38 @@ func (h *Harness) Restart(t *testing.T) {
 	h.relaunch(t)
 }
 
+// RestartAfter stops the daemon, runs between while it is down — with the
+// data directory, the daemon binary and the config path, the window an
+// operator's offline command runs in — and starts it again as Restart does.
+func (h *Harness) RestartAfter(t *testing.T, between func(dataDir, bin, cfgPath string)) {
+	t.Helper()
+	h.stopProcess()
+	between(h.dataDir, h.binPath, h.cfgPath)
+	h.relaunch(t)
+}
+
+// RestartAfterWithoutBridge is RestartAfter for a start whose Matter bridge
+// is expected to stay off: it waits for the daemon's health only, not for
+// the node.
+func (h *Harness) RestartAfterWithoutBridge(t *testing.T, between func(dataDir, bin, cfgPath string)) {
+	t.Helper()
+	h.bridgeMayStayDown = true
+	defer func() { h.bridgeMayStayDown = false }()
+	h.RestartAfter(t, between)
+}
+
+// Offline runs the daemon binary with args against the harness's
+// configuration (`--config` appended) and returns its combined output and
+// error, for the offline commands (`matter reset`, `secret rotate`). The
+// command is bounded by a minute.
+func (h *Harness) Offline(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, h.binPath, append(args, "--config", h.cfgPath)...) //nolint:gosec // G204: the locally built daemon binary
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // relaunch keeps the exited process's output for a failure report and
 // starts the next process on the same configuration, data directory and
 // simulated CCU.
@@ -368,7 +403,7 @@ func (h *Harness) launch(t *testing.T) {
 		t.Logf("daemon stderr:\n%s", h.stderrBuf.String())
 		t.Fatalf("daemon did not become healthy within %s: %v", deadline, err)
 	}
-	if opts.EnableMatter {
+	if opts.EnableMatter && !h.bridgeMayStayDown {
 		if err := h.waitForMatterListening(deadline); err != nil {
 			t.Logf("daemon stdout:\n%s", h.stdoutBuf.String())
 			t.Logf("daemon stderr:\n%s", h.stderrBuf.String())

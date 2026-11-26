@@ -113,7 +113,7 @@ func matterLabelTestConfig(t *testing.T, label string) *config.Config {
 
 func startLabelTestBridge(ctx context.Context, t *testing.T, cfg *config.Config, reg *central.Registry, db *gosql.DB) *matterBridgeBundle {
 	t.Helper()
-	b := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	b := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if b == nil {
 		t.Fatal("the Matter bridge did not start; without it this test asserts nothing")
 	}

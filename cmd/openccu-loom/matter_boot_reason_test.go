@@ -96,7 +96,7 @@ func TestStartMatterBridgeStatesTheBootReason(t *testing.T) {
 			db := openTestLoomDB(t)
 			tc.prepare(ctx, t, db)
 
-			bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, central), db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+			bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, central), db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 			if bundle == nil {
 				t.Fatal("startMatterBridge returned nil")
 			}

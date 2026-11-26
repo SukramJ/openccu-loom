@@ -159,7 +159,7 @@ func bootThermostatBridgeWith(t *testing.T, hold, schedules bool, writer *record
 	if writer != nil {
 		w = writer
 	}
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), w)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), w)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}

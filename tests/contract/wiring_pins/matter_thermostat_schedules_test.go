@@ -27,13 +27,13 @@ func TestThermostatScheduleWriterIsTheSchedulesDomain(t *testing.T) {
 	if !strings.Contains(root, "schedulesDomain := adapter.NewSchedulesDomain(") {
 		t.Fatal("daemon.go no longer builds the schedules domain under the name this pin follows")
 	}
-	if !strings.Contains(root, "wireMatterRuntime(ctx, cfg, reg, auditDB, healthTracker, parameterLabels, catalogs, auditRec, logger, wsHub, schedulesDomain)") {
+	if !strings.Contains(root, "wireMatterRuntime(ctx, cfg, reg, auditDB, ov.cipher, healthTracker, parameterLabels, catalogs, auditRec, logger, wsHub, schedulesDomain)") {
 		t.Error("daemon.go does not hand the schedules domain to the Matter runtime — a controller's week-program commit has no writer")
 	}
 
 	matter := collapseSpaces(readMatterComposition(t))
 	for _, want := range []struct{ what, expr string }{
-		{"the runtime's writer to the bridge", "bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger, schedules)"},
+		{"the runtime's writer to the bridge", "bundle := startMatterBridge(ctx, cfg, reg, db, cipher, healthTracker, labels, logger, schedules)"},
 		{"the hold flag to the build options", "ThermostatHoldAndRunningState: mc.ThermostatHoldAndRunningState,"},
 		{"the schedules flag to the build options", "ThermostatSchedules: mc.ThermostatSchedules,"},
 		{"the writer to the build options", "ClimateSchedules: schedules,"},
