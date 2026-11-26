@@ -10,6 +10,7 @@ import (
 	"time"
 
 	mattercore "thingfabric.dev/go-fabric/cluster/core"
+	matterstore "thingfabric.dev/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
@@ -29,6 +30,40 @@ func takeStopRecordAtBoot(db *gosql.DB, logger *slog.Logger) {
 	if err := sqlite.TakeStopRecordAtBoot(ctx, db); err != nil {
 		logger.Warn("boot_record.take_failed", slog.String("err", err.Error()))
 	}
+}
+
+// pendingScrubTimeout bounds the boot's scrub: a VACUUM rewrites the whole
+// database file, history included, so it gets the bound go-fabric-ui gives
+// the erase that left it pending.
+const pendingScrubTimeout = 2 * time.Minute
+
+// runPendingScrub finishes the scrub an erase of the Matter node could not:
+// the erase removed the node's rows, but a read transaction of the running
+// daemon made its VACUUM or WAL checkpoint fail, so their bytes may remain
+// in the database file or its -wal
+// (matterRuntime.Erase). The boot runs it right after the database opens,
+// before the subsystems that read it start, and clears the flag once it finished; a scrub
+// that fails again keeps the flag for the next boot.
+func runPendingScrub(db *gosql.DB, logger *slog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), pendingScrubTimeout)
+	defer cancel()
+	rec, err := sqlite.LoadBootRecord(ctx, db)
+	if err != nil {
+		logger.Warn("boot_record.scrub_read_failed", slog.String("err", err.Error()))
+		return
+	}
+	if !rec.ScrubPending {
+		return
+	}
+	if err := matterstore.Scrub(ctx, db); err != nil {
+		logger.Warn("matter.bridge.scrub_pending_failed", slog.String("err", err.Error()))
+		return
+	}
+	if err := sqlite.ClearScrubPending(ctx, db); err != nil {
+		logger.Warn("boot_record.scrub_clear_failed", slog.String("err", err.Error()))
+		return
+	}
+	logger.Info("matter.bridge.scrub_pending_done")
 }
 
 // recordRequestedStop writes the stop marker when the shutdown running now

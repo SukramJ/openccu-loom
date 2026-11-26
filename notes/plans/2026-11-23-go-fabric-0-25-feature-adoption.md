@@ -561,3 +561,98 @@ As built (branch `claude/matter-commissioning-posture`):
 - Bite proofs: `BootReason: bootReason * 0` → unit 5/6 cases red (a deleted line fails the build, not
   the test); started-version write removed → unit red; shutdown marker forced false → e2e step
   "operator restart" red; boot take removed → same step red.
+
+## 16. Slice 5: measurements (2026-11-26)
+
+State before the slice: #1176 merged (ce8581a2), slice 4 done. Branch `claude/matter-erase-1056`
+from main ce8581a2. D1 = A (section 10).
+
+Measured (go-fabric v0.26.0, go-fabric-ui v0.14.1, module cache; this repo at ce8581a2):
+
+- **go-fabric-ui offers both halves.** `fabricui.NodeSwitch` (`GU/fabricui/nodeswitch.go:42-205`):
+  `NewNodeSwitch(initial)`, `Set(n)` after the new node started, `Current()`; it delegates every
+  `NodeSource` method and `Set` ends every node stream so the page reconnects onto the new node
+  (`:25-32`, `stream.go:38-50,138`). `Options.Erase` (`GU/fabricui/options.go:236-251`): the host
+  erases and brings a node back; run detached, bounded by two minutes; nil answers 501 and
+  `Status.erase` false (`handlers_node.go:151,446-478`, confirm word `erase-node`).
+- **`Node.FactoryReset`** (`GF/node/factory_reset.go:19-96`): removes every fabric, stops the node,
+  erases the credential store and the endpoint records, pins a fresh UniqueID; the node is
+  single-use, the host builds a new one on the same store (`fabrictest/device.go`
+  `Device.FactoryReset`: reset, then `startLocked`). A stop that does not complete erases nothing.
+  A host's own endpoint state is the host's to erase (`:48-49`).
+- **The erase scrubs loom's whole database.** loom hands the node `matterstore.New(db)` on the shared
+  `openccu-loom.db` handle (`daemon_matter.go:351`); `store.Store.Erase` ends with `Scrub`
+  (`GF/store/erase.go:78-97`): `VACUUM` of the whole file and `wal_checkpoint(TRUNCATE)`. The pool is
+  WAL with several connections (`internal/store/sqlite/dsn.go:48`, `store.go:57`), so a reader
+  blocks the checkpoint and the reset returns `ErrScrubIncomplete` (rows gone, bytes may remain in
+  the -wal) — every other step completes (`factory_reset.go:31-37`). The VACUUM duration scales
+  with the whole file (history included); not measured.
+- **loom's endpoint store** (`internal/store/matterendpoint/endpoints.go:93-95`) erases only the
+  go-fabric endpoint records; the exposure allowlist (`matter_exposures`), `matter_host_identity`
+  (root serial, applied label) and `boot_record` are loom's and survive the reset.
+- **Who holds the node or its parts today** (`cmd/openccu-loom/daemon_matter.go` at ce8581a2): the
+  reconciler on `n.Aggregator()` (`:498`) and through it `sync` / `retire` / `forget` / the
+  reachability forward (`:957`, the ready and hot-plug triggers, the live-adopt hook); the RTT
+  gauges over `bridge` (`:573-579`); `SetOnReassembled` (`:988`); `wireMatterNodeEvents`'
+  `Observe` (`:991`, `matter_node_events.go:91`); the status adapter (`:993-1000`,
+  `matter_status_adapter.go:28`) and the health probe on it; the node labeler
+  (`matter_node_label.go:43`); the health-sample listener (`:473`); `Options.Node`
+  (`matterNodeSource{bundle.node}`, `:1017`); the stop closure (`:581-592`). Eighteen test files
+  construct through `startMatterBridge` / `wireMatterRuntime` and read `bundle.node`.
+
+Owner decisions (wizard, 2026-11-26):
+
+- **Scrub:** the erase counts as done when only the scrub is incomplete (`ErrScrubIncomplete`): the
+  new node starts, the log and `Options.Warnings` say the bytes may remain, and a flag in
+  `boot_record` (migration 058) makes the next boot run `store.Scrub` right after the database
+  opens, before any reader exists, clearing the flag on success.
+- **loom's own state survives:** exposure allowlist, `matter_host_identity` (root serial, applied
+  label) and `boot_record` are operator configuration and product identity, not pairing data. The
+  new node comes up with the same selection, unpaired, with a fresh UniqueID.
+- **BootReason of the rebuilt node:** SoftwareReset (6), as slice 4 states for an operator restart.
+
+Approach (to be approved):
+
+- One holder, `matterRuntime` (`cmd/openccu-loom/matter_runtime.go`), owns the current generation
+  (node + reconciler) under an RWMutex; `Sync` / `Retire` / `QueueForget` / `SetReachable` /
+  `Node()` / `Bridge()` read through it, `Erase` and `Stop` swap or end it under the write lock.
+  The node config is built by one function both the first start and the rebuild call, so the
+  rebuilt node cannot drift from the first (only `BootReason` differs).
+- Per-generation attachments re-run on every new node and detach from the old one: the node-event
+  observer (WebSocket + audit), the health-sample listener, `SetOnReassembled`, the labeler's node.
+  The RTT gauges, the status adapter and the stop closure read through the holder.
+- `Options.Node` = `fabricui.NewNodeSwitch(matterNodeSource{first})`, `Set` after the new node
+  started and the first sync ran; `Options.Erase` = `matterRuntime.Erase`. A new node that does
+  not start leaves the switch on the stopped one (go-fabric-ui's contract) and the error reaches the
+  page; a second erase retries.
+- No new `Set*` / `Attach*` setter: everything is constructed inside `wireMatterRuntime`.
+- Tests: unit through `wireMatterRuntime` per attachment (each a pin with a bite); store test for the
+  scrub flag; e2e `TestE2EMatterEraseBringsAFreshNodeBack` (CCU booted not ready; erase → 204,
+  status `erase: true`, window open, same endpoint count, new UniqueID, events stream reconnects);
+  chip-tool: pair → erase → pair again (label `needs-chiptool`). REST contract: the route is
+  go-fabric-ui's and already in `assets/openapi.yaml:6643`. MCP: not extended (destructive,
+  operator-only on the node page) — recorded in the PR.
+
+As built (branch `claude/matter-erase-1056`):
+
+- `cmd/openccu-loom/matter_runtime.go`: `matterRuntime` holds the generation (node + reconciler) under
+  an RWMutex held per call or per swap, never across the reset; `eraseMu` serialises Erase and Stop.
+  While an erase runs, Sync / Retire / QueueForget / SetReachable are skipped (the bus never waits
+  for an erase); the erase syncs the new node from the model after the swap. Attachments
+  (`attach`): health-sample listener, `SetOnReassembled`, the node observer of
+  `wireMatterNodeEvents`; `release` in the closers. Labeler `rebind` sets the last applied label on
+  the new node before Start. A reset error other than `node.ErrScrubIncomplete` returns without a
+  rebuild (the next erase finishes it, go-fabric `node/factory_reset.go:51-55`).
+- `startMatterBridge`: one `nodeConfig(bootReason)` for the first node and the rebuild; gauges and
+  the stop read through the runtime; `fabricui.NewNodeSwitch(matterNodeSource{n})` built with it.
+  `wireMatterRuntime`: `Options.Node` = the switch, `Options.Erase` = `rt.Erase`, `Warnings` =
+  findings + the runtime's `scrub_pending`. Status adapter reads `node func() *node.Node`.
+- Migration 058 `boot_record.scrub_pending`; `sqlite.MarkScrubPending` / `ClearScrubPending`;
+  `runPendingScrub` in `wireAuditOverlay` right after `takeStopRecordAtBoot`.
+- Measured while testing: with a read transaction open the erase's `VACUUM` itself waits the
+  busy timeout (5 s) and fails, so the scrub is deferred (`ErrScrubIncomplete: vacuum`), not only
+  the checkpoint.
+- Tests: `matter_erase_wiring_test.go` (pages, status, UniqueID, BootReason, selection, label,
+  window, node observer, reassembly hook, reconciler; scrub with and without a reader; boot path
+  through `wireAuditOverlay`), store `TestBootRecordScrubPendingLivesUntilCleared`, e2e
+  `TestE2EMatterEraseBringsAFreshNodeBack` (harness `EraseNode`).

@@ -143,15 +143,15 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	// The daemon supplies no manager, so the node builds the one the
 	// assembler is handed; TestStartMatterBridgeMountsGroupsOnBridgedEndpoints
 	// pins that an endpoint's AddGroup lands in it.
-	if bundle.node.Groups() == nil {
+	if bundle.Node().Groups() == nil {
 		t.Fatal("the facade runs on no group manager")
 	}
-	if bundle.node.Aggregator() == nil {
+	if bundle.Node().Aggregator() == nil {
 		t.Fatal("the facade built no Aggregator although the daemon syncs its model into it")
 	}
 	// The session and subscription managers go-fabric-ui's sessions route
 	// reads (GET /node/sessions) are the facade's own.
-	if bundle.node.Sessions() == nil || bundle.node.Subscriptions() == nil {
+	if bundle.Node().Sessions() == nil || bundle.Node().Subscriptions() == nil {
 		t.Fatal("the facade reports no session or subscription manager")
 	}
 }
@@ -206,7 +206,7 @@ func lastLines(s string, n int) string {
 // servedUniqueID reads the UniqueID the running root endpoint serves.
 func servedUniqueID(t *testing.T, b *matterBridgeBundle) string {
 	t.Helper()
-	v, ok := b.node.Root().BasicInformation.MatterRead(basicInformationAttrUniqueID)
+	v, ok := b.Node().Root().BasicInformation.MatterRead(basicInformationAttrUniqueID)
 	if !ok {
 		t.Fatal("root BasicInformation does not serve a UniqueID")
 	}
@@ -240,10 +240,10 @@ func TestStartMatterBridgeKeepsServingWithABrokenAttestationChain(t *testing.T) 
 	if bundle.commissioningBlocked == nil {
 		t.Fatal("bundle.commissioningBlocked is nil on an unloadable attestation chain, want the load error")
 	}
-	if bundle.node.Window().Open {
+	if bundle.Node().Window().Open {
 		t.Error("the uncommissioned node opened its own window, want commissioning blocked")
 	}
-	if err := bundle.node.OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
+	if err := bundle.Node().OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
 		t.Errorf("OpenOwnWindow err = %v, want ErrCommissioningBlocked", err)
 	}
 }
@@ -263,7 +263,7 @@ func TestStartMatterBridgeStartsWithoutAttestationConfig(t *testing.T) {
 	t.Cleanup(bundle.stop)
 	// The negative control of the blocked case: without a block the
 	// uncommissioned node opens its own window at Start.
-	if !bundle.node.Window().Open {
+	if !bundle.Node().Window().Open {
 		t.Error("the uncommissioned node opened no window without an attestation configuration")
 	}
 }

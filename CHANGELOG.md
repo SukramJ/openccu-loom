@@ -37,6 +37,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   supervisor look the same to the daemon. The reset marker is written at
   the end of a clean shutdown and describes one start only. New database
   migration 057 (`boot_record`).
+- **The Matter bridge can be erased from the maintenance page without a
+  restart.** *Erase* removes every paired controller, the bridge's Matter
+  credentials and its endpoint numbers, and brings a fresh, unpaired bridge
+  up at once with a new identity (UniqueID): every controller has to pair
+  it again. The device selection, the bridge's serial number and the node
+  label you set are kept. The fresh bridge reports the boot reason
+  *software reset*. The erase also scrubs the freed bytes out of the
+  database file; when a running reader prevents that, the page says so and
+  the next daemon start finishes it. New database migration 058
+  (`boot_record.scrub_pending`). (#1056)
 
 ### Changed
 

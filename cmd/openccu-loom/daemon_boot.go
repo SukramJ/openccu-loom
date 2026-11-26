@@ -167,6 +167,9 @@ func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Confi
 		// shutdown that followed an operator's restart request writes the
 		// next one, so a crash or kill leaves none.
 		takeStopRecordAtBoot(db, logger) //nolint:contextcheck // runs on its own timeout like openLoomDB, independent of the lifecycle ctx
+		// A scrub an erase of the Matter node left pending runs now, before
+		// the subsystems that read the database start (matterRuntime.Erase).
+		runPendingScrub(db, logger) //nolint:contextcheck // runs on its own timeout like openLoomDB, independent of the lifecycle ctx
 
 		teardown = func() { //nolint:contextcheck // shutdown path: the lifecycle ctx is already cancelled, the boot-record write carries its own timeout
 			recordRequestedStop(db, handlers.RestartRequested(), logger)

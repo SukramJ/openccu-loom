@@ -67,7 +67,7 @@ func TestMatterNodeLabelFollowsTheConfiguration(t *testing.T) {
 
 	// 2. A controller renames the node; a save that leaves the label
 	// alone must not undo it.
-	if err := b.node.SetNodeLabel(ctx, "Controller Name"); err != nil {
+	if err := b.Node().SetNodeLabel(ctx, "Controller Name"); err != nil {
 		t.Fatalf("simulate the controller's rename: %v", err)
 	}
 	applied, err = applier.ApplySection(ctx, configstore.SectionMatter)
@@ -124,7 +124,7 @@ func startLabelTestBridge(ctx context.Context, t *testing.T, cfg *config.Config,
 // BasicInformation serves.
 func servedRootString(t *testing.T, b *matterBridgeBundle, attr uint32) string {
 	t.Helper()
-	v, ok := b.node.Root().BasicInformation.MatterRead(attr)
+	v, ok := b.Node().Root().BasicInformation.MatterRead(attr)
 	if !ok {
 		t.Fatalf("root BasicInformation does not serve attribute 0x%04X", attr)
 	}

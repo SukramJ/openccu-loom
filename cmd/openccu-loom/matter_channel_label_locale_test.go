@@ -79,7 +79,7 @@ func TestBridgedEndpointNameCarriesTheOperatorsChannelWord(t *testing.T) {
 	t.Cleanup(bundle.stop)
 	exposeEveryCandidate(ctx, t, bundle, reg)
 
-	endpoints := bridgedEndpointsViaREST(t, bundle.node)
+	endpoints := bridgedEndpointsViaREST(t, bundle.Node())
 
 	var got string
 	var seen []string

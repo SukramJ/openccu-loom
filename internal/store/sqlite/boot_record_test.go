@@ -57,3 +57,30 @@ func TestBootRecordMatterStartedVersion(t *testing.T) {
 		t.Fatalf("record = %+v, want only the version set", rec)
 	}
 }
+
+// TestBootRecordScrubPendingLivesUntilCleared: the flag an erase leaves is
+// read by every boot until the scrub clears it — a boot whose scrub failed
+// again keeps it for the next one — and the stop-marker take leaves it alone.
+func TestBootRecordScrubPendingLivesUntilCleared(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t, "boot-record-scrub.db")
+	ctx := context.Background()
+
+	if err := MarkScrubPending(ctx, db); err != nil {
+		t.Fatalf("mark: %v", err)
+	}
+	for boot := range 2 {
+		if err := TakeStopRecordAtBoot(ctx, db); err != nil {
+			t.Fatalf("take at boot %d: %v", boot, err)
+		}
+		if rec, _ := LoadBootRecord(ctx, db); rec != (BootRecord{ScrubPending: true}) {
+			t.Fatalf("boot %d: record = %+v, want only the scrub pending", boot, rec)
+		}
+	}
+	if err := ClearScrubPending(ctx, db); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if rec, _ := LoadBootRecord(ctx, db); rec.ScrubPending {
+		t.Fatal("the flag outlived the scrub that cleared it")
+	}
+}

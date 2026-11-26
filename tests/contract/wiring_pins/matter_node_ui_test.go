@@ -27,7 +27,9 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 
 	matter := collapseSpaces(readMatterComposition(t))
 	for _, want := range []struct{ what, expr string }{
-		{"the node", "Node: matterNodeSource{bundle.node},"},
+		{"the node switch an erase sets", "Node: bundle.rt.nodes,"},
+		{"the switch over the first node", "nodes: fabricui.NewNodeSwitch(matterNodeSource{n}),"},
+		{"the erase", "Erase: bundle.rt.Erase,"},
 		{"loom's exposure provider", "ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{"},
 		{"the selection's change report to the WebSocket hub", "Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec),"},
 		{"the candidate walk", "Candidates: candidates.MatterCandidates,"},
@@ -36,7 +38,8 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 		{"the reassemble hook", "Reassemble: matterReassembler(bundle.sync, auditRec),"},
 		{"the event source", "Events: bundle.events,"},
 		{"the configuration the status page shows", "NodeConfig: matterNodeConfigView(mcfg),"},
-		{"the assembler's findings as host warnings", "Warnings: matterWarnings(bundle.assembler, catalogs, cfg.Locale),"},
+		{"the assembler's findings as host warnings", "findings := matterWarnings(bundle.assembler, catalogs, cfg.Locale)"},
+		{"the findings and the runtime's scrub warning", "return append(findings(ctx), bundle.rt.warnings(catalogs, cfg.Locale)...)"},
 	} {
 		if !strings.Contains(matter, want.expr) {
 			t.Errorf("wireMatterRuntime never hands go-fabric-ui %s (%q)", want.what, want.expr)
@@ -45,8 +48,12 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 	// The WebSocket hub is fed from the event source the SSE stream reads
 	// and from the node itself: go-fabric-ui observes the node for each
 	// open SSE stream alone, so the fabric and window transitions reach the
-	// hub only through the bridge's own observer on the bundle's node.
-	if !strings.Contains(matter, "closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))") {
+	// hub only through the bridge's own observer, which hangs on every node
+	// the runtime brings up (matterRuntime.attach), an erase's included.
+	if !strings.Contains(matter, "closers = append(closers, wireMatterNodeEvents(bundle.events, nil, wsHub, auditRec), bundle.rt.release)") {
+		t.Error("the event source never reaches the WebSocket hub — the SPA hears no reassembly and no selection change")
+	}
+	if !strings.Contains(matter, "return wireMatterNodeEvents(nil, n, wsHub, auditRec)") {
 		t.Error("the node events never reach the WebSocket hub — the SPA, which reads the hub rather than the SSE stream, hears no commissioning, no fabric removal and no window")
 	}
 	// A reassembly the handler did not trigger (a central becoming ready,

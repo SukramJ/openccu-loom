@@ -101,7 +101,7 @@ func TestStartMatterBridgeStatesTheBootReason(t *testing.T) {
 				t.Fatal("startMatterBridge returned nil")
 			}
 			t.Cleanup(bundle.stop)
-			if got := bundle.node.BootReason(); got != tc.want {
+			if got := bundle.Node().BootReason(); got != tc.want {
 				t.Fatalf("node BootReason = %d, want %d", got, tc.want)
 			}
 			rec, err := sqlite.LoadBootRecord(ctx, db)

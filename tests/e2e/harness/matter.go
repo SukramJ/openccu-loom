@@ -58,6 +58,8 @@ type NodeStatus struct {
 	WindowOpen bool   `json:"commissioning_window_open"`
 	WindowKind string `json:"window_kind"`
 	BootReason *uint8 `json:"boot_reason"`
+	// Erase reports whether the daemon wires the node's erase.
+	Erase bool `json:"erase"`
 }
 
 // NodeStatus reads GET /api/v1/node/status.
@@ -78,6 +80,16 @@ func (h *Harness) OpenPairingWindow(t *testing.T, seconds int) {
 	payload := []byte(fmt.Sprintf(`{"duration_seconds":%d}`, seconds))
 	if status, body := h.nodeDo(t, http.MethodPost, "/api/v1/node/pairing/window", payload, nil); status != http.StatusOK {
 		t.Fatalf("POST /api/v1/node/pairing/window: status %d: %s", status, body)
+	}
+}
+
+// EraseNode erases the node the way the maintenance page does (POST
+// /api/v1/node/maintenance/erase with the confirmation word) and fails the
+// test unless the daemon answers 204: the erase ran and a new node is up.
+func (h *Harness) EraseNode(t *testing.T) {
+	t.Helper()
+	if status, body := h.nodeDo(t, http.MethodPost, "/api/v1/node/maintenance/erase", []byte(`{"confirm":"erase-node"}`), nil); status != http.StatusNoContent {
+		t.Fatalf("POST /api/v1/node/maintenance/erase: status %d: %s", status, body)
 	}
 }
 

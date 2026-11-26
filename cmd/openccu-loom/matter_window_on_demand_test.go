@@ -33,14 +33,14 @@ func TestWindowOnDemandOpensNoWindowAtStart(t *testing.T) {
 				cfg.North.Matter.Commissioning.Passcode = 20202021
 				cfg.North.Matter.Commissioning.WindowOnDemand = tc.onDemand
 			})
-			if w := bundle.node.Window(); w.Open != tc.wantOpen {
+			if w := bundle.Node().Window(); w.Open != tc.wantOpen {
 				t.Fatalf("window open at start = %v (own=%v), want %v", w.Open, w.Own, tc.wantOpen)
 			}
 			rec := serveNodeAPI(t, opts, http.MethodPost, "/api/v1/node/pairing/window", `{"duration_seconds":180}`)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("operator open = %d %s, want 200", rec.Code, rec.Body.String())
 			}
-			if w := bundle.node.Window(); w.Kind != node.WindowOwn {
+			if w := bundle.Node().Window(); w.Kind != node.WindowOwn {
 				t.Fatalf("after the operator's open: kind=%v, want the node's own window", w.Kind)
 			}
 		})
@@ -71,13 +71,13 @@ func TestWindowOnDemandKeepsTheBridgeClosedAfterTheOperatorsWindow(t *testing.T)
 			if rec := serveNodeAPIOn(t, api, http.MethodPost, "/api/v1/node/pairing/window", `{"duration_seconds":180}`); rec.Code != http.StatusOK {
 				t.Fatalf("operator open = %d %s, want 200", rec.Code, rec.Body.String())
 			}
-			if w := bundle.node.Window(); w.Kind != node.WindowBasic {
+			if w := bundle.Node().Window(); w.Kind != node.WindowBasic {
 				t.Fatalf("operator's window kind = %v, want a basic window on fresh credentials", w.Kind)
 			}
 			if rec := serveNodeAPIOn(t, api, http.MethodPost, "/api/v1/node/pairing/window/close", ""); rec.Code != http.StatusNoContent {
 				t.Fatalf("close = %d %s, want 204", rec.Code, rec.Body.String())
 			}
-			if w := bundle.node.Window(); w.Open != tc.wantOpenOnStop {
+			if w := bundle.Node().Window(); w.Open != tc.wantOpenOnStop {
 				t.Fatalf("after the close: open=%v kind=%v, want open=%v", w.Open, w.Kind, tc.wantOpenOnStop)
 			}
 		})
