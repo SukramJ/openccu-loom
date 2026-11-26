@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.108.0
+
+- **Version follows OpenCCU-Loom 0.108.0**, which seals the Matter
+  bridge's credentials in its database, can erase the bridge without a
+  restart and fixes cover commands on group channels; see the
+  OpenCCU-Loom changelog. The proxy itself is unchanged.
+
 # 0.107.1
 
 - **Version follows OpenCCU-Loom 0.107.1**, which refuses a sound whose

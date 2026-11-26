@@ -71,7 +71,7 @@ type matterRuntime struct {
 	// walk describes the device model as the reconciler syncs it.
 	walk    func(context.Context) []matteradapter.DeviceSnapshot
 	labeler *matterNodeLabeler
-	// nodes is the node pages' source; nil until the pages are wired.
+	// nodes is the node pages' source; an erase switches it to the new node.
 	nodes  *fabricui.NodeSwitch
 	db     *gosql.DB
 	logger *slog.Logger
