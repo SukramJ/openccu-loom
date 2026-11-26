@@ -463,6 +463,10 @@ func TestRestartRequiredDiff_BootWiredSurfacesAreDiffed(t *testing.T) {
 			path:   "north.matter.commissioning",
 			mutate: func(c *Config) { c.North.Matter.Commissioning.EphemeralWindow = true },
 		},
+		{
+			path:   "north.matter.commissioning",
+			mutate: func(c *Config) { c.North.Matter.Commissioning.WindowOnDemand = true },
+		},
 		// The HTTP middleware chain is fixed while the router is assembled:
 		// a guard that was not installed then cannot start running later.
 		{

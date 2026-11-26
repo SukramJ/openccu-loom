@@ -502,3 +502,40 @@ As built (branch `claude/matter-reachability-3b`):
   e2e phase 1 + pin red; hook capturing the first device → rebuild test red.
 - Open: chip-tool run (composition binding changed → `needs-chiptool`), go-fabric#589 bump, push/PR on
   the owner's word.
+
+## 15. Slice 4: measurements and decisions (2026-11-26)
+
+State before the slice: #1170 and #1172 merged (279bac93); main carries go-fabric v0.26.0 and
+go-fabric-ui v0.14.1. Branch `claude/matter-commissioning-posture` from main 7439a8ea.
+
+Measured (go-fabric v0.26.0, go-fabric-ui v0.14.1, module cache):
+
+- **F4.** `node.Commissioning.WindowOnDemand` (`node/config.go:523-535`): with it a node without a
+  fabric opens no window at `Start` (`node/node.go:1528-1531`, log `commissioning.window_on_demand`),
+  none after its last fabric goes (`node/commissioning.go:509-513`), none when a basic window closes
+  and none when `SetCommissioningBlocked` lifts (`node/node.go:1815-1822`); the host opens it with
+  `OpenOwnWindow` / `OpenBasicWindow` (`node/commissioning.go:741-756`). matter.js
+  `commissioning.enabled: false` (`CommissioningServer.ts:266-273` per the godoc). The node page
+  already opens windows through those two calls (`fabricui.Options.ConfiguredWindow`,
+  `GU/fabricui/options.go:270-281`); `GET /node/status` reports `commissioning_window_open` and
+  `window_kind` (`GU/fabricui/handlers_node.go`), which is what the e2e per value reads.
+- **F5.** `node.Config.BootReason` (`node/config.go:91-102`), values `mattercore.BootReason*`
+  (`cluster/core/general_diagnostics.go:223-229`); a value past SoftwareReset fails `Validate`
+  (`node/config.go:1004-1005`); the node's own OTA record overrides it (`node/root.go:112-125`;
+  loom configures no OTA). go-fabric-ui serves `Status.boot_reason`.
+- loom persists neither the last version a node started with nor a restart marker;
+  `matter_settings` is go-fabric's table (`055_matter_store_v8_to_v12.sql:61`), not a place for
+  loom state. So F5 needs a migration of its own (the case the F5 row named for dropping it).
+- Both restart paths (REST `Restart`, MQTT `RequestRestart`) claim through
+  `handlers.claimRestart` (`internal/north/rest/handlers/system_admin.go:138`), so the shutdown
+  path can ask whether a restart was requested without a new wiring setter.
+
+Owner decisions (wizard):
+
+- F4: `north.matter.commissioning.window_on_demand`, default false (D4), restart-required.
+- F5 adopted with migration 057: a loom-owned single-row boot record with the version the Matter
+  node last started with (a different running version → SoftwareUpdateCompleted) and a cause a
+  graceful shutdown writes after an operator restart (→ SoftwareReset); read and cleared at boot, so
+  a crash or kill reports Unspecified.
+- Both present: SoftwareUpdateCompleted wins.
+- Flow stays Standard; F9 (User-Intent flow, pairing hints) stays "later".

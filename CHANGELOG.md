@@ -20,6 +20,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   central's ready event brings the persisted exposures back; the endpoint
   numbers must survive the restart. Matter was the last plane without such
   a round trip. (#1092)
+- **The Matter bridge can stay closed until you open a pairing window.**
+  New setting `north.matter.commissioning.window_on_demand` (default off):
+  when on, the bridge opens no commissioning window by itself — not at
+  start while no controller is paired, not after the last one is removed,
+  not when a window opened on the pairing page closes — and is not
+  discoverable for pairing until a window is opened on the Matter pairing
+  page. Off keeps today's behaviour, in which an unpaired bridge opens its
+  window at start (on random codes nobody was shown when no passcode is
+  configured). The setting takes effect after a restart.
 
 ### Changed
 

@@ -33,6 +33,7 @@
   "north.matter.commissioning.ephemeral_window": "bool",
   "north.matter.commissioning.iterations": "int",
   "north.matter.commissioning.passcode": "uint32",
+  "north.matter.commissioning.window_on_demand": "bool",
   "north.matter.controller_profile": "string",
   "north.matter.dev_rotate_unique_ids": "bool",
   "north.matter.discriminator": "uint16",

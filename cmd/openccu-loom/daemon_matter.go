@@ -430,6 +430,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			PBKDFIterations:    uint32(iterations), //nolint:gosec // the config validator bounds it to the PBKDF range
 			Salt:               salt,
 			LocationCapability: node.RegulatoryIndoorOutdoor,
+			WindowOnDemand:     mc.Commissioning.WindowOnDemand,
 		},
 		ProductDescription: node.ProductDescription{
 			Name:       mc.NodeLabel,
