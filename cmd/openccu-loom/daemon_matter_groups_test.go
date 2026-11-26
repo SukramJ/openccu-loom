@@ -101,7 +101,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 	t.Cleanup(bundle.stop)
 	exposeEveryCandidate(ctx, t, bundle, reg)
 
-	topo := bundle.node.Bridge().Topology()
+	topo := bundle.Node().Bridge().Topology()
 	if topo == nil {
 		t.Fatal("bridge has no topology after Start")
 	}
@@ -116,7 +116,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 		t.Fatalf("no OnOffPlugInUnit endpoint among %d bridged endpoints", len(topo.Bridged()))
 	}
 
-	cmr := bridgetest.Dial(t, bundle.node.Bridge().LocalAddr(), bridgetest.Options{
+	cmr := bridgetest.Dial(t, bundle.Node().Bridge().LocalAddr(), bridgetest.Options{
 		Passcode:      groupsTestPasscode,
 		Discriminator: groupsTestDiscrim,
 		FabricID:      groupsTestFabricID,
@@ -221,7 +221,7 @@ func TestStartMatterBridgeMountsGroupsOnBridgedEndpoints(t *testing.T) {
 	// manager holds in memory, so the bridge joins its multicast address
 	// without waiting for a reload. A second manager over the same store
 	// would hold it only after the next load.
-	memberships, err := bundle.node.Groups().Memberships(ctx)
+	memberships, err := bundle.Node().Groups().Memberships(ctx)
 	if err != nil {
 		t.Fatalf("Memberships: %v", err)
 	}

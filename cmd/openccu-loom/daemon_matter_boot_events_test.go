@@ -80,7 +80,7 @@ func TestMatterBootEventsAreReadableAfterWiring(t *testing.T) {
 		}
 	})
 
-	n, ok := wiring.nodeUI.Node.(matterNodeSource)
+	n, ok := pagesNode(wiring.nodeUI)
 	if !ok || n.Node == nil {
 		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}

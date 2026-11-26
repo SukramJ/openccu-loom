@@ -59,7 +59,7 @@ func TestStartMatterBridgePersistsBridgedNodeLabel(t *testing.T) {
 	if key == (matterendpoint.SourceKey{}) {
 		t.Fatalf("no identity row for bridged endpoint %d among %d rows", onOffEP, len(recs))
 	}
-	got, err := bundle.node.EndpointState().LoadNodeLabel(ctx, key)
+	got, err := bundle.Node().EndpointState().LoadNodeLabel(ctx, key)
 	if err != nil {
 		t.Fatalf("LoadNodeLabel(%s): %v", key, err)
 	}
@@ -69,7 +69,7 @@ func TestStartMatterBridgePersistsBridgedNodeLabel(t *testing.T) {
 			"so a controller rename is lost on restart", key, got, label)
 	}
 
-	if err := bundle.node.Bridge().Reassemble(ctx); err != nil {
+	if err := bundle.Node().Bridge().Reassemble(ctx); err != nil {
 		t.Fatalf("Reassemble: %v", err)
 	}
 	rep, err := sess.Read(ctx, path)

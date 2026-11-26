@@ -116,7 +116,7 @@ func TestMatterAttestationRefusesAPartialChain(t *testing.T) {
 	if bundle.commissioningBlocked == nil {
 		t.Fatal("a chain with only a DAC path left commissioning open, want it blocked")
 	}
-	if bundle.node.AttestationError() == nil {
+	if bundle.Node().AttestationError() == nil {
 		t.Fatal("node.AttestationError is nil for a chain with only a DAC path")
 	}
 }

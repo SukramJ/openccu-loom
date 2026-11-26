@@ -166,7 +166,7 @@ func bootThermostatBridgeWith(t *testing.T, hold, schedules bool, writer *record
 	t.Cleanup(bundle.stop)
 	exposeEveryCandidate(ctx, t, bundle, reg)
 
-	for _, ep := range bundle.node.Bridge().Topology().Bridged() {
+	for _, ep := range bundle.Node().Bridge().Topology().Bridged() {
 		if ep.DeviceType == 0x0301 {
 			return ctx, bundle, ep.ID
 		}
@@ -178,7 +178,7 @@ func bootThermostatBridgeWith(t *testing.T, hold, schedules bool, writer *record
 // readThermostat reads one Thermostat attribute of ep through the running
 // bridge: its status and value.
 func readThermostat(ctx context.Context, bundle *matterBridgeBundle, ep uint16, attr uint32) (status im.StatusCode, value any) {
-	res := bundle.node.Bridge().Dispatcher().Read(ctx, im.ConcreteAttributePath{
+	res := bundle.Node().Bridge().Dispatcher().Read(ctx, im.ConcreteAttributePath{
 		Endpoint: ep, Cluster: thermostatspec.ClusterID, Attribute: attr,
 		HasEndpoint: true, HasCluster: true, HasAttribute: true,
 	})
@@ -209,8 +209,8 @@ func TestMatterThermostatSchedulesFollowTheConfigFlags(t *testing.T) {
 			}
 			// The node page's Surface row reads the enabled extensions from
 			// the node's report, so the flag has to reach it as well.
-			if got := slices.Contains(bundle.node.Surface().Extensions, climate.MatterScheduleExtension); got != tc.schedules {
-				t.Errorf("node surface extensions = %v, %s enabled = %v, want %v", bundle.node.Surface().Extensions, climate.MatterScheduleExtension, got, tc.schedules)
+			if got := slices.Contains(bundle.Node().Surface().Extensions, climate.MatterScheduleExtension); got != tc.schedules {
+				t.Errorf("node surface extensions = %v, %s enabled = %v, want %v", bundle.Node().Surface().Extensions, climate.MatterScheduleExtension, got, tc.schedules)
 			}
 			for _, a := range []struct {
 				attr uint32
@@ -243,7 +243,7 @@ func TestMatterThermostatScheduleCommitReachesTheWriter(t *testing.T) {
 	writer := &recordingScheduleWriter{}
 	ctx, bundle, ep := bootThermostatBridge(t, false, true, writer)
 
-	cmr := bridgetest.Dial(t, bundle.node.Bridge().LocalAddr(), bridgetest.Options{
+	cmr := bridgetest.Dial(t, bundle.Node().Bridge().LocalAddr(), bridgetest.Options{
 		Passcode: thermoSchedPasscode, Discriminator: thermoSchedDiscrim,
 		FabricID: thermoSchedFabricID, NodeID: thermoSchedDeviceNode, Seed: 1,
 	})

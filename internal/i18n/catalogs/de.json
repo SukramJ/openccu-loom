@@ -137,6 +137,7 @@
   "matter.tab.pair": "Koppeln",
   "matter.warning.device_refused": "{name} ({address}) ist nicht auf der Bridge: Die Matter-Geräteschicht hat es abgelehnt ({error}).",
   "matter.warning.device_withheld": "{name} ({address}) ist nicht auf der Bridge: Die eingestellte Spezifikationsstufe (north.matter.spec_level) hält es zurück.",
+  "matter.warning.scrub_pending": "Das letzte Löschen des Matter-Knotens hat seine Daten entfernt, konnte die freigegebenen Bytes aber nicht aus der Datenbankdatei tilgen ({error}). Der nächste Start des Daemons holt das nach.",
   "message.code.ADJUSTING_RANGE_TO_SMALL": "Stellbereich zu klein",
   "message.code.CLUTCH_FAILURE": "Einkuppeln fehlgeschlagen",
   "message.code.CONFIG_PENDING": "Konfiguration ausstehend",

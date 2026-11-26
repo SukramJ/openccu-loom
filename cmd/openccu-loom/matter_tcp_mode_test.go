@@ -99,13 +99,13 @@ func TestMatterTCPModeReachesTheRunningBridge(t *testing.T) {
 			}
 			t.Cleanup(bundle.stop)
 
-			_, portStr, err := net.SplitHostPort(bundle.node.Bridge().LocalAddr())
+			_, portStr, err := net.SplitHostPort(bundle.Node().Bridge().LocalAddr())
 			if err != nil {
-				t.Fatalf("bridge LocalAddr %q: %v", bundle.node.Bridge().LocalAddr(), err)
+				t.Fatalf("bridge LocalAddr %q: %v", bundle.Node().Bridge().LocalAddr(), err)
 			}
 			port, err := strconv.Atoi(portStr)
 			if err != nil || port == 0 {
-				t.Fatalf("bridge bound no usable port: %q", bundle.node.Bridge().LocalAddr())
+				t.Fatalf("bridge bound no usable port: %q", bundle.Node().Bridge().LocalAddr())
 			}
 
 			// (i) A TCP connection to the UDP listener's port.
@@ -120,19 +120,19 @@ func TestMatterTCPModeReachesTheRunningBridge(t *testing.T) {
 			// (ii) The operational record. AnnounceFabric is what the
 			// daemon calls once a fabric is installed (here fabric index 1);
 			// the record is read back from the advertiser the daemon built.
-			if bundle.node.MDNSEnabled() {
+			if bundle.Node().MDNSEnabled() {
 				t.Fatal("the node publishes on the network, want its no-op advertiser for mdns_advertise=noop")
 			}
-			bundle.node.Bridge().AnnounceFabric(ctx, 1, [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, 0x1122)
+			bundle.Node().Bridge().AnnounceFabric(ctx, 1, [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, 0x1122)
 			var op *mdns.Service
-			for _, svc := range bundle.node.MDNSServices() {
+			for _, svc := range bundle.Node().MDNSServices() {
 				if svc.ServiceType == mdns.ServiceTypeOperational {
 					op = &svc
 					break
 				}
 			}
 			if op == nil {
-				t.Fatalf("no operational _matter._tcp record published; active = %+v", bundle.node.MDNSServices())
+				t.Fatalf("no operational _matter._tcp record published; active = %+v", bundle.Node().MDNSServices())
 			}
 			gotT, present := "", false
 			for _, r := range op.TXT {

@@ -36,7 +36,7 @@ func addGarageDrive(dev *device.Device) {
 // bridgesClosure reports whether the bundle's bridge serves a Closure
 // endpoint.
 func bridgesClosure(bundle *matterBridgeBundle) bool {
-	for _, ep := range bundle.node.Bridge().Topology().Bridged() {
+	for _, ep := range bundle.Node().Bridge().Topology().Bridged() {
 		if ep.DeviceType == uint16(fabricdevice.ClosureID) {
 			return true
 		}
@@ -65,7 +65,7 @@ func TestMatterSpecLevelFollowsTheConfig(t *testing.T) {
 				t.Errorf("Closure endpoint bridged = %v, want %v", got, tc.closure)
 			}
 			if tc.level != "" {
-				if got := bundle.node.Surface().Level; string(got) != tc.level {
+				if got := bundle.Node().Surface().Level; string(got) != tc.level {
 					t.Errorf("node surface level = %q, want %q", got, tc.level)
 				}
 			}
@@ -83,7 +83,7 @@ func TestMatterControllerProfileReachesTheNode(t *testing.T) {
 	ctx, bundle, ep := bootThermostatBridgeWith(t, false, true, nil, thermostatBridgeExtras{
 		configure: func(m *config.NorthMatter) { m.ControllerProfile = "apple-home" },
 	})
-	if got := bundle.node.Surface().Profiles; !slices.Equal(got, []string{"apple-home"}) {
+	if got := bundle.Node().Surface().Profiles; !slices.Equal(got, []string{"apple-home"}) {
 		t.Errorf("node surface profiles = %v, want [apple-home]", got)
 	}
 	st, fm := readThermostat(ctx, bundle, ep, 0xFFFC)

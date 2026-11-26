@@ -149,10 +149,10 @@ func TestStartMatterBridge_EnabledReturnsBridge(t *testing.T) {
 	}
 	t.Cleanup(bundle.stop)
 
-	if addr := bundle.node.Bridge().LocalAddr(); addr == "" {
+	if addr := bundle.Node().Bridge().LocalAddr(); addr == "" {
 		t.Error("expected non-empty LocalAddr after bridge start")
 	}
-	if topo := bundle.node.Bridge().Topology(); topo == nil {
+	if topo := bundle.Node().Bridge().Topology(); topo == nil {
 		t.Error("expected non-nil Topology after bridge start")
 	}
 }
@@ -217,7 +217,7 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	if !bundle.configuredCommissioning {
 		t.Fatalf("the configured passcode was not recognised as configured; logs:\n%s", buf.String())
 	}
-	if p, err := bundle.node.SetupPayload(); err != nil || p.QR == "" || p.Manual == "" {
+	if p, err := bundle.Node().SetupPayload(); err != nil || p.QR == "" || p.Manual == "" {
 		t.Fatalf("SetupPayload = %q, %q, %v; want the configured passcode's codes", p.QR, p.Manual, err)
 	}
 }
