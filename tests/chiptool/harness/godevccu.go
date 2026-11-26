@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/SukramJ/godevccu/pkg/godevccu"
+	"sukramj.dev/godevccu/pkg/godevccu"
 )
 
 // DefaultDevices is the device fleet the chip-tool suite uses by

@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // childDeviceBlock is the `device` block of a per-entity discovery config,

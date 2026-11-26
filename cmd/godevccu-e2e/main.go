@@ -37,7 +37,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/SukramJ/godevccu/pkg/godevccu"
+	"sukramj.dev/godevccu/pkg/godevccu"
 )
 
 // defaultDevices mirrors harness.DefaultDevices so client tests can rely

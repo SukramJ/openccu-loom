@@ -12,7 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 )
 
 // TestCommandFiltersMatchTheRoutesReallyRegistered is the anti-drift pin on

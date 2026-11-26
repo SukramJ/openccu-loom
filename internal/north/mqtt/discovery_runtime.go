@@ -7,11 +7,11 @@ import (
 	"context"
 	"log/slog"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hamodel "github.com/SukramJ/go-hamqtt/model"
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
-	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
+	hamodel "sukramj.dev/go-hamqtt/model"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
+	hagomqtt "sukramj.dev/go-hamqtt/publisher/gomqtt"
+	hatopic "sukramj.dev/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )

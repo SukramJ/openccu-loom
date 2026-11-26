@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/godevccu/pkg/litefake"
+	"sukramj.dev/godevccu/pkg/litefake"
 )
 
 // AuthMode selects which authentication backend the harness wires

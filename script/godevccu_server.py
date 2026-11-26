@@ -20,7 +20,7 @@ import tempfile
 import time
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_MODULE_CMD = "github.com/SukramJ/godevccu/cmd/godevccu"
+_MODULE_CMD = "sukramj.dev/godevccu/cmd/godevccu"
 _START_TIMEOUT_S = 30.0
 _STOP_TIMEOUT_S = 5.0
 

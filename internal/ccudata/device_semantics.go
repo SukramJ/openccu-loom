@@ -3,7 +3,7 @@
 
 package ccudata
 
-import openccudata "github.com/SukramJ/go-openccu-data"
+import openccudata "sukramj.dev/go-openccu-data"
 
 // DoorbellModels returns the curated set of device models whose
 // press/ring channel is a doorbell rather than a generic button

@@ -48,7 +48,7 @@ import (
 	"testing"
 	"time"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"

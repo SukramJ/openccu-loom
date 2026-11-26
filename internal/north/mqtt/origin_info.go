@@ -3,7 +3,7 @@
 
 package mqtt
 
-import hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+import hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 // BuildOriginInfo returns the HA Discovery `origin` block that identifies
 // the bridge in every Discovery payload (HA 2024+). All call-sites use

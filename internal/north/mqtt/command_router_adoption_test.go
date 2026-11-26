@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
-	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
+	hagomqtt "sukramj.dev/go-hamqtt/publisher/gomqtt"
 )
 
 // wireRecorder records what each command subscription actually asked the

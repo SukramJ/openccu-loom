@@ -3,7 +3,7 @@
 
 package naming
 
-import "github.com/SukramJ/go-hamqtt/topic"
+import "sukramj.dev/go-hamqtt/topic"
 
 // DiscoverySlug turns s into an HA-Discovery-safe identifier suitable
 // for the `<node_id>` and `<object_id>` segments of

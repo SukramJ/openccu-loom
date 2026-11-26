@@ -34,11 +34,6 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-ha-catalog v0.3.1
-	github.com/SukramJ/go-hamqtt v0.40.0
-	github.com/SukramJ/go-mqtt v1.7.0
-	github.com/SukramJ/go-openccu-data v0.3.0
-	github.com/SukramJ/godevccu v0.12.0
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
@@ -63,6 +58,11 @@ require (
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.62.0
+	sukramj.dev/go-ha-catalog v0.4.0
+	sukramj.dev/go-hamqtt v0.41.0
+	sukramj.dev/go-mqtt v1.8.0
+	sukramj.dev/go-openccu-data v0.4.0
+	sukramj.dev/godevccu v0.13.0
 	thingfabric.dev/go-fabric v0.26.0
 	thingfabric.dev/go-fabric-ui v0.14.1
 )

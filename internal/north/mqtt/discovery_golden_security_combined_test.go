@@ -11,7 +11,7 @@ import (
 	"sort"
 	"testing"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/combined"

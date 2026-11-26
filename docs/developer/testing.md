@@ -30,7 +30,7 @@ For the **openccu-lite** south path the counterpart to `godevccu` is `litefake` 
 
 ## Running against a simulated system
 
-Both south-bound system types can be simulated on the workstation — no hardware involved. That is useful far beyond the test suites: developing against a large device fleet, demonstrations, or pointing a daemon on another machine at a reproducible counterpart. Both recipes use the [godevccu](https://github.com/SukramJ/godevccu) CLI; `go install github.com/SukramJ/godevccu/cmd/godevccu@latest` (or `make build` in its checkout) yields the one binary.
+Both south-bound system types can be simulated on the workstation — no hardware involved. That is useful far beyond the test suites: developing against a large device fleet, demonstrations, or pointing a daemon on another machine at a reproducible counterpart. Both recipes use the [godevccu](https://github.com/SukramJ/godevccu) CLI; `go install sukramj.dev/godevccu/cmd/godevccu@latest` (or `make build` in its checkout) yields the one binary.
 
 **A simulated CCU** (XML-RPC + JSON-RPC):
 

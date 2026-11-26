@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/godevccu/pkg/litefake"
+	"sukramj.dev/godevccu/pkg/litefake"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )

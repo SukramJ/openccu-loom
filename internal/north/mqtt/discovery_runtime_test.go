@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 )
 
 // seedDeclared puts one retained discovery config into the bridge's claim

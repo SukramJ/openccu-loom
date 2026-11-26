@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hacatalog "sukramj.dev/go-ha-catalog"
 )
 
 // dropForeignDeviceClass clears a device_class the rendered platform does not

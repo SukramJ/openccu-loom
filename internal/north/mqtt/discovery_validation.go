@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // discoveryKeysHomeAssistantIgnores are keys this daemon publishes on purpose

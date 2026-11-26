@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"

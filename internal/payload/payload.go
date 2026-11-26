@@ -6,7 +6,7 @@ package payload
 import (
 	"maps"
 
-	hapayload "github.com/SukramJ/go-hamqtt/payload"
+	hapayload "sukramj.dev/go-hamqtt/payload"
 )
 
 // Kind enumerates the payload categories. It mirrors the Python

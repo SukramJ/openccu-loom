@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

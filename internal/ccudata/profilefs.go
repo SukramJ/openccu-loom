@@ -10,7 +10,7 @@ import (
 	"path"
 	"time"
 
-	openccudata "github.com/SukramJ/go-openccu-data"
+	openccudata "sukramj.dev/go-openccu-data"
 )
 
 // ProfilesFS exposes the embedded profile archives as an [fs.FS] rooted at
