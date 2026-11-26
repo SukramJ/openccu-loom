@@ -68,7 +68,7 @@ so the DCO chain stays explicit as the contributor list grows.
 ## Implementation notes
 
 - `LICENSE` carries the MIT text plus a short pointer to the `NOTICE.md` of
-  the `github.com/SukramJ/go-openccu-data` module for the eQ-3 data layer.
+  the `sukramj.dev/go-openccu-data` module for the eQ-3 data layer.
 - Every Go, Markdown, YAML, HTML, and script file with an SPDX
   header uses `SPDX-License-Identifier: MIT`.
 - `go.mod` and module-level docs reflect MIT.

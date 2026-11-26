@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hamodel "sukramj.dev/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"

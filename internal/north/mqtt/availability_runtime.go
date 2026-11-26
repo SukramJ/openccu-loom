@@ -8,8 +8,8 @@ import (
 	"errors"
 	"log/slog"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
-	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
+	hagomqtt "sukramj.dev/go-hamqtt/publisher/gomqtt"
 )
 
 // newAvailabilityPublisher builds the state publisher the device, CCU,

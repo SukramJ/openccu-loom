@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hamodel "sukramj.dev/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"sync"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
-	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
+	hagomqtt "sukramj.dev/go-hamqtt/publisher/gomqtt"
+	hatopic "sukramj.dev/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 

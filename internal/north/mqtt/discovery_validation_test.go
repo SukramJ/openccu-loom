@@ -9,7 +9,7 @@ import (
 	"errors"
 	"testing"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 )

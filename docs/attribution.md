@@ -112,7 +112,7 @@ Extracting identifier names from a public source for the purpose of
 talking to the documented API surface is interoperability, not
 derivative-work creation. The CCU data archives that DO ship in the
 binary are addressed separately by ADR 0003 and the `NOTICE.md` of the
-`github.com/SukramJ/go-openccu-data` module they come from.
+`sukramj.dev/go-openccu-data` module they come from.
 
 ## homematicip-local-frontend — MIT
 

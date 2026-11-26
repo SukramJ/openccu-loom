@@ -9,8 +9,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
+	hamodel "sukramj.dev/go-hamqtt/model"
 )
 
 // weekProgramPresetPrefix is the domain prefix of the week-program

@@ -4,7 +4,7 @@
 package mqtt
 
 import (
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // hmAvailableTemplate reads the per-datapoint availability flag out of a

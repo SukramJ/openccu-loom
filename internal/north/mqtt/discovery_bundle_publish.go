@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"strings"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // publishDeviceBundle puts one node's whole discovery document on the broker,

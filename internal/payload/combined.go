@@ -8,7 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // HA entity categories a combined projection can place itself in.

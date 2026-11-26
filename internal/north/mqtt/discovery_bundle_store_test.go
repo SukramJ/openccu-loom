@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )

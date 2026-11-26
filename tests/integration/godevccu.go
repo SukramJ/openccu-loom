@@ -10,7 +10,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/SukramJ/godevccu/pkg/godevccu"
+	"sukramj.dev/godevccu/pkg/godevccu"
 )
 
 // defaultMockDevices is the device fleet pre-loaded into every

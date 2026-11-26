@@ -3,7 +3,7 @@
 
 package payload
 
-import hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+import hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 // HADiscoveryComponentBuilder is the predecessor of
 // [HADiscoveryEntityBuilder]: a source assembles the whole

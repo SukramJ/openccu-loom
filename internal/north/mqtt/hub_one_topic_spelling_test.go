@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hamodel "sukramj.dev/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

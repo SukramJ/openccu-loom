@@ -26,7 +26,7 @@ the claim and does not edit it.
 
 ## Context
 
-ADR 0050 moved the MQTT *transport* into `github.com/SukramJ/go-mqtt` and drew
+ADR 0050 moved the MQTT *transport* into `sukramj.dev/go-mqtt` and drew
 the boundary deliberately: the shared module has no knowledge of the domain,
 and *"the topic schema, HA-Discovery payload assembly, the value→payload
 projection"* stay in `internal/north/mqtt`. That was right for the transport
@@ -81,10 +81,10 @@ Nobody chose any of this. It is what copy-and-edit produces over time.
 
 **Two new modules, and this daemon is the first full consumer.**
 
-- **`github.com/SukramJ/go-hamqtt`** — the shared data model, the Home
+- **`sukramj.dev/go-hamqtt`** — the shared data model, the Home
   Assistant discovery bundle, and a publisher runtime on top of `go-mqtt`.
   Hand-written, SemVer, zero dependencies, MIT.
-- **`github.com/SukramJ/go-ha-catalog`** — the Home Assistant vocabulary
+- **`sukramj.dev/go-ha-catalog`** — the Home Assistant vocabulary
   (device classes, state classes, units, per-platform discovery schemas,
   abbreviations), **generated from a Home Assistant core checkout**. CalVer
   snapshot constant, zero dependencies, a data artifact and not a lookup

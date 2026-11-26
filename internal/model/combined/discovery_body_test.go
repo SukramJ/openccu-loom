@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // haBody flattens a projected component into the object Home Assistant

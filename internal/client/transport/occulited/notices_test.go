@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/SukramJ/godevccu/pkg/litefake"
+	"sukramj.dev/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 )

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // discoveryCall is one publishDiscovery call as the producing planes make it.

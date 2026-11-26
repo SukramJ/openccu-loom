@@ -48,8 +48,8 @@ import (
 	"strings"
 	"testing"
 
-	hamodel "github.com/SukramJ/go-hamqtt/model"
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
+	hamodel "sukramj.dev/go-hamqtt/model"
+	hatopic "sukramj.dev/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"

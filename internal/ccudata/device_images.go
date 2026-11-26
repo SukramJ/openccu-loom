@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	openccudata "github.com/SukramJ/go-openccu-data"
+	openccudata "sukramj.dev/go-openccu-data"
 )
 
 // deviceImageDir is the snapshot directory holding the 250px device

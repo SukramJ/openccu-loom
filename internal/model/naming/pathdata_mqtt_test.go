@@ -6,7 +6,7 @@ package naming
 import (
 	"testing"
 
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamqtt/model"
 )
 
 // helpers shared by the MQTT-topic tests.

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 )

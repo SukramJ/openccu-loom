@@ -22,7 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	gomqtt "github.com/SukramJ/go-mqtt"
+	gomqtt "sukramj.dev/go-mqtt"
 
 	"thingfabric.dev/go-fabric/secure/spake2"
 

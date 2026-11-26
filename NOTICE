@@ -17,7 +17,7 @@ every other upstream project and Go module is in THIRD-PARTY-NOTICES.md.
 
 The openccu-loom binary aggregates CCU metadata archives distributed
 under the eQ-3 HomeMatic Software License (non-commercial). They come from
-the github.com/SukramJ/go-openccu-data module and are governed by that
+the sukramj.dev/go-openccu-data module and are governed by that
 module's NOTICE.md; they are not covered by the License above. See
 docs/adr/0003-embed-occu-extracts.md and
 docs/adr/0053-go-openccu-data-module.md.
