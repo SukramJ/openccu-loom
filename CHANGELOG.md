@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.108.0] - 2026-11-26
+
 ### Added
 
 - **The Matter plane of a device's projection is held by a round trip
@@ -63,6 +65,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`openccu-loom matter reset --yes`** erases the Matter bridge's fabrics
   and credentials with the daemon stopped — the way back when the master
   key is lost. The device selection is kept; the bridge comes back unpaired.
+
+- **The Matter status and selection pages name the devices the bridge
+  holds no endpoint for**: a selected device the Matter device layer
+  refused, or one the configured specification level
+  (`north.matter.spec_level`) withholds, with the time it was first seen.
+  The warnings come from the same record as the log lines
+  `matter.assembler.device_refused` / `device_withheld`, disappear once the
+  device builds or leaves the selection, and show their message to admins
+  only. (#1056)
+- **The Matter pages reload after a gap in the event stream** (a daemon
+  restart, a connection that fell behind), instead of showing fabrics and
+  commissioning windows that changed meanwhile. (#1056)
+- **A shutdown ends open Matter node event streams at once** instead of
+  waiting for them until the shutdown deadline. (#1056)
 
 ### Changed
 
@@ -189,22 +205,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4.** The
   pseudo-version carries the fix for GO-2026-6278, which `hmcli`'s event
   stream reaches; no tagged release after v1.5.3 exists. (#1171)
-
-### Added
-
-- **The Matter status and selection pages name the devices the bridge
-  holds no endpoint for**: a selected device the Matter device layer
-  refused, or one the configured specification level
-  (`north.matter.spec_level`) withholds, with the time it was first seen.
-  The warnings come from the same record as the log lines
-  `matter.assembler.device_refused` / `device_withheld`, disappear once the
-  device builds or leaves the selection, and show their message to admins
-  only. (#1056)
-- **The Matter pages reload after a gap in the event stream** (a daemon
-  restart, a connection that fell behind), instead of showing fabrics and
-  commissioning windows that changed meanwhile. (#1056)
-- **A shutdown ends open Matter node event streams at once** instead of
-  waiting for them until the shutdown deadline. (#1056)
 
 ### Fixed
 
