@@ -1364,8 +1364,8 @@ func (c *InterfaceClient) CanTransitionTo(target hmenum.ClientState) bool {
 
 // GetVersion returns the software version string associated with this client.
 // For XML-RPC interfaces this is the value returned by the getVersion call
-// during backend detection. For JSON-RPC-only interfaces (CCU-Jack) it is
-// "0". Empty string means the version has not been determined yet.
+// during backend detection. Empty string means the version has not been
+// determined yet.
 func (c *InterfaceClient) GetVersion() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
