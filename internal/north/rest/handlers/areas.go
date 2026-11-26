@@ -48,7 +48,7 @@ func areaAudit(rec audit.Recorder, r *http.Request, note string) {
 	if rec == nil {
 		return
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(r.Context(), rec, audit.Entry{
 		User:   identityFromCtx(r.Context()),
 		Action: audit.ActionAreaChange,
 		Note:   note,

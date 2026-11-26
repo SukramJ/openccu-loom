@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"sync/atomic"
@@ -99,7 +100,7 @@ func PutStartupCapture(svc StartupCaptureService, rec audit.Recorder) http.Handl
 			if cfg.Enabled {
 				action = actionStartupCaptureEnabled
 			}
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: action,
 			})
@@ -186,10 +187,10 @@ func restartStatus(signalling bool) string {
 // The caller decides whether a restart is allowed at all; the REST route is
 // mounted only when a supervisor is detected, and the MQTT path asks the same
 // predicate before it gets here.
-func RequestRestart(rec audit.Recorder, user string) bool {
+func RequestRestart(ctx context.Context, rec audit.Recorder, user string) bool {
 	signalling := claimRestart(restartNow())
 	if rec != nil {
-		rec.Record(audit.Entry{
+		audit.RecordFrom(ctx, rec, audit.Entry{
 			User:   user,
 			Action: audit.ActionSystemRestartRequested,
 			Note:   restartStatus(signalling),
@@ -232,7 +233,7 @@ func Restart(rec audit.Recorder) http.HandlerFunc {
 			"at":     now.UTC().Format(time.RFC3339Nano),
 		})
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionSystemRestartRequested,
 				Note:   status,

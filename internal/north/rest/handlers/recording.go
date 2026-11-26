@@ -112,7 +112,7 @@ func PutRecordingOverride(svc RecordingOverrideService, rec audit.Recorder) http
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          user,
 				Action:        audit.ActionRecordingToggle,
 				DeviceAddress: req.Channel,

@@ -332,8 +332,34 @@ export interface paths {
     };
     "/devices/{addr}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -369,8 +395,34 @@ export interface paths {
     };
     "/devices/{addr}/icon": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -389,8 +441,34 @@ export interface paths {
     };
     "/devices/{addr}/projection": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -419,8 +497,34 @@ export interface paths {
     };
     "/devices/{addr}/channels": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -435,8 +539,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -461,8 +591,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/event-groups": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -483,8 +639,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/data-points": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -499,8 +681,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/data-points/{param}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -515,8 +723,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/data-points/{param}/value": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -542,8 +776,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/flags": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -565,8 +825,34 @@ export interface paths {
     };
     "/devices/{addr}/paramsets/{key}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 key: "VALUES" | "MASTER" | "LINK";
@@ -628,8 +914,34 @@ export interface paths {
     };
     "/devices/{addr}/paramsets/{key}/apply-targets": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -657,8 +969,34 @@ export interface paths {
     };
     "/devices/{addr}/paramsets/{key}/apply-to": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2023,8 +2361,34 @@ export interface paths {
     };
     "/devices/{addr}/reload": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2040,8 +2404,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/reload": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2057,8 +2447,34 @@ export interface paths {
     };
     "/devices/{addr}/accept": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2096,8 +2512,34 @@ export interface paths {
     };
     "/devices/{addr}/release": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2162,8 +2604,34 @@ export interface paths {
     };
     "/devices/{addr}/firmware/update": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2186,8 +2654,34 @@ export interface paths {
     };
     "/devices/{addr}/config/restore": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2216,8 +2710,34 @@ export interface paths {
     };
     "/devices/{addr}/config/repair": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2268,8 +2788,34 @@ export interface paths {
     };
     "/devices/{addr}/config/cache-clear": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2293,8 +2839,34 @@ export interface paths {
     };
     "/devices/{addr}/rf-interface": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2320,8 +2892,34 @@ export interface paths {
     };
     "/devices/{addr}/test": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2352,8 +2950,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/team-candidates": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2375,8 +2999,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/team": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2397,8 +3047,34 @@ export interface paths {
     };
     "/devices/{addr}/replace-candidates": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2423,8 +3099,34 @@ export interface paths {
     };
     "/devices/{addr}/replace": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2484,8 +3186,34 @@ export interface paths {
     };
     "/devices/{addr}/install-mode": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2506,8 +3234,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/paramsets/{key}/determine": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2532,8 +3286,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/ui-schema": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2549,8 +3329,34 @@ export interface paths {
     };
     "/devices/{addr}/export-definition": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2575,8 +3381,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/config/export": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2598,8 +3430,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/config/import": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2621,8 +3479,34 @@ export interface paths {
     };
     "/devices/{addr}/cdps": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2638,8 +3522,34 @@ export interface paths {
     };
     "/devices/{addr}/cdps/{name}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2655,8 +3565,34 @@ export interface paths {
     };
     "/devices/{addr}/cdps/{name}/{operation}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2672,8 +3608,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/calc-dps": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2689,8 +3651,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/calc-dps/{name}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2706,8 +3694,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/linkable-channels": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2723,8 +3737,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/week_profile": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2746,8 +3786,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2767,8 +3833,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/schedule": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2785,8 +3877,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/schedule/active-profile": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2802,8 +3920,34 @@ export interface paths {
     };
     "/devices/{addr}/schedule": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2820,8 +3964,34 @@ export interface paths {
     };
     "/devices/{addr}/schedule/active-profile": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2837,8 +4007,34 @@ export interface paths {
     };
     "/devices/{addr}/schedules/copy": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2854,8 +4050,34 @@ export interface paths {
     };
     "/devices/{addr}/channels/{no}/week_profile/copy": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2871,8 +4093,34 @@ export interface paths {
     };
     "/devices/{addr}/links": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2891,8 +4139,34 @@ export interface paths {
     };
     "/devices/{addr}/links/test": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2917,8 +4191,34 @@ export interface paths {
     };
     "/devices/{addr}/link-ps/{peer}": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2935,8 +4235,34 @@ export interface paths {
     };
     "/devices/{addr}/central-links": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -3586,6 +4912,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/audit": {
+        parameters: {
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change history of one device
+         * @description The change log of one device: the device and its channels, matched
+         *     exactly (unlike the prefix filter of `GET /audit`). Open to every
+         *     principal with the operator role, where the whole log is
+         *     admin-only, because one device's history exposes only what an
+         *     operator of that device already acts on.
+         */
+        get: operations["listDeviceAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/measurements/recording": {
         parameters: {
             query?: never;
@@ -4071,8 +5447,34 @@ export interface paths {
     };
     "/devices/{addr}/values-cache/reset": {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -8219,6 +9621,12 @@ export interface components {
             timestamp: string;
             /** @description Authenticated user who triggered the change (empty if unauthenticated). */
             user?: string;
+            /**
+             * @description Who the principal in `user` asserted it acted for (the
+             *     `X-On-Behalf-Of` header of an entry credential). Recorded as
+             *     asserted, never verified. Omitted when the request named no one.
+             */
+            on_behalf_of?: string;
             /** @description Stable action tag, e.g. paramset_write, link_add, data_point_write. New values may be added in future releases. */
             action: string;
             /** @description Primary device or channel address, if applicable. */
@@ -9787,8 +11195,34 @@ export interface components {
             module_url: string;
             /** @description Hex SHA-256 of the module's bytes. */
             hash: string;
-            /** @description Path prefixes below /api/v1 the editor calls. */
-            routes: string[];
+            /**
+             * @description The calls the editor makes. A relay forwards a call only when one
+             *     entry covers it: the method matches and the prefix covers the
+             *     path below /api/v1.
+             */
+            routes: components["schemas"]["EditorRoute"][];
+        };
+        /**
+         * @description The export format of a change-log read: `csv` answers a downloadable
+         *     `text/csv` attachment instead of JSON. A named schema rather than an
+         *     inline enum, so adding it renumbered no generated client's enums.
+         * @enum {string}
+         */
+        AuditExportFormat: "csv";
+        /**
+         * @description The upper-case HTTP method of an editor route.
+         * @enum {string}
+         */
+        EditorRouteMethod: "GET" | "PUT" | "POST" | "PATCH" | "DELETE";
+        EditorRoute: {
+            method: components["schemas"]["EditorRouteMethod"];
+            /**
+             * @description Absolute path prefix below /api/v1, without a trailing slash. It
+             *     covers itself and every path below it, segment by segment; a `*`
+             *     segment matches exactly one non-empty segment.
+             * @example /devices/*\/paramsets
+             */
+            prefix: string;
         };
         SurfacesResponse: {
             /** @description The master toggle — whether Home Assistant owns this daemon's config surface. */
@@ -12616,6 +14050,30 @@ export interface components {
         /** @description Only the newest `limit` of the matching events; absent is 100. */
         EventLimit: number;
         Address: string;
+        /**
+         * @description Binds the request to one CCU. Device addresses are not unique
+         *     across CCUs (virtual remotes, internal devices and CUxD devices
+         *     repeat on every CCU), so a caller that knows which CCU it means
+         *     names it here: the address then resolves on that central alone and
+         *     never falls back to another one. A central that does not exist, or
+         *     does not hold the address, answers 404 before the operation runs.
+         *     Absent, the address resolves on the first central (by name) that
+         *     holds it.
+         */
+        DeviceCentral: string;
+        /**
+         * @description Accepted on every request; listed on the device routes, the ones an
+         *     integration relays for its users. Who an entry credential acts for,
+         *     recorded in the change log as
+         *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+         *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+         *     Accepted only from an API token (`bearer`) or a box API token; from
+         *     any other principal it is ignored. It is an assertion the daemon
+         *     cannot check and never uses for authorization. A value longer than
+         *     128 bytes, not UTF-8, with a control character, empty or sent twice
+         *     answers 400.
+         */
+        OnBehalfOf: string;
         ChannelNo: number;
         Parameter: string;
         Page: number;
@@ -13137,8 +14595,34 @@ export interface operations {
     };
     getDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
             };
@@ -13161,12 +14645,37 @@ export interface operations {
     deleteDevice: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 /** @description Also reset the device to factory defaults during removal (CCU DELETE_FLAG_RESET). */
                 reset?: boolean;
                 /** @description Force removal even when the device is unreachable (CCU DELETE_FLAG_FORCE). */
                 force?: boolean;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
             };
@@ -13189,8 +14698,34 @@ export interface operations {
     };
     patchDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
             };
@@ -13218,8 +14753,34 @@ export interface operations {
     };
     getDeviceIcon: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
             };
@@ -13242,10 +14803,35 @@ export interface operations {
     getDeviceProjection: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 /** @description Narrows the answer to one plane. A name this daemon does not answer for yields an empty `planes` list. */
                 plane?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
             };
@@ -13267,8 +14853,34 @@ export interface operations {
     };
     listDeviceChannels: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
             };
@@ -13290,8 +14902,34 @@ export interface operations {
     };
     getDeviceChannel: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13314,8 +14952,34 @@ export interface operations {
     };
     patchChannel: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13344,8 +15008,34 @@ export interface operations {
     };
     listChannelEventGroups: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13368,8 +15058,34 @@ export interface operations {
     };
     listChannelDataPoints: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13392,8 +15108,34 @@ export interface operations {
     };
     getChannelDataPoint: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13417,8 +15159,33 @@ export interface operations {
     };
     putDataPointValue: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
             header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
                 /** @description Optional UUID for retry deduplication. See description. */
                 "Idempotency-Key"?: string;
             };
@@ -13451,8 +15218,34 @@ export interface operations {
     };
     getChannelFlags: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13475,8 +15268,34 @@ export interface operations {
     };
     putChannelFlags: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -13505,8 +15324,34 @@ export interface operations {
     };
     getParamset: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 key: "VALUES" | "MASTER" | "LINK";
@@ -13533,8 +15378,33 @@ export interface operations {
     };
     putParamset: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
             header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
                 /** @description Optional UUID for client-side retry de-duplication. See description. */
                 "Idempotency-Key"?: string;
                 /** @description Edit-lock token for MASTER and LINK writes. These configuration paramsets are gated behind the per-resource edit lock: the caller must open an edit session (`POST /sessions/edit` with key `channel:{addr}:{key}`) and present the returned token here, else the write is rejected 423 Locked. VALUES writes are ungated and ignore this header. */
@@ -13579,8 +15449,34 @@ export interface operations {
     };
     getParamsetApplyTargets: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 key: "MASTER";
@@ -13606,8 +15502,33 @@ export interface operations {
     };
     applyParamsetToChannels: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
             header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
                 /** @description Edit-lock token of the source channel (`channel:{addr}:MASTER`). */
                 "X-Edit-Token"?: string;
             };
@@ -15568,8 +17489,34 @@ export interface operations {
     };
     reloadDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15591,8 +17538,34 @@ export interface operations {
     };
     reloadChannel: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: string;
@@ -15615,8 +17588,34 @@ export interface operations {
     };
     acceptInboxDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15643,8 +17642,34 @@ export interface operations {
     };
     releaseDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15686,8 +17711,33 @@ export interface operations {
     };
     updateFirmware: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
             header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
                 /**
                  * @description Optional client-supplied UUID for retry deduplication on
                  *     mutating requests. The daemon caches the response per
@@ -15729,8 +17779,34 @@ export interface operations {
     };
     restoreDeviceConfig: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15757,8 +17833,34 @@ export interface operations {
     };
     repairDeviceConfig: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15787,8 +17889,34 @@ export interface operations {
     };
     clearDeviceConfigCache: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15812,8 +17940,34 @@ export interface operations {
     };
     assignRFInterface: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15841,8 +17995,34 @@ export interface operations {
     };
     testDeviceCommunication: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15868,8 +18048,34 @@ export interface operations {
     };
     getDeviceTeamCandidates: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -15896,8 +18102,34 @@ export interface operations {
     };
     setDeviceChannelTeam: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: components["parameters"]["Address"];
                 no: components["parameters"]["ChannelNo"];
@@ -15930,7 +18162,21 @@ export interface operations {
                 /** @description Disambiguates the CCU; optional for single-CCU setups. */
                 central?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -15955,8 +18201,34 @@ export interface operations {
     };
     replaceDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16017,8 +18289,34 @@ export interface operations {
     };
     deviceInstallMode: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16045,8 +18343,34 @@ export interface operations {
     };
     determineParameter: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16085,12 +18409,37 @@ export interface operations {
     getUiSchema: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 paramset?: "VALUES" | "MASTER" | "LINK";
                 peer?: string;
                 locale?: string;
                 expert?: boolean;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16116,8 +18465,34 @@ export interface operations {
     };
     exportDeviceDefinition: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16152,10 +18527,35 @@ export interface operations {
     exportChannelConfig: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 /** @description Paramset to export. MASTER is the default (persistent channel settings). */
                 paramset?: "MASTER" | "VALUES";
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16189,8 +18589,33 @@ export interface operations {
     };
     importChannelConfig: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
             header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
                 /** @description Edit-lock token for a MASTER or LINK snapshot. Importing one is a configuration write and passes the same per-resource edit lock as PUT /devices/{addr}/paramsets/{key}: open an edit session (`POST /sessions/edit` with key `channel:{addr}:{no}:{paramset_key}`) and present the returned token here, else the import is rejected 423 Locked before any CCU call. A VALUES snapshot is ungated and ignores this header. */
                 "X-Edit-Token"?: string;
             };
@@ -16229,8 +18654,34 @@ export interface operations {
     };
     listCustomDataPoints: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16252,8 +18703,34 @@ export interface operations {
     };
     getCustomDataPoint: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 name: string;
@@ -16276,8 +18753,34 @@ export interface operations {
     };
     invokeCustomDataPoint: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 name: string;
@@ -16308,8 +18811,34 @@ export interface operations {
     };
     listCalculatedDataPoints: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16333,8 +18862,34 @@ export interface operations {
     };
     getCalculatedDataPoint: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16360,11 +18915,36 @@ export interface operations {
     linkableChannels: {
         parameters: {
             query: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 role: "sender" | "receiver";
                 interface: string;
                 locale?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16389,8 +18969,34 @@ export interface operations {
     };
     getChannelWeekProfile: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16413,8 +19019,34 @@ export interface operations {
     };
     putWeekProfileChannelLock: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16443,8 +19075,34 @@ export interface operations {
     };
     getChannelSchedule: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16470,8 +19128,34 @@ export interface operations {
     };
     putChannelSchedule: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16505,8 +19189,34 @@ export interface operations {
     };
     setChannelActiveProfile: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16534,8 +19244,34 @@ export interface operations {
     };
     getDeviceSchedule: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16559,8 +19295,34 @@ export interface operations {
     };
     putDeviceSchedule: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16593,8 +19355,34 @@ export interface operations {
     };
     setDeviceActiveProfile: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16621,8 +19409,34 @@ export interface operations {
     };
     copyDeviceSchedule: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16650,8 +19464,34 @@ export interface operations {
     };
     copyClimateProfile: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 no: number;
@@ -16681,9 +19521,34 @@ export interface operations {
     listLinks: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 locale?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16707,8 +19572,34 @@ export interface operations {
     };
     addLink: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16735,10 +19626,35 @@ export interface operations {
     removeLink: {
         parameters: {
             query: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 sender: string;
                 receiver: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16760,8 +19676,34 @@ export interface operations {
     };
     updateLink: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16787,8 +19729,34 @@ export interface operations {
     };
     testLinkAtDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16829,8 +19797,34 @@ export interface operations {
     };
     getLinkParamset: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
                 peer: string;
@@ -16855,8 +19849,33 @@ export interface operations {
     };
     putLinkParamset: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
             header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
                 /** @description Edit-lock token. A LINK paramset is per-peer configuration gated behind the per-resource edit lock: the caller must open an edit session (`POST /sessions/edit` with key `channel:{addr}:LINK:{peer}`) and present the returned token here, else the write is rejected 423 Locked. */
                 "X-Edit-Token"?: string;
             };
@@ -16886,8 +19905,34 @@ export interface operations {
     };
     getCentralLinksStatus: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16911,10 +19956,35 @@ export interface operations {
     createCentralLinks: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 /** @description Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device. */
                 channel?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -16937,10 +20007,35 @@ export interface operations {
     removeCentralLinks: {
         parameters: {
             query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
                 /** @description Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device. */
                 channel?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };
@@ -18074,6 +21169,67 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    listDeviceAudit: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+                /** @description Filter by action/source tag substring (case-insensitive). */
+                op?: string;
+                /** @description Only entries at or after this instant (RFC3339). */
+                since?: string;
+                /** @description Only entries strictly before this instant (RFC3339). */
+                until?: string;
+                limit?: number;
+                offset?: number;
+                /** @description When `csv`, a downloadable `text/csv` attachment instead of JSON. */
+                format?: components["schemas"]["AuditExportFormat"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
+            path: {
+                addr: components["parameters"]["Address"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The device's entries, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getRecordingOverride: {
         parameters: {
             query: {
@@ -18772,8 +21928,34 @@ export interface operations {
     };
     resetValuesCacheDevice: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /**
+                 * @description Binds the request to one CCU. Device addresses are not unique
+                 *     across CCUs (virtual remotes, internal devices and CUxD devices
+                 *     repeat on every CCU), so a caller that knows which CCU it means
+                 *     names it here: the address then resolves on that central alone and
+                 *     never falls back to another one. A central that does not exist, or
+                 *     does not hold the address, answers 404 before the operation runs.
+                 *     Absent, the address resolves on the first central (by name) that
+                 *     holds it.
+                 */
+                central?: components["parameters"]["DeviceCentral"];
+            };
+            header?: {
+                /**
+                 * @description Accepted on every request; listed on the device routes, the ones an
+                 *     integration relays for its users. Who an entry credential acts for,
+                 *     recorded in the change log as
+                 *     `on_behalf_of` beside the authenticated principal — e.g. the Home
+                 *     Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+                 *     Accepted only from an API token (`bearer`) or a box API token; from
+                 *     any other principal it is ignored. It is an assertion the daemon
+                 *     cannot check and never uses for authorization. A value longer than
+                 *     128 bytes, not UTF-8, with a control character, empty or sent twice
+                 *     answers 400.
+                 */
+                "X-On-Behalf-Of"?: components["parameters"]["OnBehalfOf"];
+            };
             path: {
                 addr: string;
             };

@@ -322,7 +322,7 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder, onboarding Centr
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionCentralCreate,
 				Note:   "name=" + row.Name,
@@ -415,7 +415,7 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder, onboarding Centr
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionCentralUpdate,
 				Note:   "name=" + name,
@@ -557,7 +557,7 @@ func DeleteCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionCentralDelete,
 				Note:   "name=" + name,

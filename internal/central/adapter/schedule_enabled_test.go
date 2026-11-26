@@ -467,7 +467,7 @@ func TestChannelKeyBitmaskEmptyKeyWithWeekProfile(t *testing.T) {
 func TestResolveOpsNilRegistryAndWriter(t *testing.T) {
 	t.Parallel()
 	s := NewSchedulesDomain(nil, nil)
-	_, _, err := s.resolveOps("DEV001", 1)
+	_, _, err := s.resolveOps(context.Background(), "DEV001", 1)
 	if err == nil {
 		t.Error("nil registry must return error")
 	}
@@ -479,7 +479,7 @@ func TestResolveOpsDeviceNotFound(t *testing.T) {
 	s := NewSchedulesDomain(reg, nil)
 	// writer is nil but registry exists; device not found anyway
 	// Note: nil writer triggers early return
-	_, _, err := s.resolveOps("NOSUCHDEV", 1)
+	_, _, err := s.resolveOps(context.Background(), "NOSUCHDEV", 1)
 	if err == nil {
 		t.Error("nil writer must return error")
 	}
@@ -497,7 +497,7 @@ func TestResolveOpsDeviceFoundNilWriter(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	s := NewSchedulesDomain(reg, nil) // nil writer
-	_, _, err = s.resolveOps("DEV-OPS", 1)
+	_, _, err = s.resolveOps(context.Background(), "DEV-OPS", 1)
 	// writer is nil → ErrNoScheduleBackend
 	if err == nil {
 		t.Error("nil writer with found device must return error")

@@ -36,7 +36,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 	if a.writer == nil {
 		return nil, errors.New("ui-schema: LINK paramset requires wired value writer")
 	}
-	c := a.findCentralFor(dev.Address)
+	c := a.findCentralFor(ctx, dev.Address)
 	if c == nil {
 		return nil, hmapi.ErrUISchemaNotFound
 	}
@@ -122,7 +122,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 	// as ActiveProfileID so the SPA can pre-select it.
 	if a.profiles != nil {
 		if raw, ok := a.profiles.Resolve(channelType); ok {
-			senderType := a.peerChannelType(peer)
+			senderType := a.peerChannelType(ctx, peer)
 			filtered, defs, resolvedSender, err := filterProfileDocBySender(raw, senderType)
 			if err != nil {
 				return nil, fmt.Errorf("ui-schema: filter link profile: %w", err)
@@ -260,11 +260,11 @@ func rawFloatGreaterThan(raw []byte, threshold float64) bool {
 }
 
 // findCentralFor returns the central that owns deviceAddress.
-func (a *UISchemaAdapter) findCentralFor(deviceAddress string) *central.Unit {
+func (a *UISchemaAdapter) findCentralFor(ctx context.Context, deviceAddress string) *central.Unit {
 	if a.registry == nil {
 		return nil
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		if _, ok := u.ModelRegistry.Get(deviceAddress); ok {
 			return u
 		}

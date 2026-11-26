@@ -159,7 +159,7 @@ func (s *SchedulesDomain) FindScheduleChannel(ctx context.Context, deviceAddress
 	if s.registry == nil {
 		return 0, ErrNoScheduleBackend
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -546,7 +546,7 @@ func (s *SchedulesDomain) CopySchedule(
 func (s *SchedulesDomain) GetClimateSchedule(
 	ctx context.Context, deviceAddress string, channelNo int,
 ) (*hmapi.ClimateSchedule, error) {
-	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
+	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return nil, err
 	}
@@ -575,8 +575,8 @@ func (s *SchedulesDomain) GetClimateSchedule(
 		return dto, nil
 	}
 	if hasSimpleScheduleParams(values) {
-		domain := s.detectScheduleDomain(deviceAddress, channelNo)
-		entries := parseSimpleScheduleWithDomain(values, domain, s.targetChannelBitsFor(deviceAddress, channelNo))
+		domain := s.detectScheduleDomain(ctx, deviceAddress, channelNo)
+		entries := parseSimpleScheduleWithDomain(values, domain, s.targetChannelBitsFor(ctx, deviceAddress, channelNo))
 		return &hmapi.ClimateSchedule{
 			Channel:       chRef,
 			Kind:          "simple",
@@ -615,11 +615,11 @@ func hasColorScheduleParams(raw map[string]any) bool {
 // field instead of guessing a position; see [weekprofile.TargetChannelBits].
 // astroOffsetLimitsFor resolves the channel's declared ASTRO_OFFSET range,
 // the way the CCU's editor reads it out of the paramset description.
-func (s *SchedulesDomain) astroOffsetLimitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.AstroOffsetLimits {
+func (s *SchedulesDomain) astroOffsetLimitsFor(ctx context.Context, deviceAddress string, scheduleChannelNo int) weekprofile.AstroOffsetLimits {
 	if s.registry == nil {
 		return weekprofile.AstroOffsetLimits{}
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -629,11 +629,11 @@ func (s *SchedulesDomain) astroOffsetLimitsFor(deviceAddress string, scheduleCha
 	return weekprofile.AstroOffsetLimits{}
 }
 
-func (s *SchedulesDomain) targetChannelBitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.TargetChannelBits {
+func (s *SchedulesDomain) targetChannelBitsFor(ctx context.Context, deviceAddress string, scheduleChannelNo int) weekprofile.TargetChannelBits {
 	if s.registry == nil {
 		return nil
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -651,11 +651,11 @@ func (s *SchedulesDomain) targetChannelBitsFor(deviceAddress string, scheduleCha
 	return nil
 }
 
-func (s *SchedulesDomain) detectScheduleDomain(deviceAddress string, scheduleChannelNo int) string {
+func (s *SchedulesDomain) detectScheduleDomain(ctx context.Context, deviceAddress string, scheduleChannelNo int) string {
 	if s.registry == nil {
 		return ""
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -1098,7 +1098,7 @@ func isCCUScheduleFalsePositive(err error) bool {
 func (s *SchedulesDomain) PutClimateSchedule(
 	ctx context.Context, deviceAddress string, channelNo int, sched *hmapi.ClimateSchedule,
 ) ([]hmapi.ClimateTimeCorrection, error) {
-	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
+	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return nil, err
 	}
@@ -1120,7 +1120,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	switch sched.Kind {
 	case "simple":
 		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys),
-			s.targetChannelBitsFor(deviceAddress, channelNo), s.astroOffsetLimitsFor(deviceAddress, channelNo))
+			s.targetChannelBitsFor(ctx, deviceAddress, channelNo), s.astroOffsetLimitsFor(ctx, deviceAddress, channelNo))
 		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out schedule fields the device does not advertise in its
 			// MASTER paramset description. Devices like HmIP-DLD expose only a
@@ -1179,7 +1179,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 			slog.String("err", err.Error()),
 		)
 	}
-	s.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionScheduleWrite,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     channelNo,
@@ -1221,7 +1221,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 		return fmt.Errorf("%w: %q exceeds device cap P1..P%d for %s",
 			ErrInvalidProfileID, profile, maxProfiles, deviceAddress)
 	}
-	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
+	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return err
 	}
@@ -1230,7 +1230,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 	idx, _ := strconv.Atoi(strings.TrimPrefix(profile, "P"))
 	writeAddr, paramsetKey := channelAddr, hmenum.ParamsetKeyValues
 	param, value := string(hmenum.ParameterActiveProfile), any(idx)
-	if ptr, ok := s.profilePointerFor(deviceAddress); ok {
+	if ptr, ok := s.profilePointerFor(ctx, deviceAddress); ok {
 		writeAddr = ptr.channelAddress
 		paramsetKey = ptr.paramsetKey
 		param = string(ptr.parameter)
@@ -1241,7 +1241,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 	}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		return err
 	}
-	s.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionActiveProfile,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     channelNo,
@@ -1271,7 +1271,7 @@ func (s *SchedulesDomain) readActiveProfile(
 ) (profileID string, index int, ok bool) {
 	readAddr, paramsetKey := channelAddr, hmenum.ParamsetKeyValues
 	param, offset := string(hmenum.ParameterActiveProfile), 1
-	if ptr, found := s.profilePointerFor(deviceAddress); found {
+	if ptr, found := s.profilePointerFor(ctx, deviceAddress); found {
 		readAddr = ptr.channelAddress
 		paramsetKey = ptr.paramsetKey
 		param = string(ptr.parameter)
@@ -1303,11 +1303,11 @@ func (s *SchedulesDomain) readActiveProfile(
 // profilePointerFor resolves the device's week-program pointer through
 // the model registry. Returns false when the device is unknown or has no
 // pointer data point hydrated yet.
-func (s *SchedulesDomain) profilePointerFor(deviceAddress string) (profilePointer, bool) {
+func (s *SchedulesDomain) profilePointerFor(ctx context.Context, deviceAddress string) (profilePointer, bool) {
 	if s.registry == nil {
 		return profilePointer{}, false
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -1321,12 +1321,12 @@ func (s *SchedulesDomain) profilePointerFor(deviceAddress string) (profilePointe
 // address. Mirrors ParamsetsDomain.resolve but scoped to a channel
 // number so the caller doesn't have to synthesise "addr:no" itself.
 func (s *SchedulesDomain) resolve(
-	deviceAddress string, channelNo int,
+	ctx context.Context, deviceAddress string, channelNo int,
 ) (paramsetBackend, string, error) {
 	if s.registry == nil || s.writer == nil {
 		return nil, "", ErrNoScheduleBackend
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue

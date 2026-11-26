@@ -662,7 +662,9 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 	allowedWithoutName := map[string]string{
 		"Names": "returns all names — correct to not take a name param",
 		"List":  "returns all centrals — aggregation, not lookup",
-		"Len":   "counts the registry — no single central involved",
+		"Scoped": "names its central through the request context (hmreqctx.CentralScope), which only the " +
+			"device-route guard sets after checking the name; unscoped it is List",
+		"Len": "counts the registry — no single central involved",
 		"ConfiguredInterfaceIDs": "aggregates every central's configured interfaces into one set — no single central involved; " +
 			"each wire interface id carries its central's name",
 		"StartAll":           "fans out to all centrals",

@@ -198,9 +198,9 @@ func (emptyCentrals) Names() []string { return nil }
 
 type emptyDevices struct{}
 
-func (emptyDevices) Devices() []*device.Device            { return nil }
-func (emptyDevices) Device(string) (*device.Device, bool) { return nil, false }
-func (emptyDevices) CentralOf(string) string              { return "" }
+func (emptyDevices) Devices() []*device.Device                             { return nil }
+func (emptyDevices) Device(context.Context, string) (*device.Device, bool) { return nil, false }
+func (emptyDevices) CentralOf(string) string                               { return "" }
 
 type mcpNoopWriter struct{}
 

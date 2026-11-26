@@ -298,15 +298,21 @@ type Entry struct {
 	// column, including the second-resolution timestamp — so consumers that
 	// need a stable per-row identity (list keys, expansion state) must key
 	// on it rather than on a field tuple.
-	ID            int64     `json:"id"`
-	Timestamp     time.Time `json:"timestamp"`
-	User          string    `json:"user,omitempty"`
-	Action        Action    `json:"action"`
-	DeviceAddress string    `json:"device_address,omitempty"`
-	ChannelNo     int       `json:"channel_no,omitempty"`
-	Paramset      string    `json:"paramset,omitempty"`
-	Peer          string    `json:"peer,omitempty"`
-	Parameter     string    `json:"parameter,omitempty"`
+	ID        int64     `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	// User is the authenticated principal that made the change.
+	User string `json:"user,omitempty"`
+	// OnBehalfOf is who that principal asserted it acted for (the
+	// X-On-Behalf-Of header of an entry credential); see [Actor]. Recorded,
+	// never checked or used for authorization. Producers do not set it:
+	// [RecordFrom] takes it from the request.
+	OnBehalfOf    string `json:"on_behalf_of,omitempty"`
+	Action        Action `json:"action"`
+	DeviceAddress string `json:"device_address,omitempty"`
+	ChannelNo     int    `json:"channel_no,omitempty"`
+	Paramset      string `json:"paramset,omitempty"`
+	Peer          string `json:"peer,omitempty"`
+	Parameter     string `json:"parameter,omitempty"`
 	// Changes lists per-parameter before/after pairs for paramset
 	// writes. Empty for boolean actions like link_remove.
 	Changes []Change `json:"changes,omitempty"`
@@ -321,11 +327,16 @@ type Entry struct {
 // page-by-page retrieval over the full history rather than a fixed
 // in-memory window.
 type Query struct {
-	Device string    // device-address prefix (case-insensitive)
-	Since  time.Time // inclusive lower bound (zero = no bound)
-	Until  time.Time // exclusive upper bound (zero = no bound)
-	Limit  int
-	Offset int
+	Device string // device-address prefix (case-insensitive)
+	// DeviceExact, when set, keeps only the rows of exactly this device and
+	// its channels (`ADDR` and `ADDR:n`), unlike the prefix match of Device,
+	// which also returns every other address starting with the same
+	// characters. A read scoped to one device for a non-admin uses it.
+	DeviceExact string
+	Since       time.Time // inclusive lower bound (zero = no bound)
+	Until       time.Time // exclusive upper bound (zero = no bound)
+	Limit       int
+	Offset      int
 }
 
 // Change is one parameter delta within an Entry.
@@ -392,6 +403,15 @@ func (b *Buffer) Record(e Entry) {
 	if len(b.entries) > b.cap {
 		b.entries = b.entries[:b.cap]
 	}
+}
+
+// Replay puts a row the durable store already holds back into the buffer,
+// verbatim — its principal and its "on behalf of" assertion included. It is
+// the boot-time hydration path, not a producer: a new row goes through
+// [RecordFrom], which takes the assertion from the request and would erase
+// the stored one, since a replay has no request.
+func (b *Buffer) Replay(e Entry) {
+	b.Record(e)
 }
 
 // List returns up to `limit` most-recent entries (or all when limit

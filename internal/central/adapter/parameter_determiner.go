@@ -61,7 +61,7 @@ func (a *ParameterDeterminerAdapter) DetermineParameter(
 		return nil, ErrNoDetermineBackend
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue

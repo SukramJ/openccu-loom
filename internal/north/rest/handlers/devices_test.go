@@ -38,7 +38,7 @@ func (s *stubDeviceIndex) Devices() []*device.Device {
 	return out
 }
 
-func (s *stubDeviceIndex) Device(address string) (*device.Device, bool) {
+func (s *stubDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := s.devices[address]
 	return d, ok
 }
@@ -1009,7 +1009,7 @@ func (m *multiCentralDeviceIndex) Devices() []*device.Device {
 	return out
 }
 
-func (m *multiCentralDeviceIndex) Device(address string) (*device.Device, bool) {
+func (m *multiCentralDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := m.devices[address]
 	return d, ok
 }

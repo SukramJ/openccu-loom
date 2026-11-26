@@ -27,7 +27,7 @@ func (a *DeviceAdminDomain) SearchWiredDevices(ctx context.Context, centralName,
 	if !iface.SupportsDeviceSearch() {
 		return 0, fmt.Errorf("search devices: interface %s: %w", interfaceID, backends.ErrUnsupported)
 	}
-	unit, err := a.resolveReplaceCentral(centralName)
+	unit, err := a.resolveReplaceCentral(ctx, centralName)
 	if err != nil {
 		return 0, err
 	}

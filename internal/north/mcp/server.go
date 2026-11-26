@@ -44,7 +44,7 @@ type CentralLister interface {
 // the REST DeviceIndex contract so both adapters project the same data.
 type DeviceLister interface {
 	Devices() []*device.Device
-	Device(address string) (*device.Device, bool)
+	Device(ctx context.Context, address string) (*device.Device, bool)
 	// CentralOf returns the owning CCU name, or "" when the device is
 	// unknown.
 	CentralOf(address string) string

@@ -81,9 +81,10 @@ func (s *AuditStore) Append(ctx context.Context, entry audit.Entry) error {
 		changes = string(raw)
 	}
 	const q = `
-INSERT INTO audit_log (timestamp, user, action, device_address, channel_no, paramset, peer, parameter, note, changes_json)
+INSERT INTO audit_log (timestamp, user, on_behalf_of, action, device_address, channel_no, paramset, peer, parameter, note, changes_json)
 VALUES (
     COALESCE(?, CURRENT_TIMESTAMP),
+    NULLIF(?, ''),
     NULLIF(?, ''),
     ?,
     NULLIF(?, ''),
@@ -102,6 +103,7 @@ VALUES (
 		ctx, q,
 		ts,
 		entry.User,
+		entry.OnBehalfOf,
 		string(entry.Action),
 		entry.DeviceAddress,
 		entry.ChannelNo,
@@ -161,7 +163,12 @@ func (s *AuditStore) Query(ctx context.Context, q audit.Query) ([]audit.Entry, e
 		args = append(args, q.Until.UTC().Format("2006-01-02 15:04:05"))
 	}
 
-	sqlStr := `SELECT id, timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
+	if q.DeviceExact != "" {
+		where = append(where, `(device_address = ? OR device_address LIKE ? ESCAPE '\')`)
+		args = append(args, q.DeviceExact, channelLikePrefix(q.DeviceExact)+"%")
+	}
+
+	sqlStr := `SELECT id, timestamp, COALESCE(user, ''), COALESCE(on_behalf_of, ''), action, COALESCE(device_address, ''),
             COALESCE(channel_no, 0), COALESCE(paramset, ''), COALESCE(peer, ''),
             COALESCE(parameter, ''), COALESCE(note, ''), COALESCE(changes_json, '')
           FROM audit_log`
@@ -193,7 +200,7 @@ func scanAuditRows(rows *sql.Rows) ([]audit.Entry, error) {
 			changes string
 		)
 		if err := rows.Scan(
-			&entry.ID, &ts, &entry.User, &action, &entry.DeviceAddress,
+			&entry.ID, &ts, &entry.User, &entry.OnBehalfOf, &action, &entry.DeviceAddress,
 			&entry.ChannelNo, &entry.Paramset, &entry.Peer,
 			&entry.Parameter, &entry.Note, &changes,
 		); err != nil {
@@ -229,7 +236,7 @@ func (s *AuditStore) List(ctx context.Context, deviceAddress string, limit int) 
 		limit = maxAuditListRows
 	}
 	args := []any{}
-	q := `SELECT id, timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
+	q := `SELECT id, timestamp, COALESCE(user, ''), COALESCE(on_behalf_of, ''), action, COALESCE(device_address, ''),
             COALESCE(channel_no, 0), COALESCE(paramset, ''), COALESCE(peer, ''),
             COALESCE(parameter, ''), COALESCE(note, ''), COALESCE(changes_json, '')
           FROM audit_log`

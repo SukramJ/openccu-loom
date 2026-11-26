@@ -824,7 +824,7 @@ func DeleteProgram(idx HubIndex, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionProgramDelete,
 				Note:   "delete program " + name + " (" + id + ")",

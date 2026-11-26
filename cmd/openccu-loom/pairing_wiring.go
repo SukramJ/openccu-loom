@@ -33,7 +33,7 @@ func (m pairedTokenMinter) MintPairedToken(ctx context.Context, subject string, 
 		return "", "", err
 	}
 	if m.rec != nil {
-		m.rec.Record(audit.Entry{
+		audit.RecordFrom(ctx, m.rec, audit.Entry{
 			User:   "pairing",
 			Action: audit.ActionTokenCreate,
 			Note:   "paired subject=" + subject + " role=" + string(role) + " fingerprint=" + res.Fingerprint,

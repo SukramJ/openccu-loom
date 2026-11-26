@@ -63,7 +63,7 @@ type stubChannelInfoReader struct {
 	found       bool
 }
 
-func (s *stubChannelInfoReader) ChannelMeta(_ string) (deviceAddress, model, channelType, centralName string, ok bool) {
+func (s *stubChannelInfoReader) ChannelMeta(_ context.Context, _ string) (deviceAddress, model, channelType, centralName string, ok bool) {
 	return s.deviceAddr, s.model, s.channelType, s.centralName, s.found
 }
 

@@ -60,7 +60,7 @@ func ListEventGroups(idx DeviceIndex) http.HandlerFunc {
 			return
 		}
 		groups := ch.EventGroups()
-		serial := serialSuffixForChannel(idx, ch)
+		serial := serialSuffixForChannel(r.Context(), idx, ch)
 		out := make([]EventGroupSummary, 0, len(groups))
 		for _, g := range groups {
 			out = append(out, toEventGroupSummary(g, serial))

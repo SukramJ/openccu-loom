@@ -618,6 +618,10 @@
   "module_url",
   "routes"
  ],
+ "EditorRoute": [
+  "method",
+  "prefix"
+ ],
  "Endpoint": [
   "clusters",
   "device_type",

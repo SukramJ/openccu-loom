@@ -1,14 +1,28 @@
 {
-  "prefixes": [
-    "/audit",
-    "/auth/me",
-    "/devices",
-    "/functions",
-    "/info",
-    "/rooms",
-    "/schedules",
-    "/sessions/edit",
-    "/system/ccu",
-    "/taxonomy"
+  "routes": [
+    { "method": "GET", "prefix": "/auth/me" },
+    { "method": "GET", "prefix": "/devices" },
+    { "method": "GET", "prefix": "/functions" },
+    { "method": "GET", "prefix": "/info" },
+    { "method": "GET", "prefix": "/measurements/recording" },
+    { "method": "GET", "prefix": "/rooms" },
+    { "method": "GET", "prefix": "/schedules" },
+    { "method": "GET", "prefix": "/system/ccu" },
+    { "method": "GET", "prefix": "/taxonomy" },
+    { "method": "PATCH", "prefix": "/devices/*" },
+    { "method": "PUT", "prefix": "/devices/*" },
+    { "method": "PUT", "prefix": "/measurements/recording" },
+    { "method": "POST", "prefix": "/devices/*/central-links" },
+    { "method": "POST", "prefix": "/devices/*/channels/*/paramsets" },
+    { "method": "POST", "prefix": "/devices/*/channels/*/schedule/active-profile" },
+    { "method": "POST", "prefix": "/devices/*/links/test" },
+    { "method": "POST", "prefix": "/devices/*/paramsets" },
+    { "method": "POST", "prefix": "/devices/*/schedule/active-profile" },
+    { "method": "POST", "prefix": "/functions" },
+    { "method": "POST", "prefix": "/rooms" },
+    { "method": "POST", "prefix": "/sessions/edit" },
+    { "method": "DELETE", "prefix": "/devices/*/central-links" },
+    { "method": "DELETE", "prefix": "/devices/*/links" },
+    { "method": "DELETE", "prefix": "/sessions/edit" }
   ]
 }

@@ -761,6 +761,10 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/audit**', (route) =>
     route.fulfill({ json: fixture('audit.json') }),
   );
+  // A device page's history reads its own route (operator-readable).
+  await page.route('**/api/v1/devices/*/audit**', (route) =>
+    route.fulfill({ json: fixture('audit.json') }),
+  );
 
   // Backups
   await page.route('**/api/v1/backups', (route) =>

@@ -121,7 +121,7 @@ func TestDeviceIconProxy_Icon_HappyPath(t *testing.T) {
 	host, port := splitHostPort(t, srv.URL)
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
-	locate := func(_ string) (string, string, bool) {
+	locate := func(_ context.Context, _ string) (string, string, bool) {
 		return iconFile, "ccu", true
 	}
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
@@ -192,7 +192,7 @@ func TestDeviceIconProxy_Icon_SendsBasicAuth(t *testing.T) {
 			host, port := splitHostPort(t, srv.URL)
 			cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false, Username: tc.username, Password: tc.password}
 
-			locate := func(_ string) (string, string, bool) { return iconFile, "ccu", true }
+			locate := func(_ context.Context, _ string) (string, string, bool) { return iconFile, "ccu", true }
 			proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 			if _, _, ok := proxy.Icon(context.Background(), "AABB0001"); !ok {
@@ -239,7 +239,7 @@ func TestDeviceIconProxy_Icon_HitCached(t *testing.T) {
 	host, port := splitHostPort(t, srv.URL)
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
-	locate := func(_ string) (string, string, bool) { return iconFile, "ccu", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return iconFile, "ccu", true }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	// First call — fetches from server.
@@ -274,7 +274,7 @@ func TestDeviceIconProxy_Icon_MissCached_NonOKUpstream(t *testing.T) {
 	host, port := splitHostPort(t, srv.URL)
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
-	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "swdo.png", "ccu", true }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	// First call — server returns 404 → miss.
@@ -311,7 +311,7 @@ func TestDeviceIconProxy_Icon_UnknownDevice_Returns_False(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	locate := func(_ string) (string, string, bool) { return "", "", false }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "", "", false }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals())
 
 	_, _, ok := proxy.Icon(context.Background(), "UNKNOWN")
@@ -344,7 +344,7 @@ func TestDeviceIconProxy_Icon_UnknownAddress_NeverCached(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	locate := func(_ string) (string, string, bool) { return "", "", false }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "", "", false }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals())
 
 	addresses := []string{"UNKNOWN-1", "UNKNOWN-2", "RANDOM-ABC123", "does-not-exist"}
@@ -384,7 +384,7 @@ func TestDeviceIconProxy_Icon_KnownAddress_FetchFailure_CachesSingleEntry(t *tes
 	host, port := splitHostPort(t, srv.URL)
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
-	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "swdo.png", "ccu", true }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	for range 3 {
@@ -433,7 +433,7 @@ func TestDeviceIconProxy_Icon_UnsafeFilename_Returns_False(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// note: NOT t.Parallel() here — we share the hit counter
 			filename := tc.filename
-			locate := func(_ string) (string, string, bool) { return filename, "ccu", true }
+			locate := func(_ context.Context, _ string) (string, string, bool) { return filename, "ccu", true }
 			proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 			_, _, ok := proxy.Icon(context.Background(), "DEV-"+filename)
@@ -462,7 +462,7 @@ func TestDeviceIconProxy_Icon_MissingCentralConfig_Returns_False(t *testing.T) {
 	defer srv.Close()
 
 	// locate returns "unknown" as central name, but no such central in configs.
-	locate := func(_ string) (string, string, bool) { return "swdo.png", "unknown", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "swdo.png", "unknown", true }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals())
 
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
@@ -489,7 +489,7 @@ func TestDeviceIconProxy_Icon_Non200Upstream_Returns_False(t *testing.T) {
 	host, port := splitHostPort(t, srv.URL)
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
-	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "swdo.png", "ccu", true }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
@@ -517,7 +517,7 @@ func TestDeviceIconProxy_Icon_MissExpires_RefetchesAfterOutage(t *testing.T) {
 
 	host, port := splitHostPort(t, srv.URL)
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
-	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return "swdo.png", "ccu", true }
 	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 	// Expire the miss immediately so the outage window is over by the
 	// time the second call runs.
@@ -601,7 +601,7 @@ func assertEmbeddedIcon(t *testing.T, model, wantFile string) {
 	}
 
 	var resolves atomic.Int32
-	locate := func(_ string) (string, string, bool) { return filename, "ccu", true }
+	locate := func(_ context.Context, _ string) (string, string, bool) { return filename, "ccu", true }
 	proxy := newDeviceIconProxyWith(locate, countingResolver(&resolves, deadCentral(t)))
 
 	data, ct, ok := proxy.Icon(context.Background(), "AABB0001")

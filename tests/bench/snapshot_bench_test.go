@@ -22,6 +22,7 @@
 package bench
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -49,7 +50,7 @@ type benchDeviceIndex struct {
 
 func (b *benchDeviceIndex) Devices() []*device.Device { return b.list }
 
-func (b *benchDeviceIndex) Device(address string) (*device.Device, bool) {
+func (b *benchDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := b.byID[address]
 	return d, ok
 }

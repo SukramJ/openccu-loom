@@ -134,7 +134,7 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionTokenCreate,
 				Note:   "subject=" + subject + " role=" + string(body.Role) + " fingerprint=" + res.Fingerprint,
@@ -177,7 +177,7 @@ func DeleteTokenAdmin(svc TokenAdminService, rec audit.Recorder, sockets TokenSo
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionTokenRevoke,
 				Note:   "fingerprint=" + fp,

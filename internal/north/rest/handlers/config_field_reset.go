@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -59,7 +60,7 @@ func ResetConfigField(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section delete failed", derr)
 				return
 			}
-			recordFieldReset(rec, actor, path)
+			recordFieldReset(r.Context(), rec, actor, path)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -93,16 +94,16 @@ func ResetConfigField(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 				return
 			}
 		}
-		recordFieldReset(rec, actor, path)
+		recordFieldReset(r.Context(), rec, actor, path)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func recordFieldReset(rec audit.Recorder, actor, path string) {
+func recordFieldReset(ctx context.Context, rec audit.Recorder, actor, path string) {
 	if rec == nil {
 		return
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(ctx, rec, audit.Entry{
 		User:   actor,
 		Action: audit.ActionConfigSectionUpdate,
 		Note:   "field reset: " + path,

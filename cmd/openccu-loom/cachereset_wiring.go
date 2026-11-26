@@ -147,8 +147,8 @@ func buildCacheResetService(
 		deps.Paramsets = descriptors.Paramsets
 	}
 	if auditRec != nil {
-		deps.Audit = func(_ context.Context, scope cachereset.Scope, rep cachereset.Report) {
-			auditRec.Record(audit.Entry{
+		deps.Audit = func(ctx context.Context, scope cachereset.Scope, rep cachereset.Report) {
+			audit.RecordFrom(ctx, auditRec, audit.Entry{
 				Timestamp: time.Now(),
 				Action:    audit.ActionCacheClear,
 				Note: fmt.Sprintf(

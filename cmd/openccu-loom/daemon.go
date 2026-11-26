@@ -241,7 +241,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// Audit every program run the daemon triggers, so a program reported as
 	// running twice can be attributed to the daemon or ruled out.
-	programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger)
+	programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger) //nolint:contextcheck // a bus subscriber records with no request: a program run carries no REST actor
 	defer programAuditTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
@@ -254,7 +254,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The MQTT maintenance topics' daemon-side halves (ADR 0083): set before
 	// the shared infrastructure starts the MQTT supervisor, which hands them
 	// to every bridge it builds.
-	deps.SetMQTTMaintenance(newMQTTMaintenanceHooks(levels, auditRec))
+	deps.SetMQTTMaintenance(newMQTTMaintenanceHooks(levels, auditRec)) //nolint:contextcheck // an MQTT maintenance command is no REST request and carries no actor
 	warnNonConformantTopicBase(cfg, logger)
 	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps, channelFlagsOverlay)
 	defer sharedInfraTeardown()

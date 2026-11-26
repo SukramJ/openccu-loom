@@ -1332,7 +1332,7 @@ func recordRecordingLifecycle(ctx context.Context, rec audit.Recorder, action au
 	if id, ok := auth.IdentityFrom(ctx); ok && id.Subject != "" {
 		user = id.Subject
 	}
-	rec.Record(audit.Entry{User: user, Action: action, Note: "centrals=all"})
+	audit.RecordFrom(ctx, rec, audit.Entry{User: user, Action: action, Note: "centrals=all"})
 }
 
 // recordingStartHandler implements `recording.start`.

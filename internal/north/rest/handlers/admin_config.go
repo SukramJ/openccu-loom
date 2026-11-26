@@ -772,7 +772,7 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder, applier Sectio
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				Timestamp: row.UpdatedAt,
 				User:      updatedBy,
 				Action:    audit.ActionConfigSectionUpdate,
@@ -829,7 +829,7 @@ func DeleteConfigSection(svc ConfigAdminService, rec audit.Recorder) http.Handle
 		}
 		if rec != nil {
 			actor := identityFromCtx(r.Context())
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionConfigSectionDelete,
 				Note:   "section=" + string(section),

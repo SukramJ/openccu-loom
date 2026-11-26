@@ -52,7 +52,7 @@ func TestEditorComponentIsServedByTheBuiltDaemon(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
 		t.Fatalf("decode manifest: %v", err)
 	}
-	if !slices.Contains(m.Routes, "/devices") {
+	if !slices.Contains(m.Routes, hmapi.EditorRoute{Method: http.MethodGet, Prefix: "/devices"}) {
 		t.Errorf("routes %v lack /devices, the editor's own resource", m.Routes)
 	}
 	if !strings.Contains(m.ModuleURL, m.Hash) {

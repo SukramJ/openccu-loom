@@ -30,7 +30,7 @@ func (f *fakeDeviceIndex) Devices() []*device.Device {
 	return out
 }
 
-func (f *fakeDeviceIndex) Device(addr string) (*device.Device, bool) {
+func (f *fakeDeviceIndex) Device(_ context.Context, addr string) (*device.Device, bool) {
 	d, ok := f.devices[addr]
 	return d, ok
 }

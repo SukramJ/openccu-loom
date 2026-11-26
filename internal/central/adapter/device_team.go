@@ -23,7 +23,7 @@ import (
 // wire call. Multi-CCU safe via the registry scan.
 func (a *DeviceAdminDomain) SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error {
 	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
-	unit, dev, err := a.resolveTeamUnit(deviceAddr)
+	unit, dev, err := a.resolveTeamUnit(ctx, deviceAddr)
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func (a *DeviceAdminDomain) SetChannelTeam(ctx context.Context, deviceAddr strin
 // read stays cheap.
 func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error) {
 	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
-	unit, dev, err := a.resolveTeamUnit(deviceAddr)
+	unit, dev, err := a.resolveTeamUnit(ctx, deviceAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -91,11 +91,11 @@ func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr strin
 // resolveTeamUnit finds the owning central + device for a device
 // address, mirroring the resolution the other channel-scoped admin ops
 // use.
-func (a *DeviceAdminDomain) resolveTeamUnit(deviceAddr string) (*central.Unit, *device.Device, error) {
+func (a *DeviceAdminDomain) resolveTeamUnit(ctx context.Context, deviceAddr string) (*central.Unit, *device.Device, error) {
 	if a.registry == nil || a.writer == nil {
 		return nil, nil, ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue

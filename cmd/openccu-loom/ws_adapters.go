@@ -1016,11 +1016,11 @@ func (w *wsDeviceQuery) ListDevices(_ context.Context) ([]map[string]any, error)
 	return out, nil
 }
 
-func (w *wsDeviceQuery) GetDevice(_ context.Context, address string) (map[string]any, error) {
+func (w *wsDeviceQuery) GetDevice(ctx context.Context, address string) (map[string]any, error) {
 	if w.devs == nil {
 		return nil, errors.New("ws: devices adapter not wired")
 	}
-	d, ok := w.devs.Device(address)
+	d, ok := w.devs.Device(ctx, address)
 	if !ok {
 		return nil, fmt.Errorf("ws: device not found: %s", address)
 	}

@@ -119,7 +119,7 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 		// channel address — with the serial from the owning central.
 		// A channel without a device counts its own schedule only, which keeps
 		// the family a sole schedule has.
-		serial := serialSuffixForChannel(idx, ch)
+		serial := serialSuffixForChannel(r.Context(), idx, ch)
 		deviceAddr := ch.Address
 		profiles := 1
 		if dev := ch.Device(); dev != nil {

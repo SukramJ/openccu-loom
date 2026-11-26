@@ -154,7 +154,7 @@ func registerClearDeviceConfigCache(s *mcpsdk.Server, d Deps) {
 			return nil, clearDeviceConfigCacheOut{}, fmt.Errorf("clear config cache: %w", err)
 		}
 		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
+			audit.RecordFrom(ctx, d.Audit, audit.Entry{
 				Timestamp:     time.Now().UTC(),
 				User:          callerSubject(ctx),
 				Action:        audit.ActionDeviceConfigCacheClear,

@@ -51,7 +51,7 @@ func MQTTReload(svc MQTTReloadService, rec audit.Recorder) http.HandlerFunc {
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionConfigSectionUpdate,
 				Note:   "mqtt.reload",

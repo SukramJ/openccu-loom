@@ -22,7 +22,7 @@ type CustomDPIndex interface {
 	// Devices returns all registered devices.
 	Devices() []*device.Device
 	// Device returns a single device by address.
-	Device(address string) (*device.Device, bool)
+	Device(ctx context.Context, address string) (*device.Device, bool)
 }
 
 // CustomDPInvoker is the mutating surface for WS custom-DP commands.
@@ -71,7 +71,7 @@ func RegisterCustomDPCommands(router *Router, cfg CustomDPCommandsConfig) {
 // --- cdp.list ---
 
 func customDPListHandler(idx CustomDPIndex) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Device string `json:"device"`
 		}
@@ -80,7 +80,7 @@ func customDPListHandler(idx CustomDPIndex) CommandHandler {
 		}
 
 		if p.Device != "" {
-			d, ok := idx.Device(p.Device)
+			d, ok := idx.Device(ctx, p.Device)
 			if !ok {
 				return nil, errors.New("ws: device not found: " + p.Device)
 			}
@@ -102,7 +102,7 @@ func customDPListHandler(idx CustomDPIndex) CommandHandler {
 // --- cdp.get ---
 
 func customDPGetHandler(idx CustomDPIndex) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Device string `json:"device"`
 			Name   string `json:"name"`
@@ -116,7 +116,7 @@ func customDPGetHandler(idx CustomDPIndex) CommandHandler {
 		if p.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
 		}
-		d, ok := idx.Device(p.Device)
+		d, ok := idx.Device(ctx, p.Device)
 		if !ok {
 			return nil, errors.New("ws: device not found: " + p.Device)
 		}
@@ -150,7 +150,7 @@ func customDPSetHandler(idx CustomDPIndex, invoker CustomDPInvoker) CommandHandl
 		if p.Operation == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "operation is required")
 		}
-		if _, ok := idx.Device(p.Device); !ok {
+		if _, ok := idx.Device(ctx, p.Device); !ok {
 			return nil, errors.New("ws: device not found: " + p.Device)
 		}
 		prio := wsParsePriority(p.Priority)
@@ -174,7 +174,7 @@ func customDPSetHandler(idx CustomDPIndex, invoker CustomDPInvoker) CommandHandl
 // --- calc_dp.list ---
 
 func calculatedDPListHandler(idx CustomDPIndex, labels handlers.ParameterLabeler) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Device    string `json:"device"`
 			ChannelNo *int   `json:"channel_no"`
@@ -183,7 +183,7 @@ func calculatedDPListHandler(idx CustomDPIndex, labels handlers.ParameterLabeler
 			return nil, err
 		}
 		if p.Device != "" {
-			d, ok := idx.Device(p.Device)
+			d, ok := idx.Device(ctx, p.Device)
 			if !ok {
 				return nil, errors.New("ws: device not found: " + p.Device)
 			}
@@ -204,7 +204,7 @@ func calculatedDPListHandler(idx CustomDPIndex, labels handlers.ParameterLabeler
 // --- calc_dp.get ---
 
 func calculatedDPGetHandler(idx CustomDPIndex, labels handlers.ParameterLabeler) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Device    string `json:"device"`
 			ChannelNo int    `json:"channel_no"`
@@ -219,7 +219,7 @@ func calculatedDPGetHandler(idx CustomDPIndex, labels handlers.ParameterLabeler)
 		if p.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
 		}
-		d, ok := idx.Device(p.Device)
+		d, ok := idx.Device(ctx, p.Device)
 		if !ok {
 			return nil, errors.New("ws: device not found: " + p.Device)
 		}

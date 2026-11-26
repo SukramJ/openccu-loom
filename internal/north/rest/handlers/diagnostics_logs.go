@@ -252,7 +252,7 @@ func PutDefaultLogLevel(svc LogDefaultLevelService, rec audit.Recorder) http.Han
 		}
 		svc.SetDefault(level)
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionLoggingDefaultLevelSet,
 				Note:   "level=" + hmlog.FormatLevel(level),

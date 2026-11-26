@@ -165,7 +165,7 @@ func (f *fakeDevices) Devices() []*device.Device {
 	return out
 }
 
-func (f *fakeDevices) Device(address string) (*device.Device, bool) {
+func (f *fakeDevices) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := f.devices[address]
 	return d, ok
 }

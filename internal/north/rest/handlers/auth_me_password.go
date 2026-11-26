@@ -110,7 +110,7 @@ func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder, revoker Sess
 			revoker.RevokeBySubjectExcept(ident.Subject, keepSID)
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   ident.Subject,
 				Action: audit.ActionUserUpdate,
 				Note:   "self password change",

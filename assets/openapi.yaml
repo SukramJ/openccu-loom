@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 18.0.0
+  version: 19.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -470,6 +470,9 @@ paths:
               schema: { $ref: "#/components/schemas/DeviceList" }
 
   /devices/{addr}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getDevice
       tags: [devices]
@@ -557,6 +560,9 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/icon:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getDeviceIcon
       tags: [devices]
@@ -585,6 +591,9 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /devices/{addr}/projection:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getDeviceProjection
       tags: [devices]
@@ -619,6 +628,9 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
   /devices/{addr}/channels:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listDeviceChannels
       tags: [devices]
@@ -636,6 +648,9 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /devices/{addr}/channels/{no}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getDeviceChannel
       tags: [devices]
@@ -685,6 +700,9 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/channels/{no}/event-groups:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listChannelEventGroups
       tags: [devices]
@@ -708,6 +726,9 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /devices/{addr}/channels/{no}/data-points:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listChannelDataPoints
       tags: [devices]
@@ -726,6 +747,9 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /devices/{addr}/channels/{no}/data-points/{param}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getChannelDataPoint
       tags: [devices]
@@ -743,6 +767,9 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /devices/{addr}/channels/{no}/data-points/{param}/value:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     put:
       operationId: putDataPointValue
       tags: [devices]
@@ -789,6 +816,9 @@ paths:
           $ref: "#/components/responses/ServiceUnavailable"
 
   /devices/{addr}/channels/{no}/flags:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getChannelFlags
       tags: [devices]
@@ -844,6 +874,8 @@ paths:
         in: path
         required: true
         schema: { type: string, enum: [VALUES, MASTER, LINK] }
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getParamset
       tags: [paramsets]
@@ -951,6 +983,9 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/paramsets/{key}/apply-targets:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getParamsetApplyTargets
       tags: [paramsets]
@@ -983,6 +1018,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/paramsets/{key}/apply-to:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: applyParamsetToChannels
       tags: [paramsets]
@@ -2892,6 +2930,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/reload:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: reloadDevice
       summary: Re-pull a single device's config from its CCU
@@ -2909,6 +2950,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/reload:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: reloadChannel
       summary: Re-pull a single channel's config from its CCU
@@ -2927,6 +2971,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/accept:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: acceptInboxDevice
       summary: Promote a pending pairing into the registry
@@ -2972,6 +3019,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/release:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: releaseDevice
       summary: Finish onboarding and publish the device to the ecosystems
@@ -3033,6 +3083,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/firmware/update:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: updateFirmware
       summary: Trigger OTA firmware update for the device
@@ -3065,6 +3118,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/config/restore:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: restoreDeviceConfig
       summary: Re-transmit stored configuration to a device (admin-only)
@@ -3098,6 +3154,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/config/repair:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: repairDeviceConfig
       summary: Rebuild a device's stored MASTER configuration (admin-only)
@@ -3158,6 +3217,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/config/cache-clear:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: clearDeviceConfigCache
       summary: Drop the interface process's cached device configuration (admin-only)
@@ -3183,6 +3245,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/rf-interface:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: assignRFInterface
       summary: Assign a BidCos-RF device to an RF interface (admin-only)
@@ -3215,6 +3280,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/test:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: testDeviceCommunication
       summary: Run the per-device communication / function test
@@ -3251,6 +3319,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/team-candidates:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getDeviceTeamCandidates
       summary: List team channels a channel may be assigned to
@@ -3276,6 +3347,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/team:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     put:
       operationId: setDeviceChannelTeam
       summary: Assign a channel to a team
@@ -3306,6 +3380,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/replace-candidates:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listDeviceReplaceCandidates
       summary: List devices the new device may replace
@@ -3333,6 +3410,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/replace:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: replaceDevice
       summary: Replace a paired device with a new one (admin-only)
@@ -3413,6 +3493,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/install-mode:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: deviceInstallMode
       summary: Open a targeted pairing window for one device
@@ -3441,6 +3524,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/paramsets/{key}/determine:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: determineParameter
       summary: Read one parameter's live value from the device
@@ -3478,6 +3564,9 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/ui-schema:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getUiSchema
       summary: Renderable form descriptor for a channel paramset
@@ -3500,6 +3589,9 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/export-definition:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: exportDeviceDefinition
       summary: Export a device definition as an aiohomematic-compatible zip
@@ -3533,6 +3625,9 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/channels/{no}/config/export:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: exportChannelConfig
       summary: Export a channel's paramset as a portable JSON snapshot
@@ -3567,6 +3662,9 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/channels/{no}/config/import:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: importChannelConfig
       summary: Import a previously-exported channel paramset snapshot
@@ -3615,6 +3713,9 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/cdps:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listCustomDataPoints
       summary: List all custom data points of a device
@@ -3631,6 +3732,9 @@ paths:
                 items: { $ref: "#/components/schemas/CustomDPSummary" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/cdps/{name}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getCustomDataPoint
       summary: Get a single custom data point by name
@@ -3646,6 +3750,9 @@ paths:
               schema: { $ref: "#/components/schemas/CustomDPDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/cdps/{name}/{operation}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: invokeCustomDataPoint
       summary: "Invoke an operation on a custom data point (turn_on, set_temperature, open, …)"
@@ -3676,6 +3783,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/calc-dps:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listCalculatedDataPoints
       summary: List all calculated data points on a channel
@@ -3694,6 +3804,9 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/calc-dps/{name}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getCalculatedDataPoint
       summary: Get a single calculated data point by name
@@ -3711,6 +3824,9 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/linkable-channels:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: linkableChannels
       summary: Eligible link partners for the channel
@@ -3734,6 +3850,9 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/week_profile:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getChannelWeekProfile
       summary: Week-profile metadata for one channel
@@ -3754,6 +3873,9 @@ paths:
               schema: { $ref: "#/components/schemas/WeekProfileResponse" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/week_profile/channel-locks/{key}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     put:
       operationId: putWeekProfileChannelLock
       tags: [devices]
@@ -3783,6 +3905,9 @@ paths:
 
 
   /devices/{addr}/channels/{no}/schedule:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getChannelSchedule
       summary: Climate or simple schedule of one channel
@@ -3830,6 +3955,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/schedule/active-profile:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: setChannelActiveProfile
       summary: Pick the active climate profile (P1..P6)
@@ -3853,6 +3981,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/schedule:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getDeviceSchedule
       summary: Auto-resolves schedule channel from the device
@@ -3897,6 +4028,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/schedule/active-profile:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: setDeviceActiveProfile
       summary: Pick the active climate profile (auto-resolves channel)
@@ -3919,6 +4053,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/schedules/copy:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: copyDeviceSchedule
       summary: Copy the whole week schedule to another device
@@ -3942,6 +4079,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/week_profile/copy:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: copyClimateProfile
       summary: Copy a single climate profile to another channel/profile
@@ -3966,6 +4106,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/links:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: listLinks
       summary: List direct links of the device
@@ -4042,6 +4185,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/links/test:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: testLinkAtDevice
       summary: Test a direct link at the device (activate link paramset)
@@ -4077,6 +4223,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/link-ps/{peer}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getLinkParamset
       summary: LINK paramset between this channel and a peer
@@ -4128,6 +4277,9 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/central-links:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     get:
       operationId: getCentralLinksStatus
       summary: PRESS-event forwarding status for the device
@@ -5192,6 +5344,61 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/audit:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
+    get:
+      operationId: listDeviceAudit
+      summary: Change history of one device
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      description: |
+        The change log of one device: the device and its channels, matched
+        exactly (unlike the prefix filter of `GET /audit`). Open to every
+        principal with the operator role, where the whole log is
+        admin-only, because one device's history exposes only what an
+        operator of that device already acts on.
+      tags: [audit]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - in: query
+          name: op
+          schema: { type: string }
+          description: Filter by action/source tag substring (case-insensitive).
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+          description: Only entries at or after this instant (RFC3339).
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+          description: Only entries strictly before this instant (RFC3339).
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 1000 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: format
+          schema: { $ref: "#/components/schemas/AuditExportFormat" }
+          description: When `csv`, a downloadable `text/csv` attachment instead of JSON.
+      responses:
+        "200":
+          description: The device's entries, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /measurements/recording:
     get:
       operationId: getRecordingOverride
@@ -5892,6 +6099,9 @@ paths:
           description: cache feature disabled or store unwired.
 
   /devices/{addr}/values-cache/reset:
+    parameters:
+      - $ref: "#/components/parameters/DeviceCentral"
+      - $ref: "#/components/parameters/OnBehalfOf"
     post:
       operationId: resetValuesCacheDevice
       summary: Drop the VALUES-cache rows for one device (admin-only)
@@ -8542,6 +8752,36 @@ components:
       in: path
       required: true
       schema: { type: string }
+    DeviceCentral:
+      name: central
+      in: query
+      required: false
+      schema: { type: string }
+      description: |
+        Binds the request to one CCU. Device addresses are not unique
+        across CCUs (virtual remotes, internal devices and CUxD devices
+        repeat on every CCU), so a caller that knows which CCU it means
+        names it here: the address then resolves on that central alone and
+        never falls back to another one. A central that does not exist, or
+        does not hold the address, answers 404 before the operation runs.
+        Absent, the address resolves on the first central (by name) that
+        holds it.
+    OnBehalfOf:
+      name: X-On-Behalf-Of
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+      description: |
+        Accepted on every request; listed on the device routes, the ones an
+        integration relays for its users. Who an entry credential acts for,
+        recorded in the change log as
+        `on_behalf_of` beside the authenticated principal — e.g. the Home
+        Assistant user whose edit an integration relays (`Alex (ha:<id>)`).
+        Accepted only from an API token (`bearer`) or a box API token; from
+        any other principal it is ignored. It is an assertion the daemon
+        cannot check and never uses for authorization. A value longer than
+        128 bytes, not UTF-8, with a control character, empty or sent twice
+        answers 400.
     ChannelNo:
       name: no
       in: path
@@ -11547,6 +11787,12 @@ components:
         user:
           type: string
           description: Authenticated user who triggered the change (empty if unauthenticated).
+        on_behalf_of:
+          type: string
+          description: |
+            Who the principal in `user` asserted it acted for (the
+            `X-On-Behalf-Of` header of an entry credential). Recorded as
+            asserted, never verified. Omitted when the request named no one.
         action:
           type: string
           description: >
@@ -13607,8 +13853,34 @@ components:
           description: Hex SHA-256 of the module's bytes.
         routes:
           type: array
-          description: Path prefixes below /api/v1 the editor calls.
-          items: { type: string }
+          description: |
+            The calls the editor makes. A relay forwards a call only when one
+            entry covers it: the method matches and the prefix covers the
+            path below /api/v1.
+          items: { $ref: "#/components/schemas/EditorRoute" }
+    AuditExportFormat:
+      type: string
+      enum: [csv]
+      description: |
+        The export format of a change-log read: `csv` answers a downloadable
+        `text/csv` attachment instead of JSON. A named schema rather than an
+        inline enum, so adding it renumbered no generated client's enums.
+    EditorRouteMethod:
+      type: string
+      enum: [GET, PUT, POST, PATCH, DELETE]
+      description: The upper-case HTTP method of an editor route.
+    EditorRoute:
+      type: object
+      required: [method, prefix]
+      properties:
+        method: { $ref: "#/components/schemas/EditorRouteMethod" }
+        prefix:
+          type: string
+          description: |
+            Absolute path prefix below /api/v1, without a trailing slash. It
+            covers itself and every path below it, segment by segment; a `*`
+            segment matches exactly one non-empty segment.
+          example: /devices/*/paramsets
     SurfacesResponse:
       type: object
       required:
