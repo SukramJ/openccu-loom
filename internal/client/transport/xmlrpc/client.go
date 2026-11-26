@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -152,9 +154,13 @@ func (c *Client) doCall(ctx context.Context, method string, params []Value) (Val
 		req.SetBasicAuth(c.cfg.Username, c.cfg.Password)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	// The tracker tells a dial that never reached the CCU apart from a
+	// reply lost after the call went out; the retry layer repeats only
+	// the first for a state-changing method.
+	var sent httpx.WriteTracker
+	resp, err := c.httpClient.Do(sent.Trace(req))
 	if err != nil {
-		return nil, c.wrap(method, fmt.Errorf("%w: %w", hmerr.ErrNoConnection, err))
+		return nil, c.wrap(method, sent.SendError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -165,7 +171,7 @@ func (c *Client) doCall(ctx context.Context, method string, params []Value) (Val
 	limited := io.LimitReader(resp.Body, c.limit+1)
 	raw, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, c.wrap(method, fmt.Errorf("read response: %w", err))
+		return nil, c.wrap(method, sent.SendError(fmt.Errorf("read response: %w", err)))
 	}
 	if int64(len(raw)) > c.limit {
 		return nil, c.wrap(method, fmt.Errorf("response exceeds limit of %d bytes: %w", c.limit, hmerr.ErrClientException))

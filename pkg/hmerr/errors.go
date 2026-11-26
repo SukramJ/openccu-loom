@@ -43,9 +43,20 @@ var (
 	// must not respond by re-logging-in (the credentials are valid).
 	ErrPermissionDenied = errors.New("permission denied")
 
-	// ErrNoConnection signals that the transport could not reach the
-	// remote at all (DNS, TCP, TLS). Distinct from ErrAuthFailure.
+	// ErrNoConnection signals that the transport failed: the remote
+	// could not be reached (DNS, TCP, TLS) or the connection broke before
+	// a reply arrived. A failure after the request was written carries
+	// [ErrReplyLost] on top. Distinct from ErrAuthFailure.
 	ErrNoConnection = errors.New("no connection")
+
+	// ErrReplyLost signals that the request was written to the wire and
+	// the connection then broke or timed out before a complete reply
+	// arrived. Whether the remote executed the call is unknown, so only a
+	// call that is safe to repeat may be sent again; a state-changing call
+	// (an ACTION press, a program run, a firmware install) must not be.
+	// It wraps [ErrNoConnection], so every transport-failure check still
+	// matches.
+	ErrReplyLost = fmt.Errorf("reply lost: %w", ErrNoConnection)
 
 	// ErrCircuitBreakerOpen signals that the client-side breaker is
 	// holding requests off; the caller should not retry immediately.

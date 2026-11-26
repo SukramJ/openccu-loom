@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A command whose reply the connection dropped is no longer sent again.**
+  When the CCU received a call and the connection broke before its answer
+  arrived, the retry layer sent it up to twice more — a button press
+  (`PRESS_SHORT`), a firmware install, a device deletion or a paramset write
+  could reach the CCU three times. The transports now tell a dial that
+  never reached the CCU apart from a reply lost after the call went out
+  (`hmerr.ErrReplyLost`), and only a read is repeated after a lost reply; a
+  refused dial and a CCU fault such as DUTY_CYCLE are still retried for
+  writes, because the CCU did not act on them. JSON-RPC reads — sysvar and
+  program refreshes, device details, read-only ReGa scripts — are now sent
+  once more after a lost reply (the CCU's web server closes idle keep-alive
+  connections after 60 s), where they failed outright before; writes,
+  `Session.*` and state-changing scripts are sent once. Which methods and
+  scripts count as reads is decided in one place
+  (`internal/client/reliability/classifier.go`), and every ReGa script
+  carries an explicit verdict. (#1157)
+
 ## [0.108.0] - 2026-11-26
 
 ### Added

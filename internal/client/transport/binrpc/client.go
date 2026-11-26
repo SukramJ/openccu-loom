@@ -159,12 +159,15 @@ func (c *Client) doCall(ctx context.Context, method string, params []xmlrpc.Valu
 		return nil, c.wrap(method, fmt.Errorf("write request: %w", err))
 	}
 
+	// The request frame is on the wire: a failure from here on is a lost
+	// reply, and the CCU may already have executed the call. The retry
+	// layer repeats it only for a method that is safe to repeat.
 	resp, err := ReadResponse(io.LimitReader(conn, MaxMessageSize+8))
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, c.wrap(method, fmt.Errorf("%w: %w", hmerr.ErrNoConnection, ctx.Err()))
+			return nil, c.wrap(method, fmt.Errorf("%w: %w", hmerr.ErrReplyLost, ctx.Err()))
 		}
-		return nil, c.wrap(method, fmt.Errorf("read response: %w", err))
+		return nil, c.wrap(method, fmt.Errorf("%w: read response: %w", hmerr.ErrReplyLost, err))
 	}
 	if resp.Fault != nil {
 		c.logger.Debug(

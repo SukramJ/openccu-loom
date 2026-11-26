@@ -3,7 +3,11 @@
 
 package reliability
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
 
 // RPCClass classifies an outbound RPC method by its semantic role on the
 // south-bound transport. Different classes are throttled independently so a
@@ -83,6 +87,23 @@ var readMethods = map[string]struct{}{
 	"ccu.getversion":           {},
 	"channel.getlist":          {},
 	"channel.getvalue":         {},
+	// The WebUI's API handlers for these only read: a file test or read,
+	// a ReGa object walk, or the matching XML-RPC getter
+	// (OpenCCU-Base www/api/methods/ccu/getauthenabled.tcl,
+	// getheatinggrouplist.tcl, gethttpsredirectenabled.tcl;
+	// device/getregaidbyaddress.tcl; interface/getinstallmode.tcl,
+	// getlinkinfo.tcl, getlinks.tcl, getsuppressedservicemessages.tcl,
+	// listbidcosinterfaces.tcl; program/get.tcl).
+	"ccu.getauthenabled":                     {},
+	"ccu.getheatinggrouplist":                {},
+	"ccu.gethttpsredirectenabled":            {},
+	"device.getregaidbyaddress":              {},
+	"interface.getinstallmode":               {},
+	"interface.getlinkinfo":                  {},
+	"interface.getlinks":                     {},
+	"interface.getsuppressedservicemessages": {},
+	"interface.listbidcosinterfaces":         {},
+	"program.get":                            {},
 }
 
 // writeMethods enumerates every method that mutates CCU state. Same
@@ -144,4 +165,50 @@ func ClassifyMethod(method string) RPCClass {
 		return RPCClassControl
 	}
 	return RPCClassUnknown
+}
+
+// RepeatableAfterLostReply reports whether a call to method may be sent
+// again after its reply was lost ([hmerr.ErrReplyLost]): the request went
+// out, the connection broke, and whether the CCU executed it is unknown.
+// Only a read is safe to repeat. A write, a session or liveness call and
+// every method this table does not know are sent once — repeating an
+// ACTION press, a program run or a firmware install does it twice.
+//
+// A call that never reached the wire (a refused dial) is not a lost reply
+// and stays retryable whatever the method.
+func RepeatableAfterLostReply(method string) bool {
+	return ClassifyMethod(method) == RPCClassRead
+}
+
+// readOnlyScripts lists the ReGa scripts that are safe to run again after a
+// lost reply. Each entry is judged on the script's body under
+// internal/client/rega/scripts, never on its name: they only walk ReGa
+// objects and Write() the result, and their system.Exec calls only read
+// (get_backend_info: version file, hostname, environment; get_serial:
+// board serial files).
+//
+// Not listed although named like reads: get_system_update_info runs
+// /bin/checkFirmwareUpdate.sh, and create_backup_status removes the
+// backup's pid file once it reports the run as completed or failed, so
+// running it twice turns a "failed" answer into "idle".
+var readOnlyScripts = map[hmenum.RegaScript]struct{}{
+	hmenum.RegaScriptFetchAllDeviceData:            {},
+	hmenum.RegaScriptGetAlarmMessages:              {},
+	hmenum.RegaScriptGetBackendInfo:                {},
+	hmenum.RegaScriptGetInboxDevices:               {},
+	hmenum.RegaScriptGetProgramDescriptions:        {},
+	hmenum.RegaScriptGetSerial:                     {},
+	hmenum.RegaScriptGetServiceMessages:            {},
+	hmenum.RegaScriptGetSystemVariableDescriptions: {},
+	hmenum.RegaScriptGetUserLevel:                  {},
+	hmenum.RegaScriptPollComTest:                   {},
+	hmenum.RegaScriptUsageBySysvar:                 {},
+}
+
+// RepeatableScriptAfterLostReply is [RepeatableAfterLostReply] for a ReGa
+// script: true only for a script listed in readOnlyScripts. A script that
+// is not listed — every new one until someone has read it — runs once.
+func RepeatableScriptAfterLostReply(script hmenum.RegaScript) bool {
+	_, ok := readOnlyScripts[script]
+	return ok
 }
