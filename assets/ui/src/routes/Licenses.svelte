@@ -23,7 +23,7 @@
   import { t } from "$lib/i18n";
 
   const NOTICES_URL = "https://github.com/SukramJ/openccu-loom/blob/main/THIRD-PARTY-NOTICES.md";
-  const PRIVACY_URL = "https://sukramj.github.io/openccu-loom/privacy/";
+  const PRIVACY_URL = "https://sukramj.dev/openccu-loom/privacy/";
 
   // Quoted verbatim from the repository's LICENSE (Apache License 2.0,
   // section 7, Disclaimer of Warranty). This paragraph is the legal text

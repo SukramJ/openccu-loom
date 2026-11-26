@@ -1,6 +1,6 @@
 site_name: OpenCCU-Loom
 site_description: Standalone Go daemon bridging Homematic CCUs to MQTT, REST/WebSocket, a Config UI, and Matter
-site_url: https://sukramj.github.io/openccu-loom/
+site_url: https://sukramj.dev/openccu-loom/
 repo_url: https://github.com/SukramJ/openccu-loom
 repo_name: SukramJ/openccu-loom
 edit_uri: edit/main/docs/
