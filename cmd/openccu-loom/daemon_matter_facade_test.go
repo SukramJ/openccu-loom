@@ -135,7 +135,7 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	reg := buildTestRegistry(t, "ccu-groups")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}
@@ -232,7 +232,7 @@ func TestStartMatterBridgeKeepsServingWithABrokenAttestationChain(t *testing.T) 
 	reg := buildTestRegistry(t, "ccu-attest-broken")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge refused to start on an unloadable attestation chain, want it serving the paired controllers")
 	}
@@ -256,7 +256,7 @@ func TestStartMatterBridgeStartsWithoutAttestationConfig(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-attest-none")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil without an attestation configuration")
 	}
@@ -283,7 +283,7 @@ func TestStartMatterBridgePinsUniqueIDAcrossARename(t *testing.T) {
 
 	cfg := matterTestConfig(t, "ccu-uid-rename")
 	cfg.North.Matter.NodeLabel = "Bridge One"
-	first := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
+	first := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, logger, nil)
 	if first == nil {
 		t.Fatal("first startMatterBridge returned nil")
 	}
@@ -294,7 +294,7 @@ func TestStartMatterBridgePinsUniqueIDAcrossARename(t *testing.T) {
 	cfg.North.Matter.NodeLabel = "Bridge Two"
 	// A daemon restart builds a fresh registry; the manifest of the first
 	// one has already declared the readiness seam.
-	second := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-uid-rename"), db, health.NewTracker(), nil, logger, nil)
+	second := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-uid-rename"), db, nil, health.NewTracker(), nil, logger, nil)
 	if second == nil {
 		t.Fatal("second startMatterBridge returned nil")
 	}
@@ -320,7 +320,7 @@ func TestStartMatterBridgeServesAUniqueIDTheDaemonPinnedBefore(t *testing.T) {
 	}
 	cfg := matterTestConfig(t, "ccu-uid-pinned")
 	reg := buildTestRegistry(t, "ccu-uid-pinned")
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}

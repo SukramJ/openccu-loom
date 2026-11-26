@@ -697,7 +697,7 @@ Owner decisions (wizard, 2026-11-26), written up as ADR 0092 (proposed,
 - **Rotation now:** offline `openccu-loom secret rotate` — config secrets re-sealed in one
   transaction + `store.Reseal`, scrub; both keys kept until every step committed (re-runnable);
   env-managed key: the command takes or prints the new value.
-- **No/wrong key:** bridge off (`ErrNoSealer` / `ErrUnseal`), health `matter` names reason and fix;
+- **No/wrong key:** bridge off (`ErrNoSealer` / `ErrUnseal`), health `matter.bridge` names reason and fix;
   offline `openccu-loom matter reset` erases the Matter store + endpoint records (selection kept).
 - Scrub owed after sealing: page warning while `ScrubOwed`; `NewSealed` retries each start.
 
@@ -707,3 +707,53 @@ database before `node.New` (canary probe vs. the error `store.New` returns); (3)
 a sealed database works through a store opened without the sealer (for `matter reset`); (4) the
 config-secret rows to re-seal (`config_sections` JSON leaves, `centrals.password_plain`) and whether
 `internal/secret` can keep the raw key for HKDF with one derivation method as its only API growth.
+
+ADR 0092 accepted by the owner (2026-11-26). Open measurements, answered:
+
+1. A sealed `Store` seals every write through its `s.sealer` field whatever the canary
+   (`GF/store/seal.go:230-231`); `Erase` drops the canary with every other `matter_settings` row
+   (`:422-427`). The erase rebuild therefore opens a fresh `NewSealed` store, which re-marks at once.
+2. go-fabric exports no "is sealed" probe; the mark is the reserved row `store.seal_canary` in
+   `matter_settings` (`GF/store/seal.go:427`, `readCanary :434-443`). loom probes that row before
+   `node.New` and pins the probe by behaviour (true after `NewSealed`, false after `Erase` and on a
+   fresh database), so a rename upstream turns the pin red. A store without the sealer on a marked
+   database refuses only secret writes (`refuseClearSecretWrite :476-490`), so without the probe the
+   bridge would start and fail later at CASE or commissioning.
+3. `Store.Erase` is DELETEs, seeds and `Scrub` — no sealer (`GF/store/erase.go:78-98`): `matter
+   reset` erases through `store.New(db)` without the key; to be confirmed by its test.
+4. Config secrets to re-seal on rotation: `config_sections` JSON leaves at secret paths
+   (`configstore.TransformSectionJSON`, wired `cmd/openccu-loom/daemon_boot.go:224`,
+   `configcli.go:35`) and `centrals.password_plain` (`internal/store/sqlite/centrals_store.go:67-89`).
+   No other `enc:v1` user; `backup.go` archives use the separate stream format.
+5. No existing guard detects a running daemon for offline commands (`backup.go` has none).
+
+Approach approved (wizard, 2026-11-26): `internal/secret` keeps the raw key and gains one HKDF
+derivation; the boot's cipher is passed explicitly to `startMatterBridge`; with a key the store is
+opened with `NewSealed` (fresh per erase rebuild), an owed scrub is a page warning; without a key a
+canary probe fails closed with a named health reason; offline `secret rotate` (progress through
+`secret.key.next`, re-runnable) and `matter reset`. Running-daemon guard: the daemon holds an
+exclusive lock on `<data_dir>/openccu-loom.lock` (flock, stdlib) while it runs; the offline
+commands take it non-blocking and refuse otherwise.
+
+As built (branch `claude/matter-sealing-at-rest`):
+
+- `internal/secret`: `Cipher` keeps the raw key; `DeriveKey(label)` (HKDF-SHA256), `NewCipher`,
+  `GenerateKey`, `EncodeKey`/`DecodeKey`, `WriteKeyFile` (temp + rename), `ReadKeyFile`,
+  `PendingKeyFileName`.
+- `internal/datalock`: `Acquire(dataDir)` / `Release`, `ErrHeld`; Unix `syscall.Flock`, Windows
+  `syscall.CreateFile` with share mode 0 (no new dependency). `runDaemon` takes it before the serve.
+- `cmd/openccu-loom/matter_seal.go`: label `openccu-loom matter-store seal v1`, canary probe
+  (`store.seal_canary`), `openMatterStore` (sealed / clear / refused), `matterSealRefused` →
+  `matter.bridge` unhealthy, sticky. `startMatterBridge(…, cipher, …)`; the boot cipher travels as
+  `auditOverlay.cipher`. Erase rebuild opens the store anew. Page warning `seal_scrub_owed`.
+- `cmd/openccu-loom/matter_seal_cli.go`: `secret rotate` (config secrets in one tx, then
+  `store.Reseal`, then rename `secret.key.next` → `secret.key`; env mode prints the key) and
+  `matter reset --yes` (endpoint records + `store.Erase` + fresh UniqueID pin, mirroring
+  `node.FactoryReset`), both behind `withOfflineDB` (lock first).
+- e2e: the harness provisions no key, so the daemon creates `secret.key` and **every Matter e2e
+  and chip-tool run now exercises the sealed store**, restarts included.
+  `TestE2EMatterSealedStoreFailsClosedAndResetRecovers` (key removed → another key → bridge off,
+  `matter.bridge` names it; `matter reset` refused while running; reset while down → bridge back
+  with the selection). Harness: `RestartAfter`, `RestartAfterWithoutBridge`, `Offline`.
+- Measured while testing: the health component is `matter.bridge`, not `matter` (ADR text
+  corrected).

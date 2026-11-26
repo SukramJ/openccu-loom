@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	gosql "database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -35,6 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -327,7 +329,7 @@ func matterAttestation(mc config.NorthMatter, logger *slog.Logger) node.Attestat
 // leaves the handle untouched for the caller to keep using. The facade is
 // handed the two stores, never the handle ([node.Store.DB] would apply
 // go-fabric's schema; the daemon carries it in its own migrations).
-func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, schedules interfaces.ClimateScheduleWriter) *matterBridgeBundle { //nolint:funlen // composition/wiring: long sequential setup
+func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, cipher *secret.Cipher, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, schedules interfaces.ClimateScheduleWriter) *matterBridgeBundle { //nolint:funlen // composition/wiring: long sequential setup
 	if cfg == nil || !cfg.North.Matter.Enabled {
 		return nil
 	}
@@ -350,8 +352,27 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// The credential store is built on the daemon's shared handle: the
 	// daemon carries go-fabric's schema in its own migrations, so the node
 	// is handed the store rather than the handle it would apply the schema
-	// to (go-fabric guides "Advanced seams", store).
-	store := matterstore.New(db)
+	// to (go-fabric guides "Advanced seams", store). It is sealed under a
+	// key derived from the master key whenever one resolved (ADR 0092); a
+	// sealed store the key does not open keeps the bridge off.
+	sealer, err := matterSealer(cipher)
+	if err != nil {
+		logger.Error("matter.bridge.seal.key", slog.String("err", err.Error()))
+		return nil
+	}
+	store, scrubOwed, err := openMatterStore(ctx, db, sealer)
+	if err != nil {
+		if errors.Is(err, errMatterSealKeyMissing) || errors.Is(err, errMatterSealKeyMismatch) {
+			matterSealRefused(err, healthTracker, logger)
+			return nil
+		}
+		logger.Error("matter.bridge.store_open_failed", slog.String("err", err.Error()))
+		return nil
+	}
+	if scrubOwed {
+		logger.Warn("matter.bridge.seal.scrub_owed",
+			slog.String("hint", "the Matter secrets are sealed; their clear bytes may remain in the database file until a later start finishes the scrub"))
+	}
 	// Endpoint identity and the exposure allowlist are keyed by this
 	// daemon's own 5-tuple, so they are persisted here rather than by the
 	// bridge module — which sees only an opaque key. Same database handle,
@@ -423,7 +444,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 	// One configuration for the first node and every node an erase brings up
 	// (matterRuntime.Erase); only the boot reason differs.
-	nodeConfig := func(bootReason uint8) node.Config {
+	nodeConfig := func(bootReason uint8, creds *matterstore.Store) node.Config {
 		return node.Config{
 			Network: node.Network{
 				Listen:     mc.Listen,
@@ -462,7 +483,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				SoftwareVersion:       node.SoftwareVersionFromString(build.Version),
 				SoftwareVersionString: build.Version,
 			},
-			Store:               node.Store{Credentials: store, Endpoints: identity},
+			Store:               node.Store{Credentials: creds, Endpoints: identity},
 			Attestation:         attest,
 			Health:              matterHealth(healthTracker),
 			Locales:             matterLocales(cfg.Locale),
@@ -472,10 +493,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			Logger:              logger,
 		}
 	}
+	// The node an erase brings up gets the credential store opened anew:
+	// the erase dropped the seal canary with every other row, and a fresh
+	// sealed open marks the database again at once.
 	newNode := func(ctx context.Context, bootReason uint8) (*node.Node, error) {
-		return node.New(ctx, nodeConfig(bootReason))
+		creds, _, err := openMatterStore(ctx, db, sealer)
+		if err != nil {
+			return nil, err
+		}
+		return node.New(ctx, nodeConfig(bootReason, creds))
 	}
-	n, err := newNode(ctx, bootReason)
+	n, err := node.New(ctx, nodeConfig(bootReason, store))
 	if err != nil {
 		return fail("matter.bridge.node", err)
 	}
@@ -511,6 +539,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		newReconciler: newReconciler,
 		walk:          walk,
 		nodes:         fabricui.NewNodeSwitch(matterNodeSource{n}),
+		sealScrubOwed: scrubOwed,
 		db:            db,
 		logger:        logger,
 	}
@@ -943,9 +972,9 @@ func newMatterCentralHook(
 // itself — the commissioning window with its fail-safe, verifier installer
 // and CM=2 announcement, the PartsList providers, the StartUp / BootReason
 // events, the fabric fan-out — is not repeated here (ADR 0084 phase 3).
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub, schedules interfaces.ClimateScheduleWriter) (wiring matterWiring, closers []func(), teardown func()) {
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, cipher *secret.Cipher, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub, schedules interfaces.ClimateScheduleWriter) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
-	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger, schedules)
+	bundle := startMatterBridge(ctx, cfg, reg, db, cipher, healthTracker, labels, logger, schedules)
 	if bundle == nil {
 		wiring.projection = matteradapter.NewProjectionPlane(nil, nil)
 		return wiring, closers, teardown

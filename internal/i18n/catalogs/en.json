@@ -137,6 +137,7 @@
   "matter.tab.pair": "Pair",
   "matter.warning.device_refused": "{name} ({address}) is not on the bridge: the Matter device layer refused it ({error}).",
   "matter.warning.device_withheld": "{name} ({address}) is not on the bridge: the configured specification level (north.matter.spec_level) withholds it.",
+  "matter.warning.seal_scrub_owed": "The Matter secrets are sealed, but their former clear bytes could not yet be scrubbed out of the database file. The next daemon start tries again.",
   "matter.warning.scrub_pending": "The last erase of the Matter node removed its data, but could not scrub the freed bytes out of the database file ({error}). The next daemon start scrubs it.",
   "message.code.ADJUSTING_RANGE_TO_SMALL": "Adjustment range too small",
   "message.code.CLUTCH_FAILURE": "Clutch failed",

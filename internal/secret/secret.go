@@ -15,7 +15,9 @@ package secret
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -32,6 +34,10 @@ const (
 	EnvKeyVar = "OPENCCU_LOOM_SECRET_KEY"
 	// KeyFileName is the auto-generated key file under the data dir.
 	KeyFileName = "secret.key"
+	// PendingKeyFileName holds the next master key while a rotation runs
+	// (ADR 0092): it exists from the rotation's first write until every
+	// store opens under it, and then replaces KeyFileName.
+	PendingKeyFileName = "secret.key.next"
 	// encPrefix tags a sealed value. Versioned so the scheme can evolve.
 	encPrefix = "enc:v1:"
 	keySize   = 32 // AES-256
@@ -42,6 +48,8 @@ const (
 // need to special-case the no-key path.
 type Cipher struct {
 	aead cipher.AEAD // nil when unavailable
+	// key is the master key the AEAD runs under, kept for DeriveKey.
+	key []byte
 }
 
 // Available reports whether a usable master key was resolved.
@@ -124,7 +132,81 @@ func newCipher(key []byte) (*Cipher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("secret: new gcm: %w", err)
 	}
-	return &Cipher{aead: aead}, nil
+	return &Cipher{aead: aead, key: append([]byte(nil), key...)}, nil
+}
+
+// NewCipher returns a Cipher over key, a raw 32-byte master key: the
+// rotation opens the stores under the old key and seals them under the new
+// one (ADR 0092).
+func NewCipher(key []byte) (*Cipher, error) {
+	if len(key) != keySize {
+		return nil, fmt.Errorf("secret: a master key is %d bytes, got %d", keySize, len(key))
+	}
+	return newCipher(key)
+}
+
+// GenerateKey returns a fresh random master key.
+func GenerateKey() ([]byte, error) {
+	key := make([]byte, keySize)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return nil, fmt.Errorf("secret: generate key: %w", err)
+	}
+	return key, nil
+}
+
+// EncodeKey is a master key in the form OPENCCU_LOOM_SECRET_KEY and the key
+// file carry: standard base64.
+func EncodeKey(key []byte) string { return base64.StdEncoding.EncodeToString(key) }
+
+// DecodeKey parses a master key in EncodeKey's form.
+func DecodeKey(s string) ([]byte, error) {
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+	if err != nil || len(key) != keySize {
+		return nil, fmt.Errorf("secret: a master key is base64-encoded %d bytes", keySize)
+	}
+	return key, nil
+}
+
+// WriteKeyFile writes key to path, mode 0600, through a temporary file and
+// a rename, so a crash leaves either the old file or the whole new one.
+func WriteKeyFile(path string, key []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(EncodeKey(key)+"\n"), 0o600); err != nil {
+		return fmt.Errorf("secret: write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("secret: install %s: %w", path, err)
+	}
+	return nil
+}
+
+// ReadKeyFile reads a key file in WriteKeyFile's form.
+func ReadKeyFile(path string) ([]byte, error) {
+	raw, err := os.ReadFile(path) //nolint:gosec // a path under the operator's data_dir
+	if err != nil {
+		return nil, err
+	}
+	key, err := DecodeKey(string(raw))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return key, nil
+}
+
+// DeriveKey derives a 32-byte key for one use of the master key with
+// HKDF-SHA256, label naming the use: each use gets a key of its own, and
+// none of them reveals the master key or another use's key. The Matter
+// credential store is sealed under such a key (ADR 0092). An unavailable
+// Cipher has no key to derive from and returns ErrNoKey.
+func (c *Cipher) DeriveKey(label string) ([]byte, error) {
+	if !c.Available() {
+		return nil, ErrNoKey
+	}
+	key, err := hkdf.Key(sha256.New, c.key, nil, label, keySize)
+	if err != nil {
+		return nil, fmt.Errorf("secret: derive %q: %w", label, err)
+	}
+	return key, nil
 }
 
 // loadOrCreateKeyFile reads <dataDir>/secret.key, generating it (mode

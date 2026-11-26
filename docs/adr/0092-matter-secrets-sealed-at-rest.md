@@ -1,6 +1,6 @@
 # ADR 0092 — Matter secrets sealed at rest under the master key
 
-- **Status**: proposed (2026-11-26)
+- **Status**: accepted (2026-11-26)
 - **Related**: [ADR 0027 — encrypt config secrets at rest](./0027-encrypt-config-secrets-at-rest.md),
   [ADR 0084 — the Matter device layer and node facade](./0084-matter-device-layer-and-node-facade.md)
 
@@ -51,7 +51,7 @@ it, and the node pages warn while it is owed.
 
 A sealed database that meets no key, or another key, does not start the
 bridge (`ErrNoSealer`, `ErrUnseal`). The rest of the daemon runs; the
-health component `matter` reports the reason and what to do. Nothing is
+health component `matter.bridge` reports the reason and what to do. Nothing is
 ever erased automatically. The recovery path is the key: restore it, or set
 the environment variable the store was sealed under. When the key is gone
 for good, `openccu-loom matter reset`, run with the daemon stopped, erases

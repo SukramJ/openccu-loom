@@ -29,7 +29,7 @@ restore are:
 | File | Contents | Why it matters |
 |---|---|---|
 | `<data_dir>/openccu-loom.db` | SQLite database: centrals, config sections, users/tokens, sessions, paramset caches, audit log, Matter fabrics | the daemon's entire runtime state |
-| `<data_dir>/secret.key` | AES-256 master key (auto-generated, mode `0600`) | decrypts the secret-classed values stored in the database |
+| `<data_dir>/secret.key` | AES-256 master key (auto-generated, mode `0600`) | decrypts the secret-classed values stored in the database and opens the sealed Matter credentials |
 
 !!! danger "Back up `secret.key` together with the database"
     Secret-classed fields (CCU passwords, API tokens, OIDC client
@@ -129,6 +129,11 @@ accepted as before.
     the original database and its sidecars back together, a successful
     one discards them. You do not have to delete them by hand, and you
     must not copy them back in afterwards.
+
+!!! note "After a key rotation"
+    `openccu-loom secret rotate` moves the live database to a new master
+    key. Archives written before it open only with the old key, so keep
+    the old key as long as you keep those archives.
 
 ## A scheduled backup (cron)
 

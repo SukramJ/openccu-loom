@@ -61,7 +61,7 @@ func TestMatterBootEventsAreReadableAfterWiring(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
+		ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil, nil,
 	)
 	// Cancel here rather than in a t.Cleanup of its own. Cleanups run LIFO, and

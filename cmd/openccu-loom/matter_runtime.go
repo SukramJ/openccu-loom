@@ -76,6 +76,11 @@ type matterRuntime struct {
 	db     *gosql.DB
 	logger *slog.Logger
 
+	// sealScrubOwed reports that the start sealed the credential store but
+	// could not scrub the clear bytes out of the file; go-fabric retries the
+	// scrub on every open (ADR 0092).
+	sealScrubOwed bool
+
 	// scrubMu guards scrubErr and scrubSince: the scrub the last erase
 	// could not finish, which the boot runs (runPendingScrub).
 	scrubMu    sync.Mutex
@@ -253,21 +258,30 @@ func (rt *matterRuntime) scrubPending(ctx context.Context, err error) {
 	rt.scrubMu.Unlock()
 }
 
-// warnings is the scrub an erase left pending, as go-fabric-ui's host
-// warning, in the daemon's locale; without catalogues the code stands in
+// warnings are the scrub the sealing of the store still owes and the scrub
+// an erase left pending, as go-fabric-ui's host warnings, in the daemon's locale; without catalogues the code stands in
 // for the message, as matterWarnings does.
 func (rt *matterRuntime) warnings(catalogs *i18n.Catalogs, locale string) []fabricui.Warning {
+	var out []fabricui.Warning
+	if rt.sealScrubOwed {
+		const code = "seal_scrub_owed"
+		msg := code
+		if catalogs != nil {
+			msg = catalogs.T(locale, "matter.warning."+code)
+		}
+		out = append(out, fabricui.Warning{Code: code, Message: msg})
+	}
 	rt.scrubMu.Lock()
 	defer rt.scrubMu.Unlock()
 	if rt.scrubSince.IsZero() {
-		return nil
+		return out
 	}
 	const code = "scrub_pending"
 	msg := code
 	if catalogs != nil {
 		msg = catalogs.TF(locale, "matter.warning."+code, map[string]string{"error": rt.scrubErr})
 	}
-	return []fabricui.Warning{{Code: code, Message: msg, Since: rt.scrubSince}}
+	return append(out, fabricui.Warning{Code: code, Message: msg, Since: rt.scrubSince})
 }
 
 // release takes the attachments off the node that runs now; the daemon's

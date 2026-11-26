@@ -47,8 +47,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   database file; when a running reader prevents that, the page says so and
   the next daemon start finishes it. New database migration 058
   (`boot_record.scrub_pending`). (#1056)
+- **The Matter bridge's credentials are sealed in the database.** Every
+  fabric's operational private key, IPK, group keys and resumption secrets
+  are encrypted at rest under a key derived from the master key the daemon
+  already uses for configuration secrets (`OPENCCU_LOOM_SECRET_KEY` or
+  `secret.key`), so a copied database or backup no longer gives them away.
+  The first start with a master key seals an existing store; pairings are
+  kept. From then on the bridge needs that key: without it, or with another
+  one, the bridge stays off and the `matter.bridge` health component says
+  why (ADR 0092).
+- **`openccu-loom secret rotate`** moves the configuration secrets and the
+  Matter credentials to a new master key, with the daemon stopped. It is
+  safe to run again after an interruption; with an environment key it
+  prints the new value to set.
+- **`openccu-loom matter reset --yes`** erases the Matter bridge's fabrics
+  and credentials with the daemon stopped — the way back when the master
+  key is lost. The device selection is kept; the bridge comes back unpaired.
 
 ### Changed
+
+- **One daemon per data directory.** The daemon holds a lock on
+  `<data_dir>/openccu-loom.lock` while it runs; a second daemon on the same
+  directory does not start, and the offline commands that rewrite the
+  database (`secret rotate`, `matter reset`) refuse while the daemon runs.
 
 - **Breaking for API users (REST API 18.0.0): the Matter node routes read
   with admin rights only.** go-fabric-ui 0.10 put 43 reading operations
