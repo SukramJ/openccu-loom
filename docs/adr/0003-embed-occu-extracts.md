@@ -4,7 +4,7 @@
 - **Date**: 2026-04-24
 - **Supersedes**: original revision from 2026-04-23 (wrongly assumed
   GPL-2.0-or-later for the upstream data)
-- **Related**: the `NOTICE.md` of the `sukramj.dev/go-openccu-data`
+- **Related**: the `NOTICE.md` of the `github.com/SukramJ/go-openccu-data`
   module (see [ADR 0053](./0053-go-openccu-data-module.md)),
   `notes/plans/roadmap.md`,
   [ADR 0001 — License: MIT](./0001-license-mit.md)

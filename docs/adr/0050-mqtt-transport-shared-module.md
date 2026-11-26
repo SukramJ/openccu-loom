@@ -26,7 +26,7 @@ boundary rather than duplicated per-consumer.
 ## Decision
 
 **The MQTT transport is extracted out of the OpenCCU-Loom tree into a
-standalone, MIT-licensed shared module, `sukramj.dev/go-mqtt`, consumed
+standalone, MIT-licensed shared module, `github.com/SukramJ/go-mqtt`, consumed
 as an ordinary `go.mod` dependency (currently pinned at `v1.2.0`).** All five
 daemons — `mtec`, `daikin`, `zendure`, `homeconnect`, and `loom` — depend on
 the same module; the transport lives, is tested, and is released once.
@@ -96,7 +96,7 @@ the normal `go mod` supply chain like any other dependency.
   hand-ports.
 - OpenCCU-Loom's `internal/north/mqtt` shrinks to the Homematic-specific layer;
   the domain-agnostic wire client is no longer in-tree.
-- A new external dependency enters `go.mod` (`sukramj.dev/go-mqtt`), MIT
+- A new external dependency enters `go.mod` (`github.com/SukramJ/go-mqtt`), MIT
   and CGo-free, pinned to an exact version.
 - Cross-repo releases follow the squash-only, module-first, pin-bump-second
   fan-out; a transport change is a two-step (module release → consumer bump)

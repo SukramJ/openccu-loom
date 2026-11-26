@@ -20,7 +20,7 @@ migration).
 ## Decision
 
 The extracts ship as a dedicated Go module,
-`sukramj.dev/go-openccu-data`: a data artifact embedding the
+`github.com/SukramJ/go-openccu-data`: a data artifact embedding the
 upstream archives (translations, easymodes, MASTER-paramset profiles,
 curated overlays, curated device semantics) with thin typed accessors
 (`ReadFile`, `ReadDir`, `DoorbellModels`) and a `SnapshotVersion`
