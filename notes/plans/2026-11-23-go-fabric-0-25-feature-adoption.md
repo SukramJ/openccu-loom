@@ -656,3 +656,54 @@ As built (branch `claude/matter-erase-1056`):
   window, node observer, reassembly hook, reconciler; scrub with and without a reader; boot path
   through `wireAuditOverlay`), store `TestBootRecordScrubPendingLivesUntilCleared`, e2e
   `TestE2EMatterEraseBringsAFreshNodeBack` (harness `EraseNode`).
+
+## 17. Slice 6: measurements (2026-11-26)
+
+State before the slice: #1177 merged (2e5e3a23), slice 5 done, #1056 closed by it. Branch
+`claude/matter-sealing-at-rest` from main 2e5e3a23. D5 = sealing now, behind an ADR.
+
+Measured (go-fabric v0.26.0 module cache; this repo at 2e5e3a23):
+
+- **go-fabric.** `store.NewSealed(ctx, db, s Sealer)` (`GF/store/seal.go:164`) seals every secret
+  column on the way in, writes a seal canary, scrubs; strict while open (no clear secret written, an
+  unmarked secret row refused with `ErrUnseal`); a store without the sealer reads sealed values as
+  `ErrNoSealer`; "every Store of one database needs the sealer" (`:160-161`). `ScrubOwed`
+  (`:656-664`): an unfinished scrub is no error, retried on every `NewSealed`. `Reseal(ctx, db, old,
+  next)` (`:686-698`): one transaction, then a scrub; "there is no unseal" — back to clear only by
+  restore or factory reset. `node.Store.Sealer` excludes `Store.Credentials`
+  (`GF/node/config.go:823-824`), and loom passes `Credentials`, so loom opens the store with
+  `store.NewSealed` itself. `Erase` drops the canary (`GF/CHANGELOG.md:864`). Protects
+  confidentiality of a copy, not integrity (`GF/docs/security.md` "Sealing at rest").
+- **loom opens the store once:** `matterstore.New(db)` at `cmd/openccu-loom/daemon_matter.go:354`
+  (after `matterstore.Upgrade` at `:346`); no other production open.
+- **Key custody today (ADR 0027, `internal/secret/secret.go:1-130`):** one AES-256 master key,
+  `OPENCCU_LOOM_SECRET_KEY` (base64) or `<data_dir>/secret.key` (auto-created, 0600); without either
+  the config secrets fall back to plaintext ("hardening, not a boot dependency"). `Cipher` keeps
+  only the AEAD, not the raw key. ADR 0027 defers rotation (`:127-129`).
+- **Backup (`cmd/openccu-loom/backup.go`):** the archive never contains `secret.key` (`:233-240`);
+  it is sealed with the master key when one exists (`:271-285`, `secret.LoadExisting`, never minted
+  by the CLI), else written in a loud plaintext mode; restore needs the master key for a sealed
+  archive (`:756-762`). So a Matter key derived from the master key travels with the same custody
+  the archive already requires.
+- **Unverified:** whether a sealed `Store` keeps sealing (and re-marks) after its `Erase` dropped the
+  canary — slice 5 rebuilds the node on the same `Store` instance; to be measured by a test first.
+
+Owner decisions (wizard, 2026-11-26), written up as ADR 0092 (proposed,
+`docs/adr/0092-matter-secrets-sealed-at-rest.md`):
+
+- **Key:** HKDF-SHA256 from ADR 0027's master key, own label; go-fabric's AES-256-GCM sealer.
+- **Activation:** automatic whenever a master key resolves (no switch); without one, clear as today
+  unless the database was sealed before.
+- **Rotation now:** offline `openccu-loom secret rotate` — config secrets re-sealed in one
+  transaction + `store.Reseal`, scrub; both keys kept until every step committed (re-runnable);
+  env-managed key: the command takes or prints the new value.
+- **No/wrong key:** bridge off (`ErrNoSealer` / `ErrUnseal`), health `matter` names reason and fix;
+  offline `openccu-loom matter reset` erases the Matter store + endpoint records (selection kept).
+- Scrub owed after sealing: page warning while `ScrubOwed`; `NewSealed` retries each start.
+
+Open measurements before code: (1) a sealed `Store` after its `Erase` (slice 5 rebuilds on the same
+instance) — still sealing, canary rewritten?; (2) how a start without a key detects a sealed
+database before `node.New` (canary probe vs. the error `store.New` returns); (3) whether `Erase` of
+a sealed database works through a store opened without the sealer (for `matter reset`); (4) the
+config-secret rows to re-seal (`config_sections` JSON leaves, `centrals.password_plain`) and whether
+`internal/secret` can keep the raw key for HKDF with one derivation method as its only API growth.
