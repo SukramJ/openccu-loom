@@ -264,6 +264,7 @@ func matterRestartRules() []RestartRule {
 				"north.matter.commissioning.iterations",
 				"north.matter.commissioning.concurrent_pairings",
 				"north.matter.commissioning.ephemeral_window",
+				"north.matter.commissioning.window_on_demand",
 			},
 			Differs: func(b, e *Config) bool {
 				bc, ec := b.North.Matter.WithDefaults().Commissioning, e.North.Matter.WithDefaults().Commissioning

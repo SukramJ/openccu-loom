@@ -147,6 +147,14 @@ func claimRestart(now time.Time) bool {
 	return restartSignalledAt.CompareAndSwap(prev, now.UnixNano())
 }
 
+// RestartRequested reports whether a restart request (REST or MQTT) claimed
+// a shutdown signal in this process. The shutdown path reads it to record
+// that the stop was an operator's restart, which the next start reports as
+// the Matter node's BootReason SoftwareReset. A claim whose shutdown did not
+// finish still counts: the stop that eventually ends the process followed
+// the operator's request.
+func RestartRequested() bool { return restartSignalledAt.Load() != 0 }
+
 // restartSignal asks the daemon's own process to shut down. It is a
 // variable so the double-fire latch can be exercised without
 // terminating the test process.

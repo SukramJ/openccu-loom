@@ -20,6 +20,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   central's ready event brings the persisted exposures back; the endpoint
   numbers must survive the restart. Matter was the last plane without such
   a round trip. (#1092)
+- **The Matter bridge can stay closed until you open a pairing window.**
+  New setting `north.matter.commissioning.window_on_demand` (default off):
+  when on, the bridge opens no commissioning window by itself — not at
+  start while no controller is paired, not after the last one is removed,
+  not when a window opened on the pairing page closes — and is not
+  discoverable for pairing until a window is opened on the Matter pairing
+  page. Off keeps today's behaviour, in which an unpaired bridge opens its
+  window at start (on random codes nobody was shown when no passcode is
+  configured). The setting takes effect after a restart.
+- **The Matter bridge reports why it started.** Controllers and the Matter
+  status page read the GeneralDiagnostics boot reason: *software update
+  completed* on the first start of a new daemon version, *software reset*
+  after a restart requested in the Web UI, over REST or over MQTT, and
+  *unspecified* otherwise — a crash, a power loss and a stop by the
+  supervisor look the same to the daemon. The reset marker is written at
+  the end of a clean shutdown and describes one start only. New database
+  migration 057 (`boot_record`).
 
 ### Changed
 

@@ -306,6 +306,14 @@ func Start(t *testing.T, opts Options) *Harness {
 func (h *Harness) Restart(t *testing.T) {
 	t.Helper()
 	h.stopProcess()
+	h.relaunch(t)
+}
+
+// relaunch keeps the exited process's output for a failure report and
+// starts the next process on the same configuration, data directory and
+// simulated CCU.
+func (h *Harness) relaunch(t *testing.T) {
+	t.Helper()
 	h.earlierLogs.WriteString(h.stdoutBuf.String())
 	h.earlierLogs.WriteString(h.stderrBuf.String())
 	h.stdoutBuf = newSyncBuffer()

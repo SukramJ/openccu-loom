@@ -502,3 +502,62 @@ As built (branch `claude/matter-reachability-3b`):
   e2e phase 1 + pin red; hook capturing the first device → rebuild test red.
 - Open: chip-tool run (composition binding changed → `needs-chiptool`), go-fabric#589 bump, push/PR on
   the owner's word.
+
+## 15. Slice 4: measurements and decisions (2026-11-26)
+
+State before the slice: #1170 and #1172 merged (279bac93); main carries go-fabric v0.26.0 and
+go-fabric-ui v0.14.1. Branch `claude/matter-commissioning-posture` from main 7439a8ea.
+
+Measured (go-fabric v0.26.0, go-fabric-ui v0.14.1, module cache):
+
+- **F4.** `node.Commissioning.WindowOnDemand` (`node/config.go:523-535`): with it a node without a
+  fabric opens no window at `Start` (`node/node.go:1528-1531`, log `commissioning.window_on_demand`),
+  none after its last fabric goes (`node/commissioning.go:509-513`), none when a basic window closes
+  and none when `SetCommissioningBlocked` lifts (`node/node.go:1815-1822`); the host opens it with
+  `OpenOwnWindow` / `OpenBasicWindow` (`node/commissioning.go:741-756`). matter.js
+  `commissioning.enabled: false` (`CommissioningServer.ts:266-273` per the godoc). The node page
+  already opens windows through those two calls (`fabricui.Options.ConfiguredWindow`,
+  `GU/fabricui/options.go:270-281`); `GET /node/status` reports `commissioning_window_open` and
+  `window_kind` (`GU/fabricui/handlers_node.go`), which is what the e2e per value reads.
+- **F5.** `node.Config.BootReason` (`node/config.go:91-102`), values `mattercore.BootReason*`
+  (`cluster/core/general_diagnostics.go:223-229`); a value past SoftwareReset fails `Validate`
+  (`node/config.go:1004-1005`); the node's own OTA record overrides it (`node/root.go:112-125`;
+  loom configures no OTA). go-fabric-ui serves `Status.boot_reason`.
+- loom persists neither the last version a node started with nor a restart marker;
+  `matter_settings` is go-fabric's table (`055_matter_store_v8_to_v12.sql:61`), not a place for
+  loom state. So F5 needs a migration of its own (the case the F5 row named for dropping it).
+- Both restart paths (REST `Restart`, MQTT `RequestRestart`) claim through
+  `handlers.claimRestart` (`internal/north/rest/handlers/system_admin.go:138`), so the shutdown
+  path can ask whether a restart was requested without a new wiring setter.
+
+Owner decisions (wizard):
+
+- F4: `north.matter.commissioning.window_on_demand`, default false (D4), restart-required.
+- F5 adopted with migration 057: a loom-owned single-row boot record with the version the Matter
+  node last started with (a different running version → SoftwareUpdateCompleted) and a cause a
+  graceful shutdown writes after an operator restart (→ SoftwareReset); read and cleared at boot, so
+  a crash or kill reports Unspecified.
+- Both present: SoftwareUpdateCompleted wins.
+- Flow stays Standard; F9 (User-Intent flow, pairing hints) stays "later".
+
+As built (branch `claude/matter-commissioning-posture`):
+
+- F4: `Commissioning.WindowOnDemand` from the config in `startMatterBridge`. Tests per value through
+  `startMatterBridge` (`matter_window_on_demand_test.go`: window at start; basic window closed without
+  a reopen) and e2e `TestE2EMatterWindowOnDemandFollowsTheSetting` (section save → restart-required →
+  restart → no window → pairing page opens one). Bite: root line removed → both unit "on" cases and the
+  e2e red.
+- F5: migration 057 `boot_record` (`stop_requested`, `last_stop_requested`, `matter_started_version`).
+  Boot: `takeStopRecordAtBoot` right after the DB opens (every boot, Matter on or off). Shutdown: the
+  DB teardown writes the marker when `handlers.RestartRequested()` (a claim in this process; REST and
+  MQTT share `claimRestart`). Matter start: `loadMatterBootReason` → `node.Config.BootReason`;
+  `SetMatterStartedVersion` after `Start` succeeded. No new wiring setter, `startMatterBridge`'s
+  signature unchanged (it reads the record through its `db`).
+- Tests: store (`boot_record_test.go`: the marker lives one boot), handlers (`RestartRequested` after a
+  REST and an MQTT claim), derivation table + three cases through `startMatterBridge`, e2e
+  `TestE2EMatterBootReasonStatesWhatTheDaemonKnows` (fresh 0, SIGTERM 0, `POST /system/restart` 6,
+  SIGTERM after it 0, a second binary built with another `build.Version` 5). Harness:
+  `RestartOnRequest`, `RestartWithBinary`, `BuildDaemonWithVersion`, `NodeStatus`, `OpenPairingWindow`.
+- Bite proofs: `BootReason: bootReason * 0` → unit 5/6 cases red (a deleted line fails the build, not
+  the test); started-version write removed → unit red; shutdown marker forced false → e2e step
+  "operator restart" red; boot take removed → same step red.

@@ -427,3 +427,28 @@ func TestRequestRestart_SharesTheLatchWithTheRESTHandler(t *testing.T) {
 		t.Errorf("audit entries attributed to the MQTT surface = %d, want 2", mqttEntries)
 	}
 }
+
+// TestRestartRequested_FollowsTheClaim: the shutdown path reads no request
+// before any restart was asked for, and reads one after a request on either
+// surface claimed the signal.
+func TestRestartRequested_FollowsTheClaim(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request func(t *testing.T, env *restartTestEnv)
+	}{
+		{name: "rest", request: func(t *testing.T, env *restartTestEnv) { t.Helper(); env.post(t, Restart(nil)) }},
+		{name: "mqtt", request: func(*testing.T, *restartTestEnv) { RequestRestart(nil, "mqtt:maintenance/set/restart") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newRestartTestEnv(t)
+			if RestartRequested() {
+				t.Fatal("RestartRequested before any request")
+			}
+			tc.request(t, env)
+			if !RestartRequested() {
+				t.Fatal("RestartRequested false after a request claimed the signal")
+			}
+			env.awaitSignals(t, 1)
+		})
+	}
+}

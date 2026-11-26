@@ -565,6 +565,10 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"AlarmCodeStore:Upsert":                    "reason: alarm codes are daemon-level user/hardware identities keyed by code id; zones may span centrals",
 		"AlarmCodeStore:Get":                       "reason: alarm codes are daemon-level user/hardware identities keyed by code id; zones may span centrals",
 		"AlarmCodeStore:Delete":                    "reason: alarm codes are daemon-level user/hardware identities keyed by code id; zones may span centrals",
+		// boot_record is one row about the daemon process itself — how its
+		// last stop ended and which version its Matter node last started
+		// with; no central has a share in it.
+		":RecordStopRequested": "reason: boot_record is a single daemon-wide row about the process's own stop; not per-CCU by design",
 	}
 
 	dir := filepath.Join(repoRoot(t), "internal", "store", "sqlite")

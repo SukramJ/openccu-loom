@@ -463,6 +463,11 @@ north:
       # discriminator + passcode. Recommended for production.  [default: false]
       ephemeral_window: false
 
+      # Window on demand: the bridge opens no commissioning window by
+      # itself (not at start while unpaired, not after the last controller
+      # is removed); open one on the Matter pairing page.  [default: false]
+      window_on_demand: false
+
     # ─── CASE / Operational session ─────────────────────────────────────
     case:
       # 64-bit operational node ID in the fabric. 0 = CASE disabled.
