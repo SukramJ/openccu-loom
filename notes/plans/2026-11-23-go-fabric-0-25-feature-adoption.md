@@ -539,3 +539,25 @@ Owner decisions (wizard):
   a crash or kill reports Unspecified.
 - Both present: SoftwareUpdateCompleted wins.
 - Flow stays Standard; F9 (User-Intent flow, pairing hints) stays "later".
+
+As built (branch `claude/matter-commissioning-posture`):
+
+- F4: `Commissioning.WindowOnDemand` from the config in `startMatterBridge`. Tests per value through
+  `startMatterBridge` (`matter_window_on_demand_test.go`: window at start; basic window closed without
+  a reopen) and e2e `TestE2EMatterWindowOnDemandFollowsTheSetting` (section save → restart-required →
+  restart → no window → pairing page opens one). Bite: root line removed → both unit "on" cases and the
+  e2e red.
+- F5: migration 057 `boot_record` (`stop_requested`, `last_stop_requested`, `matter_started_version`).
+  Boot: `takeStopRecordAtBoot` right after the DB opens (every boot, Matter on or off). Shutdown: the
+  DB teardown writes the marker when `handlers.RestartRequested()` (a claim in this process; REST and
+  MQTT share `claimRestart`). Matter start: `loadMatterBootReason` → `node.Config.BootReason`;
+  `SetMatterStartedVersion` after `Start` succeeded. No new wiring setter, `startMatterBridge`'s
+  signature unchanged (it reads the record through its `db`).
+- Tests: store (`boot_record_test.go`: the marker lives one boot), handlers (`RestartRequested` after a
+  REST and an MQTT claim), derivation table + three cases through `startMatterBridge`, e2e
+  `TestE2EMatterBootReasonStatesWhatTheDaemonKnows` (fresh 0, SIGTERM 0, `POST /system/restart` 6,
+  SIGTERM after it 0, a second binary built with another `build.Version` 5). Harness:
+  `RestartOnRequest`, `RestartWithBinary`, `BuildDaemonWithVersion`, `NodeStatus`, `OpenPairingWindow`.
+- Bite proofs: `BootReason: bootReason * 0` → unit 5/6 cases red (a deleted line fails the build, not
+  the test); started-version write removed → unit red; shutdown marker forced false → e2e step
+  "operator restart" red; boot take removed → same step red.

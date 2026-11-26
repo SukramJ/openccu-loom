@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/secret"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
@@ -160,7 +161,15 @@ func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Confi
 		// short of exactly the writes an operator is most likely to look for.
 		// This runs as the last teardown in the LIFO chain, by which point
 		// every producer is already down and cannot refill the queue.
-		teardown = func() {
+		// The boot record's stop marker describes the previous process's
+		// stop: every boot retires it before anything reads the record
+		// (the Matter node's BootReason), and the end of a graceful
+		// shutdown that followed an operator's restart request writes the
+		// next one, so a crash or kill leaves none.
+		takeStopRecordAtBoot(db, logger) //nolint:contextcheck // runs on its own timeout like openLoomDB, independent of the lifecycle ctx
+
+		teardown = func() { //nolint:contextcheck // shutdown path: the lifecycle ctx is already cancelled, the boot-record write carries its own timeout
+			recordRequestedStop(db, handlers.RestartRequested(), logger)
 			stopAuditSink()
 			_ = db.Close()
 		}

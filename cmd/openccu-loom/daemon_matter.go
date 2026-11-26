@@ -412,6 +412,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return fail("matter.bridge.pase.credentials", err)
 	}
 	attest := matterAttestation(mc, logger)
+	bootReason := loadMatterBootReason(ctx, db, build.Version, logger)
 	uiEvents := fabricui.NewEvents()
 	surfacePolicies := matterSurfacePolicies(mc)
 	if mc.DevRotateUniqueIDs {
@@ -432,6 +433,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			LocationCapability: node.RegulatoryIndoorOutdoor,
 			WindowOnDemand:     mc.Commissioning.WindowOnDemand,
 		},
+		BootReason: bootReason,
 		ProductDescription: node.ProductDescription{
 			Name:       mc.NodeLabel,
 			DeviceType: matterRootNodeDeviceType,
@@ -544,10 +546,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		cancel()
 		return fail("matter.bridge.start", err)
 	}
+	recordMatterStartedVersion(ctx, db, build.Version, logger)
 	logger.Info("matter.bridge.up",
 		slog.String("addr", n.LocalAddr()),
 		slog.Bool("ipv4_only", mc.PreferIPv4),
-		slog.Bool("configured_passcode", configured))
+		slog.Bool("configured_passcode", configured),
+		slog.Int("boot_reason", int(n.BootReason())))
 	logMatterMDNSInterfaces(n.DiagnoseMDNS, mc.MDNSInterfaces, logger)
 
 	// The node's health probe (node.Config.Health, matterHealth) reports
