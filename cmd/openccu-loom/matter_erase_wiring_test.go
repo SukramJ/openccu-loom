@@ -118,9 +118,15 @@ func eraseNode(t *testing.T, api http.Handler) {
 // erase has to bring a new node up — and everything the daemon hangs on the
 // node has to move to it: the pages, the status reader, the endpoint hook
 // and the node observer. The old node is the negative control throughout:
-// every check would read it had the daemon kept it.
+// every check would read it had the daemon kept it. It runs in a fresh
+// process: the UniqueID check needs the pinned form, and a dev-rotation
+// start elsewhere in this package switches the process to rotation, under
+// which go-fabric's erase pins no fresh UniqueID (node/factory_reset.go:
+// 148-154).
 func TestMatterEraseBringsAFreshNodeBackUnderThePages(t *testing.T) {
-	t.Parallel()
+	if !inFreshProcess(t) {
+		return
+	}
 	mw, api, hub, _ := eraseRuntime(t, "ccu-erase")
 	ctx := context.Background()
 
