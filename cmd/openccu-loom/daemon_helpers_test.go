@@ -649,7 +649,7 @@ func TestNewDeviceLookupAdapter_NonNilReg_ReturnsAdapter(t *testing.T) {
 func TestDeviceLookupAdapter_LocateDevice_NilReceiver_ReturnsFalse(t *testing.T) {
 	t.Parallel()
 	var a *deviceLookupAdapter
-	_, _, ok := a.LocateDevice("00012345:0")
+	_, _, ok := a.LocateDevice(context.Background(), "00012345:0")
 	if ok {
 		t.Error("nil receiver: expected ok=false")
 	}
@@ -659,7 +659,7 @@ func TestDeviceLookupAdapter_LocateDevice_EmptyRegistry_ReturnsFalse(t *testing.
 	t.Parallel()
 	reg := buildTestRegistry(t)
 	a := newDeviceLookupAdapter(reg)
-	_, _, ok := a.LocateDevice("00012345:0")
+	_, _, ok := a.LocateDevice(context.Background(), "00012345:0")
 	if ok {
 		t.Error("empty registry: expected ok=false")
 	}
@@ -670,7 +670,7 @@ func TestDeviceLookupAdapter_LocateDevice_RegistryWithCentralNoDevice_ReturnsFal
 	reg := buildTestRegistry(t, "ccu-01")
 	a := newDeviceLookupAdapter(reg)
 	// Registry has a central but its ModelRegistry has no matching device address.
-	_, _, ok := a.LocateDevice("00012345:0")
+	_, _, ok := a.LocateDevice(context.Background(), "00012345:0")
 	if ok {
 		t.Error("central with empty model registry: expected ok=false")
 	}

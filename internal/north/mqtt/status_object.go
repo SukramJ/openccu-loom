@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 )
 
 // statusExtKey is this daemon's one project-extension key in every

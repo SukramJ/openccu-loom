@@ -185,19 +185,19 @@ func TestMatterStatusReaderAdapter_WindowNonNil_SetsWindowOpenFalse(t *testing.T
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
 	t.Cleanup(bundle.stop)
 
 	// An uncommissioned node opens its own window at Start: close it.
-	if err := bundle.node.CloseWindow(context.Background()); err != nil {
+	if err := bundle.Node().CloseWindow(context.Background()); err != nil {
 		t.Fatalf("CloseWindow: %v", err)
 	}
 	r := &matterStatusReaderAdapter{
 		enabled: true,
-		node:    bundle.node,
+		node:    bundle.Node,
 	}
 	status := r.MatterStatus(context.Background())
 	if status.WindowOpen {
@@ -226,12 +226,12 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
 	t.Cleanup(bundle.stop)
-	if bundle.node.Root().OperationalCredentials == nil {
+	if bundle.Node().Root().OperationalCredentials == nil {
 		t.Fatal("startMatterBridge produced a nil OperationalCredentials cluster")
 	}
 
@@ -245,13 +245,13 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 		t.Fatalf("AddFabric: %v", err)
 	}
 
-	before := bundle.node.Root().OperationalCredentials.MatterDataVersion()
+	before := bundle.Node().Root().OperationalCredentials.MatterDataVersion()
 
-	if err := bundle.node.RemoveFabric(ctx, idx); err != nil {
+	if err := bundle.Node().RemoveFabric(ctx, idx); err != nil {
 		t.Fatalf("RemoveFabric: %v", err)
 	}
 
-	after := bundle.node.Root().OperationalCredentials.MatterDataVersion()
+	after := bundle.Node().Root().OperationalCredentials.MatterDataVersion()
 	if after == before {
 		t.Errorf("DataVersion did not change after RevokeFabric: before=%d after=%d", before, after)
 	}
@@ -277,18 +277,18 @@ func TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration(t *testin
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
 	t.Cleanup(bundle.stop)
 
-	if err := bundle.node.OpenOwnWindow(context.Background(), 600*time.Second); err != nil {
+	if err := bundle.Node().OpenOwnWindow(context.Background(), 600*time.Second); err != nil {
 		t.Fatalf("OpenOwnWindow: unexpected error: %v", err)
 	}
 	r := &matterStatusReaderAdapter{
 		enabled: true,
-		node:    bundle.node,
+		node:    bundle.Node,
 	}
 	status := r.MatterStatus(context.Background())
 	if !status.WindowOpen {

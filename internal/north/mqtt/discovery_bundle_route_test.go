@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 func bundleBridge(t *testing.T) (*Bridge, *mockPublisher) {

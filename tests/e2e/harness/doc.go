@@ -10,7 +10,7 @@
 // hermetic in-process equivalent:
 //
 //   - South-bound CCU: godevccu (imported directly from
-//     github.com/SukramJ/godevccu)
+//     sukramj.dev/godevccu)
 //   - South-bound openccu-lite box: litefake (BackendOpenCCULite; see
 //     lite.go), selected through Options.Backend
 //   - MQTT broker: an embedded pure-Go broker

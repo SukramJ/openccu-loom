@@ -173,23 +173,28 @@ type Config struct {
 	// interfaces that don't have one.
 	RegaRunner *rega.Runner
 
-	// SessionRecorderHook, when non-nil, is called after every successful
-	// SetValue or PutParamset so the CacheCoordinator's session recorder
-	// can capture the CCU-communication trace. The hook is intentionally
-	// typed as a plain function (not a full interface) to keep the client
-	// package free of a dependency on the coordinators or store packages.
+	// SessionRecorderHook, when non-nil, is called once for every call
+	// [InterfaceClient.Call] completes successfully, so the session
+	// recorder behind the diagnostics RPC recording can capture the
+	// CCU-communication trace — reads and writes alike, because Call is the
+	// one path every south-bound RPC of this client takes. It fires after
+	// the reliability stack has finished: once per logical call however many
+	// attempts the retrier needed, only for the leader of a coalesced group,
+	// and never for a failed call. [InterfaceClient.CallOrdered] does not
+	// report to it. The hook is a plain function, not an interface, to keep
+	// the client package free of a dependency on the coordinators or store
+	// packages.
 	//
 	// rpcType is a transport label derived from [Config.BackendKind]:
 	// "bin-rpc" for CUxD, "xml-rpc" otherwise. It is NOT a
 	// session.RPCType value — those spell the same transports "bin" /
 	// "xml" / "json" — because this package cannot import the store; the
-	// wiring layer maps the label. method is the RPC method name
-	// ("setValue" or "putParamset"). params and response are the wire
-	// arguments / result values.
+	// wiring layer maps the label. method is the RPC method name, params
+	// the arguments as handed to Call (before wire encoding), response the
+	// decoded result.
 	//
 	// Nil = no recording (default; no overhead). The daemon wires this
-	// from the CacheCoordinator.RecordSession passthrough. Closes
-	// the Item 2 gap in (RecordSession-Wiring).
+	// from the CacheCoordinator.RecordSession passthrough.
 	SessionRecorderHook func(rpcType, method string, params, response any)
 
 	// RPCOutcomeHook, when non-nil, is called once per south-bound RPC
@@ -493,8 +498,11 @@ func (c *InterfaceClient) Call(
 		// command that is backing off — e.g. a CCU DUTY_CYCLE fault parking a
 		// write for tens of seconds — does not hold the pool permit hostage
 		// while unrelated reads/writes wait.
+		// DoMethod, not Do: a reply lost after the call went out is
+		// repeated only for a read, so an ACTION press or a firmware
+		// install whose answer the connection dropped is not sent twice.
 		err := c.cfg.Circuit.DoWithPriority(ctx, method, priority, func(ctx context.Context) error {
-			return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
+			return c.cfg.Retrier.DoMethod(ctx, method, func(ctx context.Context, _ int) error {
 				if err := throttle.Acquire(ctx, priority); err != nil {
 					return err
 				}
@@ -507,6 +515,15 @@ func (c *InterfaceClient) Call(
 				return nil
 			})
 		})
+		// Reported here, once the whole reliability stack has succeeded and
+		// outside the throttle permit: once per logical call (not per retry
+		// attempt), and only by the leader of a coalesced group, since
+		// followers never run execute.
+		if err == nil {
+			if hook := c.cfg.SessionRecorderHook; hook != nil {
+				hook(rpcTypeLabel(c.cfg.BackendKind), method, params, result)
+			}
+		}
 		return result, err
 	}
 
@@ -526,6 +543,20 @@ func (c *InterfaceClient) Call(
 	}
 	c.observeRPCOutcome(ctx, method, started, err)
 	return out, err
+}
+
+// rpcTypeLabel names the transport the session-recorder hook is reporting
+// on. CUxD is driven over BIN-RPC — the daemon runs its own BIN-RPC callback
+// server for it, and its wiring records the trace under the BIN-RPC session
+// type; every other backend flavour reaches the CCU over XML-RPC.
+//
+// The label is the hook's own spelling, not a session.RPCType value: this
+// package does not import the store, so the wiring maps it.
+func rpcTypeLabel(k backends.Kind) string {
+	if k == backends.KindCUxD {
+		return "bin-rpc"
+	}
+	return "xml-rpc"
 }
 
 // CallOrdered issues a read through the same reliability stack as [Call]
@@ -572,7 +603,7 @@ func (c *InterfaceClient) CallOrdered(
 
 	var result any
 	err := c.cfg.Circuit.DoWithPriority(ctx, method, priority, func(ctx context.Context) error {
-		return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
+		return c.cfg.Retrier.DoMethod(ctx, method, func(ctx context.Context, _ int) error {
 			if err := throttle.Acquire(ctx, priority); err != nil {
 				return err
 			}
@@ -696,8 +727,8 @@ func (c *InterfaceClient) SetConnectionIssueGate(fn func() bool) {
 	c.cfg.PingPong.SetConnectionIssueGate(fn)
 }
 
-// Close marks the client permanently stopped, cancels all in-flight
-// retry chains, and closes its throttles. Subsequent Call invocations
+// Close marks the client permanently stopped, releases callers parked on a
+// coalesced call, and closes its throttles. Subsequent Call invocations
 // return an error.
 func (c *InterfaceClient) Close() {
 	c.mu.Lock()
@@ -709,11 +740,6 @@ func (c *InterfaceClient) Close() {
 	// the same-state no-op keeps a second Close silent.
 	_ = c.sm.TransitionTo(hmenum.ClientStateStopping, "close", true, hmenum.FailureReasonNone)
 	_ = c.sm.TransitionTo(hmenum.ClientStateStopped, "close", true, hmenum.FailureReasonNone)
-	// Cancel any stale retry chains so they do not keep wire resources occupied
-	// after the interface shuts down.
-	if c.cfg.Retrier != nil {
-		c.cfg.Retrier.CancelInterface()
-	}
 	// Release everyone parked on a coalesced call. Their transport is gone,
 	// so waiting for a result that can no longer arrive only holds the
 	// caller — the shutdown error tells them the call was not carried out.
@@ -1364,8 +1390,8 @@ func (c *InterfaceClient) CanTransitionTo(target hmenum.ClientState) bool {
 
 // GetVersion returns the software version string associated with this client.
 // For XML-RPC interfaces this is the value returned by the getVersion call
-// during backend detection. For JSON-RPC-only interfaces (CCU-Jack) it is
-// "0". Empty string means the version has not been determined yet.
+// during backend detection. Empty string means the version has not been
+// determined yet.
 func (c *InterfaceClient) GetVersion() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()

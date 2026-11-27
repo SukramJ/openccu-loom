@@ -6,6 +6,120 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **REST API 19.0.0: the editor component's route list names the method.**
+  `GET /api/v1/ui/editor-component` answers `routes` as a list of
+  `{method, prefix}` (schema `EditorRoute`) instead of path prefixes; a `*`
+  segment matches one path segment. A prefix alone could not tell an edit
+  (`POST /devices/{addr}/paramsets/…`) from a lifecycle call
+  (`POST /devices/{addr}/release`), so a relay that enforced `/devices`
+  forwarded both. `GET /measurements/recording` and its `PUT`, which the
+  editor's recording toggle calls, joined the list; `GET /audit` left it.
+  This retypes a field, hence the major. (#1119)
+
+### Added
+
+- **Every device route can be bound to one CCU.** `?central=<name>` on any
+  `/api/v1/devices/{addr}…` route resolves the address on that central alone:
+  a central that does not exist or does not hold the address answers 404
+  before the operation runs, and nothing falls back to another CCU. Device
+  addresses repeat across CCUs (virtual remotes, internal devices, CUxD
+  devices), and an editor opened from one CCU's Home Assistant entry edited
+  whichever CCU sorted first. Without the parameter nothing changes. A
+  `POST /devices/{addr}/replace` whose body names another central than
+  `?central=` is refused with 422 before anything is unpaired. (#1119)
+- **The change log records who an integration acted for.** An API token or
+  a box API token may send `X-On-Behalf-Of` (at most 128 bytes, e.g.
+  `Alex (ha:<id>)`); every row the request writes carries it as
+  `on_behalf_of` beside the authenticated principal — in the REST answer,
+  the CSV export (last column), the MCP `list_audit` tool and the SPA's
+  change log ("on behalf of …"). It is recorded as asserted and never used
+  for authorization; from a browser session or a password login the header
+  is ignored, and a malformed value answers 400. Paramset, link, schedule,
+  configuration-repair and custom-data-point writes recorded no principal at
+  all before; they now name it. (#1119)
+- **A device's change history for operators.** `GET
+  /api/v1/devices/{addr}/audit` lists the entries of exactly that device and
+  its channels to every principal with the operator role; `GET /audit`
+  stays admin-only. The device page's history tab — in the SPA and in the
+  editor component inside Home Assistant, whose paired token is an operator
+  — reads it, so the tab no longer answers 403 there. (#1119)
+
+### Fixed
+
+- **The MCP device tools act on the CCU they name.** `set_datapoint`,
+  `write_paramset`, `write_link_paramset`, `list_paramset_apply_targets`,
+  `apply_paramset_to_channels`, `repair_device_config`,
+  `clear_device_config_cache` and `assign_rf_interface` bind the call to
+  `central_name` the way `?central=` binds a REST device route: an unknown
+  central, or one that does not hold the address, is refused, and otherwise
+  the address resolves on that central alone. They used to compare the name
+  with the first CCU holding the address, so a device whose address a second
+  CCU repeats could not be reached there. (#1184)
+
+- **REST API 19.1.0: a device read bound to a CCU answers `released` from
+  that CCU.**
+  `GET /devices/{addr}?central=` and `GET /devices?central=` (and the MCP
+  `list_devices` tool with `central_name`) report the onboarding state that
+  central holds, so a device released on one CCU no longer reads unreleased
+  because a same-named device on another CCU is still held back. The
+  central-filtered list now lists a device whose address another CCU repeats
+  under its own CCU; it used to be missing there, because the filter asked
+  which CCU holds the address first. Unbound reads keep the rule that a hold
+  on any CCU wins. `released` is now documented on `DeviceSummary`. (#1183)
+
+- **The change log records the CCU a change was made on.** Every row now
+  stores its central: the one the request was bound to with `?central=`, or
+  the one the daemon resolved the device on. It used to be derived from the
+  device address when the log was read, so the history of an address that
+  exists on two CCUs (a virtual remote, an internal device, a CUxD device)
+  listed both CCUs' rows under one of them. `GET /devices/{addr}/audit?central=`
+  now leaves out rows recorded on the other CCU; rows written before this
+  release carry no central and are still attributed from the address. The MCP
+  `list_audit` tool reports the recorded central. New column
+  `audit_log.central` (migration 060). (#1182)
+
+- **`POST /diagnostics/rpc-recording` records again.** A recording started
+  on a running daemon captured nothing: the hook that feeds it sat in two
+  write methods no production path called. It now records every south-bound
+  call that goes through the interface client's reliability stack — reads
+  and writes, once per successful call however many retries it took, and
+  once per group of identical coalesced writes. JSON-RPC calls,
+  `init`/`deinit` and the order-preserving reads of the device-definition
+  export are not recorded. The unused write methods and the retry
+  supersede-by-data-point machinery only they used are removed. (#1180)
+
+- **Matter is back in the navigation behind the Home Assistant remote
+  add-on.** Opened through the remote add-on, the UI dropped Matter from its
+  menu and the view settings said the bridge was switched off while it ran.
+  The add-on forwards the name Home Assistant is reached under, which no loom
+  setting lists, and the Matter routes refused every request under it with
+  403 `host_not_allowed`. They now admit a request an API token or a box API
+  token authenticated under any name. That is the credential the remote add-on
+  injects, and a page that rebinds a foreign name to the daemon cannot present
+  it. A session cookie or a cached Basic login is still held to the names in
+  `north.rest.public_url` and `<hostname>.local`.
+
+- **A command whose reply the connection dropped is no longer sent again.**
+  When the CCU received a call and the connection broke before its answer
+  arrived, the retry layer sent it up to twice more — a button press
+  (`PRESS_SHORT`), a firmware install, a device deletion or a paramset write
+  could reach the CCU three times. The transports now tell a dial that
+  never reached the CCU apart from a reply lost after the call went out
+  (`hmerr.ErrReplyLost`), and only a read is repeated after a lost reply; a
+  refused dial and a CCU fault such as DUTY_CYCLE are still retried for
+  writes, because the CCU did not act on them. JSON-RPC reads — sysvar and
+  program refreshes, device details, read-only ReGa scripts — are now sent
+  once more after a lost reply (the CCU's web server closes idle keep-alive
+  connections after 60 s), where they failed outright before; writes,
+  `Session.*` and state-changing scripts are sent once. Which methods and
+  scripts count as reads is decided in one place
+  (`internal/client/reliability/classifier.go`), and every ReGa script
+  carries an explicit verdict. (#1157)
+
+## [0.108.0] - 2026-11-26
+
 ### Added
 
 - **The Matter plane of a device's projection is held by a round trip
@@ -20,8 +134,70 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   central's ready event brings the persisted exposures back; the endpoint
   numbers must survive the restart. Matter was the last plane without such
   a round trip. (#1092)
+- **The Matter bridge can stay closed until you open a pairing window.**
+  New setting `north.matter.commissioning.window_on_demand` (default off):
+  when on, the bridge opens no commissioning window by itself — not at
+  start while no controller is paired, not after the last one is removed,
+  not when a window opened on the pairing page closes — and is not
+  discoverable for pairing until a window is opened on the Matter pairing
+  page. Off keeps today's behaviour, in which an unpaired bridge opens its
+  window at start (on random codes nobody was shown when no passcode is
+  configured). The setting takes effect after a restart.
+- **The Matter bridge reports why it started.** Controllers and the Matter
+  status page read the GeneralDiagnostics boot reason: *software update
+  completed* on the first start of a new daemon version, *software reset*
+  after a restart requested in the Web UI, over REST or over MQTT, and
+  *unspecified* otherwise — a crash, a power loss and a stop by the
+  supervisor look the same to the daemon. The reset marker is written at
+  the end of a clean shutdown and describes one start only. New database
+  migration 057 (`boot_record`).
+- **The Matter bridge can be erased from the maintenance page without a
+  restart.** *Erase* removes every paired controller, the bridge's Matter
+  credentials and its endpoint numbers, and brings a fresh, unpaired bridge
+  up at once with a new identity (UniqueID): every controller has to pair
+  it again. The device selection, the bridge's serial number and the node
+  label you set are kept. The fresh bridge reports the boot reason
+  *software reset*. The erase also scrubs the freed bytes out of the
+  database file; when a running reader prevents that, the page says so and
+  the next daemon start finishes it. New database migration 058
+  (`boot_record.scrub_pending`). (#1056)
+- **The Matter bridge's credentials are sealed in the database.** Every
+  fabric's operational private key, IPK, group keys and resumption secrets
+  are encrypted at rest under a key derived from the master key the daemon
+  already uses for configuration secrets (`OPENCCU_LOOM_SECRET_KEY` or
+  `secret.key`), so a copied database or backup no longer gives them away.
+  The first start with a master key seals an existing store; pairings are
+  kept. From then on the bridge needs that key: without it, or with another
+  one, the bridge stays off and the `matter.bridge` health component says
+  why (ADR 0092).
+- **`openccu-loom secret rotate`** moves the configuration secrets and the
+  Matter credentials to a new master key, with the daemon stopped. It is
+  safe to run again after an interruption; with an environment key it
+  prints the new value to set.
+- **`openccu-loom matter reset --yes`** erases the Matter bridge's fabrics
+  and credentials with the daemon stopped — the way back when the master
+  key is lost. The device selection is kept; the bridge comes back unpaired.
+
+- **The Matter status and selection pages name the devices the bridge
+  holds no endpoint for**: a selected device the Matter device layer
+  refused, or one the configured specification level
+  (`north.matter.spec_level`) withholds, with the time it was first seen.
+  The warnings come from the same record as the log lines
+  `matter.assembler.device_refused` / `device_withheld`, disappear once the
+  device builds or leaves the selection, and show their message to admins
+  only. (#1056)
+- **The Matter pages reload after a gap in the event stream** (a daemon
+  restart, a connection that fell behind), instead of showing fabrics and
+  commissioning windows that changed meanwhile. (#1056)
+- **A shutdown ends open Matter node event streams at once** instead of
+  waiting for them until the shutdown deadline. (#1056)
 
 ### Changed
+
+- **One daemon per data directory.** The daemon holds a lock on
+  `<data_dir>/openccu-loom.lock` while it runs; a second daemon on the same
+  directory does not start, and the offline commands that rewrite the
+  database (`secret rotate`, `matter reset`) refuse while the daemon runs.
 
 - **Breaking for API users (REST API 18.0.0): the Matter node routes read
   with admin rights only.** go-fabric-ui 0.10 put 43 reading operations
@@ -141,22 +317,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4.** The
   pseudo-version carries the fix for GO-2026-6278, which `hmcli`'s event
   stream reaches; no tagged release after v1.5.3 exists. (#1171)
-
-### Added
-
-- **The Matter status and selection pages name the devices the bridge
-  holds no endpoint for**: a selected device the Matter device layer
-  refused, or one the configured specification level
-  (`north.matter.spec_level`) withholds, with the time it was first seen.
-  The warnings come from the same record as the log lines
-  `matter.assembler.device_refused` / `device_withheld`, disappear once the
-  device builds or leaves the selection, and show their message to admins
-  only. (#1056)
-- **The Matter pages reload after a gap in the event stream** (a daemon
-  restart, a connection that fell behind), instead of showing fabrics and
-  commissioning windows that changed meanwhile. (#1056)
-- **A shutdown ends open Matter node event streams at once** instead of
-  waiting for them until the shutdown deadline. (#1056)
 
 ### Fixed
 

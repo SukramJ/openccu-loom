@@ -509,7 +509,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			return ok && id.HasRole(auth.RoleAdmin)
 		},
 		NodeAllowedHosts:    nodeAllowedHosts(cfg, os.Hostname),
-		NodeAllowHost:       nodeSupervisorAllowHost(cfg, deploymentKind()),
+		NodeAllowHost:       nodeAllowHost(cfg, deploymentKind()),
 		MatterAuditRecorder: d.auditRec,
 		// Visibility / un-ignore surface — notes/concepts/ui/unignore-concept.md.
 		VisibilityUnIgnoreStore:     d.visibilityUnIgnoreStore,
@@ -554,6 +554,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ChannelFlags:          channelFlagsWriterFrom(d.channelFlagsStore),
 		ChannelFlagsOverlay:   d.channelFlagsOverlay,
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
+		DeviceCentrals:        deviceCentralsOf(d.reg),
 		WiringManifest:        d.reg.Manifest(),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cookiesSecure(cfg),

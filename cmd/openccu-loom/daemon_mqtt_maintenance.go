@@ -4,9 +4,10 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -40,7 +41,8 @@ func newMQTTMaintenanceHooks(levels *hmlog.LevelRegistry, rec audit.Recorder) mq
 	h := mqttMaintenanceHooks{
 		supervised: detectSupervisedRestart,
 		restart: func() {
-			handlers.RequestRestart(rec, mqttMaintenanceRestartUser)
+			// no request: an MQTT maintenance command carries no REST actor.
+			handlers.RequestRestart(context.Background(), rec, mqttMaintenanceRestartUser)
 		},
 	}
 	if levels != nil {

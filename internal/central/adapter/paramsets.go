@@ -129,7 +129,7 @@ func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string,
 func (p *ParamsetsDomain) GetParamsetOn(
 	ctx context.Context, centralName, deviceAddress string, key hmenum.ParamsetKey,
 ) (map[string]any, error) {
-	ch := p.resolveChannelOn(centralName, deviceAddress)
+	ch := p.resolveChannelOn(ctx, centralName, deviceAddress)
 	if ch != nil {
 		snapshot := ch.GetAll(key)
 		if len(snapshot) > 0 {
@@ -148,7 +148,7 @@ func (p *ParamsetsDomain) GetParamsetOn(
 		// Refresh failed or returned nothing — fall through to the
 		// backend direct call so the caller still gets a result.
 	}
-	b, err := p.resolveOn(centralName, deviceAddress)
+	b, err := p.resolveOn(ctx, centralName, deviceAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -208,10 +208,10 @@ func (p *ParamsetsDomain) PutParamsetOn(
 			ErrLinkParamsetNotAddressable, deviceAddress)
 	}
 	// VisibilityGate runs first — before the channel is touched.
-	if err := p.checkVisibilityOn(centralName, deviceAddress, key, values); err != nil {
+	if err := p.checkVisibilityOn(ctx, centralName, deviceAddress, key, values); err != nil {
 		return nil, err
 	}
-	b, err := p.resolveOn(centralName, deviceAddress)
+	b, resolvedOn, err := p.resolveUnitOn(ctx, centralName, deviceAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (p *ParamsetsDomain) PutParamsetOn(
 		sent  map[string]any
 		descs map[string]hmproto.ParameterData
 	)
-	ch := p.resolveChannelOn(centralName, deviceAddress)
+	ch := p.resolveChannelOn(ctx, centralName, deviceAddress)
 	if ch != nil {
 		// Route through the model: Channel.SetMany validates + dispatches.
 		paramValues, convErr := anyMapToParamValues(ch, key, values)
@@ -267,13 +267,13 @@ func (p *ParamsetsDomain) PutParamsetOn(
 	}
 	stored, readErr := b.GetParamset(ctx, deviceAddress, key)
 	if readErr == nil {
-		p.applyStoredValuesOn(centralName, deviceAddress, key, stored)
+		p.applyStoredValuesOn(ctx, centralName, deviceAddress, key, stored)
 	}
 	var report *interfaces.ParamsetWriteReport
 	if key != hmenum.ParamsetKeyValues {
 		report = paramsetWriteReport(sent, descs, stored, readErr)
 	}
-	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
+	p.recordParamsetWrite(ctx, resolvedOn, deviceAddress, string(key), before, values)
 	return report, nil
 }
 
@@ -410,7 +410,7 @@ func auditRedacted(before any) any {
 // without it the log cannot tell a paramset an operator edited in the UI
 // from one an assistant wrote over MCP — which is the first question
 // asked of an unexplained configuration change.
-func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddress, paramset string, before, after map[string]any) {
+func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, centralName, channelAddress, paramset string, before, after map[string]any) {
 	if p.audit == nil {
 		return
 	}
@@ -422,8 +422,9 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 	// unrelated channel. The canonical parser answers -1, the model's own
 	// device.ChannelNumberDevice.
 	_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
-	p.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, p.audit, audit.Entry{
 		Action:        audit.ActionParamsetWrite,
+		Central:       centralName,
 		DeviceAddress: deviceAddressOf(channelAddress),
 		ChannelNo:     auditChannelNo,
 		Paramset:      paramset,
@@ -541,13 +542,13 @@ func channelNumberOf(channelAddress string) int {
 // applyStoredValuesOn forwards a freshly read paramset through [OnWireValue]
 // to the owning channel's data points, scoped to one central.
 func (p *ParamsetsDomain) applyStoredValuesOn(
-	centralName, channelAddress string, key hmenum.ParamsetKey, current map[string]any,
+	ctx context.Context, centralName, channelAddress string, key hmenum.ParamsetKey, current map[string]any,
 ) {
 	if p.registry == nil {
 		return
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	for _, u := range p.unitsFor(centralName) {
+	for _, u := range p.unitsFor(ctx, centralName) {
 		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
@@ -574,7 +575,7 @@ func (p *ParamsetsDomain) applyStoredValuesOn(
 // channel address rather than a fixed key string, so the call takes
 // the peer explicitly.
 func (p *ParamsetsDomain) GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error) {
-	b, err := p.resolve(channelAddress)
+	b, err := p.resolve(ctx, channelAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +595,7 @@ func (p *ParamsetsDomain) GetLinkFormSchema(
 	_ string, // interfaceID — reserved; receiver is resolved from the registry
 	receiverChannelAddr, senderChannelAddr string,
 ) (map[string]any, error) {
-	b, err := p.resolve(receiverChannelAddr)
+	b, err := p.resolve(ctx, receiverChannelAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -626,10 +627,10 @@ func (p *ParamsetsDomain) GetLinkFormSchema(
 func (p *ParamsetsDomain) PutLinkParamset(
 	ctx context.Context, channelAddress, peerAddress string, values map[string]any,
 ) (*interfaces.ParamsetWriteReport, error) {
-	if err := p.checkVisibility(channelAddress, hmenum.ParamsetKeyLink, values); err != nil {
+	if err := p.checkVisibility(ctx, channelAddress, hmenum.ParamsetKeyLink, values); err != nil {
 		return nil, err
 	}
-	b, err := p.resolve(channelAddress)
+	b, resolvedOn, err := p.resolveUnitOn(ctx, "", channelAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -651,8 +652,9 @@ func (p *ParamsetsDomain) PutLinkParamset(
 		// See recordParamsetWrite: the canonical parser reports the
 		// device level as -1 rather than as channel 0.
 		_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
-		p.audit.Record(audit.Entry{
+		audit.RecordFrom(ctx, p.audit, audit.Entry{
 			Action:        audit.ActionLinkParamsetWrite,
+			Central:       resolvedOn,
 			DeviceAddress: deviceAddressOf(channelAddress),
 			ChannelNo:     auditChannelNo,
 			Peer:          peerAddress,
@@ -694,9 +696,10 @@ func gateDecidesWrites(key hmenum.ParamsetKey) bool {
 	return key != hmenum.ParamsetKeyMaster
 }
 
-// checkVisibility is [ParamsetsDomain.checkVisibilityOn] across every central.
-func (p *ParamsetsDomain) checkVisibility(channelAddress string, key hmenum.ParamsetKey, values map[string]any) error {
-	return p.checkVisibilityOn("", channelAddress, key, values)
+// checkVisibility is [ParamsetsDomain.checkVisibilityOn] across the centrals
+// ctx may consult (see [ParamsetsDomain.unitsFor]).
+func (p *ParamsetsDomain) checkVisibility(ctx context.Context, channelAddress string, key hmenum.ParamsetKey, values map[string]any) error {
+	return p.checkVisibilityOn(ctx, "", channelAddress, key, values)
 }
 
 // checkVisibilityOn consults the VisibilityGate (if configured) against
@@ -711,12 +714,12 @@ func (p *ParamsetsDomain) checkVisibility(channelAddress string, key hmenum.Para
 // The channel number is extracted from channelAddress (e.g. "DEV:3" → 3)
 // and forwarded to [VisibilityGate.IsAllowedForChannel].
 func (p *ParamsetsDomain) checkVisibilityOn(
-	centralName, channelAddress string, key hmenum.ParamsetKey, values map[string]any,
+	ctx context.Context, centralName, channelAddress string, key hmenum.ParamsetKey, values map[string]any,
 ) error {
 	if p.gate == nil || len(values) == 0 || !gateDecidesWrites(key) {
 		return nil
 	}
-	model, channelType := p.resolveChannelInfoOn(centralName, channelAddress)
+	model, channelType := p.resolveChannelInfoOn(ctx, centralName, channelAddress)
 	// When the device cannot be found, skip the gate check. Diagnostic
 	// tooling may write to addresses that are not yet in the model
 	// registry; blocking them here would break initialisation sequences.
@@ -748,11 +751,11 @@ func (p *ParamsetsDomain) checkVisibilityOn(
 // [gateDecidesWrites]. A MASTER paramset passes through untouched: the write
 // side accepts every writable MASTER parameter, so filtering the read side by
 // the data-point-creation whitelist would export less than can be imported.
-func (p *ParamsetsDomain) VisibleValues(channelAddress string, key hmenum.ParamsetKey, values map[string]any) map[string]any {
+func (p *ParamsetsDomain) VisibleValues(ctx context.Context, channelAddress string, key hmenum.ParamsetKey, values map[string]any) map[string]any {
 	if p == nil || p.gate == nil || len(values) == 0 || !gateDecidesWrites(key) {
 		return values
 	}
-	model, channelType := p.resolveChannelInfo(channelAddress)
+	model, channelType := p.resolveChannelInfo(ctx, channelAddress)
 	if model == "" {
 		return values
 	}
@@ -766,17 +769,21 @@ func (p *ParamsetsDomain) VisibleValues(channelAddress string, key hmenum.Params
 	return out
 }
 
-// unitsFor returns the central units a lookup must consider. An empty
-// centralName means "every central, in name-sorted registry order" — the
-// first-match behaviour every unscoped caller relies on. A non-empty name
-// narrows the walk to that one central and returns nothing when it is not
-// registered, so a scoped call can never answer from another CCU.
-func (p *ParamsetsDomain) unitsFor(centralName string) []*central.Unit {
+// unitsFor returns the central units a lookup must consider. A non-empty
+// centralName narrows the walk to that one central and returns nothing when it
+// is not registered, so a scoped call can never answer from another CCU; an
+// explicit name wins over the request binding because the caller that passes
+// one (a config edit session, a config import) has already decided which CCU
+// it is talking about. An empty name walks the centrals ctx may consult (see
+// [requestUnits]): only the bound one for a request on a device route, every
+// central in name-sorted order — the first-match behaviour every unbound
+// caller relies on — otherwise.
+func (p *ParamsetsDomain) unitsFor(ctx context.Context, centralName string) []*central.Unit {
 	if p.registry == nil {
 		return nil
 	}
 	if centralName == "" {
-		return p.registry.List()
+		return requestUnits(ctx, p.registry)
 	}
 	u, ok := p.registry.Get(centralName)
 	if !ok || u == nil {
@@ -788,18 +795,18 @@ func (p *ParamsetsDomain) unitsFor(centralName string) []*central.Unit {
 // resolveChannelInfo returns the device model string and channel type
 // string for the given channel address by walking the central registry.
 // Returns ("", "") when the channel cannot be found.
-func (p *ParamsetsDomain) resolveChannelInfo(channelAddress string) (model, channelType string) {
-	return p.resolveChannelInfoOn("", channelAddress)
+func (p *ParamsetsDomain) resolveChannelInfo(ctx context.Context, channelAddress string) (model, channelType string) {
+	return p.resolveChannelInfoOn(ctx, "", channelAddress)
 }
 
 // resolveChannelInfoOn is [ParamsetsDomain.resolveChannelInfo] scoped to one
 // central; see [ParamsetsDomain.unitsFor] for what an empty name means.
-func (p *ParamsetsDomain) resolveChannelInfoOn(centralName, channelAddress string) (model, channelType string) {
+func (p *ParamsetsDomain) resolveChannelInfoOn(ctx context.Context, centralName, channelAddress string) (model, channelType string) {
 	if p.registry == nil {
 		return "", ""
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range p.unitsFor(centralName) {
+	for _, u := range p.unitsFor(ctx, centralName) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue
@@ -816,46 +823,53 @@ func (p *ParamsetsDomain) resolveChannelInfoOn(centralName, channelAddress strin
 
 // resolve maps a device address to the owning central's backend.
 // Walks the registry so multi-CCU setups work out of the box.
-func (p *ParamsetsDomain) resolve(deviceOrChannel string) (paramsetBackend, error) {
-	return p.resolveOn("", deviceOrChannel)
+func (p *ParamsetsDomain) resolve(ctx context.Context, deviceOrChannel string) (paramsetBackend, error) {
+	return p.resolveOn(ctx, "", deviceOrChannel)
 }
 
 // resolveOn is [ParamsetsDomain.resolve] scoped to one central; see
 // [ParamsetsDomain.unitsFor] for what an empty name means.
-func (p *ParamsetsDomain) resolveOn(centralName, deviceOrChannel string) (paramsetBackend, error) {
+func (p *ParamsetsDomain) resolveOn(ctx context.Context, centralName, deviceOrChannel string) (paramsetBackend, error) {
+	b, _, err := p.resolveUnitOn(ctx, centralName, deviceOrChannel)
+	return b, err
+}
+
+// resolveUnitOn is [ParamsetsDomain.resolveOn] plus the name of the central
+// the device resolved on, which a write records with its change-log row.
+func (p *ParamsetsDomain) resolveUnitOn(ctx context.Context, centralName, deviceOrChannel string) (paramsetBackend, string, error) {
 	if p.registry == nil || p.writer == nil {
-		return nil, ErrNoParamsetBackend
+		return nil, "", ErrNoParamsetBackend
 	}
 	addr := deviceAddressOf(deviceOrChannel)
-	for _, u := range p.unitsFor(centralName) {
+	for _, u := range p.unitsFor(ctx, centralName) {
 		dev, ok := u.ModelRegistry.Get(addr)
 		if !ok {
 			continue
 		}
 		b, ok := p.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, u.Name(), dev.InterfaceID)
+			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, u.Name(), dev.InterfaceID)
 		}
-		return b, nil
+		return b, u.Name(), nil
 	}
-	return nil, fmt.Errorf("%w: device %s", ErrNoParamsetBackend, addr)
+	return nil, "", fmt.Errorf("%w: device %s", ErrNoParamsetBackend, addr)
 }
 
 // resolveChannel walks the registry and returns the [device.Channel]
 // for channelAddress, or nil when not found. The lookup is intentionally
 // lenient — unknown addresses fall through to the backend path.
-func (p *ParamsetsDomain) resolveChannel(channelAddress string) *device.Channel {
-	return p.resolveChannelOn("", channelAddress)
+func (p *ParamsetsDomain) resolveChannel(ctx context.Context, channelAddress string) *device.Channel {
+	return p.resolveChannelOn(ctx, "", channelAddress)
 }
 
 // resolveChannelOn is [ParamsetsDomain.resolveChannel] scoped to one central;
 // see [ParamsetsDomain.unitsFor] for what an empty name means.
-func (p *ParamsetsDomain) resolveChannelOn(centralName, channelAddress string) *device.Channel {
+func (p *ParamsetsDomain) resolveChannelOn(ctx context.Context, centralName, channelAddress string) *device.Channel {
 	if p.registry == nil {
 		return nil
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range p.unitsFor(centralName) {
+	for _, u := range p.unitsFor(ctx, centralName) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue

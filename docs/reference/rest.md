@@ -71,6 +71,7 @@ Alarm system zones, arming, sensors, outputs, journal, walk-test
 | Method | Path | Summary | Access |
 |---|---|---|---|
 | GET | `/audit` | Recent change history (FIFO buffer) | admin |
+| GET | `/devices/{addr}/audit` | Change history of one device | operator |
 
 ## auth {#auth}
 

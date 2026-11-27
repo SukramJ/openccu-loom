@@ -58,7 +58,7 @@ func TestMatterBridgeEnforcesStoredACLAfterBoot(t *testing.T) {
 	t.Cleanup(cancel)
 
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("the Matter bridge did not start; without it this pin asserts nothing")
 	}
@@ -89,9 +89,9 @@ func TestMatterBridgeEnforcesStoredACLAfterBoot(t *testing.T) {
 		t.Fatalf("seed acl: %v", err)
 	}
 
-	checker, ok := bundle.node.Bridge().Dispatcher().(im.ACLChecker)
+	checker, ok := bundle.Node().Bridge().Dispatcher().(im.ACLChecker)
 	if !ok {
-		t.Fatalf("the bridge's dispatcher (%T) does not check ACLs at all", bundle.node.Bridge().Dispatcher())
+		t.Fatalf("the bridge's dispatcher (%T) does not check ACLs at all", bundle.Node().Bridge().Dispatcher())
 	}
 
 	if status := checker.CheckACL(ctx, fabric, granted, nil, bridgedEP, onOffID, privOperate); !status.IsSuccess() {

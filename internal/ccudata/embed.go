@@ -11,7 +11,7 @@ import (
 	"maps"
 	"strings"
 
-	openccudata "github.com/SukramJ/go-openccu-data"
+	openccudata "sukramj.dev/go-openccu-data"
 )
 
 // The CCU-metadata archives ship as the versioned data-artifact

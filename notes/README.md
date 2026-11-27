@@ -5,7 +5,7 @@ concepts, parity fixtures, plans, and contributor procedures. None of it is
 published.
 
 The published documentation lives in [`docs/`](../docs/) and is built by
-MkDocs into <https://sukramj.github.io/openccu-loom/>. The boundary is the
+MkDocs into <https://sukramj.dev/openccu-loom/>. The boundary is the
 directory, not a list — **everything under `docs/` is published, and nothing
 under `notes/` ever is.**
 

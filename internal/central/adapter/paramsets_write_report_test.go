@@ -76,7 +76,7 @@ func TestPutParamsetMasterReportsClampedValue(t *testing.T) {
 	if got := reads.count(hmenum.ParamsetKeyMaster); got != 2 {
 		t.Fatalf("MASTER reads = %d, want 2 (before + one read-back)", got)
 	}
-	ch := domain.resolveChannel("0001ABCD:1")
+	ch := domain.resolveChannel(context.Background(), "0001ABCD:1")
 	if v := ch.GetAll(hmenum.ParamsetKeyMaster)[hmenum.ParameterLevel]; v.Unwrap() != 0.5 {
 		t.Fatalf("model MASTER LEVEL = %v, want the stored 0.5", v.Unwrap())
 	}
@@ -145,7 +145,7 @@ func TestPutParamsetValuesReturnsNilReport(t *testing.T) {
 	if got := reads.count(hmenum.ParamsetKeyValues); got != 2 {
 		t.Fatalf("VALUES reads = %d, want 2 (before + model refresh)", got)
 	}
-	ch := domain.resolveChannel("0001ABCD:1")
+	ch := domain.resolveChannel(context.Background(), "0001ABCD:1")
 	if v := ch.GetAll(hmenum.ParamsetKeyValues)[hmenum.ParameterLevel]; v.Unwrap() != 0.9 {
 		t.Fatalf("model VALUES LEVEL = %v, want the refreshed 0.9", v.Unwrap())
 	}

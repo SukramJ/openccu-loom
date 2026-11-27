@@ -25,7 +25,9 @@ import (
 // go-fabric-ui's (GET /api/v1/node/status) over the same node.
 type matterStatusReaderAdapter struct {
 	enabled bool
-	node    *node.Node
+	// node is the node that runs now (matterRuntime.Node): an erase
+	// replaces it.
+	node func() *node.Node
 	// exposures counts the operator's enabled allowlist rows. Separate
 	// from store because the allowlist is keyed by this daemon's source
 	// 5-tuple and therefore lives host-side; see [matterendpoint].
@@ -43,11 +45,15 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) mcp.Matter
 	if !r.enabled || r.node == nil {
 		return res
 	}
-	res.ListenAddr = r.node.LocalAddr()
+	n := r.node()
+	if n == nil {
+		return res
+	}
+	res.ListenAddr = n.LocalAddr()
 	res.Listening = res.ListenAddr != ""
 	// The served topology's bridged devices, without the root and the
 	// Aggregator: the count of bridged Matter devices.
-	res.EndpointCount = len(r.node.Topology().Devices)
+	res.EndpointCount = len(n.Topology().Devices)
 	if r.cfg != nil {
 		res.Advertising = r.cfg.advertising
 	}
@@ -56,11 +62,11 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) mcp.Matter
 	// opens at start — reads WindowNotOpen on the cluster, as matter.js keeps
 	// those attributes for administrator windows alone, and the status
 	// surface would call a live window closed.
-	if window := r.node.Window(); window.Open {
+	if window := n.Window(); window.Open {
 		res.WindowOpen = true
 		res.WindowDuration = uint16(min(window.Timeout/time.Second, math.MaxUint16)) //nolint:gosec // clamped to uint16
 	}
-	if fabrics, err := r.node.FabricInfos(ctx); err == nil {
+	if fabrics, err := n.FabricInfos(ctx); err == nil {
 		res.FabricCount = len(fabrics)
 	}
 	if r.exposures != nil {

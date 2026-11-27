@@ -4,6 +4,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -42,7 +43,7 @@ func TestDeviceAdminInterfaceDutyCycleKnown(t *testing.T) {
 	c.Hub.SetBidcosInterfaces(map[string]coordinators.BidcosInterfaceInfo{
 		"BidCos-RF": {Address: "OEQ1234567", DutyCycle: 85, CarrierSense: 12, Connected: true},
 	})
-	dc, ok := dom.InterfaceDutyCycle("LEQ0012345")
+	dc, ok := dom.InterfaceDutyCycle(context.Background(), "LEQ0012345")
 	if !ok || dc != 85 {
 		t.Fatalf("expected (85, true), got (%d, %v)", dc, ok)
 	}
@@ -53,7 +54,7 @@ func TestDeviceAdminInterfaceDutyCycleNoCacheEntry(t *testing.T) {
 	dom, _ := buildDutyCycleFixture(t)
 	// No SetBidcosInterfaces call: HmIP-style interfaces and un-polled
 	// BidCos interfaces have no cache entry.
-	if dc, ok := dom.InterfaceDutyCycle("LEQ0012345"); ok {
+	if dc, ok := dom.InterfaceDutyCycle(context.Background(), "LEQ0012345"); ok {
 		t.Fatalf("expected unknown, got (%d, %v)", dc, ok)
 	}
 }
@@ -66,7 +67,7 @@ func TestDeviceAdminInterfaceDutyCycleUnreportedValue(t *testing.T) {
 	c.Hub.SetBidcosInterfaces(map[string]coordinators.BidcosInterfaceInfo{
 		"BidCos-RF": {Address: "OEQ1234567", DutyCycle: -1, CarrierSense: -1},
 	})
-	if dc, ok := dom.InterfaceDutyCycle("LEQ0012345"); ok {
+	if dc, ok := dom.InterfaceDutyCycle(context.Background(), "LEQ0012345"); ok {
 		t.Fatalf("expected unknown for -1 sentinel, got (%d, %v)", dc, ok)
 	}
 }
@@ -77,7 +78,7 @@ func TestDeviceAdminInterfaceDutyCycleUnknownDevice(t *testing.T) {
 	c.Hub.SetBidcosInterfaces(map[string]coordinators.BidcosInterfaceInfo{
 		"BidCos-RF": {Address: "OEQ1234567", DutyCycle: 85},
 	})
-	if dc, ok := dom.InterfaceDutyCycle("DOES-NOT-EXIST"); ok {
+	if dc, ok := dom.InterfaceDutyCycle(context.Background(), "DOES-NOT-EXIST"); ok {
 		t.Fatalf("expected unknown for missing device, got (%d, %v)", dc, ok)
 	}
 }
@@ -85,7 +86,7 @@ func TestDeviceAdminInterfaceDutyCycleUnknownDevice(t *testing.T) {
 func TestDeviceAdminInterfaceDutyCycleNilRegistry(t *testing.T) {
 	t.Parallel()
 	dom := NewDeviceAdminDomain(nil, client.NewValueWriter())
-	if dc, ok := dom.InterfaceDutyCycle("LEQ0012345"); ok {
+	if dc, ok := dom.InterfaceDutyCycle(context.Background(), "LEQ0012345"); ok {
 		t.Fatalf("expected unknown for nil registry, got (%d, %v)", dc, ok)
 	}
 }
@@ -97,7 +98,7 @@ func TestDeviceAdminInterfaceDutyCycleNilHub(t *testing.T) {
 	// but the field is a plain pointer) must report unknown rather than
 	// panic on the nil dereference.
 	c.Hub = nil
-	if dc, ok := dom.InterfaceDutyCycle("LEQ0012345"); ok {
+	if dc, ok := dom.InterfaceDutyCycle(context.Background(), "LEQ0012345"); ok {
 		t.Fatalf("expected unknown for nil hub, got (%d, %v)", dc, ok)
 	}
 }

@@ -20,7 +20,7 @@ func TestGetEditorComponentAnswersTheManifest(t *testing.T) {
 	want := hmapi.EditorComponentManifest{
 		ModuleURL: "/app/component/editor-ab.js",
 		Hash:      "ab",
-		Routes:    []string{"/devices"},
+		Routes:    []hmapi.EditorRoute{{Method: "GET", Prefix: "/devices"}},
 	}
 	rec := httptest.NewRecorder()
 	GetEditorComponent(stubEditorComponent{want})(rec, httptest.NewRequest(http.MethodGet, "/api/v1/ui/editor-component", http.NoBody))
@@ -34,7 +34,7 @@ func TestGetEditorComponentAnswersTheManifest(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ModuleURL != want.ModuleURL || got.Hash != want.Hash || len(got.Routes) != 1 || got.Routes[0] != "/devices" {
+	if got.ModuleURL != want.ModuleURL || got.Hash != want.Hash || len(got.Routes) != 1 || got.Routes[0] != want.Routes[0] {
 		t.Fatalf("manifest = %+v", got)
 	}
 }

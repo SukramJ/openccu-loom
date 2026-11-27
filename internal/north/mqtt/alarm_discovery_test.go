@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"testing"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

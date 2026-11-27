@@ -15,7 +15,7 @@ import (
 
 // The two descriptors below are copied verbatim out of the paramset
 // descriptions embedded in the simulator this repository pins
-// (github.com/SukramJ/godevccu v0.2.2, go.mod:6 —
+// (sukramj.dev/godevccu v0.2.2, go.mod:6 —
 // internal/embed/data/paramset_descriptions/{HmIP-eTRV-B1,HM-RC-19-B}.json).
 // They are the two shapes an ENUM parameter takes on the wire, and they
 // decide the wire form of a label-typed write in opposite directions.

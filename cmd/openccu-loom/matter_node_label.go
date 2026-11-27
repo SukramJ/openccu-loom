@@ -85,3 +85,21 @@ func (l *matterNodeLabeler) Apply(ctx context.Context, label string) (bool, erro
 		slog.String("to", label))
 	return true, nil
 }
+
+// rebind moves the labeler to n, a node an erase brought up, and sets the
+// label last applied on it. The erase took the label the old node stored,
+// a controller's rename included, so the new node would otherwise serve the
+// label configured when the daemon started rather than the operator's last.
+// The marker stays: the label it names is the one the node now serves.
+func (l *matterNodeLabeler) rebind(ctx context.Context, n nodeLabelSetter) error {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.node = n
+	if err := n.SetNodeLabel(ctx, l.applied); err != nil {
+		return fmt.Errorf("matter node label: %w", err)
+	}
+	return nil
+}

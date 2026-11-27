@@ -52,6 +52,47 @@ func (h *Harness) NodeEndpoints(t *testing.T) []NodeEndpoint {
 	return out.Endpoints
 }
 
+// NodeStatus is the part of GET /api/v1/node/status the commissioning
+// tests read: the window state and the boot reason the node was built with.
+type NodeStatus struct {
+	WindowOpen bool   `json:"commissioning_window_open"`
+	WindowKind string `json:"window_kind"`
+	BootReason *uint8 `json:"boot_reason"`
+	// Erase reports whether the daemon wires the node's erase.
+	Erase bool `json:"erase"`
+}
+
+// NodeStatus reads GET /api/v1/node/status.
+func (h *Harness) NodeStatus(t *testing.T) NodeStatus {
+	t.Helper()
+	var out NodeStatus
+	if status, body := h.nodeDo(t, http.MethodGet, "/api/v1/node/status", nil, &out); status != http.StatusOK {
+		t.Fatalf("GET /api/v1/node/status: status %d: %s", status, body)
+	}
+	return out
+}
+
+// OpenPairingWindow opens a commissioning window the way the pairing page
+// does (POST /api/v1/node/pairing/window) and fails the test unless the
+// node answers 200.
+func (h *Harness) OpenPairingWindow(t *testing.T, seconds int) {
+	t.Helper()
+	payload := []byte(fmt.Sprintf(`{"duration_seconds":%d}`, seconds))
+	if status, body := h.nodeDo(t, http.MethodPost, "/api/v1/node/pairing/window", payload, nil); status != http.StatusOK {
+		t.Fatalf("POST /api/v1/node/pairing/window: status %d: %s", status, body)
+	}
+}
+
+// EraseNode erases the node the way the maintenance page does (POST
+// /api/v1/node/maintenance/erase with the confirmation word) and fails the
+// test unless the daemon answers 204: the erase ran and a new node is up.
+func (h *Harness) EraseNode(t *testing.T) {
+	t.Helper()
+	if status, body := h.nodeDo(t, http.MethodPost, "/api/v1/node/maintenance/erase", []byte(`{"confirm":"erase-node"}`), nil); status != http.StatusNoContent {
+		t.Fatalf("POST /api/v1/node/maintenance/erase: status %d: %s", status, body)
+	}
+}
+
 // EnableAllExposures switches every source the node offers on, except
 // the ones its verdict calls unmappable (the provider refuses those):
 // GET /api/v1/node/exposure, then one PUT with the batch. It returns the

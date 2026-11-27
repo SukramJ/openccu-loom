@@ -2007,7 +2007,7 @@ func (d *DataPoint[T]) EnumValueIsIndex() bool {
 // MIN, MAX and DEFAULT in the domain its values live in — either all three as
 // integers (indices into VALUE_LIST) or all three as the VALUE_LIST labels.
 // Measured over the paramset descriptions of the simulator at
-// github.com/SukramJ/godevccu v0.2.2 (399 device files, decoded as JSON and
+// sukramj.dev/godevccu v0.2.2 (399 device files, decoded as JSON and
 // classified by the Go type of each decoded bound; the module has since moved
 // to a newer release and the counts were not re-taken): 38144 ENUM parameters
 // declare a VALUE_LIST, 9186 declare all three bounds as integers, 28958

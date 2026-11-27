@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	gosql "database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -35,6 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -118,14 +120,17 @@ const (
 // the node facade that runs the bridge, and the daemon-side collaborators
 // the REST / WebSocket adapters are built over.
 type matterBridgeBundle struct {
-	// node is go-fabric's node facade (ADR 0084 phase 3): it performs the
-	// stack-generic bring-up — stores, root and Aggregator servers,
-	// sessions, PASE, CASE, the commissioning window, the fabric hooks,
-	// the event-number persistence — and owns their lifecycle. What the
-	// daemon reaches through it is named by the fields below; the bridge
-	// it runs on (Node.Bridge), its root servers (Node.Root) and its group
-	// state (Node.Groups) are reached through it directly.
-	node  *node.Node
+	// rt holds go-fabric's node facade (ADR 0084 phase 3) and the
+	// reconciler on its Aggregator. The node performs the stack-generic
+	// bring-up — stores, root and Aggregator servers, sessions, PASE,
+	// CASE, the commissioning window, the fabric hooks, the event-number
+	// persistence — and owns their lifecycle; an erase replaces it
+	// (matterRuntime.Erase), so the daemon reaches it through rt, never by
+	// keeping it. What the daemon reaches besides is named by the fields
+	// below; the bridge the node runs on (Node.Bridge), its root servers
+	// (Node.Root) and its group state (Node.Groups) are reached through
+	// the node directly.
+	rt    *matterRuntime
 	stop  func()
 	store *matterstore.Store
 	// identity persists endpoint ids and the exposure allowlist — the two
@@ -138,15 +143,12 @@ type matterBridgeBundle struct {
 	// boundary and is reached through here. sync describes the model and
 	// applies the changes to the Aggregator (matteradapter.Reconciler);
 	// retire collects a removed central's endpoint numbers; forget queues a
-	// device the CCU deleted, so the next sync frees its numbers.
+	// device the CCU deleted, so the next sync frees its numbers. All three
+	// reach the reconciler of the node that runs now (matterRuntime).
 	assembler *matteradapter.Assembler
 	sync      func(context.Context) error
 	retire    func(ctx context.Context, centralName string) error
 	forget    func(centralName, address string)
-	// reconciler holds the bridged devices; the reachability forward
-	// states a physical device's flips on them
-	// (matteradapter.Reconciler.SetReachable).
-	reconciler *matteradapter.Reconciler
 	// events is go-fabric-ui's event source: the daemon publishes its own
 	// reassemblies into it, and the handler's SSE stream and the WebSocket
 	// bridge (wireMatterNodeEvents) read from it. The node's fabric and
@@ -170,6 +172,9 @@ type matterBridgeBundle struct {
 	// nodeLabel applies north.matter.node_label to the running node.
 	nodeLabel *matterNodeLabeler
 }
+
+// Node is the node that runs now (matterRuntime.Node).
+func (b *matterBridgeBundle) Node() *node.Node { return b.rt.Node() }
 
 // matterRootNodeDeviceType is the device type the commissionable record's
 // DT key advertises (Matter Device Library §2.1 RootNode). matter.js's
@@ -324,7 +329,7 @@ func matterAttestation(mc config.NorthMatter, logger *slog.Logger) node.Attestat
 // leaves the handle untouched for the caller to keep using. The facade is
 // handed the two stores, never the handle ([node.Store.DB] would apply
 // go-fabric's schema; the daemon carries it in its own migrations).
-func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, schedules interfaces.ClimateScheduleWriter) *matterBridgeBundle { //nolint:funlen // composition/wiring: long sequential setup
+func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, cipher *secret.Cipher, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, schedules interfaces.ClimateScheduleWriter) *matterBridgeBundle { //nolint:funlen // composition/wiring: long sequential setup
 	if cfg == nil || !cfg.North.Matter.Enabled {
 		return nil
 	}
@@ -347,8 +352,27 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// The credential store is built on the daemon's shared handle: the
 	// daemon carries go-fabric's schema in its own migrations, so the node
 	// is handed the store rather than the handle it would apply the schema
-	// to (go-fabric guides "Advanced seams", store).
-	store := matterstore.New(db)
+	// to (go-fabric guides "Advanced seams", store). It is sealed under a
+	// key derived from the master key whenever one resolved (ADR 0092); a
+	// sealed store the key does not open keeps the bridge off.
+	sealer, err := matterSealer(cipher)
+	if err != nil {
+		logger.Error("matter.bridge.seal.key", slog.String("err", err.Error()))
+		return nil
+	}
+	store, scrubOwed, err := openMatterStore(ctx, db, sealer)
+	if err != nil {
+		if errors.Is(err, errMatterSealKeyMissing) || errors.Is(err, errMatterSealKeyMismatch) {
+			matterSealRefused(err, healthTracker, logger)
+			return nil
+		}
+		logger.Error("matter.bridge.store_open_failed", slog.String("err", err.Error()))
+		return nil
+	}
+	if scrubOwed {
+		logger.Warn("matter.bridge.seal.scrub_owed",
+			slog.String("hint", "the Matter secrets are sealed; their clear bytes may remain in the database file until a later start finishes the scrub"))
+	}
 	// Endpoint identity and the exposure allowlist are keyed by this
 	// daemon's own 5-tuple, so they are persisted here rather than by the
 	// bridge module — which sees only an opaque key. Same database handle,
@@ -412,62 +436,76 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return fail("matter.bridge.pase.credentials", err)
 	}
 	attest := matterAttestation(mc, logger)
+	bootReason := loadMatterBootReason(ctx, db, build.Version, logger)
 	uiEvents := fabricui.NewEvents()
 	surfacePolicies := matterSurfacePolicies(mc)
 	if mc.DevRotateUniqueIDs {
 		bootid.EnableRotation()
 	}
-	n, err := node.New(ctx, node.Config{
-		Network: node.Network{
-			Listen:     mc.Listen,
-			PreferIPv4: mc.PreferIPv4,
-			TCP:        matterTCPConfig(mc.TCP),
-			MDNS:       matterMDNS(mc, logger),
-		},
-		Commissioning: node.Commissioning{
-			Passcode:           passcode,
-			Discriminator:      mc.Discriminator,
-			PBKDFIterations:    uint32(iterations), //nolint:gosec // the config validator bounds it to the PBKDF range
-			Salt:               salt,
-			LocationCapability: node.RegulatoryIndoorOutdoor,
-		},
-		ProductDescription: node.ProductDescription{
-			Name:       mc.NodeLabel,
-			DeviceType: matterRootNodeDeviceType,
-			VendorID:   mc.VendorID,
-			ProductID:  mc.ProductID,
-		},
-		BasicInformation: node.BasicInformation{
-			VendorName:   matterVendorName,
-			ProductName:  matterProductName,
-			NodeLabel:    mc.NodeLabel,
-			SerialNumber: rootSerial,
-			// UniqueID stays empty: the facade pins it (quality F) on the
-			// first boot of the store and serves the stored value on every
-			// later one (Node.UniqueID), so a node_label edit never
-			// re-identifies the bridge under a paired controller's cache;
-			// under dev_rotate_unique_ids it serves a per-boot value and
-			// pins nothing.
-			HardwareVersion:       1,
-			HardwareVersionString: "1.0",
-			SoftwareVersion:       node.SoftwareVersionFromString(build.Version),
-			SoftwareVersionString: build.Version,
-		},
-		Store:               node.Store{Credentials: store, Endpoints: identity},
-		Attestation:         attest,
-		Health:              matterHealth(healthTracker),
-		Locales:             matterLocales(cfg.Locale),
-		Limits:              node.Limits{SupportedFabrics: matterSupportedFabrics},
-		TimeSynchronization: node.TimeSynchronization{Off: !mc.TimeSyncEnabled()},
-		Surface:             surfacePolicies,
-		Logger:              logger,
-	})
+	// One configuration for the first node and every node an erase brings up
+	// (matterRuntime.Erase); only the boot reason differs.
+	nodeConfig := func(bootReason uint8, creds *matterstore.Store) node.Config {
+		return node.Config{
+			Network: node.Network{
+				Listen:     mc.Listen,
+				PreferIPv4: mc.PreferIPv4,
+				TCP:        matterTCPConfig(mc.TCP),
+				MDNS:       matterMDNS(mc, logger),
+			},
+			Commissioning: node.Commissioning{
+				Passcode:           passcode,
+				Discriminator:      mc.Discriminator,
+				PBKDFIterations:    uint32(iterations), //nolint:gosec // the config validator bounds it to the PBKDF range
+				Salt:               salt,
+				LocationCapability: node.RegulatoryIndoorOutdoor,
+				WindowOnDemand:     mc.Commissioning.WindowOnDemand,
+			},
+			BootReason: bootReason,
+			ProductDescription: node.ProductDescription{
+				Name:       mc.NodeLabel,
+				DeviceType: matterRootNodeDeviceType,
+				VendorID:   mc.VendorID,
+				ProductID:  mc.ProductID,
+			},
+			BasicInformation: node.BasicInformation{
+				VendorName:   matterVendorName,
+				ProductName:  matterProductName,
+				NodeLabel:    mc.NodeLabel,
+				SerialNumber: rootSerial,
+				// UniqueID stays empty: the facade pins it (quality F) on the
+				// first boot of the store and serves the stored value on every
+				// later one (Node.UniqueID), so a node_label edit never
+				// re-identifies the bridge under a paired controller's cache;
+				// under dev_rotate_unique_ids it serves a per-boot value and
+				// pins nothing.
+				HardwareVersion:       1,
+				HardwareVersionString: "1.0",
+				SoftwareVersion:       node.SoftwareVersionFromString(build.Version),
+				SoftwareVersionString: build.Version,
+			},
+			Store:               node.Store{Credentials: creds, Endpoints: identity},
+			Attestation:         attest,
+			Health:              matterHealth(healthTracker),
+			Locales:             matterLocales(cfg.Locale),
+			Limits:              node.Limits{SupportedFabrics: matterSupportedFabrics},
+			TimeSynchronization: node.TimeSynchronization{Off: !mc.TimeSyncEnabled()},
+			Surface:             surfacePolicies,
+			Logger:              logger,
+		}
+	}
+	// The node an erase brings up gets the credential store opened anew:
+	// the erase dropped the seal canary with every other row, and a fresh
+	// sealed open marks the database again at once.
+	newNode := func(ctx context.Context, bootReason uint8) (*node.Node, error) {
+		creds, _, err := openMatterStore(ctx, db, sealer)
+		if err != nil {
+			return nil, err
+		}
+		return node.New(ctx, nodeConfig(bootReason, creds))
+	}
+	n, err := node.New(ctx, nodeConfig(bootReason, store))
 	if err != nil {
 		return fail("matter.bridge.node", err)
-	}
-	if healthTracker != nil {
-		// The listener lives as long as the node: no unsubscribe.
-		n.OnHealthSample(matterHealthRecorder{healthTracker}.onSample)
 	}
 	// The daemon owns the device walk: it knows the device model, the
 	// operator's exposure allowlist and the locale, none of which the
@@ -492,8 +530,25 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ChannelLabel:            channelLabel,
 		Build:                   matterBuild,
 	}, logger)
-	reconciler := matteradapter.NewReconciler(n.Aggregator(), assembler, identity, logger)
-	syncModel := func(ctx context.Context) error { return reconciler.Sync(ctx, walk(ctx)) }
+	newReconciler := func(n *node.Node) *matteradapter.Reconciler {
+		return matteradapter.NewReconciler(n.Aggregator(), assembler, identity, logger)
+	}
+	rt := &matterRuntime{
+		gen:           matterGeneration{node: n, reconciler: newReconciler(n)},
+		newNode:       newNode,
+		newReconciler: newReconciler,
+		walk:          walk,
+		nodes:         fabricui.NewNodeSwitch(matterNodeSource{n}),
+		sealScrubOwed: scrubOwed,
+		db:            db,
+		logger:        logger,
+	}
+	if healthTracker != nil {
+		rt.attach(func(n *node.Node) func() {
+			return n.OnHealthSample(matterHealthRecorder{healthTracker}.onSample)
+		})
+	}
+	syncModel := rt.Sync
 	// The allowlist checker is wired before the first sync, so the
 	// bridge only ever serves sources the operator has explicitly
 	// enabled. Default = empty allowlist = empty topology. The
@@ -517,7 +572,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if mc.TimeSyncEnabled() {
 		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")
 	}
-	bridge := n.Bridge()
 	attestErr := n.AttestationError()
 	if attestErr != nil {
 		// The bridge still starts on the test chain with commissioning
@@ -534,6 +588,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// before it starts and before any controller reads it. A refusal does
 	// not stop the bridge: the node serves the label it had.
 	nodeLabel := newMatterNodeLabeler(n, db, hostID.AppliedNodeLabel, logger)
+	rt.labeler = nodeLabel
 	if _, lErr := nodeLabel.Apply(ctx, mc.NodeLabel); lErr != nil {
 		logger.Warn("matter.bridge.node_label_apply_failed", slog.String("err", lErr.Error()))
 	}
@@ -543,10 +598,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		cancel()
 		return fail("matter.bridge.start", err)
 	}
+	recordMatterStartedVersion(ctx, db, build.Version, logger)
 	logger.Info("matter.bridge.up",
 		slog.String("addr", n.LocalAddr()),
 		slog.Bool("ipv4_only", mc.PreferIPv4),
-		slog.Bool("configured_passcode", configured))
+		slog.Bool("configured_passcode", configured),
+		slog.Int("boot_reason", int(n.BootReason())))
 	logMatterMDNSInterfaces(n.DiagnoseMDNS, mc.MDNSInterfaces, logger)
 
 	// The node's health probe (node.Config.Health, matterHealth) reports
@@ -564,13 +621,13 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// daemon_infra.go: occupancy saturates and then cannot tell a live
 		// median from one frozen at the last successful exchange. A total of
 		// zero is the correct steady state of a bridge nobody has paired.
-		mb := bridge
+		// The gauges read the node that runs now, which an erase replaces.
 		healthTracker.RegisterGauge("matter.controller_rtt_ms",
-			func() float64 { return mb.ControllerRTT().MedianMs })
+			func() float64 { return matterControllerRTT(rt).MedianMs })
 		healthTracker.RegisterGauge("matter.controller_rtt_max_ms",
-			func() float64 { return mb.ControllerRTT().MaxMs })
+			func() float64 { return matterControllerRTT(rt).MaxMs })
 		healthTracker.RegisterGauge("matter.controller_rtt_total",
-			func() float64 { return float64(mb.ControllerRTT().Total) })
+			func() float64 { return float64(matterControllerRTT(rt).Total) })
 	}
 
 	stop := func() { //nolint:contextcheck // shutdown path must not inherit the (potentially cancelled) daemon ctx
@@ -581,20 +638,19 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// the PASE providers, the CASE reaper, the subscription engine,
 		// the DNS-SD re-announce loop, the bridge (mDNS goodbyes on the
 		// wire) and the advertiser with its subtype responder.
-		if err := n.Stop(stopCtx); err != nil {
+		if err := rt.Stop(stopCtx); err != nil {
 			logger.Warn("matter.bridge.stop", slog.String("err", err.Error()))
 		}
 	}
 	return &matterBridgeBundle{
-		node:                    n,
+		rt:                      rt,
 		stop:                    stop,
 		store:                   store,
 		identity:                identity,
 		assembler:               assembler,
 		sync:                    syncModel,
-		retire:                  reconciler.Retire,
-		forget:                  reconciler.QueueForget,
-		reconciler:              reconciler,
+		retire:                  rt.Retire,
+		forget:                  rt.QueueForget,
 		events:                  uiEvents,
 		configuredCommissioning: configured,
 		commissioningBlocked:    attestErr,
@@ -810,7 +866,7 @@ func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder
 				if err != nil {
 					note = "error: " + err.Error()
 				}
-				rec.Record(audit.Entry{User: id.Subject, Action: audit.ActionMatterForceSync, Note: note})
+				audit.RecordFrom(ctx, rec, audit.Entry{User: id.Subject, Action: audit.ActionMatterForceSync, Note: note})
 			}
 		}
 		return err
@@ -916,9 +972,9 @@ func newMatterCentralHook(
 // itself — the commissioning window with its fail-safe, verifier installer
 // and CM=2 announcement, the PartsList providers, the StartUp / BootReason
 // events, the fabric fan-out — is not repeated here (ADR 0084 phase 3).
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub, schedules interfaces.ClimateScheduleWriter) (wiring matterWiring, closers []func(), teardown func()) {
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, cipher *secret.Cipher, healthTracker *health.Tracker, labels device.ParameterTranslator, catalogs *i18n.Catalogs, auditRec audit.Recorder, logger *slog.Logger, wsHub *ws.Hub, schedules interfaces.ClimateScheduleWriter) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
-	bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger, schedules)
+	bundle := startMatterBridge(ctx, cfg, reg, db, cipher, healthTracker, labels, logger, schedules)
 	if bundle == nil {
 		wiring.projection = matteradapter.NewProjectionPlane(nil, nil)
 		return wiring, closers, teardown
@@ -928,7 +984,6 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// consume the same values; mixing raw and defaulted fields used to
 	// publish discriminator 0 while the bridge core held the 0xF00 default.
 	mcfg := cfg.North.Matter.WithDefaults()
-	mb := bundle.node.Bridge()
 	mids := bundle.identity
 	teardown = bundle.stop
 	wiring.exposureStore = mids
@@ -949,7 +1004,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// binds later is stated the model's availability before the node binds
 	// it, so the forward carries only the flips.
 	closers = append(closers, wireMatterReachableForward(reg, func(centralName, address string, ok bool) {
-		bundle.reconciler.SetReachable(ctx, centralName, address, ok)
+		bundle.rt.SetReachable(ctx, centralName, address, ok)
 	}))
 	// Reassemble the topology once each central's initial device load
 	// completes: the boot-time assembly (the facade's Start) runs before
@@ -980,14 +1035,26 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// node pages reload their endpoint list and the WebSocket hub carries
 	// `node.endpoints_changed`. The StartUp / BootReason events are the
 	// facade's (emitted by its Start).
-	mb.SetOnReassembled(func(int) {
-		bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
+	// The hook and the node observer hang on each node an erase brings up
+	// (matterRuntime.attach); the event source is the daemon's and stays.
+	bundle.rt.attach(func(n *node.Node) func() {
+		mb := n.Bridge()
+		if mb == nil {
+			return nil
+		}
+		mb.SetOnReassembled(func(int) {
+			bundle.events.Publish(fabricui.Event{Type: fabricui.EventEndpointsChanged, Data: struct{}{}})
+		})
+		return nil
 	})
-	closers = append(closers, wireMatterNodeEvents(bundle.events, bundle.node, wsHub, auditRec))
+	bundle.rt.attach(func(n *node.Node) func() { //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
+		return wireMatterNodeEvents(nil, n, wsHub, auditRec) //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
+	})
+	closers = append(closers, wireMatterNodeEvents(bundle.events, nil, wsHub, auditRec), bundle.rt.release) //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
 
 	wiring.status = &matterStatusReaderAdapter{
 		enabled:   mcfg.Enabled,
-		node:      bundle.node,
+		node:      bundle.Node,
 		exposures: mids,
 		cfg: &matterStatusConfig{
 			advertising: mcfg.MDNSAdvertise == "zeroconf",
@@ -1008,9 +1075,13 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// through the facade (node.ErrCommissioningBlocked), as it refuses a
 	// commissioner's AdministratorCommissioning.
 	candidates := &matterCandidateProviderAdapter{reg: reg, asm: bundle.assembler}
+	// The pages read the node through the runtime's switch, which an erase
+	// sets to the node it brings up; Erase is that erase.
+	findings := matterWarnings(bundle.assembler, catalogs, cfg.Locale)
 	wiring.nodeUI = fabricui.Options{
-		Node: matterNodeSource{bundle.node},
-		Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec), ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{
+		Node:  bundle.rt.nodes,
+		Erase: bundle.rt.Erase,
+		Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec), ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{ //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
 			Candidates: candidates.MatterCandidates,
 			Store:      mids,
 			Labels:     matterParameterLabels{labels},
@@ -1029,8 +1100,11 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ConfiguredWindow: bundle.configuredCommissioning && !mcfg.Commissioning.EphemeralWindow,
 		NodeConfig:       matterNodeConfigView(mcfg),
 		// Selected sources the bridge holds no endpoint for, on the status
-		// and selection pages instead of only in the log.
-		Warnings: matterWarnings(bundle.assembler, catalogs, cfg.Locale),
+		// and selection pages instead of only in the log, and a scrub an
+		// erase left to the next boot.
+		Warnings: func(ctx context.Context) []fabricui.Warning {
+			return append(findings(ctx), bundle.rt.warnings(catalogs, cfg.Locale)...)
+		},
 	}
 	return wiring, closers, teardown
 }

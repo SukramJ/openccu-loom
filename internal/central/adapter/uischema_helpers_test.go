@@ -320,7 +320,7 @@ func TestPeerChannelTypeDeviceFoundWithChannel(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	a := &UISchemaAdapter{registry: reg}
-	got := a.peerChannelType("PDEV001:1")
+	got := a.peerChannelType(context.Background(), "PDEV001:1")
 	if got != "SWITCH_VIRTUAL_RECEIVER" {
 		t.Errorf("channel found = %q, want SWITCH_VIRTUAL_RECEIVER", got)
 	}
@@ -340,7 +340,7 @@ func TestPeerChannelTypeDeviceFoundChannelNotFound(t *testing.T) {
 
 	a := &UISchemaAdapter{registry: reg}
 	// Channel :9 doesn't exist → returns ""
-	got := a.peerChannelType("PDEV002:9")
+	got := a.peerChannelType(context.Background(), "PDEV002:9")
 	if got != "" {
 		t.Errorf("channel not found = %q, want empty", got)
 	}

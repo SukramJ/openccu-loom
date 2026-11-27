@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 )
 
 // TestDiscoveryNodeIDFromTopic pins both discovery topic shapes. Before the

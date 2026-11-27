@@ -22,7 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	gomqtt "github.com/SukramJ/go-mqtt"
+	gomqtt "sukramj.dev/go-mqtt"
 
 	"thingfabric.dev/go-fabric/secure/spake2"
 
@@ -1143,6 +1143,16 @@ type NorthMatterCommissioning struct {
 	// runs on the node facade's basic window with the fresh
 	// credentials; the configured ones return when it closes.
 	EphemeralWindow bool `yaml:"ephemeral_window" json:"ephemeral_window" cfg:"basic"`
+
+	// WindowOnDemand, when true, makes the bridge open no commissioning
+	// window by itself: not at start while it has no controller, not
+	// after the last controller is removed, not when a window the web
+	// interface opened closes. The bridge is not commissionable until the
+	// operator opens a window on the Matter pairing page. False keeps the
+	// window an uncommissioned bridge opens at start (on the configured
+	// passcode, or on random credentials nobody was shown when none is
+	// configured). go-fabric's node.Commissioning.WindowOnDemand.
+	WindowOnDemand bool `yaml:"window_on_demand" json:"window_on_demand" cfg:"basic"`
 
 	// retiredSalt records that the source still set `salt`, a key the
 	// daemon no longer reads: go-fabric draws a fresh PBKDF salt for every

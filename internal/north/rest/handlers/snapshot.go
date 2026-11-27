@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -122,7 +123,7 @@ type snapshotInclude struct {
 // useful for diagnostics. Applies to both response shapes.
 func Snapshot(deps SnapshotDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		env := buildSnapshotEnvelope(deps, snapshotIncludes(r), strings.TrimSpace(r.URL.Query().Get("central")),
+		env := buildSnapshotEnvelope(r.Context(), deps, snapshotIncludes(r), strings.TrimSpace(r.URL.Query().Get("central")),
 			r.URL.Query().Get("released_only") == "true")
 		if wantsAnonymise(r) {
 			anonymiseSnapshot(&env)
@@ -165,7 +166,7 @@ func snapshotIncludes(r *http.Request) snapshotInclude {
 // the hub entities (programs + sysvars) to that one CCU via exact match
 // on the canonical central name. Rooms and functions are not
 // central-tagged in the model and stay fleet-wide.
-func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName string, releasedOnly bool) SnapshotEnvelope {
+func buildSnapshotEnvelope(ctx context.Context, deps SnapshotDeps, inc snapshotInclude, centralName string, releasedOnly bool) SnapshotEnvelope {
 	env := SnapshotEnvelope{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -183,7 +184,7 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName s
 		sort.Slice(devs, func(i, j int) bool { return devs[i].Address < devs[j].Address })
 		env.Devices = make([]DeviceSummary, 0, len(devs))
 		for _, d := range devs {
-			released := deps.Devices.Released(d.Address)
+			released := deps.Devices.Released(ctx, d.Address)
 			// Same opt-in as GET /devices: a snapshot is what an
 			// ecosystem client seeds from, and it is also what the
 			// Config UI reloads. Only the caller knows which it is.
@@ -193,7 +194,7 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName s
 			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address), released))
 		}
 		if inc.channels {
-			env.DeviceChannels = snapshotDeviceChannels(deps.Devices, devs, deps.Labels, inc.dataPoints)
+			env.DeviceChannels = snapshotDeviceChannels(ctx, deps.Devices, devs, deps.Labels, inc.dataPoints)
 		}
 		env.Rooms = snapshotRooms(deps.Devices)
 		env.Functions = snapshotFunctions(deps.Devices)
@@ -400,7 +401,7 @@ func anonToken(kind, value string) string {
 // withDataPoints is set, their data points) using the same projection
 // helpers the per-channel REST endpoints use. devs is expected pre-sorted
 // by the caller so the output ordering is deterministic.
-func snapshotDeviceChannels(idx DeviceIndex, devs []*device.Device, labels ParameterLabeler, withDataPoints bool) []SnapshotDeviceChannels {
+func snapshotDeviceChannels(ctx context.Context, idx DeviceIndex, devs []*device.Device, labels ParameterLabeler, withDataPoints bool) []SnapshotDeviceChannels {
 	out := make([]SnapshotDeviceChannels, 0, len(devs))
 	for _, d := range devs {
 		// Resolve the canonical-unique_id serial suffix once per device — all
@@ -412,7 +413,9 @@ func snapshotDeviceChannels(idx DeviceIndex, devs []*device.Device, labels Param
 		chans := d.Channels()
 		entries := make([]SnapshotChannelEntry, 0, len(chans))
 		for _, ch := range chans {
-			entry := SnapshotChannelEntry{ChannelSummary: toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch))}
+			// The snapshot spans every central and is never bound to one, so
+			// the channel's central comes from the unbound address lookup.
+			entry := SnapshotChannelEntry{ChannelSummary: toChannelSummary(ch, labels, serialSuffixForChannel(ctx, idx, ch))}
 			if withDataPoints {
 				dps := ch.DataPoints()
 				entry.DataPoints = make([]DataPointSummary, 0, len(dps))

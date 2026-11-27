@@ -30,7 +30,7 @@ func (f *fakeDeviceIndex) Devices() []*device.Device {
 	return out
 }
 
-func (f *fakeDeviceIndex) Device(addr string) (*device.Device, bool) {
+func (f *fakeDeviceIndex) Device(_ context.Context, addr string) (*device.Device, bool) {
 	d, ok := f.devices[addr]
 	return d, ok
 }
@@ -49,7 +49,7 @@ func (f *fakeDeviceIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (f *fakeDeviceIndex) Released(string) bool { return true }
+func (f *fakeDeviceIndex) Released(context.Context, string) bool { return true }
 
 // fakeChannelWriter satisfies [device.ChannelWriter] and records every
 // SetValue / PutParamset call made through the channel's installed writer.

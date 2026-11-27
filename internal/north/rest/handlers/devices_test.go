@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -38,7 +39,7 @@ func (s *stubDeviceIndex) Devices() []*device.Device {
 	return out
 }
 
-func (s *stubDeviceIndex) Device(address string) (*device.Device, bool) {
+func (s *stubDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := s.devices[address]
 	return d, ok
 }
@@ -57,7 +58,9 @@ func (s *stubDeviceIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (s *stubDeviceIndex) Released(address string) bool { return !s.unreleased[address] }
+func (s *stubDeviceIndex) Released(_ context.Context, address string) bool {
+	return !s.unreleased[address]
+}
 
 func newTestDevice(addr, model string) *device.Device {
 	return device.New(device.Config{
@@ -1009,7 +1012,12 @@ func (m *multiCentralDeviceIndex) Devices() []*device.Device {
 	return out
 }
 
-func (m *multiCentralDeviceIndex) Device(address string) (*device.Device, bool) {
+// Device honours a central binding the way the production adapter does: a
+// bound lookup answers only for the bound central's devices.
+func (m *multiCentralDeviceIndex) Device(ctx context.Context, address string) (*device.Device, bool) {
+	if scope, ok := hmreqctx.CentralScope(ctx); ok && m.centrals[address] != scope {
+		return nil, false
+	}
 	d, ok := m.devices[address]
 	return d, ok
 }
@@ -1025,7 +1033,7 @@ func (m *multiCentralDeviceIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (m *multiCentralDeviceIndex) Released(string) bool { return true }
+func (m *multiCentralDeviceIndex) Released(context.Context, string) bool { return true }
 
 func TestListDevices_CentralFilter(t *testing.T) {
 	t.Parallel()

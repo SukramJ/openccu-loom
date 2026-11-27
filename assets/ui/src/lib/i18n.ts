@@ -1389,6 +1389,8 @@ const EN: Catalog = {
     "Concurrent pairings",
   "config.field.north.matter.commissioning.ephemeral_window":
     "Ephemeral commissioning window",
+  "config.field.north.matter.commissioning.window_on_demand":
+    "Commissioning window on demand only",
   "config.field.north.matter.case.node_id": "Node ID",
   "config.field.north.matter.case.fabric_id": "Fabric ID",
   "config.field.north.matter.attestation.dac_path": "DAC certificate path",
@@ -1633,6 +1635,8 @@ const EN: Catalog = {
     "No effect since the bridge runs on go-fabric's node facade: the PASE adapter is isolated per exchange always, so multiple commissioners can pair in parallel. Kept for compatibility with existing configs.",
   "config.help.north.matter.commissioning.ephemeral_window":
     "Generate a fresh discriminator + passcode + verifier each time the SPA opens a commissioning window. Recommended for production: pairing codes auto-rotate and the static configured passcode acts only as the long-lived label-code fallback.",
+  "config.help.north.matter.commissioning.window_on_demand":
+    "The bridge opens no commissioning window by itself — not at start while no controller is paired, not after the last one is removed. It is not discoverable for pairing until you open a window on the Matter pairing page. Off keeps the window an unpaired bridge opens at start; without a configured passcode that window runs on random codes nobody was shown. Takes effect after a restart.",
   "config.help.north.matter.case.node_id":
     "No effect: the operational node id is the one each commissioner assigns in the NOC it installs, persisted per fabric. Kept for compatibility with existing configs.",
   "config.help.north.matter.case.fabric_id":
@@ -3977,6 +3981,7 @@ const EN: Catalog = {
   "audit.col.time": "Time",
   "audit.col.action": "Action",
   "audit.col.user": "User",
+  "audit.on_behalf_of": "on behalf of {name}",
   "audit.col.target": "Target",
   "audit.col.changes": "Changes",
   // --- Fleet (read-only cross-CCU overview) ---
@@ -5615,6 +5620,8 @@ const DE: Catalog = {
     "Parallele Pairings",
   "config.field.north.matter.commissioning.ephemeral_window":
     "Ephemeres Pairing-Fenster",
+  "config.field.north.matter.commissioning.window_on_demand":
+    "Pairing-Fenster nur auf Anforderung",
   "config.field.north.matter.case.node_id": "Node-ID",
   "config.field.north.matter.case.fabric_id": "Fabric-ID",
   "config.field.north.matter.attestation.dac_path": "DAC-Zertifikatspfad",
@@ -5862,6 +5869,8 @@ const DE: Catalog = {
     "Ohne Wirkung, seit die Bridge auf go-fabrics Node-Fassade läuft: der PASE-Adapter ist immer pro Exchange isoliert, mehrere Commissioner können parallel pairen. Bleibt für bestehende Konfigurationen erhalten.",
   "config.help.north.matter.commissioning.ephemeral_window":
     "Erzeugt bei jedem in der SPA geöffneten Commissioning-Fenster einen frischen Discriminator + Passcode + Verifier. Empfohlen für Produktion: Pairing-Codes rotieren automatisch, der statische Passcode dient nur noch als langlebiger Label-Code-Fallback.",
+  "config.help.north.matter.commissioning.window_on_demand":
+    "Die Bridge öffnet von sich aus kein Pairing-Fenster – weder beim Start, solange kein Controller gekoppelt ist, noch nachdem der letzte entfernt wurde. Sie ist erst zum Koppeln auffindbar, wenn du auf der Matter-Pairing-Seite ein Fenster öffnest. Aus: Eine ungekoppelte Bridge öffnet beim Start ihr Fenster; ohne konfigurierten Passcode läuft es auf Zufallscodes, die niemand angezeigt bekommt. Wirkt nach einem Neustart.",
   "config.help.north.matter.case.node_id":
     "Ohne Wirkung: die Operational-Node-ID vergibt jeder Commissioner im NOC, den er installiert; sie wird pro Fabric persistiert. Bleibt für bestehende Konfigurationen erhalten.",
   "config.help.north.matter.case.fabric_id":
@@ -8197,6 +8206,7 @@ const DE: Catalog = {
   "audit.col.time": "Zeit",
   "audit.col.action": "Aktion",
   "audit.col.user": "Benutzer",
+  "audit.on_behalf_of": "im Auftrag von {name}",
   "audit.col.target": "Ziel",
   "audit.col.changes": "Änderungen",
   // --- CCU-Flotte (schreibgeschützte CCU-übergreifende Übersicht) ---

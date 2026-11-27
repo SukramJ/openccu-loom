@@ -47,7 +47,7 @@ func TestOperatorSelectionChangeReachesTheWebSocketHub(t *testing.T) {
 	hub := ws.NewHub()
 	ctx, cancel := context.WithCancel(context.Background())
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
+		ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), hub, nil,
 	)
 	// One cleanup, cancel first: see TestMatterBootEventsAreReadableAfterWiring.

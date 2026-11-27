@@ -25,7 +25,7 @@ import (
 // already models, and flags whether each candidate's model matches the
 // new device's (an exact swap vs. a compatible cross-type one).
 func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error) {
-	unit, err := a.resolveReplaceCentral(centralName)
+	unit, err := a.resolveReplaceCentral(ctx, centralName)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, 
 // the SPA updates without waiting for the CCU's replaceDevice callback
 // (which dedups when it arrives).
 func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error {
-	unit, err := a.resolveReplaceCentral(centralName)
+	unit, err := a.resolveReplaceCentral(ctx, centralName)
 	if err != nil {
 		return err
 	}
@@ -128,8 +128,9 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 }
 
 // resolveReplaceCentral resolves the owning central: an explicit name,
-// else the sole central, else an ambiguity error.
-func (a *DeviceAdminDomain) resolveReplaceCentral(centralName string) (*central.Unit, error) {
+// else the sole central the request may consult (see [requestUnits]), else an
+// ambiguity error.
+func (a *DeviceAdminDomain) resolveReplaceCentral(ctx context.Context, centralName string) (*central.Unit, error) {
 	if a.registry == nil || a.writer == nil {
 		return nil, ErrNoDeviceBackend
 	}
@@ -140,7 +141,7 @@ func (a *DeviceAdminDomain) resolveReplaceCentral(centralName string) (*central.
 		}
 		return u, nil
 	}
-	units := a.registry.List()
+	units := requestUnits(ctx, a.registry)
 	if len(units) == 1 {
 		return units[0], nil
 	}

@@ -43,7 +43,7 @@ func (f *fakeHubIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (f *fakeHubIndex) Released(string) bool { return true }
+func (f *fakeHubIndex) Released(context.Context, string) bool { return true }
 
 type fakeProgramWriter struct {
 	calls atomic.Int32

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

@@ -112,8 +112,9 @@ func (d *CustomDPDispatcher) InvokeCustomDP(
 // repeats across CCUs, and the unscoped walk stops at the first central
 // holding the address, which is the alphabetically first one.
 //
-// An empty centralName keeps the registry-wide walk, which is what the REST
-// and WebSocket paths have (their URLs carry no central).
+// An empty centralName walks the centrals ctx may consult (see
+// [requestUnits]): only the bound one for a REST request on a device route,
+// the whole registry for an unbound caller.
 func (d *CustomDPDispatcher) InvokeCustomDPOn(
 	ctx context.Context,
 	centralName, deviceAddress, name, operation string,
@@ -121,7 +122,7 @@ func (d *CustomDPDispatcher) InvokeCustomDPOn(
 	priority hmenum.CommandPriority,
 	source string,
 ) error {
-	dp, chNo, err := d.resolveCustomDP(centralName, deviceAddress, name)
+	dp, chNo, resolvedOn, err := d.resolveCustomDP(ctx, centralName, deviceAddress, name)
 	if err != nil {
 		return err
 	}
@@ -130,23 +131,25 @@ func (d *CustomDPDispatcher) InvokeCustomDPOn(
 		return err
 	}
 
-	d.recordAudit(deviceAddress, chNo, name, operation, source, params)
+	d.recordAudit(ctx, resolvedOn, deviceAddress, chNo, name, operation, source, params)
 	return nil
 }
 
 // resolveCustomDP finds the named custom data point on the device at
-// deviceAddress. A non-empty centralName scopes the lookup to that central;
-// an empty one walks the whole registry and stops at the first central
-// holding the address.
-func (d *CustomDPDispatcher) resolveCustomDP(centralName, deviceAddress, name string) (device.AttachableDataPoint, int, error) {
+// deviceAddress, and names the central it was found on. A non-empty
+// centralName scopes the lookup to that central; an empty one walks the
+// centrals ctx may consult and stops at the first one holding the address.
+func (d *CustomDPDispatcher) resolveCustomDP(
+	ctx context.Context, centralName, deviceAddress, name string,
+) (dp device.AttachableDataPoint, chNo int, foundOn string, err error) {
 	if d.registry == nil {
-		return nil, 0, errors.New("custom_dp: registry not configured")
+		return nil, 0, "", errors.New("custom_dp: registry not configured")
 	}
-	units := d.registry.List()
+	units := requestUnits(ctx, d.registry)
 	if centralName != "" {
 		u, ok := d.registry.Get(centralName)
 		if !ok || u == nil {
-			return nil, 0, fmt.Errorf("custom_dp: unknown central %q", centralName)
+			return nil, 0, "", fmt.Errorf("custom_dp: unknown central %q", centralName)
 		}
 		units = []*central.Unit{u}
 	}
@@ -158,12 +161,12 @@ func (d *CustomDPDispatcher) resolveCustomDP(centralName, deviceAddress, name st
 		// Accepts the bare parameter name and the channel-exact
 		// `PARAM@<channel>` wire form (profile channel groups).
 		if dp, chNo, found := custom.FindByWireName(dev, name); found {
-			return dp, chNo, nil
+			return dp, chNo, u.Name(), nil
 		}
 		// Device found but DP not found.
-		return nil, 0, fmt.Errorf("custom_dp: data point %q not found on device %s", name, deviceAddress)
+		return nil, 0, "", fmt.Errorf("custom_dp: data point %q not found on device %s", name, deviceAddress)
 	}
-	return nil, 0, fmt.Errorf("custom_dp: device %s not found", deviceAddress)
+	return nil, 0, "", fmt.Errorf("custom_dp: device %s not found", deviceAddress)
 }
 
 // dispatch type-asserts dp to its concrete model type and routes
@@ -893,7 +896,8 @@ func (d *CustomDPDispatcher) dispatchAccessPermission(
 // --- Audit ---
 
 func (d *CustomDPDispatcher) recordAudit(
-	deviceAddress string,
+	ctx context.Context,
+	centralName, deviceAddress string,
 	chNo int,
 	name, operation, source string,
 	params map[string]any,
@@ -905,8 +909,9 @@ func (d *CustomDPDispatcher) recordAudit(
 	if len(params) > 0 {
 		note += " params=" + strings.Join(slices.Sorted(maps.Keys(params)), ",")
 	}
-	d.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionDataPointWrite,
+		Central:       centralName,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     chNo,
 		Parameter:     name,

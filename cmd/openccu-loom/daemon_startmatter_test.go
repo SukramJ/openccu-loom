@@ -33,13 +33,13 @@ func TestStartMatterBridge_EphemeralWindow(t *testing.T) {
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, logger, nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with ephemeral window enabled")
 	}
 	t.Cleanup(bundle.stop)
 
-	if bundle.node.Bridge().LocalAddr() == "" {
+	if bundle.Node().Bridge().LocalAddr() == "" {
 		t.Error("expected non-empty LocalAddr")
 	}
 }
@@ -65,7 +65,7 @@ func TestStartMatterBridge_EphemeralWindowConcurrent(t *testing.T) {
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, logger, nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with concurrent ephemeral window enabled")
 	}
@@ -90,7 +90,7 @@ func TestStartMatterBridge_DevRotateUniqueIDs(t *testing.T) {
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
 	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, logger, nil)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with DevRotateUniqueIDs")
 	}
@@ -103,7 +103,7 @@ func TestStartMatterBridge_NilConfig_ReturnsNil(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
-	if got := startMatterBridge(ctx, nil, reg, nil, health.NewTracker(), nil, logger, nil); got != nil {
+	if got := startMatterBridge(ctx, nil, reg, nil, nil, health.NewTracker(), nil, logger, nil); got != nil {
 		t.Error("expected nil for nil config")
 		got.stop()
 	}

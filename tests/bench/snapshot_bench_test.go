@@ -22,6 +22,7 @@
 package bench
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -49,7 +50,7 @@ type benchDeviceIndex struct {
 
 func (b *benchDeviceIndex) Devices() []*device.Device { return b.list }
 
-func (b *benchDeviceIndex) Device(address string) (*device.Device, bool) {
+func (b *benchDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := b.byID[address]
 	return d, ok
 }
@@ -97,7 +98,7 @@ func benchFleet(devices, channels, dps int) *benchDeviceIndex {
 	return idx
 }
 
-func (b *benchDeviceIndex) Released(string) bool { return true }
+func (b *benchDeviceIndex) Released(context.Context, string) bool { return true }
 
 // runSnapshotBench drives the Snapshot handler with the given query and
 // Accept header b.N times, reporting allocations.

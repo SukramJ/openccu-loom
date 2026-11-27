@@ -97,7 +97,7 @@ func startWithAttestation(t *testing.T, mutate func(a *config.NorthMatterAttesta
 	mutate(&cfg.North.Matter.Attestation)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-attestation"), openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-attestation"), openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil; a chain that does not load must leave the bridge running")
 	}
@@ -116,7 +116,7 @@ func TestMatterAttestationRefusesAPartialChain(t *testing.T) {
 	if bundle.commissioningBlocked == nil {
 		t.Fatal("a chain with only a DAC path left commissioning open, want it blocked")
 	}
-	if bundle.node.AttestationError() == nil {
+	if bundle.Node().AttestationError() == nil {
 		t.Fatal("node.AttestationError is nil for a chain with only a DAC path")
 	}
 }

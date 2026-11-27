@@ -1682,9 +1682,9 @@ type rollbackPublisher interface {
 // every channel of dev and registers an OnAnyRollback callback that
 // publishes a [hmevent.DataPointOptimisticRolledBackEvent] on bus.
 // Mirrors Python `data_point.py:1493-1504 _publish_rollback_event`,
-// which emits the same event via `event_bus.publish_sync`. North-bound
-// consumers (REST long-poll, MQTT) can subscribe to surface the
-// rollback to operators.
+// which emits the same event via `event_bus.publish_sync`. The
+// WebSocket plane subscribes to it (internal/north/rest/ws) to surface
+// the rollback to operators.
 //
 // No-op when bus or dev is nil. The returned unsubscribe is
 // intentionally dropped: rollback subscriptions live as long as the

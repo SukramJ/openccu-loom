@@ -45,7 +45,7 @@ type fakeDeviceLookup struct {
 	found       bool
 }
 
-func (f *fakeDeviceLookup) LocateDevice(_ string) (centralName, interfaceID string, ok bool) {
+func (f *fakeDeviceLookup) LocateDevice(_ context.Context, _ string) (centralName, interfaceID string, ok bool) {
 	return f.centralName, f.iface, f.found
 }
 

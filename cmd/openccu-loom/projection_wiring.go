@@ -30,11 +30,13 @@ func newDeviceProjector(devices *adapter.DevicesAdapter, reg *central.Registry, 
 
 // ProjectDevice implements handlers.DeviceProjector and mcp.DeviceProjector.
 func (p *deviceProjector) ProjectDevice(ctx context.Context, address, plane string) (projection.Device, bool, error) {
-	dev, ok := p.devices.Device(address)
+	// One lookup yields both the device and its central, so a request bound
+	// to a central projects that central's device against that central's
+	// fleet rather than pairing it with the first CCU holding the address.
+	dev, centralName, ok := p.devices.Resolve(ctx, address)
 	if !ok {
 		return projection.Device{}, false, nil
 	}
-	centralName := p.devices.CentralOf(address)
 	var fleet []*device.Device
 	if u, found := p.reg.Get(centralName); found && u.ModelRegistry != nil {
 		fleet = u.ModelRegistry.List()

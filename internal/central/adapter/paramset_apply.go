@@ -133,7 +133,7 @@ func (p *ParamsetApplyDomain) applyOne(
 	// exactly what the live write will do — the write path checks it
 	// again, but a dry run that skips it would answer would_apply for a
 	// value the write then refuses.
-	if err := p.paramsets.checkVisibilityOn(src.central, target, hmenum.ParamsetKeyMaster, values); err != nil {
+	if err := p.paramsets.checkVisibilityOn(ctx, src.central, target, hmenum.ParamsetKeyMaster, values); err != nil {
 		return refused(err.Error())
 	}
 	// A modelled target is written through Channel.SetMany, which accepts
@@ -141,7 +141,7 @@ func (p *ParamsetApplyDomain) applyOne(
 	// of the stored description (profile-owned slots and filtered
 	// parameters are deliberately absent). Predict that gate here, so the
 	// dry run never promises a write SetMany would refuse.
-	if ch := p.paramsets.resolveChannelOn(src.central, target); ch != nil {
+	if ch := p.paramsets.resolveChannelOn(ctx, src.central, target); ch != nil {
 		for name := range values {
 			if channelParameterFor(ch, hmenum.ParamsetKeyMaster, hmenum.Parameter(name)) == nil {
 				return refused(fmt.Sprintf("parameter %s is not writable on this channel's model paramset", name))
@@ -192,7 +192,7 @@ func (p *ParamsetApplyDomain) resolveSource(ctx context.Context, sourceChannel s
 		return applySource{}, fmt.Errorf("%w: %s", hmerr.ErrDescriptionNotFound, sourceChannel)
 	}
 	devAddr := deviceAddressOf(sourceChannel)
-	for _, u := range p.registry.List() {
+	for _, u := range p.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue

@@ -423,7 +423,7 @@ func TestToFloatUnsupported(t *testing.T) {
 func TestPeerChannelTypeNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := nilAdapter()
-	if got := a.peerChannelType("DEV001:1"); got != "" {
+	if got := a.peerChannelType(context.Background(), "DEV001:1"); got != "" {
 		t.Errorf("peerChannelType nil registry = %q, want empty", got)
 	}
 }
@@ -431,7 +431,7 @@ func TestPeerChannelTypeNilRegistry(t *testing.T) {
 func TestPeerChannelTypeEmptyAddress(t *testing.T) {
 	t.Parallel()
 	a := &UISchemaAdapter{registry: central.NewRegistry()}
-	if got := a.peerChannelType(""); got != "" {
+	if got := a.peerChannelType(context.Background(), ""); got != "" {
 		t.Errorf("peerChannelType empty = %q, want empty", got)
 	}
 }
@@ -439,7 +439,7 @@ func TestPeerChannelTypeEmptyAddress(t *testing.T) {
 func TestPeerChannelTypeNotFound(t *testing.T) {
 	t.Parallel()
 	a := &UISchemaAdapter{registry: central.NewRegistry()}
-	if got := a.peerChannelType("NOSUCHDEV:1"); got != "" {
+	if got := a.peerChannelType(context.Background(), "NOSUCHDEV:1"); got != "" {
 		t.Errorf("peerChannelType not found = %q, want empty", got)
 	}
 }

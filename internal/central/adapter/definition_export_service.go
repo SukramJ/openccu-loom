@@ -38,26 +38,19 @@ func (d *DefinitionExportDomain) ExportDefinition(ctx context.Context, deviceAdd
 	if d == nil || d.reg == nil {
 		return "", nil, errors.New("definition export: registry not wired")
 	}
-	for _, name := range d.reg.Names() {
-		unit, ok := d.reg.Get(name)
-		if !ok || unit == nil || unit.ModelRegistry == nil {
-			continue
-		}
-		dev, ok := unit.ModelRegistry.Get(deviceAddress)
-		if !ok {
-			continue
-		}
-		ic := clientForInterface(unit, dev.Interface)
-		if ic == nil {
-			return "", nil, fmt.Errorf("definition export: no client for interface %s on central %s", dev.Interface, name)
-		}
-		res, err := definitionexport.Export(ctx, ic, deviceAddress, d.randomID)
-		if err != nil {
-			return "", nil, err
-		}
-		return res.Model, res.Zip, nil
+	unit, dev, ok := unitHolding(ctx, d.reg, deviceAddress)
+	if !ok {
+		return "", nil, definitionexport.ErrDeviceNotFound
 	}
-	return "", nil, definitionexport.ErrDeviceNotFound
+	ic := clientForInterface(unit, dev.Interface)
+	if ic == nil {
+		return "", nil, fmt.Errorf("definition export: no client for interface %s on central %s", dev.Interface, unit.Name())
+	}
+	res, err := definitionexport.Export(ctx, ic, deviceAddress, d.randomID)
+	if err != nil {
+		return "", nil, err
+	}
+	return res.Model, res.Zip, nil
 }
 
 // clientForInterface returns the InterfaceClient serving iface on unit, or nil.

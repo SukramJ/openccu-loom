@@ -10,6 +10,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -79,7 +80,7 @@ func TestLookupChannelUISchemaDeviceFound(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	a := &UISchemaAdapter{registry: reg}
-	gotDev, gotCh := a.lookupChannel("DEV001", 1)
+	gotDev, gotCh := a.lookupChannel(context.Background(), "DEV001", 1)
 	if gotDev == nil {
 		t.Fatal("lookupChannel found device: dev must not be nil")
 	}
@@ -102,7 +103,7 @@ func TestLookupChannelUISchemaDeviceFoundNoChannel(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	a := &UISchemaAdapter{registry: reg}
-	gotDev, gotCh := a.lookupChannel("DEV002", 5)
+	gotDev, gotCh := a.lookupChannel(context.Background(), "DEV002", 5)
 	if gotDev == nil {
 		t.Fatal("lookupChannel: dev must not be nil when device is found")
 	}

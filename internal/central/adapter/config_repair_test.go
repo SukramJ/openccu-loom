@@ -227,6 +227,12 @@ func TestConfigRepairClampsToViolatedBoundAndWritesFullSet(t *testing.T) {
 	if len(rows) != 1 || rows[0].Action != audit.ActionParamsetWrite || rows[0].Note != configRepairAuditNote || rows[0].ChannelNo != 1 {
 		t.Fatalf("audit rows=%+v, want one repair paramset_write row on channel 1", rows)
 	}
+	// The repair walked ccu-01 without a request binding: the row carries the
+	// central it resolved the device on, not one derived later from the
+	// address, which another CCU may repeat.
+	if rows[0].Central != "ccu-01" {
+		t.Errorf("audit row central=%q, want ccu-01", rows[0].Central)
+	}
 }
 
 // TestConfigRepairNeverClampsSpecialValue pins that a declared SPECIAL value

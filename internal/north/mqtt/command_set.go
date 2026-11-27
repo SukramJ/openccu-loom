@@ -10,7 +10,7 @@ import (
 	"errors"
 	"log/slog"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 )
 
 // alarmPanelItem is the leaf of the alarm zone's panel item: the

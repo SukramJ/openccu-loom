@@ -2,7 +2,7 @@
 
 ## Looking for help with OpenCCU-Loom?
 
-- **Documentation** first: <https://sukramj.github.io/openccu-loom/> —
+- **Documentation** first: <https://sukramj.dev/openccu-loom/> —
   getting started, configuration, the admin guides and the integration
   pages (MQTT, REST/WebSocket, Matter, Home Assistant).
 - **Bugs and feature requests** go to this repository's

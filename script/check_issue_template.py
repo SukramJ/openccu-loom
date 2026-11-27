@@ -72,7 +72,7 @@ MAX_DRIFT_MISSING = 0
 NEW_ISSUE_URL = "https://github.com/SukramJ/openccu-loom/issues/new/choose"
 DISCUSSIONS_URL = "https://github.com/SukramJ/openccu-loom/discussions"
 AI_POLICY_URL = "https://github.com/SukramJ/openccu-loom/blob/main/AI_POLICY.md#6-do-not-bypass-the-issue-form"
-DIAGNOSTICS_DOC_URL = "https://sukramj.github.io/openccu-loom/user-guide/#diagnostics-and-recording"
+DIAGNOSTICS_DOC_URL = "https://sukramj.dev/openccu-loom/user-guide/#diagnostics-and-recording"
 
 GITHUB_API = "https://api.github.com"
 

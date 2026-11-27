@@ -10,18 +10,17 @@ package reliability
 // waits in real time.
 //
 // Covered gaps:
-// 1. Retrier.DoForKey re-registration after CancelKey (new chain registers).
-// 2. Circuit-breaker AddOnStateChange + OnStateChange coexist:
+// 1. Circuit-breaker AddOnStateChange + OnStateChange coexist:
 // both listeners fire on the same state transition.
-// 3. Circuit OPEN→HALF_OPEN callback runs outside the lock
+// 2. Circuit OPEN→HALF_OPEN callback runs outside the lock
 // (refreshLocked fires via goroutine; CB methods may be called from
 // within the callback without deadlock).
-// 4. Coalescer Clear while leader executes: the leader's own Do call still
+// 3. Coalescer Clear while leader executes: the leader's own Do call still
 // returns its result (not nil/nil like cleared followers).
-// 5. Throttle Purge concurrent with burst-window waiters:
+// 4. Throttle Purge concurrent with burst-window waiters:
 // Purge unblocks address-tagged waiters while burst-window waiters
 // for a different address remain queued.
-// 6. Retrier exhausts with context already cancelled: ctx.Err is returned,
+// 5. Retrier exhausts with context already cancelled: ctx.Err is returned,
 // not the wrapped "exhausted after N attempts" error.
 
 import (
@@ -35,80 +34,9 @@ import (
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// ─── 1. Retrier.DoForKey re-registration after CancelKey ────────────────────
-
-// TestRetrierDoForKeyReregistersAfterCancelKey verifies that after CancelKey
-// removes a slot, a subsequent DoForKey on the same key can succeed — the
-// registry is clean enough to accept a new entry.
-func TestRetrierDoForKeyReregistersAfterCancelKey(t *testing.T) {
-	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		r := NewRetrier(RetryConfig{
-			MaxAttempts: 5,
-			Initial:     100 * time.Millisecond,
-			Max:         200 * time.Millisecond,
-			Multiplier:  2,
-		})
-
-		key := hmtypes.DataPointKey{
-			InterfaceID:    "HmIP-RF",
-			ChannelAddress: "ABCD1234:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      "LEVEL",
-		}
-
-		// Start a retry chain that always fails; it will park on its first backoff.
-		blocking := make(chan struct{})
-		firstDone := make(chan error, 1)
-		go func() {
-			firstDone <- r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
-				<-blocking // block until released to prevent the timer from being the cancellation mechanism
-				return errors.New("transient")
-			})
-		}()
-
-		// Wait for the goroutine to register.
-		synctest.Wait()
-		if r.ActiveRetryCount() != 1 {
-			close(blocking)
-			t.Fatalf("expected 1 active retry, got %d", r.ActiveRetryCount())
-		}
-
-		// CancelKey wakes the goroutine.
-		close(blocking)
-		r.CancelKey(key)
-
-		synctest.Wait()
-		select {
-		case err := <-firstDone:
-			if !errors.Is(err, ErrRetrySuperseded) {
-				t.Fatalf("first chain: expected ErrRetrySuperseded, got %v", err)
-			}
-		default:
-			t.Fatal("first chain did not return after CancelKey")
-		}
-
-		// After cancellation the slot is gone.
-		if got := r.ActiveRetryCount(); got != 0 {
-			t.Fatalf("ActiveRetryCount after CancelKey=%d, want 0", got)
-		}
-
-		// A new DoForKey on the same key must succeed without interference.
-		if err := r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
-			return nil // immediate success
-		}); err != nil {
-			t.Fatalf("re-registration: %v", err)
-		}
-		if got := r.ActiveRetryCount(); got != 0 {
-			t.Fatalf("ActiveRetryCount after successful re-run=%d, want 0", got)
-		}
-	})
-}
-
-// ─── 2. Circuit-breaker: OnStateChange and AddOnStateChange both fire ───────
+// ─── 1. Circuit-breaker: OnStateChange and AddOnStateChange both fire ───────
 
 // TestCircuitBothListenersFireOnTrip verifies that the primary listener
 // registered via OnStateChange and an additional listener registered via
@@ -193,7 +121,7 @@ func TestCircuitAddOnStateChangeDoesNotDisplacePrimary(t *testing.T) {
 	})
 }
 
-// ─── 3. Circuit OPEN→HALF_OPEN callback runs outside the lock ───────────────
+// ─── 2. Circuit OPEN→HALF_OPEN callback runs outside the lock ───────────────
 
 // TestCircuitHalfOpenCallbackCanCallBack verifies that the OPEN→HALF_OPEN
 // state change callback (which refreshLocked fires via a goroutine) does not
@@ -245,7 +173,7 @@ func TestCircuitHalfOpenCallbackCanCallBack(t *testing.T) {
 	})
 }
 
-// ─── 4. Coalescer Clear: every participant is released with an error ────────
+// ─── 3. Coalescer Clear: every participant is released with an error ────────
 
 // TestCoalescerClearAbandonsLeaderAndFollowers verifies what Clear does to a
 // call that is still running: the shared call's context is cancelled, and
@@ -318,7 +246,7 @@ func TestCoalescerClearAbandonsLeaderAndFollowers(t *testing.T) {
 	})
 }
 
-// ─── 5. Throttle Purge concurrent with burst-window waiters ─────────────────
+// ─── 4. Throttle Purge concurrent with burst-window waiters ─────────────────
 
 // TestThrottlePurgeWithMixedPriorityQueue checks that Purge correctly cancels
 // address-tagged waiters in the priority queue while leaving waiters with a
@@ -401,7 +329,7 @@ func TestThrottlePurgeWithMixedPriorityQueue(t *testing.T) {
 	})
 }
 
-// ─── 6. Retrier ctx already cancelled: ctx.Err not wrapped exhaustion ────────
+// ─── 5. Retrier ctx already cancelled: ctx.Err not wrapped exhaustion ────────
 
 // TestRetrierContextAlreadyCancelledReturnsCtxErr verifies that when the
 // context is cancelled before the first attempt even runs, Do returns
@@ -443,7 +371,7 @@ func TestRetrierContextAlreadyCancelledReturnsCtxErr(t *testing.T) {
 	})
 }
 
-// ─── 7. Circuit+Retry: RecoveryWaiter is called once per circuit failure ──────
+// ─── 6. Circuit+Retry: RecoveryWaiter is called once per circuit failure ──────
 
 // TestCircuitRecoveryWaiterCalledOnCircuitOpen verifies that when a Retrier
 // is configured with a CircuitRecoveryWaiter and the fn returns
@@ -485,7 +413,7 @@ func TestCircuitRecoveryWaiterCalledOnCircuitOpen(t *testing.T) {
 	})
 }
 
-// ─── 8. Throttle Close unblocks burst-window waiters and counts them ─────────
+// ─── 7. Throttle Close unblocks burst-window waiters and counts them ─────────
 
 // TestThrottleCloseSuspendsBurstWaiters verifies that Close() also wakes
 // goroutines that are blocked in waitForBurstSlot (not in the priority queue)

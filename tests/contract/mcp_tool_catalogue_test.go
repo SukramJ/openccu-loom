@@ -198,9 +198,10 @@ func (emptyCentrals) Names() []string { return nil }
 
 type emptyDevices struct{}
 
-func (emptyDevices) Devices() []*device.Device            { return nil }
-func (emptyDevices) Device(string) (*device.Device, bool) { return nil, false }
-func (emptyDevices) CentralOf(string) string              { return "" }
+func (emptyDevices) Devices() []*device.Device                             { return nil }
+func (emptyDevices) Device(context.Context, string) (*device.Device, bool) { return nil, false }
+func (emptyDevices) CentralOf(string) string                               { return "" }
+func (emptyDevices) HoldsDevice(string, string) (known, holds bool)        { return false, false }
 
 type mcpNoopWriter struct{}
 
@@ -208,7 +209,7 @@ func (mcpNoopWriter) SetValue(context.Context, string, hmenum.Parameter, any, hm
 	return nil
 }
 
-func (emptyDevices) Released(string) bool { return true }
+func (emptyDevices) Released(context.Context, string) bool { return true }
 
 type mcpNoopParamsets struct{}
 

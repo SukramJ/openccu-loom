@@ -53,10 +53,10 @@ func TestDevicesAdapterListsEveryCentral(t *testing.T) {
 	if got := a.Devices(); len(got) != 1 || got[0].Address != d.Address {
 		t.Fatalf("devices=%+v", got)
 	}
-	if got, ok := a.Device(d.Address); !ok || got != d {
+	if got, ok := a.Device(context.Background(), d.Address); !ok || got != d {
 		t.Fatalf("device=%v ok=%v", got, ok)
 	}
-	if _, ok := a.Device("MISSING"); ok {
+	if _, ok := a.Device(context.Background(), "MISSING"); ok {
 		t.Fatal("expected miss")
 	}
 }

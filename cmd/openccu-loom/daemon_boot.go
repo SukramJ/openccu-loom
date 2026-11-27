@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/secret"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
@@ -52,6 +53,10 @@ type auditOverlay struct {
 	// (ADR 0027 resilient fallback); the daemon surfaces this on /health and
 	// as a metric. Only meaningful when db != nil.
 	secretsAvailable bool
+	// cipher is the master-key cipher the boot resolved (ADR 0027); the
+	// Matter bridge derives its store's sealing key from it (ADR 0092).
+	// Unavailable when no key resolved; nil when the database did not open.
+	cipher *secret.Cipher
 
 	// overlayErr holds the failure of the boot-time DB-tier overlay, if any.
 	// A failed overlay leaves the daemon running on the config file alone —
@@ -85,6 +90,15 @@ type auditOverlay struct {
 	dbOpenErr error
 }
 
+// effectiveDataDir is the data directory the daemon works in: the
+// configured one, else ./var.
+func effectiveDataDir(cfg *config.Config) string {
+	if cfg == nil || cfg.DataDir == "" {
+		return "./var"
+	}
+	return cfg.DataDir
+}
+
 // openLoomDB opens the single shared <DataDir>/openccu-loom.db database used
 // by every persistence-backed subsystem in the composition root (audit,
 // session recorder, incident recorder, Matter bridge). Centralising the open
@@ -106,11 +120,7 @@ func openLoomDB(cfg *config.Config, logger *slog.Logger) (db *gosql.DB, err erro
 	if cfg == nil {
 		return nil, nil
 	}
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = "./var"
-	}
-	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
+	dsn := sqlitestore.FileDSN(filepath.Join(effectiveDataDir(cfg), "openccu-loom.db"))
 	openCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err = sqlitestore.Open(openCtx, dsn)
@@ -160,7 +170,18 @@ func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Confi
 		// short of exactly the writes an operator is most likely to look for.
 		// This runs as the last teardown in the LIFO chain, by which point
 		// every producer is already down and cannot refill the queue.
-		teardown = func() {
+		// The boot record's stop marker describes the previous process's
+		// stop: every boot retires it before anything reads the record
+		// (the Matter node's BootReason), and the end of a graceful
+		// shutdown that followed an operator's restart request writes the
+		// next one, so a crash or kill leaves none.
+		takeStopRecordAtBoot(db, logger) //nolint:contextcheck // runs on its own timeout like openLoomDB, independent of the lifecycle ctx
+		// A scrub an erase of the Matter node left pending runs now, before
+		// the subsystems that read the database start (matterRuntime.Erase).
+		runPendingScrub(db, logger) //nolint:contextcheck // runs on its own timeout like openLoomDB, independent of the lifecycle ctx
+
+		teardown = func() { //nolint:contextcheck // shutdown path: the lifecycle ctx is already cancelled, the boot-record write carries its own timeout
+			recordRequestedStop(db, handlers.RestartRequested(), logger)
 			stopAuditSink()
 			_ = db.Close()
 		}
@@ -192,6 +213,7 @@ func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Confi
 			cipher = &secret.Cipher{}
 		}
 		ov.secretsAvailable = cipher.Available()
+		ov.cipher = cipher
 		// The two handovers that make a stored secret a secret. Declared
 		// because their absence is the quietest failure in the daemon: the
 		// stores accept every write, the SPA reports success, and the CCU
@@ -351,7 +373,7 @@ func hydrateAuditBuffer(ctx context.Context, buf *audit.Buffer, store *sqlitesto
 		return
 	}
 	for i := range slices.Backward(entries) {
-		buf.Record(entries[i])
+		buf.Replay(entries[i])
 	}
 	if len(entries) > 0 {
 		logger.Info("audit.buffer.hydrated", slog.Int("entries", len(entries)))

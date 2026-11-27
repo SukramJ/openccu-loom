@@ -135,7 +135,7 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	reg := buildTestRegistry(t, "ccu-groups")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}
@@ -143,15 +143,15 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	// The daemon supplies no manager, so the node builds the one the
 	// assembler is handed; TestStartMatterBridgeMountsGroupsOnBridgedEndpoints
 	// pins that an endpoint's AddGroup lands in it.
-	if bundle.node.Groups() == nil {
+	if bundle.Node().Groups() == nil {
 		t.Fatal("the facade runs on no group manager")
 	}
-	if bundle.node.Aggregator() == nil {
+	if bundle.Node().Aggregator() == nil {
 		t.Fatal("the facade built no Aggregator although the daemon syncs its model into it")
 	}
 	// The session and subscription managers go-fabric-ui's sessions route
 	// reads (GET /node/sessions) are the facade's own.
-	if bundle.node.Sessions() == nil || bundle.node.Subscriptions() == nil {
+	if bundle.Node().Sessions() == nil || bundle.Node().Subscriptions() == nil {
 		t.Fatal("the facade reports no session or subscription manager")
 	}
 }
@@ -206,7 +206,7 @@ func lastLines(s string, n int) string {
 // servedUniqueID reads the UniqueID the running root endpoint serves.
 func servedUniqueID(t *testing.T, b *matterBridgeBundle) string {
 	t.Helper()
-	v, ok := b.node.Root().BasicInformation.MatterRead(basicInformationAttrUniqueID)
+	v, ok := b.Node().Root().BasicInformation.MatterRead(basicInformationAttrUniqueID)
 	if !ok {
 		t.Fatal("root BasicInformation does not serve a UniqueID")
 	}
@@ -232,7 +232,7 @@ func TestStartMatterBridgeKeepsServingWithABrokenAttestationChain(t *testing.T) 
 	reg := buildTestRegistry(t, "ccu-attest-broken")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge refused to start on an unloadable attestation chain, want it serving the paired controllers")
 	}
@@ -240,10 +240,10 @@ func TestStartMatterBridgeKeepsServingWithABrokenAttestationChain(t *testing.T) 
 	if bundle.commissioningBlocked == nil {
 		t.Fatal("bundle.commissioningBlocked is nil on an unloadable attestation chain, want the load error")
 	}
-	if bundle.node.Window().Open {
+	if bundle.Node().Window().Open {
 		t.Error("the uncommissioned node opened its own window, want commissioning blocked")
 	}
-	if err := bundle.node.OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
+	if err := bundle.Node().OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
 		t.Errorf("OpenOwnWindow err = %v, want ErrCommissioningBlocked", err)
 	}
 }
@@ -256,14 +256,14 @@ func TestStartMatterBridgeStartsWithoutAttestationConfig(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-attest-none")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil without an attestation configuration")
 	}
 	t.Cleanup(bundle.stop)
 	// The negative control of the blocked case: without a block the
 	// uncommissioned node opens its own window at Start.
-	if !bundle.node.Window().Open {
+	if !bundle.Node().Window().Open {
 		t.Error("the uncommissioned node opened no window without an attestation configuration")
 	}
 }
@@ -283,7 +283,7 @@ func TestStartMatterBridgePinsUniqueIDAcrossARename(t *testing.T) {
 
 	cfg := matterTestConfig(t, "ccu-uid-rename")
 	cfg.North.Matter.NodeLabel = "Bridge One"
-	first := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger, nil)
+	first := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, logger, nil)
 	if first == nil {
 		t.Fatal("first startMatterBridge returned nil")
 	}
@@ -294,7 +294,7 @@ func TestStartMatterBridgePinsUniqueIDAcrossARename(t *testing.T) {
 	cfg.North.Matter.NodeLabel = "Bridge Two"
 	// A daemon restart builds a fresh registry; the manifest of the first
 	// one has already declared the readiness seam.
-	second := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-uid-rename"), db, health.NewTracker(), nil, logger, nil)
+	second := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-uid-rename"), db, nil, health.NewTracker(), nil, logger, nil)
 	if second == nil {
 		t.Fatal("second startMatterBridge returned nil")
 	}
@@ -320,7 +320,7 @@ func TestStartMatterBridgeServesAUniqueIDTheDaemonPinnedBefore(t *testing.T) {
 	}
 	cfg := matterTestConfig(t, "ccu-uid-pinned")
 	reg := buildTestRegistry(t, "ccu-uid-pinned")
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}

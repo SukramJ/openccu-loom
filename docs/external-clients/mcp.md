@@ -436,7 +436,8 @@ multi-CCU deployment.
 | No `/mcp` route (404) | `north.mcp.enabled` is `false`, or the client is pointed at the wrong `path`. |
 | `401 Unauthorized` | Missing/invalid `Authorization` header. Check the API token and that you send it on every request. |
 | Write tools missing from `tools/list` | `allow_writes` is `false`, or the relevant subsystem (writer/paramsets/hubs) isn't wired. |
-| `device X belongs to central "A", not "B"` | The `central_name` you passed doesn't own that device. Fix the name (see `get_device`'s reported central). |
+| `no central named "B"` | The `central_name` you passed is not a configured CCU (see `list_centrals`). |
+| `central "B" holds no device X` | The named CCU has no device at that address. The call acts on the named CCU only and never falls back to another; fix the name or the address. |
 | `key must be MASTER or VALUES` | `read_paramset` / `write_paramset` accept those two keys only. For `LINK`, use `read_link_paramset` / `write_link_paramset`, which take the channel pair. |
 | `mcp.v1` absent from `GET /info` | Server isn't enabled, or the daemon wasn't restarted after the config change. |
 

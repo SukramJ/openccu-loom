@@ -82,7 +82,7 @@ func ValuesBatch(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibility
 		results := make([]ValuesBatchResult, 0, len(req.Queries))
 		for _, q := range req.Queries {
 			res := ValuesBatchResult{Address: q.Address, Channel: q.Channel, Parameter: q.Parameter}
-			d, ok := idx.Device(q.Address)
+			d, ok := idx.Device(r.Context(), q.Address)
 			if !ok {
 				res.Error = "device not found"
 				results = append(results, res)
@@ -107,7 +107,7 @@ func ValuesBatch(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibility
 				results = append(results, res)
 				continue
 			}
-			summary := toDataPointSummary(dp, labels, ch, serialSuffixForChannel(idx, ch))
+			summary := toDataPointSummary(dp, labels, ch, serialSuffixForChannel(r.Context(), idx, ch))
 			res.Summary = &summary
 			results = append(results, res)
 		}

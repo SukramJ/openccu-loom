@@ -18,6 +18,7 @@ how the code defends them:
 |---|---|---|
 | CCU credentials (`centrals[].password`) | Disclosure through a config dump | The `password` field is marked `cfg:"secret"`; secret-classed values are encrypted at rest and never echoed back by the config read endpoints. |
 | Config secrets at rest (OIDC client secret, MQTT password, token map, Matter DAC key, …) | Theft of the data directory | AES-256-GCM sealing with an `enc:v1:` prefix; master key from `OPENCCU_LOOM_SECRET_KEY` or an auto-generated `secret.key` (mode `0600`). See [Secrets at rest](#secrets-at-rest). |
+| Matter fabric credentials (operational keys, IPKs, group keys, resumption secrets) | Theft of the database or a backup | Sealed in the database under a key derived from the master key; a start without the key keeps the bridge off. See [Matter credentials at rest](#matter-credentials-at-rest). |
 | Session cookie | XSS / session theft | `openccu_loom_session` is `HttpOnly` + `SameSite=Lax`; `Secure` is set when the daemon is told it sits behind TLS. 12-hour server-side TTL; revoked on logout. |
 | Mutating REST/UI requests | Cross-site request forgery | Double-submit CSRF token (cookie `openccu_loom_csrf` + `X-CSRF-Token` header / `_csrf` form field), enabled by default. See [CSRF](#csrf). |
 | API tokens and passwords | Timing side-channel on comparison | `crypto/subtle.ConstantTimeCompare` for both bearer-token and Basic-password matching. |
@@ -78,11 +79,44 @@ to the SQLite store.
     daemon — that is an operator mistake worth surfacing loudly. A
     missing key only downgrades to the plaintext fallback.
 
-!!! danger "The Matter operational private key is stored unencrypted"
-    Per-fabric Matter operational credentials (NOC, ICAC, operational
-    private key, IPK) are persisted unencrypted so commissioned
-    controllers survive a daemon restart. Protecting the data directory
-    is the operator's responsibility.
+### Matter credentials at rest
+
+The Matter bridge's credentials — every fabric's operational private key,
+its IPK, group keys, CASE resumption secrets, ICD keys and door-lock
+credential data — are **sealed** in the database under a key derived from
+the same master key (HKDF-SHA256, a label of its own; ADR 0092). A copy of
+`openccu-loom.db`, its free pages and its `-wal` included, does not give
+them away without the master key. Certificates, fabric and node IDs and
+ACLs stay readable; sealing protects confidentiality, not integrity.
+
+- **Automatic.** The first start that resolves a master key seals an
+  existing store and scrubs the clear bytes out of the file. Without a
+  master key the store stays clear, as the configuration secrets do.
+- **One-way, fail-closed.** Once sealed, every start needs the key. A start
+  without it, or with another key, keeps the bridge off — the rest of the
+  daemon runs — and the `matter.bridge` health component says why. Nothing
+  is erased automatically; see [Troubleshooting](admin/troubleshooting.md#lost-secretkey).
+- **Rotation.** `openccu-loom secret rotate` (daemon stopped) moves the
+  configuration secrets and the Matter store to a new master key; see
+  [Rotating the master key](#rotating-the-master-key).
+
+### Rotating the master key
+
+Stop the daemon, then run:
+
+```sh
+openccu-loom secret rotate --config /path/to/config.yaml
+```
+
+It generates a new key (or takes `--new-key <base64>`), re-seals every
+configuration secret and the Matter store under it, scrubs the file and
+installs the key as `secret.key`. With `OPENCCU_LOOM_SECRET_KEY` it prints
+the new key instead; set the variable to it before the next start. The
+command refuses while the daemon runs (it holds a lock on the data
+directory). An interrupted rotation is finished by running the command
+again — with an environment key, pass the printed key back with
+`--new-key`. Backup archives written before the rotation open only with
+the old key: keep it as long as you keep them.
 
 ## Login throttling and session lifetime
 

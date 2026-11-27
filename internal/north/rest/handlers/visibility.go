@@ -272,7 +272,7 @@ func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility upda
 			for _, p := range removed {
 				changes = append(changes, audit.Change{Parameter: p, Before: "active", After: nil})
 			}
-			auditRec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), auditRec, audit.Entry{
 				User:    user,
 				Action:  audit.ActionUnIgnoreUpdate,
 				Note:    fmt.Sprintf("central=%s added=%d removed=%d affected_devices=%d", req.CentralName, len(added), len(removed), affected),

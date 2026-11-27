@@ -316,7 +316,7 @@ openccu-loom/
 compile time (gitignored — regenerated in CI, never committed).
 
 **`docs/` vs `notes/` is a hard boundary.** Everything under `docs/` is
-published to <https://sukramj.github.io/openccu-loom/> and needs a nav entry
+published to <https://sukramj.dev/openccu-loom/> and needs a nav entry
 in `mkdocs.yml`; nothing under `notes/` ever is. Read
 [`notes/README.md`](./notes/README.md) before adding a document — it names the
 four guards and how a published page cites a working document (an absolute

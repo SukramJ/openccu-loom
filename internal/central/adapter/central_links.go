@@ -80,7 +80,7 @@ func (c *CentralLinksDomain) CentralLinksStatus(ctx context.Context, deviceAddre
 	if c.registry == nil {
 		return hmapi.CentralLinksStatus{}, ErrNoCentralLinkBackend
 	}
-	for _, u := range c.registry.List() {
+	for _, u := range c.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -178,7 +178,7 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, chann
 	if c.registry == nil || c.writer == nil {
 		return hmapi.CentralLinksReport{}, ErrNoCentralLinkBackend
 	}
-	for _, u := range c.registry.List() {
+	for _, u := range c.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue

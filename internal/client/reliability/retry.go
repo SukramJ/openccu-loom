@@ -14,12 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// ErrRetrySuperseded is returned by [Retrier.DoForKey] when a newer retry for
-// the same [hmtypes.DataPointKey] cancels an in-flight one.
-var ErrRetrySuperseded = errors.New("retry: superseded by newer command for the same data point")
 
 // RetryConfig configures a [Retrier]. Zero values pick sensible defaults.
 type RetryConfig struct {
@@ -133,33 +128,24 @@ type CommandRetryMetrics struct {
 	// before the recovery signal arrived. The retrier does not increment
 	// it today, so it always reads zero.
 	RecoveryWaitTimeouts int64
-
-	// CancelledRetries is the number of chains cancelled by supersede
-	// or explicit CancelKey/CancelInterface calls.
-	CancelledRetries int64
 }
 
 // Retrier repeats an operation with exponential backoff and jitter. Retry
 // aborts when ctx is cancelled, when the error matches one of the
 // non-retryable sentinels, or when MaxAttempts is reached.
-//
-// Active-retry tracking: [Retrier.DoForKey] keys an in-flight retry chain by
-// [hmtypes.DataPointKey] so a subsequent write to the same data point can
-// supersede the earlier chain.
 type Retrier struct {
 	cfg RetryConfig
 
 	mu      sync.Mutex
-	active  map[hmtypes.DataPointKey]chan struct{}
 	metrics CommandRetryMetrics // parity metrics
 
 	// jitterMu guards cfg.Rand: a *rand.Rand is not safe for concurrent use,
-	// and DoForKey runs independent per-key retry chains in parallel, so two
+	// and one Retrier serves every concurrent call of its interface, so two
 	// goroutines can compute jitter at the same time. A dedicated mutex keeps
 	// this off the r.mu hot path and only wraps the pure jitter computation.
 	jitterMu sync.Mutex
 
-	// enabled is the runtime kill-switch. When false, Do and DoForKey execute
+	// enabled is the runtime kill-switch. When false, Do and DoMethod execute
 	// the operation once and return without retrying regardless of the error.
 	// Default is true.
 	enabled bool
@@ -207,7 +193,6 @@ func NewRetrier(cfg RetryConfig) *Retrier {
 	}
 	return &Retrier{
 		cfg:     cfg,
-		active:  make(map[hmtypes.DataPointKey]chan struct{}),
 		enabled: true,
 		sink:    cfg.IncidentSink,
 	}
@@ -249,7 +234,37 @@ var nonRetryable = []error{
 // actually means on the wire. The shape of the two special paths
 // follows the Python reference implementation's
 // `client/command_retry.py`.
+//
+// Do does not know which call fn makes, so it repeats a lost reply
+// ([hmerr.ErrReplyLost]) like any other transient failure. A caller that
+// sends a named RPC method uses [Retrier.DoMethod] instead.
 func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt int) error) error {
+	return r.do(ctx, nil, fn)
+}
+
+// DoMethod is [Retrier.Do] for one call of the RPC method method. It
+// repeats a lost reply only when [RepeatableAfterLostReply] allows it for
+// method: the request was sent and the CCU may already have executed it,
+// so a state-changing call is answered with the lost-reply error instead
+// of being sent again. Every other failure keeps the policy of Do — a dial
+// that never reached the CCU and a fault the CCU answered with
+// (DUTY_CYCLE, TRANSMISSION_PENDING) are retried for writes too, because
+// the CCU did not act on them.
+func (r *Retrier) DoMethod(ctx context.Context, method string, fn func(ctx context.Context, attempt int) error) error {
+	if RepeatableAfterLostReply(method) {
+		return r.do(ctx, nil, fn)
+	}
+	return r.do(ctx, isLostReply, fn)
+}
+
+// isLostReply is the extra stop condition [Retrier.DoMethod] applies to a
+// method that is not safe to repeat.
+func isLostReply(err error) bool { return errors.Is(err, hmerr.ErrReplyLost) }
+
+// do is the retry loop behind [Retrier.Do] and [Retrier.DoMethod]. stop,
+// when non-nil, ends the chain on an error the configured policy would
+// otherwise retry.
+func (r *Retrier) do(ctx context.Context, stop func(error) bool, fn func(ctx context.Context, attempt int) error) error {
 	// enabled kill-switch — single attempt when disabled.
 	// retry=false fast-path (same semantic).
 	r.mu.Lock()
@@ -274,6 +289,9 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 			return err
 		}
 		if r.isNonRetryableUnderConfig(err) {
+			return err
+		}
+		if stop != nil && stop(err) {
 			return err
 		}
 		if attempt == r.cfg.MaxAttempts {
@@ -324,10 +342,6 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 // schedule. A CCU fault with a fixed recovery window (DUTY_CYCLE,
 // TRANSMISSION_PENDING) takes precedence and bypasses the jitter; everything
 // else waits the jittered schedule delay.
-//
-// It exists once so both retry entry points ([Retrier.Do] and
-// [Retrier.DoForKey]) are on one policy —
-// [TestHmCliRetryScheduleIsTheSameForDoAndDoForKey] measures that they are.
 func (r *Retrier) waitAfter(err error, delay time.Duration) time.Duration {
 	if wait := r.specialDelayFor(err); wait > 0 {
 		return wait
@@ -502,115 +516,8 @@ func (r *Retrier) isNonRetryableUnderConfig(err error) bool {
 	return isNonRetryable(err)
 }
 
-// DoForKey is like [Do] but registers the retry chain under key so a
-// subsequent DoForKey on the same key can supersede this one. The
-// superseded retry returns [ErrRetrySuperseded] regardless of the
-// underlying transient error so the caller can distinguish "the user
-// changed their mind" from "the CCU is still struggling".
-//
-// Multiple concurrent retries for *different* keys do not interact
-// each key has its own supersede slot.
-//
-// When [Retrier.Enabled] is false, fn is called exactly once without
-// registering a supersede slot (the retry=False fast-path).
-func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn func(ctx context.Context, attempt int) error) error { //nolint:funlen // single-purpose retry state machine with many error/backoff branches
-	// enabled kill-switch.
-	r.mu.Lock()
-	enabled := r.enabled
-	r.mu.Unlock()
-	if !enabled {
-		return fn(ctx, 1)
-	}
-
-	cancel := make(chan struct{})
-	r.mu.Lock()
-	if prev, ok := r.active[key]; ok {
-		close(prev) // signal the previous chain to bail out.
-		r.metrics.CancelledRetries++
-	}
-	r.active[key] = cancel
-	r.mu.Unlock()
-
-	defer func() {
-		r.mu.Lock()
-		// Only delete our slot when we are still the registered owner;
-		// a newer DoForKey may have replaced us, in which case it owns
-		// the cleanup.
-		if r.active[key] == cancel {
-			delete(r.active, key)
-		}
-		r.mu.Unlock()
-	}()
-
-	var err error
-	delay := r.cfg.Initial
-	for attempt := 1; attempt <= r.cfg.MaxAttempts; attempt++ {
-		select {
-		case <-cancel:
-			// The cancelling caller (supersede in DoForKey / CancelKey /
-			// CancelInterface) already counted this cancellation;
-			// counting again here double-counts CancelledRetries.
-			return ErrRetrySuperseded
-		default:
-		}
-		if err = fn(ctx, attempt); err == nil {
-			if attempt > 1 {
-				r.mu.Lock()
-				r.metrics.SuccessfulRetries++
-				r.mu.Unlock()
-			}
-			return nil
-		}
-		if ctx.Err() != nil {
-			return err
-		}
-		if r.isNonRetryableUnderConfig(err) {
-			return err
-		}
-		if attempt == r.cfg.MaxAttempts {
-			r.mu.Lock()
-			r.metrics.ExhaustedRetries++
-			r.mu.Unlock()
-			if r.sink != nil {
-				r.sink.ReportRetryExhausted(err)
-			}
-			return fmt.Errorf("retry: exhausted after %d attempts: %w", attempt, err)
-		}
-		r.mu.Lock()
-		r.metrics.TotalRetries++
-		r.mu.Unlock()
-		wait := r.waitAfter(err, delay)
-		if r.cfg.RecoveryWaiter != nil && shouldWaitForRecovery(err) {
-			r.mu.Lock()
-			r.metrics.RecoveryWaits++
-			r.mu.Unlock()
-			deadline := time.Now().Add(r.recoveryDeadline(wait))
-			r.cfg.RecoveryWaiter.WaitForRecovery(ctx, deadline)
-			if ctx.Err() != nil {
-				return err
-			}
-			delay = r.advanceSchedule(err, delay)
-			continue
-		}
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return err
-		case <-cancel:
-			timer.Stop()
-			// Counted by the cancelling caller, not here (see the loop-top
-			// <-cancel case above) — avoids double-counting CancelledRetries.
-			return ErrRetrySuperseded
-		case <-timer.C:
-		}
-		delay = r.advanceSchedule(err, delay)
-	}
-	return err
-}
-
-// DoOnce executes fn exactly once, without registering a retry chain, without
-// backoff, and without supersede tracking. The call still goes through the
+// DoOnce executes fn exactly once, without a retry chain and without
+// backoff. The call still goes through the
 // ctx-cancellation check but never re-invokes fn on error.
 //
 // This is the single-shot fast-path for [WriteOptions.SkipRetry]: fire-
@@ -620,47 +527,8 @@ func (r *Retrier) DoOnce(ctx context.Context, fn func(ctx context.Context, attem
 	return fn(ctx, 1)
 }
 
-// CancelKey aborts any in-flight [DoForKey] retry chain for key with
-// [ErrRetrySuperseded]. Safe to call concurrently and idempotent missing keys
-// are a no-op.
-func (r *Retrier) CancelKey(key hmtypes.DataPointKey) {
-	r.mu.Lock()
-	if cancel, ok := r.active[key]; ok {
-		close(cancel)
-		delete(r.active, key)
-		r.metrics.CancelledRetries++
-	}
-	r.mu.Unlock()
-}
-
-// CancelInterface aborts every in-flight retry chain registered with this
-// Retrier. Returns the number of chains canceled. Used by the
-// interface-shutdown pipeline (de-init proxy, reconnect, central stop) to
-// ensure no stale retry chains keep wire resources occupied after the
-// interface is going away.
-func (r *Retrier) CancelInterface() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	canceled := 0
-	for key, cancel := range r.active {
-		close(cancel)
-		delete(r.active, key)
-		canceled++
-	}
-	r.metrics.CancelledRetries += int64(canceled)
-	return canceled
-}
-
-// ActiveRetryCount reports how many DataPointKey-scoped retry chains
-// are currently in flight. Useful for metrics and tests.
-func (r *Retrier) ActiveRetryCount() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.active)
-}
-
 // Enabled reports whether retry is globally active. When false, [Do] and
-// [DoForKey] execute the operation exactly once and return immediately
+// [DoMethod] execute the operation exactly once and return immediately
 // without backoff.
 func (r *Retrier) Enabled() bool {
 	r.mu.Lock()

@@ -136,7 +136,7 @@ func auditRecord(rec audit.Recorder, r *http.Request, action audit.Action, centr
 	if len(centrals) > 0 {
 		note = "centrals=" + joinComma(centrals)
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(r.Context(), rec, audit.Entry{
 		User:   identityFromCtx(r.Context()),
 		Action: action,
 		Note:   note,

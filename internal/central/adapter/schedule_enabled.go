@@ -95,7 +95,7 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 	// model reverting a write the CCU had already taken. Delegate instead; the
 	// backend path below stays for devices whose schedule is not modelled or
 	// whose writer the pipeline has not attached.
-	if wp := s.scheduleProfileFor(deviceAddress); wp != nil && wp.ScheduleChannelAddress() != "" &&
+	if wp := s.scheduleProfileFor(ctx, deviceAddress); wp != nil && wp.ScheduleChannelAddress() != "" &&
 		(channelKey != "" || len(wp.ScheduleEnabled()) > 0) {
 		if err := wp.SetScheduleEnabled(ctx, channelKey, enabled, hmenum.CommandPriorityHigh); err != nil {
 			return fmt.Errorf("schedules.SetScheduleEnabled: %w", err)
@@ -108,7 +108,7 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 	if err != nil {
 		return fmt.Errorf("schedules.SetScheduleEnabled: find channel: %w", err)
 	}
-	b, scheduleChannelAddr, err := s.resolveOps(deviceAddress, channelNo)
+	b, scheduleChannelAddr, err := s.resolveOps(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return fmt.Errorf("schedules.SetScheduleEnabled: resolve backend: %w", err)
 	}
@@ -155,7 +155,7 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 
 	var dev *device.Device
 	if s.registry != nil {
-		for _, u := range s.registry.List() {
+		for _, u := range s.registry.Scoped(ctx) {
 			if d, ok := u.ModelRegistry.Get(deviceAddress); ok {
 				dev = d
 				break
@@ -205,11 +205,11 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 // scheduleProfileFor returns the week-profile data point of the first
 // channel of deviceAddress that carries one, or nil when the device is
 // unknown or has no modelled schedule.
-func (s *SchedulesDomain) scheduleProfileFor(deviceAddress string) *weekprofile.ProfileDataPoint {
+func (s *SchedulesDomain) scheduleProfileFor(ctx context.Context, deviceAddress string) *weekprofile.ProfileDataPoint {
 	if s.registry == nil {
 		return nil
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -230,7 +230,7 @@ func (s *SchedulesDomain) scheduleProfileFor(deviceAddress string) *weekprofile.
 // writer of its own — so this stays an in-memory update.
 // Best-effort: silently returns when the device or channel cannot be found.
 func (s *SchedulesDomain) applyScheduleEnabledToModel(ctx context.Context, deviceAddress, channelKey string, enabled bool) {
-	if wp := s.scheduleProfileFor(deviceAddress); wp != nil {
+	if wp := s.scheduleProfileFor(ctx, deviceAddress); wp != nil {
 		_ = wp.SetScheduleEnabled(ctx, channelKey, enabled, hmenum.CommandPriorityHigh)
 	}
 }
@@ -239,12 +239,12 @@ func (s *SchedulesDomain) applyScheduleEnabledToModel(ctx context.Context, devic
 // and returns the full backends.Operations interface (which includes
 // SetValue) along with the qualified channel address.
 func (s *SchedulesDomain) resolveOps(
-	deviceAddress string, channelNo int,
+	ctx context.Context, deviceAddress string, channelNo int,
 ) (backends.Operations, string, error) {
 	if s.registry == nil || s.writer == nil {
 		return nil, "", ErrNoScheduleBackend
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue

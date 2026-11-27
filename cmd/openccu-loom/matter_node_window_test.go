@@ -35,14 +35,14 @@ func windowBundle(t *testing.T, central string, mutate func(*config.Config)) (*m
 	reg := buildTestRegistry(t, central)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}
 	t.Cleanup(bundle.stop)
 	mcfg := cfg.North.Matter.WithDefaults()
 	return bundle, fabricui.Options{
-		Node:               bundle.node,
+		Node:               bundle.Node(),
 		Events:             bundle.events,
 		ConfiguredWindow:   bundle.configuredCommissioning && !mcfg.Commissioning.EphemeralWindow,
 		AllowEmptyTopology: true,
@@ -70,7 +70,7 @@ func TestOperatorWindowReplacesTheBootWindow(t *testing.T) {
 	bundle, opts := windowBundle(t, "ccu-boot-window", func(cfg *config.Config) {
 		cfg.North.Matter.Commissioning.Passcode = 20202021
 	})
-	if w := bundle.node.Window(); !w.Open || !w.Own {
+	if w := bundle.Node().Window(); !w.Open || !w.Own {
 		t.Skipf("the node did not open its own window at Start (open=%v own=%v)", w.Open, w.Own)
 	}
 	api := newNodeAPI(t, opts)
@@ -83,14 +83,14 @@ func TestOperatorWindowReplacesTheBootWindow(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	payload, err := bundle.node.SetupPayload()
+	payload, err := bundle.Node().SetupPayload()
 	if err != nil {
 		t.Fatalf("SetupPayload: %v", err)
 	}
 	if got.DurationSeconds != 180 || got.QRCode != payload.QR || got.ManualCode != payload.Manual {
 		t.Fatalf("window = %+v, want 180 s on the node's codes (%s, %s)", got, payload.QR, payload.Manual)
 	}
-	if w := bundle.node.Window(); !w.Open || !w.Own || w.Timeout != 180*time.Second {
+	if w := bundle.Node().Window(); !w.Open || !w.Own || w.Timeout != 180*time.Second {
 		t.Fatalf("after the open: open=%v own=%v timeout=%s, want the node's own window for 180 s", w.Open, w.Own, w.Timeout)
 	}
 
@@ -127,7 +127,7 @@ func TestOperatorWindowWithoutAPasscodeRunsOnFreshCredentials(t *testing.T) {
 	if got.Passcode == 0 || got.Discriminator == 0 || got.QRCode == "" || got.ManualCode == "" {
 		t.Fatalf("window = %+v, want fresh credentials with their codes", got)
 	}
-	if !bundle.node.Window().Open {
+	if !bundle.Node().Window().Open {
 		t.Fatal("the window is not open after the operator's open")
 	}
 }

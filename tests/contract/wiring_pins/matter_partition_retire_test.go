@@ -20,7 +20,7 @@ func TestMatterPartitionRetirementIsWiredThroughTheCompositionRoot(t *testing.T)
 	t.Parallel()
 	matter := collapseSpaces(readMatterComposition(t))
 	for _, built := range []struct{ what, expr string }{
-		{"the bundle's retire", "retire: reconciler.Retire,"},
+		{"the bundle's retire", "retire: rt.Retire,"},
 		{"the wiring's retire", "wiring.retire = bundle.retire"},
 	} {
 		if !strings.Contains(matter, built.expr) {

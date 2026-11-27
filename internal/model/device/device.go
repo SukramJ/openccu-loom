@@ -89,7 +89,8 @@ type Device struct {
 	// applies pending configuration when it next wakes up, which lets a
 	// north-bound surface show a "pending wakeup" hint after a config
 	// write. Not part of the payload plane; consumed by the REST device
-	// DTO only.
+	// DTO and by the lite hub's check whether a device's value channels
+	// are spared.
 	RxMode    hmenum.RxMode
 	Updatable bool `payload:"config"`
 

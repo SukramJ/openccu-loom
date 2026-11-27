@@ -1,160 +1,253 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-// interface_client_session_hook_test.go — tests for the Item-2 parity gap:
-// Config.SessionRecorderHook is called after successful SetValue / PutParamset
-// so the CacheCoordinator session recorder can capture CCU-communication
-// traces. A nil hook must be a no-op with no overhead.
+// interface_client_session_hook_test.go — Config.SessionRecorderHook is
+// reported to from InterfaceClient.Call: once per successful logical call,
+// never for a failed one, once however many retry attempts the call took,
+// once per coalesced group, and labelled with the client's transport.
 
 package client_test
 
 import (
 	"context"
-	"sync/atomic"
+	"errors"
+	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// newHookIC constructs a minimal InterfaceClient wired with hook as
-// the SessionRecorderHook. The underlying Caller always succeeds.
-func newHookIC(t *testing.T, hook func(rpcType, method string, params, response any)) *client.InterfaceClient {
-	t.Helper()
-	return newHookICForKind(t, hook, backends.KindCCU)
+// hookRecord is one observed SessionRecorderHook invocation.
+type hookRecord struct {
+	rpcType string
+	method  string
+	// params and response are the hook's own untyped wire values.
+	params   any
+	response any
 }
 
-// newHookICForKind is newHookIC with an explicit backend flavour, so the
-// transport label the hook receives can be observed per kind.
-func newHookICForKind(
-	t *testing.T,
-	hook func(rpcType, method string, params, response any),
-	kind backends.Kind,
-) *client.InterfaceClient {
+// hookSpy collects SessionRecorderHook invocations; safe for concurrent use.
+type hookSpy struct {
+	mu      sync.Mutex
+	records []hookRecord
+}
+
+func (s *hookSpy) hook(rpcType, method string, params, response any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records = append(s.records, hookRecord{rpcType: rpcType, method: method, params: params, response: response})
+}
+
+func (s *hookSpy) snapshot() []hookRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]hookRecord(nil), s.records...)
+}
+
+// fastRetrier retries up to maxAttempts with no meaningful backoff.
+func fastRetrier(maxAttempts int) *reliability.Retrier {
+	return reliability.NewRetrier(reliability.RetryConfig{
+		MaxAttempts: maxAttempts,
+		Initial:     time.Microsecond,
+		Max:         time.Microsecond,
+		Jitter:      -1,
+	})
+}
+
+func newHookClient(t *testing.T, cfg client.Config) *client.InterfaceClient {
 	t.Helper()
-	nop := client.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) {
-		return nil, nil
-	})
-	ic, err := client.New(client.Config{
-		CentralName:         "test",
-		Interface:           hmenum.InterfaceHmIPRF,
-		Caller:              nop,
-		BackendKind:         kind,
-		SessionRecorderHook: hook,
-	})
+	cfg.CentralName = "test"
+	cfg.Interface = hmenum.InterfaceHmIPRF
+	ic, err := client.New(cfg)
 	if err != nil {
 		t.Fatalf("client.New: %v", err)
 	}
+	t.Cleanup(ic.Close)
 	return ic
 }
 
-// TestSessionRecorderHookCalledOnSetValue verifies that the hook fires
-// exactly once after a successful SetValue, carrying the correct method
-// name and channel address in the params slice.
-func TestSessionRecorderHookCalledOnSetValue(t *testing.T) {
+// TestSessionRecorderHookFiresOncePerSuccessfulCall pins the hook's payload:
+// one invocation carrying the transport label, the method, the arguments as
+// handed to Call and the decoded result.
+func TestSessionRecorderHookFiresOncePerSuccessfulCall(t *testing.T) {
 	t.Parallel()
 
-	var calls atomic.Int32
-	var lastMethod string
-	var lastParams any
+	spy := &hookSpy{}
+	reply := []any{map[string]any{"ADDRESS": "MEQ0123456"}}
+	ic := newHookClient(t, client.Config{
+		Caller: client.CallerFunc(func(context.Context, string, []any) (any, error) {
+			return reply, nil
+		}),
+		SessionRecorderHook: spy.hook,
+	})
 
-	hook := func(rpcType, method string, params, response any) {
-		calls.Add(1)
-		lastMethod = method
-		lastParams = params
-	}
-
-	ic := newHookIC(t, hook)
-	b := &orchBackend{}
-
-	if err := ic.SetValue(
-		context.Background(), b,
-		"MEQ0123456:1", hmenum.ParameterLevel, 0.5,
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
-	); err != nil {
-		t.Fatalf("SetValue: %v", err)
+	params := []any{"MEQ0123456:1", "LEVEL", 0.5}
+	if _, err := ic.Call(context.Background(), "setValue", params, hmenum.CommandPriorityHigh, ""); err != nil {
+		t.Fatalf("Call: %v", err)
 	}
 
-	if n := calls.Load(); n != 1 {
-		t.Errorf("hook called %d times, want 1", n)
+	got := spy.snapshot()
+	if len(got) != 1 {
+		t.Fatalf("hook called %d times, want 1", len(got))
 	}
-	if lastMethod != "setValue" {
-		t.Errorf("method=%q want setValue", lastMethod)
-	}
-	ps, ok := lastParams.([]any)
-	if !ok || len(ps) < 1 {
-		t.Fatalf("params shape unexpected: %T %v", lastParams, lastParams)
-	}
-	if ps[0] != "MEQ0123456:1" {
-		t.Errorf("params[0]=%v want MEQ0123456:1", ps[0])
+	want := hookRecord{rpcType: "xml-rpc", method: "setValue", params: params, response: reply}
+	if !reflect.DeepEqual(got[0], want) {
+		t.Errorf("hook recorded %+v, want %+v", got[0], want)
 	}
 }
 
-// TestSessionRecorderHookCalledOnPutParamset verifies that the hook fires
-// exactly once after a successful PutParamset with method="putParamset".
-func TestSessionRecorderHookCalledOnPutParamset(t *testing.T) {
+// TestSessionRecorderHookSkipsAFailedCall pins that a call the reliability
+// stack ends with an error is not recorded: the trace is a replayable record
+// of what the CCU answered, and a failure has no answer to replay.
+func TestSessionRecorderHookSkipsAFailedCall(t *testing.T) {
 	t.Parallel()
 
-	var calls atomic.Int32
-	var lastMethod string
+	spy := &hookSpy{}
+	ic := newHookClient(t, client.Config{
+		Caller: client.CallerFunc(func(context.Context, string, []any) (any, error) {
+			return nil, errors.New("transport down")
+		}),
+		Retrier:             fastRetrier(2),
+		SessionRecorderHook: spy.hook,
+	})
 
-	hook := func(rpcType, method string, params, response any) {
-		calls.Add(1)
-		lastMethod = method
+	if _, err := ic.Call(context.Background(), "listDevices", nil, hmenum.CommandPriorityHigh, ""); err == nil {
+		t.Fatal("Call with a failing caller returned nil error")
 	}
-
-	ic := newHookIC(t, hook)
-	b := &orchBackend{}
-
-	if err := ic.PutParamset(
-		context.Background(), b,
-		"MEQ0123456:1", "MASTER",
-		map[string]any{"CYCLIC_INFO_MSG_DIS": false},
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
-	); err != nil {
-		t.Fatalf("PutParamset: %v", err)
-	}
-
-	if n := calls.Load(); n != 1 {
-		t.Errorf("hook called %d times, want 1", n)
-	}
-	if lastMethod != "putParamset" {
-		t.Errorf("method=%q want putParamset", lastMethod)
+	if got := spy.snapshot(); len(got) != 0 {
+		t.Errorf("hook called %d times for a failed call, want 0: %+v", len(got), got)
 	}
 }
 
-// TestSessionRecorderHookNotCalledWhenNil verifies that a nil
-// SessionRecorderHook is a no-op: SetValue and PutParamset complete
-// without panic even when no hook is wired.
-func TestSessionRecorderHookNotCalledWhenNil(t *testing.T) {
+// TestSessionRecorderHookFiresOnceAfterRetries pins that the hook sits
+// outside the retry loop: a call that needed several wire attempts is one
+// logical call and one trace entry.
+func TestSessionRecorderHookFiresOnceAfterRetries(t *testing.T) {
 	t.Parallel()
 
-	ic := newHookIC(t, nil)
-	b := &orchBackend{}
+	spy := &hookSpy{}
+	var (
+		mu       sync.Mutex
+		attempts int
+	)
+	ic := newHookClient(t, client.Config{
+		Caller: client.CallerFunc(func(context.Context, string, []any) (any, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			attempts++
+			if attempts < 3 {
+				return nil, errors.New("transient")
+			}
+			return "ok", nil
+		}),
+		Retrier:             fastRetrier(5),
+		SessionRecorderHook: spy.hook,
+	})
 
-	// Neither call should panic.
-	if err := ic.SetValue(
-		context.Background(), b,
-		"MEQ0123456:1", hmenum.ParameterLevel, 1.0,
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
-	); err != nil {
-		t.Fatalf("SetValue (nil hook): %v", err)
+	if _, err := ic.Call(context.Background(), "listDevices", nil, hmenum.CommandPriorityHigh, ""); err != nil {
+		t.Fatalf("Call: %v", err)
 	}
-	if err := ic.PutParamset(
-		context.Background(), b,
-		"MEQ0123456:1", "MASTER",
-		map[string]any{"K": "V"},
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
-	); err != nil {
-		t.Fatalf("PutParamset (nil hook): %v", err)
+	mu.Lock()
+	n := attempts
+	mu.Unlock()
+	if n != 3 {
+		t.Fatalf("caller reached %d times, want 3 (two transient failures, then success)", n)
+	}
+	got := spy.snapshot()
+	if len(got) != 1 {
+		t.Fatalf("hook called %d times after %d attempts, want 1", len(got), n)
+	}
+	if got[0].response != "ok" {
+		t.Errorf("hook response = %v, want the successful attempt's result \"ok\"", got[0].response)
 	}
 }
 
-// TestSessionRecorderHookLabelsTheTransport verifies that the rpcType
-// argument names the transport the client actually speaks: CUxD is driven
-// over BIN-RPC, every other backend flavour over XML-RPC. A hard-coded
-// label would report a CUxD trace as XML-RPC.
+// TestSessionRecorderHookFiresOncePerCoalescedGroup pins that only the
+// leader of a coalesced group reports: the followers share its single wire
+// call, so recording them would invent calls the CCU never saw.
+func TestSessionRecorderHookFiresOncePerCoalescedGroup(t *testing.T) {
+	t.Parallel()
+
+	const participants = 4
+	spy := &hookSpy{}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	ic := newHookClient(t, client.Config{
+		Caller: client.CallerFunc(func(ctx context.Context, _ string, _ []any) (any, error) {
+			once.Do(func() { close(started) })
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-release:
+				return nil, nil
+			}
+		}),
+		SessionRecorderHook: spy.hook,
+	})
+
+	const key = "setValue|0|VCU1234567:1|STATE|bool|true"
+	params := []any{"VCU1234567:1", "STATE", true}
+	errs := make(chan error, participants)
+	call := func() {
+		_, err := ic.Call(context.Background(), "setValue", params, hmenum.CommandPriorityLow, key)
+		errs <- err
+	}
+	go call()
+	<-started
+	for range participants - 1 {
+		go call()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for ic.Coalescer().Stats().Total < participants {
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d of %d callers joined the coalesced group", ic.Coalescer().Stats().Total, participants)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+	for range participants {
+		if err := <-errs; err != nil {
+			t.Fatalf("coalesced Call: %v", err)
+		}
+	}
+
+	if st := ic.Coalescer().Stats(); st.Executed != 1 {
+		t.Fatalf("coalescer executed %d wire calls, want 1 — the group did not form", st.Executed)
+	}
+	if got := spy.snapshot(); len(got) != 1 {
+		t.Errorf("hook called %d times for one coalesced group of %d callers, want 1", len(got), participants)
+	}
+}
+
+// TestSessionRecorderHookNilIsANoOp pins that an unwired hook costs nothing
+// and breaks nothing.
+func TestSessionRecorderHookNilIsANoOp(t *testing.T) {
+	t.Parallel()
+
+	ic := newHookClient(t, client.Config{
+		Caller: client.CallerFunc(func(context.Context, string, []any) (any, error) {
+			return "ok", nil
+		}),
+	})
+	out, err := ic.Call(context.Background(), "listDevices", nil, hmenum.CommandPriorityHigh, "")
+	if err != nil {
+		t.Fatalf("Call (nil hook): %v", err)
+	}
+	if out != "ok" {
+		t.Errorf("Call (nil hook) = %v, want \"ok\"", out)
+	}
+}
+
+// TestSessionRecorderHookLabelsTheTransport pins that the rpcType argument
+// names the transport the client actually speaks: CUxD is driven over
+// BIN-RPC, every other backend flavour over XML-RPC. A hard-coded label
+// would report a CUxD trace as XML-RPC.
 func TestSessionRecorderHookLabelsTheTransport(t *testing.T) {
 	t.Parallel()
 
@@ -171,26 +264,23 @@ func TestSessionRecorderHookLabelsTheTransport(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			var seenTypes []string
-			hook := func(rpcType, _ string, _, _ any) {
-				seenTypes = append(seenTypes, rpcType)
+			spy := &hookSpy{}
+			ic := newHookClient(t, client.Config{
+				Caller: client.CallerFunc(func(context.Context, string, []any) (any, error) {
+					return nil, nil
+				}),
+				BackendKind:         tc.kind,
+				SessionRecorderHook: spy.hook,
+			})
+			if _, err := ic.Call(context.Background(), "listDevices", nil, hmenum.CommandPriorityHigh, ""); err != nil {
+				t.Fatalf("Call: %v", err)
 			}
-
-			ic := newHookICForKind(t, hook, tc.kind)
-			b := &orchBackend{}
-
-			_ = ic.SetValue(context.Background(), b, "A:1", hmenum.ParameterLevel, 1.0,
-				hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset)
-			_ = ic.PutParamset(context.Background(), b, "A:1", "MASTER",
-				map[string]any{}, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset)
-
-			if len(seenTypes) != 2 {
-				t.Fatalf("hook called %d times, want 2", len(seenTypes))
+			got := spy.snapshot()
+			if len(got) != 1 {
+				t.Fatalf("hook called %d times, want 1", len(got))
 			}
-			for i, rt := range seenTypes {
-				if rt != tc.want {
-					t.Errorf("seenTypes[%d]=%q want %q for %v", i, rt, tc.want, tc.kind)
-				}
+			if got[0].rpcType != tc.want {
+				t.Errorf("rpcType = %q, want %q for %v", got[0].rpcType, tc.want, tc.kind)
 			}
 		})
 	}

@@ -10,8 +10,8 @@ import (
 	"sort"
 	"sync"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
 )
 
 // discoveryBundleStore accumulates the components of one node so they can be

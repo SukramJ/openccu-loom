@@ -21,7 +21,7 @@ func TestMatterRestartForgetIsWiredThroughTheCompositionRoot(t *testing.T) {
 	t.Parallel()
 	matter := collapseSpaces(readMatterComposition(t))
 	for _, built := range []struct{ what, expr string }{
-		{"the bundle's forget", "forget: reconciler.QueueForget,"},
+		{"the bundle's forget", "forget: rt.QueueForget,"},
 		{"the wiring's forget", "wiring.forget = bundle.forget"},
 	} {
 		if !strings.Contains(matter, built.expr) {

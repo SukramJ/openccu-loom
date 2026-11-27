@@ -86,7 +86,7 @@ func TestDeviceAdminResolveDeviceFoundNilWriter(t *testing.T) {
 	reg := registerDeviceInRegistry(t, "ccu-resolve", "DEV004", "HmIP-RF")
 	a := NewDeviceAdminDomain(reg, nil)
 	// writer is nil → resolve returns ErrNoDeviceBackend
-	_, err := a.resolve("DEV004")
+	_, err := a.resolve(context.Background(), "DEV004")
 	if err == nil {
 		t.Fatal("resolve with nil writer must return error")
 	}
@@ -136,7 +136,7 @@ func TestDeviceAdminAcceptInboxDeviceHubModelNil(t *testing.T) {
 func TestDeviceAdminResolveNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := NewDeviceAdminDomain(nil, nil)
-	_, err := a.resolve("DEV001")
+	_, err := a.resolve(context.Background(), "DEV001")
 	if err == nil {
 		t.Fatal("expected error from nil registry")
 	}
@@ -252,7 +252,7 @@ func TestDevicesAdapterDevicesNilRegistry(t *testing.T) {
 func TestDevicesAdapterDeviceNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := NewDevicesAdapter(nil)
-	_, ok := a.Device("DEV001")
+	_, ok := a.Device(context.Background(), "DEV001")
 	if ok {
 		t.Error("Device() nil registry must return false")
 	}

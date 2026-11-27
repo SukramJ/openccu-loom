@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strconv"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
+	hamodel "sukramj.dev/go-hamqtt/model"
 )
 
 // CombinedEvent carries the per-channel context needed to emit one HA

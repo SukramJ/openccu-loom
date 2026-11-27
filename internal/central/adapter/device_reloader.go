@@ -44,7 +44,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 	if a.registry == nil || a.writer == nil {
 		return errors.New("device_reloader: adapter not fully wired")
 	}
-	for _, unit := range a.registry.List() {
+	for _, unit := range a.registry.Scoped(ctx) {
 		dev, ok := unit.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -103,7 +103,7 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		return errors.New("channel_reloader: empty channel address")
 	}
 	deviceAddr := hmtypes.DeviceAddress(channelAddress)
-	for _, unit := range a.registry.List() {
+	for _, unit := range a.registry.Scoped(ctx) {
 		dev, ok := unit.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue

@@ -9,6 +9,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
@@ -289,7 +290,7 @@ func TestBuildSubsetGroupsActiveOptionDetection(t *testing.T) {
 func TestLookupChannelNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := nilAdapter()
-	dev, ch := a.lookupChannel("DEV001", 1)
+	dev, ch := a.lookupChannel(context.Background(), "DEV001", 1)
 	if dev != nil || ch != nil {
 		t.Errorf("lookupChannel nil registry = (%v, %v), want both nil", dev, ch)
 	}
@@ -299,7 +300,7 @@ func TestLookupChannelNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	a := &UISchemaAdapter{registry: reg}
-	dev, ch := a.lookupChannel("NOSUCHDEV", 1)
+	dev, ch := a.lookupChannel(context.Background(), "NOSUCHDEV", 1)
 	if dev != nil || ch != nil {
 		t.Errorf("lookupChannel not found = (%v, %v), want both nil", dev, ch)
 	}

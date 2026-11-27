@@ -267,6 +267,14 @@ recovered.
 - If the key is truly gone, the encrypted values are unrecoverable.
   Re-enter the affected secrets (CCU passwords, tokens, MQTT/OIDC
   secrets) and let the daemon re-seal them under a new key.
+- The Matter bridge stays off: its credentials are sealed under the lost
+  key, and the `matter.bridge` health component reads *the master key does
+  not open the sealed Matter credential store* (or *no master key is
+  available*). Stop the daemon and run
+  `openccu-loom matter reset --yes --config /path/to/config.yaml`: it
+  erases the bridge's fabrics and credentials, keeps the device selection,
+  and the next start brings the bridge up unpaired — pair it with your
+  controllers again.
 
 !!! tip "Avoid this entirely"
     Back up `secret.key` with every database backup, or pin a stable

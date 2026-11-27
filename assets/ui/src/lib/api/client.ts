@@ -935,6 +935,31 @@ export const api = {
     if (p.until) qs.set("until", p.until);
     return request<AuditEntry[]>(`/audit?${qs.toString()}`);
   },
+  /**
+   * The change log of one device: the device and its channels, matched
+   * exactly. Open to an operator, where the whole log (`listAudit`) is
+   * admin-only, so a device page shows its own history to everyone who may
+   * change the device.
+   */
+  listDeviceAudit(
+    address: string,
+    p: { limit?: number; offset?: number; since?: string; until?: string } = {},
+  ) {
+    const qs = new URLSearchParams({ limit: String(p.limit ?? 200) });
+    if (p.offset) qs.set("offset", String(p.offset));
+    if (p.since) qs.set("since", p.since);
+    if (p.until) qs.set("until", p.until);
+    return request<AuditEntry[]>(`/devices/${encodeURIComponent(address)}/audit?${qs.toString()}`);
+  },
+  deviceAuditDownloadUrl(
+    address: string,
+    p: { limit?: number; since?: string; until?: string },
+  ): string | null {
+    const qs = new URLSearchParams({ format: "csv", limit: String(p.limit ?? 10000) });
+    if (p.since) qs.set("since", p.since);
+    if (p.until) qs.set("until", p.until);
+    return host().resourceUrl(`/devices/${encodeURIComponent(address)}/audit?${qs.toString()}`);
+  },
   auditDownloadUrl(p: {
     limit?: number;
     device?: string;

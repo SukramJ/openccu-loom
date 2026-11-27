@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // stubDeviceReplacer is an inline stub for DeviceReplacePort.
@@ -298,5 +299,29 @@ func TestPostDeviceReplace_MissingAddr_Returns400(t *testing.T) {
 	}
 	if svc.lastReplaceOldAddress != "" {
 		t.Errorf("domain layer must not be called on a missing address, got %q", svc.lastReplaceOldAddress)
+	}
+}
+
+// TestPostDeviceReplace_BodyCentralMustAgreeWithTheBinding pins that a body
+// naming another central than the route's ?central= binding is refused before
+// anything is unpaired, and that a body without one takes the binding's.
+func TestPostDeviceReplace_BodyCentralMustAgreeWithTheBinding(t *testing.T) {
+	t.Parallel()
+	bound := func(body string) (*stubDeviceReplacer, *httptest.ResponseRecorder) {
+		svc := &stubDeviceReplacer{}
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		ctx := hmreqctx.WithCentralScope(chiContext(req, map[string]string{"addr": "NEW001"}), "ccu-b")
+		w := httptest.NewRecorder()
+		PostDeviceReplace(svc, nil).ServeHTTP(w, req.WithContext(ctx))
+		return svc, w
+	}
+
+	svc, w := bound(`{"old_address":"OLD001","central":"ccu-a"}`)
+	if w.Code != http.StatusUnprocessableEntity || svc.lastReplaceOldAddress != "" {
+		t.Fatalf("conflicting central: status %d, replace called for %q; want 422 and no call", w.Code, svc.lastReplaceOldAddress)
+	}
+	svc, w = bound(`{"old_address":"OLD001"}`)
+	if w.Code != http.StatusAccepted || svc.lastReplaceCentral != "ccu-b" {
+		t.Fatalf("body without central: status %d central %q; want 202 on ccu-b", w.Code, svc.lastReplaceCentral)
 	}
 }

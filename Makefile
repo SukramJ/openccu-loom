@@ -543,7 +543,7 @@ pre-commit: ## run the pre-commit hook against the current working tree (no comm
 
 .PHONY: bump-ccudata
 bump-ccudata: ## bump the go-openccu-data data-artifact module to its latest tag
-	go get github.com/SukramJ/go-openccu-data@latest && go mod tidy
+	go get sukramj.dev/go-openccu-data@latest && go mod tidy
 	@echo "-- data artifact bumped; run 'make test' to validate --"
 
 .PHONY: sync-matter-schema

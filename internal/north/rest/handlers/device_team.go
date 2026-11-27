@@ -111,7 +111,7 @@ func SetDeviceChannelTeam(svc DeviceTeamPort, rec audit.Recorder) http.HandlerFu
 			if team == "" {
 				note = "team=reset"
 			}
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceTeamSet,
 				DeviceAddress: addr + ":" + strconv.Itoa(no),

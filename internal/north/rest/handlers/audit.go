@@ -12,8 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // AuditService is the read-side handle the SPA needs.
@@ -33,6 +36,7 @@ type AuditQuerier interface {
 // auditFilter holds parsed query-parameter values for GET /audit.
 type auditFilter struct {
 	device      string    // device address prefix (case-insensitive)
+	deviceExact string    // exactly this device and its channels (device route)
 	op          string    // action/source substring match (case-insensitive)
 	centralName string    // exact CCU match (best-effort; empty = all)
 	since       time.Time // inclusive lower bound (zero = no bound)
@@ -101,10 +105,24 @@ func parseAuditFilter(r *http.Request) (f auditFilter, errMsg string) { //nolint
 	return f, ""
 }
 
-// applyAuditFilter runs the in-memory filter pass over entries, derives each
-// entry's CCU via centralOf (best-effort, from the device address), applies the
-// central filter, and returns the filtered, limit-capped DTO slice. centralOf
-// may be nil (central derivation skipped → all entries are daemon-wide).
+// auditCentral names the CCU a row is attributed to: the central recorded
+// with it, or, for a row recorded without one (every row older than the
+// column, and a daemon-wide change), the central centralOf derives from its
+// device address. centralOf may be nil (no derivation: such a row stays
+// central-less).
+func auditCentral(e *audit.Entry, centralOf func(address string) string) string {
+	if e.Central != "" {
+		return e.Central
+	}
+	if centralOf != nil && e.DeviceAddress != "" {
+		return centralOf(e.DeviceAddress)
+	}
+	return ""
+}
+
+// applyAuditFilter runs the in-memory filter pass over entries, attributes
+// each to a CCU (see [auditCentral]), applies the central filter, and returns
+// the filtered, limit-capped DTO slice.
 func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(address string) string) []AuditEntryDTO {
 	deviceLo := strings.ToLower(f.device)
 	opLo := strings.ToLower(f.op)
@@ -113,6 +131,10 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 	for i := range entries {
 		e := &entries[i]
 		if deviceLo != "" && !strings.HasPrefix(strings.ToLower(e.DeviceAddress), deviceLo) {
+			continue
+		}
+		if f.deviceExact != "" && e.DeviceAddress != f.deviceExact &&
+			!strings.HasPrefix(e.DeviceAddress, f.deviceExact+":") {
 			continue
 		}
 		if opLo != "" && !strings.Contains(strings.ToLower(string(e.Action)), opLo) {
@@ -124,10 +146,7 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 		if !f.until.IsZero() && !e.Timestamp.Before(f.until) {
 			continue
 		}
-		centralName := ""
-		if centralOf != nil && e.DeviceAddress != "" {
-			centralName = centralOf(e.DeviceAddress)
-		}
+		centralName := auditCentral(e, centralOf)
 		if f.centralName != "" && centralName != f.centralName {
 			continue
 		}
@@ -150,9 +169,35 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 //	?central=<name>           only entries belonging to the named CCU
 //	?limit=<int>              max results, default 1000, max 10000
 //
-// idx is optional: when non-nil, each entry's CCU is derived best-effort from
-// its device address (idx.CentralOf); daemon-wide entries stay central-less.
+// An entry belongs to the CCU recorded with it. A row recorded without one
+// is attributed best-effort from its device address when idx is non-nil
+// (idx.CentralOf); daemon-wide entries stay central-less.
 func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
+	return listAudit(svc, idx, nil)
+}
+
+// ListDeviceAudit serves `GET /devices/{addr}/audit`: the change log of one
+// device — the device and its channels, matched exactly — for every
+// principal that may change the device (operator and up). The whole log at
+// `GET /audit` stays admin-only because it exposes every device, subject and
+// operator action across every central; one device's history exposes only
+// what an operator of that device already acts on.
+//
+// It takes the query parameters of [ListAudit] except `device` and
+// `central`: the path names the device, and `?central=` is the route's
+// binding ([middleware.DeviceCentral]). A bound read lists the rows recorded
+// on that central and the rows recorded without a central (older than the
+// column), which it attributes to the bound central as before; rows
+// recorded on another CCU that repeats the address are left out.
+func ListDeviceAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
+	return listAudit(svc, idx, func(r *http.Request, f *auditFilter) {
+		f.device = ""
+		f.centralName, _ = hmreqctx.CentralScope(r.Context())
+		f.deviceExact = chi.URLParam(r, "addr")
+	})
+}
+
+func listAudit(svc AuditService, idx DeviceIndex, scope func(*http.Request, *auditFilter)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -165,9 +210,24 @@ func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid query parameter", errMsg))
 			return
 		}
+		if scope != nil {
+			scope(r, &f)
+			if f.deviceExact == "" {
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Missing address", "addr path parameter is required"))
+				return
+			}
+		}
 		var centralOf func(string) string
 		if idx != nil {
 			centralOf = idx.CentralOf
+		}
+		if bound, ok := hmreqctx.CentralScope(r.Context()); ok && scope != nil {
+			// A row recorded without a central has only its address; on a
+			// bound device read the route's central is the one the caller
+			// asked about, where the address lookup would name the first CCU
+			// holding it. A row that recorded its central keeps it.
+			centralOf = func(string) string { return bound }
 		}
 
 		var out []AuditEntryDTO
@@ -176,11 +236,12 @@ func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 			// offset; the in-memory pass then layers the op + central
 			// filters (not first-class SQL columns) without re-capping.
 			entries, err := querier.Query(r.Context(), audit.Query{
-				Device: f.device,
-				Since:  f.since,
-				Until:  f.until,
-				Limit:  f.limit,
-				Offset: f.offset,
+				Device:      f.device,
+				DeviceExact: f.deviceExact,
+				Since:       f.since,
+				Until:       f.until,
+				Limit:       f.limit,
+				Offset:      f.offset,
 			})
 			if err != nil {
 				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Audit query failed", err)
@@ -212,10 +273,7 @@ func applyAuditPostFilter(entries []audit.Entry, f auditFilter, centralOf func(a
 		if opLo != "" && !strings.Contains(strings.ToLower(string(e.Action)), opLo) {
 			continue
 		}
-		centralName := ""
-		if centralOf != nil && e.DeviceAddress != "" {
-			centralName = centralOf(e.DeviceAddress)
-		}
+		centralName := auditCentral(e, centralOf)
 		if f.centralName != "" && centralName != f.centralName {
 			continue
 		}
@@ -234,6 +292,9 @@ func writeAuditCSV(w http.ResponseWriter, entries []AuditEntryDTO) {
 	_ = cw.Write([]string{
 		"timestamp", "user", "action", "central", "device_address",
 		"channel_no", "paramset", "peer", "parameter", "note", "changes",
+		// Appended rather than placed beside "user" so a spreadsheet or
+		// script that reads the export by column position keeps working.
+		"on_behalf_of",
 	})
 	for i := range entries {
 		e := &entries[i]
@@ -251,6 +312,7 @@ func writeAuditCSV(w http.ResponseWriter, entries []AuditEntryDTO) {
 			e.Timestamp.UTC().Format(time.RFC3339), csvCell(e.User), string(e.Action),
 			csvCell(e.Central), csvCell(e.DeviceAddress), channel, csvCell(e.Paramset), csvCell(e.Peer),
 			csvCell(e.Parameter), csvCell(e.Note), csvCell(changes),
+			csvCell(e.OnBehalfOf),
 		})
 	}
 	cw.Flush()

@@ -168,7 +168,7 @@ type DeviceAdmin interface {
 	// report a device-level DUTY_CYCLE data point instead), or the poll
 	// has not populated the cache yet. It is a cache read — no CCU round
 	// trip — so the firmware-update gate can consult it inline.
-	InterfaceDutyCycle(address string) (int, bool)
+	InterfaceDutyCycle(ctx context.Context, address string) (int, bool)
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
 	// SetChannelRooms replaces a single channel's room assignments. The

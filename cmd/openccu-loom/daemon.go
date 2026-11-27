@@ -241,7 +241,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// Audit every program run the daemon triggers, so a program reported as
 	// running twice can be attributed to the daemon or ruled out.
-	programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger)
+	programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger) //nolint:contextcheck // a bus subscriber records with no request: a program run carries no REST actor
 	defer programAuditTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
@@ -254,7 +254,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The MQTT maintenance topics' daemon-side halves (ADR 0083): set before
 	// the shared infrastructure starts the MQTT supervisor, which hands them
 	// to every bridge it builds.
-	deps.SetMQTTMaintenance(newMQTTMaintenanceHooks(levels, auditRec))
+	deps.SetMQTTMaintenance(newMQTTMaintenanceHooks(levels, auditRec)) //nolint:contextcheck // an MQTT maintenance command is no REST request and carries no actor
 	warnNonConformantTopicBase(cfg, logger)
 	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps, channelFlagsOverlay)
 	defer sharedInfraTeardown()
@@ -291,8 +291,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// (`released_only:true`). Without this the option is accepted and
 	// filters nothing — the hub falls back to "everything is released",
 	// which is the safe direction: a missing checker must not blank a
-	// subscriber's stream.
-	wsHub.SetReleaseChecker(reg.Released)
+	// subscriber's stream. The hub asks by address alone and the daemon
+	// context is bound to no central, so the answer is the unbound one: a
+	// hold on any central holding the address wins.
+	wsHub.SetReleaseChecker(func(deviceAddress string) bool {
+		return reg.Released(ctx, deviceAddress)
+	})
 	wsHandler := si.wsHandler
 	valueWriter := si.valueWriter
 	mqttCollector := si.mqttCollector
@@ -785,7 +789,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// daemon — the bridge is best-effort until GA.
 	// auditDB (ov.db) is threaded through rather than opened again — see
 	// openLoomDB in daemon_boot.go.
-	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, auditDB, healthTracker, parameterLabels, catalogs, auditRec, logger, wsHub, schedulesDomain)
+	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, auditDB, ov.cipher, healthTracker, parameterLabels, catalogs, auditRec, logger, wsHub, schedulesDomain)
 	// Hand the per-central Matter wiring hook to the live-adopt
 	// orchestrator so a runtime-added central latches readiness, triggers
 	// a reassemble, and forwards reachability exactly like a boot-time

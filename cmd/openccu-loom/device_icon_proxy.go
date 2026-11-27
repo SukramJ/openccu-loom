@@ -40,8 +40,9 @@ var safeIconName = regexp.MustCompile(`^[\w\-./]+\.png$`)
 // only a filename the snapshot does not carry is proxied from the CCU
 // that owns the device, caching the bytes (icons are effectively static).
 type deviceIconProxy struct {
-	// locate maps a device address to its icon filename and central name.
-	locate   func(address string) (filename, centralName string, ok bool)
+	// locate maps a device address to its icon filename and central name,
+	// consulting only the central a bound request names.
+	locate   func(ctx context.Context, address string) (filename, centralName string, ok bool)
 	resolve  adapter.CentralConfigResolver
 	secure   *http.Client
 	insecure *http.Client
@@ -72,11 +73,14 @@ type cachedIcon struct {
 // central-config source (see [adapter.CentralConfigResolver]) so a
 // central adopted at runtime is served without a daemon restart.
 func newDeviceIconProxy(reg *central.Registry, resolve adapter.CentralConfigResolver) *deviceIconProxy {
-	locate := func(address string) (string, string, bool) {
+	locate := func(ctx context.Context, address string) (string, string, bool) {
 		if reg == nil {
 			return "", "", false
 		}
-		for _, unit := range reg.List() {
+		// Scoped, not List: the virtual-remote roots and INT000* devices
+		// repeat on every CCU, and a request bound to one central must get
+		// that central's artwork and fetch it from that CCU.
+		for _, unit := range reg.Scoped(ctx) {
 			if unit == nil || unit.ModelRegistry == nil {
 				continue
 			}
@@ -92,7 +96,7 @@ func newDeviceIconProxy(reg *central.Registry, resolve adapter.CentralConfigReso
 // newDeviceIconProxyWith is the testable constructor — it takes the
 // address→(filename, central) resolver directly instead of a registry.
 func newDeviceIconProxyWith(
-	locate func(address string) (filename, centralName string, ok bool),
+	locate func(ctx context.Context, address string) (filename, centralName string, ok bool),
 	resolve adapter.CentralConfigResolver,
 ) *deviceIconProxy {
 	return &deviceIconProxy{
@@ -136,7 +140,7 @@ func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte
 	if p == nil || p.locate == nil || address == "" {
 		return nil, "", false
 	}
-	filename, centralName, known := p.locate(address)
+	filename, centralName, known := p.locate(ctx, address)
 	if !known {
 		return nil, "", false
 	}
@@ -150,7 +154,10 @@ func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte
 		return data, "image/png", true
 	}
 	p.mu.RLock()
-	c, cached := p.cache[address]
+	// Keyed by central as well: an address that repeats across CCUs has one
+	// artwork per CCU, and a bound request must not get another CCU's entry.
+	key := centralName + "|" + address
+	c, cached := p.cache[key]
 	p.mu.RUnlock()
 	if cached && (c.expires.IsZero() || time.Now().Before(c.expires)) {
 		return c.data, c.contentType, len(c.data) > 0
@@ -166,7 +173,7 @@ func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte
 		entry.expires = time.Now().Add(ttl)
 	}
 	p.mu.Lock()
-	p.cache[address] = entry
+	p.cache[key] = entry
 	p.mu.Unlock()
 	return data, contentType, len(data) > 0
 }

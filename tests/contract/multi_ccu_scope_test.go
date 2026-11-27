@@ -565,6 +565,10 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"AlarmCodeStore:Upsert":                    "reason: alarm codes are daemon-level user/hardware identities keyed by code id; zones may span centrals",
 		"AlarmCodeStore:Get":                       "reason: alarm codes are daemon-level user/hardware identities keyed by code id; zones may span centrals",
 		"AlarmCodeStore:Delete":                    "reason: alarm codes are daemon-level user/hardware identities keyed by code id; zones may span centrals",
+		// boot_record is one row about the daemon process itself — how its
+		// last stop ended and which version its Matter node last started
+		// with; no central has a share in it.
+		":RecordStopRequested": "reason: boot_record is a single daemon-wide row about the process's own stop; not per-CCU by design",
 	}
 
 	dir := filepath.Join(repoRoot(t), "internal", "store", "sqlite")
@@ -658,7 +662,9 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 	allowedWithoutName := map[string]string{
 		"Names": "returns all names — correct to not take a name param",
 		"List":  "returns all centrals — aggregation, not lookup",
-		"Len":   "counts the registry — no single central involved",
+		"Scoped": "names its central through the request context (hmreqctx.CentralScope), which only the " +
+			"device-route guard sets after checking the name; unscoped it is List",
+		"Len": "counts the registry — no single central involved",
 		"ConfiguredInterfaceIDs": "aggregates every central's configured interfaces into one set — no single central involved; " +
 			"each wire interface id carries its central's name",
 		"StartAll":           "fans out to all centrals",

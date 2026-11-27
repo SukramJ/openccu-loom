@@ -298,7 +298,7 @@ func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms
 	if partial {
 		parts = append(parts, "(partial: the rest of the patch failed)")
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(r.Context(), rec, audit.Entry{
 		User:          identityFromCtx(r.Context()),
 		Action:        audit.ActionDeviceAssignment,
 		DeviceAddress: address,
@@ -359,7 +359,7 @@ func UpdateDeviceFirmware(admin DeviceAdmin) http.HandlerFunc {
 			return
 		}
 		resp := FirmwareUpdateResponse{Status: "scheduled"}
-		if dc, ok := admin.InterfaceDutyCycle(addr); ok && coordinators.FirmwareUpdateRisky(dc) {
+		if dc, ok := admin.InterfaceDutyCycle(r.Context(), addr); ok && coordinators.FirmwareUpdateRisky(dc) {
 			resp.DutyCycleWarning = &dc
 		}
 		JSON(w, http.StatusAccepted, resp)

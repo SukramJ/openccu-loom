@@ -12,7 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
 
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 )

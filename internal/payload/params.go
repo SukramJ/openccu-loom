@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	hapayload "github.com/SukramJ/go-hamqtt/payload"
+	hapayload "sukramj.dev/go-hamqtt/payload"
 )
 
 // ErrServiceMissingParam is returned by the Param* decoders when a

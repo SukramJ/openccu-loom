@@ -829,7 +829,7 @@ func TestSchedulesDomainDetectScheduleDomainNotFound(t *testing.T) {
 	reg := central.NewRegistry()
 	s := NewSchedulesDomain(reg, nil)
 	// Device not found → returns ""
-	got := s.detectScheduleDomain("NOSUCHDEV", 1)
+	got := s.detectScheduleDomain(context.Background(), "NOSUCHDEV", 1)
 	if got != "" {
 		t.Errorf("detectScheduleDomain not found = %q, want empty", got)
 	}
@@ -842,7 +842,7 @@ func TestSchedulesDomainDetectScheduleDomainNotFound(t *testing.T) {
 func TestParamsetsDomainResolveChannelNilRegistry(t *testing.T) {
 	t.Parallel()
 	p := NewParamsetsDomain(nil, nil)
-	ch := p.resolveChannel("DEV:1")
+	ch := p.resolveChannel(context.Background(), "DEV:1")
 	if ch != nil {
 		t.Errorf("resolveChannel nil registry = %v, want nil", ch)
 	}

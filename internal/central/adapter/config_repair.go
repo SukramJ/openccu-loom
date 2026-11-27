@@ -69,7 +69,7 @@ var _ interfaces.DeviceConfigRepairService = (*ConfigRepairDomain)(nil)
 func (c *ConfigRepairDomain) RepairDeviceConfig(
 	ctx context.Context, deviceAddress string, channels []string, dryRun bool,
 ) ([]interfaces.ConfigRepairOutcome, error) {
-	u, dev := c.findDevice(deviceAddress)
+	u, dev := c.findDevice(ctx, deviceAddress)
 	if dev == nil {
 		return nil, fmt.Errorf("%w: device %s is not modelled on any central", hmerr.ErrDescriptionNotFound, deviceAddress)
 	}
@@ -86,11 +86,11 @@ func (c *ConfigRepairDomain) RepairDeviceConfig(
 
 // findDevice returns the first central, in name-sorted registry order, whose
 // model holds the device — the resolution every unscoped paramset path uses.
-func (c *ConfigRepairDomain) findDevice(deviceAddress string) (*central.Unit, *device.Device) {
+func (c *ConfigRepairDomain) findDevice(ctx context.Context, deviceAddress string) (*central.Unit, *device.Device) {
 	if c.registry == nil {
 		return nil, nil
 	}
-	for _, u := range c.registry.List() {
+	for _, u := range c.registry.Scoped(ctx) {
 		if dev, ok := u.ModelRegistry.Get(deviceAddress); ok && dev != nil {
 			return u, dev
 		}
@@ -155,7 +155,7 @@ func (c *ConfigRepairDomain) repairChannel(
 	if !belongsToDevice(dev, address) {
 		return failed(fmt.Sprintf("channel %s does not belong to device %s", address, dev.Address))
 	}
-	b, err := c.paramsets.resolveOn(centralName, address)
+	b, err := c.paramsets.resolveOn(ctx, centralName, address)
 	if err != nil {
 		return failed(err.Error())
 	}
@@ -214,25 +214,26 @@ func (c *ConfigRepairDomain) repairChannel(
 	}
 	readBack, readErr := b.GetParamset(ctx, address, hmenum.ParamsetKeyMaster)
 	if readErr == nil {
-		c.paramsets.applyStoredValuesOn(centralName, address, hmenum.ParamsetKeyMaster, readBack)
+		c.paramsets.applyStoredValuesOn(ctx, centralName, address, hmenum.ParamsetKeyMaster, readBack)
 	}
 	outcome.Result = paramsetWriteReport(plan.write, descs, readBack, readErr)
 	outcome.Status = interfaces.RepairRepaired
 	if hasForeign {
 		outcome.Status = interfaces.RepairForeignParameters
 	}
-	c.recordRepair(address, stored, plan.write)
+	c.recordRepair(ctx, centralName, address, stored, plan.write)
 	return outcome
 }
 
 // recordRepair appends one change-log row for a written channel.
-func (c *ConfigRepairDomain) recordRepair(address string, before, after map[string]any) {
+func (c *ConfigRepairDomain) recordRepair(ctx context.Context, centralName, address string, before, after map[string]any) {
 	if c.audit == nil {
 		return
 	}
 	_, channelNo, _ := hmtypes.SplitChannelAddress(address)
-	c.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, c.audit, audit.Entry{
 		Action:        audit.ActionParamsetWrite,
+		Central:       centralName,
 		DeviceAddress: deviceAddressOf(address),
 		ChannelNo:     channelNo,
 		Paramset:      string(hmenum.ParamsetKeyMaster),

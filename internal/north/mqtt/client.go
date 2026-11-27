@@ -6,11 +6,11 @@ package mqtt
 import (
 	"crypto/tls"
 
-	gomqtt "github.com/SukramJ/go-mqtt"
+	gomqtt "sukramj.dev/go-mqtt"
 )
 
 // The MQTT transport — wire codec, TCP/TLS adapter, and the reconnecting
-// lifecycle — lives in the standalone github.com/SukramJ/go-mqtt module,
+// lifecycle — lives in the standalone sukramj.dev/go-mqtt module,
 // shared with the go-*2mqtt bridges. These aliases re-export its surface
 // under this package so the loom-specific side (bridge.go, the command
 // subscriber, HA Discovery, entity descriptions, topic building, hub

@@ -53,3 +53,46 @@ func TestE2ENodeRoutesAnswerUnderThePublicURLName(t *testing.T) {
 		t.Errorf("Host rebound.example.test (configured nowhere) = %d %s, want 403 host_not_allowed", code, body)
 	}
 }
+
+// TestE2ENodeRoutesAdmitATokenBehindAForwardingProxy boots the built daemon
+// and sends the request the Home Assistant remote add-on sends: its API token
+// as Bearer and the name Home Assistant is reached under in X-Forwarded-Host,
+// a name no loom setting lists. The node routes must answer it — the SPA
+// reads a refused GET /node/status as a bridge that is switched off and drops
+// Matter from its navigation. The same request with Basic credentials, which
+// a browser can cache and attach on its own, stays refused, so the Host
+// check still stands against DNS rebinding.
+//
+// The harness enables one credential kind per daemon, so each direction
+// boots its own.
+func TestE2ENodeRoutesAdmitATokenBehindAForwardingProxy(t *testing.T) {
+	t.Parallel()
+	const publicURL = "http://loom.example.test:8080"
+	tokenDaemon := harness.Start(t, harness.Options{AuthMode: harness.AuthToken, PublicURL: publicURL})
+	basicDaemon := harness.Start(t, harness.Options{AuthMode: harness.AuthBasic, PublicURL: publicURL})
+
+	status := func(h *harness.Harness, authz string) (int, string) {
+		t.Helper()
+		req, err := h.REST().NewRequest(http.MethodGet, "/api/v1/node/status", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("X-Forwarded-Host", "homeassistant.example.test:8123")
+		req.Header.Set("Authorization", authz)
+		resp, err := h.REST().Do(req)
+		if err != nil {
+			t.Fatalf("GET /api/v1/node/status: %v", err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+
+	if code, body := status(tokenDaemon, "Bearer "+harness.AdminToken); code != http.StatusOK {
+		t.Errorf("Bearer behind a forwarding proxy = %d %s, want 200", code, body)
+	}
+	basic := "Basic " + harness.BasicAuthHeader(harness.AdminUser, harness.AdminPass)
+	if code, body := status(basicDaemon, basic); code != http.StatusForbidden || !strings.Contains(body, "host_not_allowed") {
+		t.Errorf("Basic behind a forwarding proxy = %d %s, want 403 host_not_allowed", code, body)
+	}
+}

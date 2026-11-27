@@ -9,8 +9,8 @@ import (
 	"maps"
 	"testing"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hacatalog "sukramj.dev/go-ha-catalog"
+	hamodel "sukramj.dev/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"

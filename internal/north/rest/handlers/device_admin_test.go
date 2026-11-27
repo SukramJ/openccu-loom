@@ -86,7 +86,7 @@ func (s *stubDeviceAdmin) UpdateFirmware(_ context.Context, addr string) error {
 	return s.updateFWErr
 }
 
-func (s *stubDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool) {
+func (s *stubDeviceAdmin) InterfaceDutyCycle(_ context.Context, _ string) (int, bool) {
 	return s.dutyCycle, s.dutyCycleKnown
 }
 

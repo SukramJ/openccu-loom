@@ -86,7 +86,7 @@ type getReceiverProposalOut struct {
 }
 
 type assignRFInterfaceIn struct {
-	CentralName      string `json:"central_name,omitempty" jsonschema:"the CCU that owns the device; when given it must match the device's central"`
+	CentralName      string `json:"central_name,omitempty" jsonschema:"the CCU that holds the device; when given, the call acts on that CCU's device and fails if it holds none"`
 	Address          string `json:"address" jsonschema:"the BidCos-RF device address"`
 	InterfaceAddress string `json:"interface_address" jsonschema:"serial of the RF gateway to assign"`
 	Roaming          bool   `json:"roaming,omitempty" jsonschema:"allow the daemon to re-assign the device by signal strength"`
@@ -198,14 +198,15 @@ func registerAssignRFInterface(s *mcpsdk.Server, d Deps) {
 		if address == "" || gateway == "" {
 			return nil, assignRFInterfaceOut{}, errors.New("address and interface_address are required")
 		}
-		if err := requireDeviceOwner(d, strings.TrimSpace(in.CentralName), address); err != nil {
+		ctx, err := bindDeviceCentral(ctx, d, strings.TrimSpace(in.CentralName), address)
+		if err != nil {
 			return nil, assignRFInterfaceOut{}, err
 		}
 		if err := d.RFInterface.AssignRFInterface(ctx, address, gateway, in.Roaming); err != nil {
 			return nil, assignRFInterfaceOut{}, fmt.Errorf("assign rf interface: %w", err)
 		}
 		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
+			audit.RecordFrom(ctx, d.Audit, audit.Entry{
 				Timestamp:     time.Now().UTC(),
 				User:          callerSubject(ctx),
 				Action:        audit.ActionDeviceRFInterfaceAssign,

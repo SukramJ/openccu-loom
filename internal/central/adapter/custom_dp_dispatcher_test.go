@@ -2166,7 +2166,7 @@ func TestRecordAudit_OmitsRawValues(t *testing.T) {
 	d := NewCustomDPDispatcher(central.NewRegistry()).SetAuditRecorder(spy)
 
 	const secretPIN = "8765"
-	d.recordAudit("00021BE9957782", 1, "PIN", "set_pin", "rest", map[string]any{
+	d.recordAudit(context.Background(), "ccu1", "00021BE9957782", 1, "PIN", "set_pin", "rest", map[string]any{
 		"PIN":   secretPIN,
 		"STATE": true,
 	})
@@ -2198,7 +2198,7 @@ func TestRecordAudit_NoParams(t *testing.T) {
 	spy := &spyAudit{}
 	d := NewCustomDPDispatcher(central.NewRegistry()).SetAuditRecorder(spy)
 
-	d.recordAudit("ADDR", 2, "STATE", "turn_on", "ws", nil)
+	d.recordAudit(context.Background(), "ccu1", "ADDR", 2, "STATE", "turn_on", "ws", nil)
 
 	if spy.count() != 1 {
 		t.Fatalf("expected 1 audit entry, got %d", spy.count())

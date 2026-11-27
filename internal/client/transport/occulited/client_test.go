@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/godevccu/pkg/litefake"
+	"sukramj.dev/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"

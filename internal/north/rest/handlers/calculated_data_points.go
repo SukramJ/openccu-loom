@@ -196,7 +196,7 @@ func lookupCalculatedDPByChannelAndName(d *device.Device, channelNo int, name st
 func ListCalculatedDataPoints(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
-		d, ok := idx.Device(addr)
+		d, ok := idx.Device(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
@@ -219,7 +219,7 @@ func ListCalculatedDataPoints(idx DeviceIndex, labels ParameterLabeler) http.Han
 		}
 		_ = chNo
 		dps := ch.CalculatedDataPoints()
-		serial := serialSuffixForChannel(idx, ch)
+		serial := serialSuffixForChannel(r.Context(), idx, ch)
 		out := make([]CalculatedDPSummary, 0, len(dps))
 		for _, dp := range dps {
 			out = append(out, toCalculatedDPSummary(dp, ch, labels, serial))
@@ -234,7 +234,7 @@ func ListCalculatedDataPoints(idx DeviceIndex, labels ParameterLabeler) http.Han
 func GetCalculatedDataPoint(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
-		d, ok := idx.Device(addr)
+		d, ok := idx.Device(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
@@ -254,7 +254,7 @@ func GetCalculatedDataPoint(idx DeviceIndex, labels ParameterLabeler) http.Handl
 				problem.New(problem.TypeNotFound, r, "Calculated data point not found", name))
 			return
 		}
-		summary := toCalculatedDPSummary(dp, ch, labels, serialSuffixForChannel(idx, ch))
+		summary := toCalculatedDPSummary(dp, ch, labels, serialSuffixForChannel(r.Context(), idx, ch))
 		detail := CalculatedDPDetail{
 			CalculatedDPSummary: summary,
 			DependsOn:           dependsOn(dp),

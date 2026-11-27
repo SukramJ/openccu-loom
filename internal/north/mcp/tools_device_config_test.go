@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -38,11 +39,14 @@ func (f *fakeConfigRepairTool) RepairDeviceConfig(
 // err when set.
 type fakeConfigCache struct {
 	cleared []string
+	scopes  []string // the central each call's context was bound to
 	err     error
 }
 
-func (f *fakeConfigCache) ClearConfigCache(_ context.Context, address string) error {
+func (f *fakeConfigCache) ClearConfigCache(ctx context.Context, address string) error {
 	f.cleared = append(f.cleared, address)
+	scope, _ := hmreqctx.CentralScope(ctx)
+	f.scopes = append(f.scopes, scope)
 	return f.err
 }
 

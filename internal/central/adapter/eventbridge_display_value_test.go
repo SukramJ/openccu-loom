@@ -35,7 +35,7 @@ type crossPlaneDeviceIndex struct {
 
 func (s crossPlaneDeviceIndex) Devices() []*device.Device { return []*device.Device{s.d} }
 
-func (s crossPlaneDeviceIndex) Device(address string) (*device.Device, bool) {
+func (s crossPlaneDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	if address == s.d.Address {
 		return s.d, true
 	}
@@ -77,7 +77,7 @@ func registryWithLevelDevice(t *testing.T) (*central.Registry, *central.Unit, *d
 	return reg, u, d
 }
 
-func (s crossPlaneDeviceIndex) Released(string) bool { return true }
+func (s crossPlaneDeviceIndex) Released(context.Context, string) bool { return true }
 
 // TestEventBridgeValueChanged_LevelDisplayValue is the WS-plane pin for
 // the DisplayValue projection plus the MQTT double-scaling tripwire in

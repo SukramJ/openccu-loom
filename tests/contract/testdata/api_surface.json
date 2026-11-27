@@ -1,5 +1,5 @@
 {
- "api_version": "18.0.0",
+ "api_version": "19.1.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -71,6 +71,7 @@
   "GET /config/sections/{section}": "getConfigSection",
   "GET /devices": "listDevices",
   "GET /devices/{addr}": "getDevice",
+  "GET /devices/{addr}/audit": "listDeviceAudit",
   "GET /devices/{addr}/cdps": "listCustomDataPoints",
   "GET /devices/{addr}/cdps/{name}": "getCustomDataPoint",
   "GET /devices/{addr}/central-links": "getCentralLinksStatus",
@@ -686,12 +687,14 @@
    "device_address:string",
    "id:integer",
    "note:string",
+   "on_behalf_of:string",
    "parameter:string",
    "paramset:string",
    "peer:string",
    "timestamp:string",
    "user:string"
   ],
+  "AuditExportFormat": [],
   "BackupEntry": [
    "bytes:integer",
    "central:string",
@@ -1232,6 +1235,7 @@
    "model_label:string",
    "name:string",
    "product_group:string",
+   "released:boolean",
    "rooms:array\u003cstring\u003e",
    "rx_mode:$ref:RxMode",
    "sub_model:string",
@@ -1295,8 +1299,13 @@
   "EditorComponentManifest": [
    "hash:string",
    "module_url:string",
-   "routes:array\u003cstring\u003e"
+   "routes:array\u003c$ref:EditorRoute\u003e"
   ],
+  "EditorRoute": [
+   "method:$ref:EditorRouteMethod",
+   "prefix:string"
+  ],
+  "EditorRouteMethod": [],
   "Endpoint": [
    "clusters:array\u003c$ref:Cluster\u003e",
    "device_type:integer",

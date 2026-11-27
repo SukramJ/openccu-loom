@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -258,7 +259,19 @@ type wireError struct {
 // HTTP auth status — and the client transparently re-logs in and retries
 // the call once. A 400 that persists after a fresh login is a genuine
 // privilege mismatch and is surfaced as [hmerr.ErrPermissionDenied].
-func (c *Client) Call(ctx context.Context, method string, params map[string]any, out any) error {
+//
+// A reply lost after the request went out ([hmerr.ErrReplyLost]) — the
+// CCU's web server closing a keep-alive connection as the request is
+// written — is sent once more when the call is safe to repeat: method is
+// a read ([reliability.RepeatableAfterLostReply]) or the caller passed
+// [RepeatAfterLostReply]. Everything else, Session.* included, is sent
+// once: the CCU may already have executed it. A connection that was never
+// established is not a lost reply and is returned as is.
+func (c *Client) Call(ctx context.Context, method string, params map[string]any, out any, opts ...CallOption) error {
+	var o callOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
 	if err := c.acquire(ctx); err != nil {
 		return err
 	}
@@ -277,12 +290,32 @@ func (c *Client) Call(ctx context.Context, method string, params map[string]any,
 	start := time.Now()
 
 	err := c.callOnce(ctx, method, params, out, true /*allowRetry*/)
+	if errors.Is(err, hmerr.ErrReplyLost) && (o.repeatable || reliability.RepeatableAfterLostReply(method)) {
+		c.logger.Debug("jsonrpc resend after lost reply",
+			slog.String("method", method), slog.String("err", err.Error()))
+		err = c.callOnce(ctx, method, params, out, true /*allowRetry*/)
+	}
 
 	c.observer.OnRequestEnd(span, interfaces.RequestResult{
 		Duration: time.Since(start),
 		Err:      err,
 	})
 	return err
+}
+
+// CallOption adjusts one [Client.Call].
+type CallOption func(*callOptions)
+
+type callOptions struct {
+	repeatable bool
+}
+
+// RepeatAfterLostReply marks a call as safe to send again after its reply
+// was lost, for a call whose method alone does not say so: ReGa.runScript
+// carrying a script that only reads
+// ([reliability.RepeatableScriptAfterLostReply]).
+func RepeatAfterLostReply() CallOption {
+	return func(o *callOptions) { o.repeatable = true }
 }
 
 // callOnce performs one round trip. If allowRetry is true and the CCU
@@ -311,9 +344,13 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	// The tracker tells a dial that never reached the CCU apart from a
+	// reply lost after the call went out; [Client.Call] resends only the
+	// latter, and only for a call that is safe to repeat.
+	var sent httpx.WriteTracker
+	resp, err := c.httpClient.Do(sent.Trace(req))
 	if err != nil {
-		return c.wrap(method, fmt.Errorf("%w: %w", hmerr.ErrNoConnection, err))
+		return c.wrap(method, sent.SendError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -323,7 +360,7 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	// bounds total time, not bytes. Mirrors the xmlrpc client's LimitReader.
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, c.limit+1))
 	if err != nil {
-		return c.wrap(method, fmt.Errorf("read response: %w", err))
+		return c.wrap(method, sent.SendError(fmt.Errorf("read response: %w", err)))
 	}
 	if int64(len(raw)) > c.limit {
 		return c.wrap(method, fmt.Errorf("response exceeds limit of %d bytes: %w", c.limit, hmerr.ErrClientException))

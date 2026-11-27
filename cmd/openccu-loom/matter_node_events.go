@@ -141,7 +141,8 @@ func matterNodeEventSink(hub *ws.Hub, rec audit.Recorder) func(fabricui.Event) {
 			if f, ok := ev.Data.(fabricui.FabricEvent); ok {
 				note = fmt.Sprintf("fabric_index=%d", f.FabricIndex)
 			}
-			rec.Record(audit.Entry{User: nodeAuditActor, Action: audit.ActionMatterFabricRevoke, Note: note})
+			// no request: a node event is pushed by the fabric, not by an operator.
+			audit.RecordFrom(context.Background(), rec, audit.Entry{User: nodeAuditActor, Action: audit.ActionMatterFabricRevoke, Note: note})
 		}
 	}
 }

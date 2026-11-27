@@ -26,6 +26,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/restapi"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmui"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -685,10 +686,26 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		// existing client's list — the failure mode opposite to the one
 		// this filter exists for.
 		releasedOnly := q.Get("released_only") == "true"
+		// With `central`, the list is that central's devices and every
+		// answer about them comes from it: membership is decided by the
+		// scoped resolution, not by the first central holding the address,
+		// so a device whose address another CCU repeats is listed under its
+		// own CCU, and `released` is that CCU's hold alone. The unbound list
+		// keeps the address-keyed answers. An unknown central resolves
+		// nothing and lists nothing, as the filter always did.
+		listCtx := r.Context()
+		if centralFilter != "" {
+			listCtx = hmreqctx.WithCentralScope(listCtx, centralFilter)
+		}
 		filtered := devs[:0:0]
 		for _, d := range devs {
-			if centralFilter != "" && idx.CentralOf(d.Address) != centralFilter {
-				continue
+			// Identity, not mere presence: the unbound device list carries
+			// one entry per central for a repeated address, and only the
+			// entry the scoped lookup resolves to belongs to this central.
+			if centralFilter != "" {
+				if held, ok := idx.Device(listCtx, d.Address); !ok || held != d {
+					continue
+				}
 			}
 			if ifaceFilter != "" && !strings.Contains(strings.ToLower(string(d.Interface)), ifaceFilter) {
 				continue
@@ -702,7 +719,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 			if addrFilter != "" && !strings.Contains(strings.ToLower(d.Address), addrFilter) {
 				continue
 			}
-			if releasedOnly && !idx.Released(d.Address) {
+			if releasedOnly && !idx.Released(listCtx, d.Address) {
 				continue
 			}
 			filtered = append(filtered, d)
@@ -721,7 +738,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		}
 		out := make([]DeviceSummary, 0, end-start)
 		for _, d := range filtered[start:end] {
-			out = append(out, toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)))
+			out = append(out, toDeviceSummary(d, centralOfRequest(listCtx, idx, d.Address), idx.Released(listCtx, d.Address)))
 		}
 		w.Header().Set("X-Total-Count", strconv.Itoa(total))
 		JSON(w, http.StatusOK, map[string]any{
@@ -737,7 +754,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
-		d, ok := idx.Device(addr)
+		d, ok := idx.Device(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
@@ -746,10 +763,10 @@ func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 		chans := d.Channels()
 		summaries := make([]ChannelSummary, 0, len(chans))
 		for _, ch := range chans {
-			summaries = append(summaries, toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch)))
+			summaries = append(summaries, toChannelSummary(ch, labels, serialSuffixForChannel(r.Context(), idx, ch)))
 		}
 		JSON(w, http.StatusOK, DeviceDetail{
-			DeviceSummary: toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)),
+			DeviceSummary: toDeviceSummary(d, centralOfRequest(r.Context(), idx, d.Address), idx.Released(r.Context(), d.Address)),
 			Channels:      summaries,
 		})
 	}
@@ -759,7 +776,7 @@ func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 func ListChannels(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
-		d, ok := idx.Device(addr)
+		d, ok := idx.Device(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
@@ -768,7 +785,7 @@ func ListChannels(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 		chans := d.Channels()
 		out := make([]ChannelSummary, 0, len(chans))
 		for _, ch := range chans {
-			out = append(out, toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch)))
+			out = append(out, toChannelSummary(ch, labels, serialSuffixForChannel(r.Context(), idx, ch)))
 		}
 		JSON(w, http.StatusOK, out)
 	}
@@ -782,7 +799,7 @@ func GetChannel(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 			problem.WriteFromError(w, r, err)
 			return
 		}
-		JSON(w, http.StatusOK, toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch)))
+		JSON(w, http.StatusOK, toChannelSummary(ch, labels, serialSuffixForChannel(r.Context(), idx, ch)))
 	}
 }
 
@@ -862,7 +879,7 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 		}
 		includeAll := r.URL.Query().Get("include") == "all"
 		dps := ch.DataPoints()
-		serial := serialSuffixForChannel(idx, ch)
+		serial := serialSuffixForChannel(r.Context(), idx, ch)
 		out := make([]DataPointSummary, 0, len(dps))
 		for _, dp := range dps {
 			if !includeAll && dataPointListing(ch, vis, dp.Parameter()) != "" {
@@ -889,7 +906,7 @@ func GetDataPoint(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Parameter not found", string(param)))
 			return
 		}
-		JSON(w, http.StatusOK, toDataPointSummary(dp, labels, ch, serialSuffixForChannel(idx, ch)))
+		JSON(w, http.StatusOK, toDataPointSummary(dp, labels, ch, serialSuffixForChannel(r.Context(), idx, ch)))
 	}
 }
 
@@ -984,7 +1001,7 @@ func writeChannelLocked(w http.ResponseWriter, r *http.Request) {
 
 func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 	addr := chi.URLParam(r, "addr")
-	d, ok := idx.Device(addr)
+	d, ok := idx.Device(r.Context(), addr)
 	if !ok {
 		return nil, errors.Join(problem.ErrNotFound, errors.New("device "+addr))
 	}
@@ -1004,7 +1021,7 @@ func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 // owning ch's device, so the data-point converters can stamp the canonical
 // unique_id. Returns "" when idx, the channel, its device or the central are
 // unknown — callers then leave unique_id empty.
-func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
+func serialSuffixForChannel(ctx context.Context, idx DeviceIndex, ch *device.Channel) string {
 	if idx == nil || ch == nil {
 		return ""
 	}
@@ -1012,7 +1029,20 @@ func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 	if dev == nil {
 		return ""
 	}
-	return idx.SerialSuffix(idx.CentralOf(dev.Address))
+	return idx.SerialSuffix(centralOfRequest(ctx, idx, dev.Address))
+}
+
+// centralOfRequest names the central a device answer is attributed to. A
+// request the device-route guard bound to a central resolved its device on
+// that central only (see [DeviceIndex.Device]), so the binding is the answer;
+// asking [DeviceIndex.CentralOf] instead would name the first CCU holding the
+// address, which for an address repeated across CCUs is a different one. An
+// unbound request keeps the address-keyed lookup.
+func centralOfRequest(ctx context.Context, idx DeviceIndex, address string) string {
+	if name, ok := hmreqctx.CentralScope(ctx); ok {
+		return name
+	}
+	return idx.CentralOf(address)
 }
 
 // TaxonomyAssignment is one taxonomy node an address is directly assigned

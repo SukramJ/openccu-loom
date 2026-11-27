@@ -91,7 +91,7 @@ func TestDeviceCommunication(svc DeviceCommunicationTestPort, rec audit.Recorder
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceCommunicationTest,
 				DeviceAddress: addr,

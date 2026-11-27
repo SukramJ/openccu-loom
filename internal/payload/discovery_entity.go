@@ -6,9 +6,9 @@ package payload
 import (
 	"strconv"
 
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hamodel "github.com/SukramJ/go-hamqtt/model"
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
+	hadiscovery "sukramj.dev/go-hamqtt/discovery"
+	hamodel "sukramj.dev/go-hamqtt/model"
+	hatopic "sukramj.dev/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )

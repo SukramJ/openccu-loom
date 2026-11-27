@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	openccudata "github.com/SukramJ/go-openccu-data"
+	openccudata "sukramj.dev/go-openccu-data"
 )
 
 // ProfileStore holds the receiver-profile catalogue extracted from the

@@ -382,10 +382,10 @@ type stubCentralIndex struct {
 	centralOf map[string]string
 }
 
-func (s *stubCentralIndex) Devices() []*device.Device            { return nil }
-func (s *stubCentralIndex) Device(string) (*device.Device, bool) { return nil, false }
-func (s *stubCentralIndex) SerialSuffix(string) string           { return "" }
-func (s *stubCentralIndex) CentralOf(addr string) string         { return s.centralOf[addr] }
+func (s *stubCentralIndex) Devices() []*device.Device                             { return nil }
+func (s *stubCentralIndex) Device(context.Context, string) (*device.Device, bool) { return nil, false }
+func (s *stubCentralIndex) SerialSuffix(string) string                            { return "" }
+func (s *stubCentralIndex) CentralOf(addr string) string                          { return s.centralOf[addr] }
 
 func TestListAudit_DurablePath_QueryCalledNotList(t *testing.T) {
 	t.Parallel()
@@ -415,7 +415,7 @@ func TestListAudit_DurablePath_QueryCalledNotList(t *testing.T) {
 	}
 }
 
-func (s *stubCentralIndex) Released(string) bool { return true }
+func (s *stubCentralIndex) Released(context.Context, string) bool { return true }
 
 func TestListAudit_DurablePath_OpPostFilterApplied(t *testing.T) {
 	t.Parallel()

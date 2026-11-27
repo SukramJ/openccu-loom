@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SukramJ/godevccu/pkg/litefake"
+	"sukramj.dev/godevccu/pkg/litefake"
 )
 
 // configInputs collects every value the config template needs.

@@ -62,7 +62,7 @@ var ErrNoLinkBackend = errors.New("links: no backend for device")
 // and direction ("outgoing" / "incoming") relative to the queried
 // device.
 func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale string) ([]hmapi.Link, error) {
-	c, dev, err := d.lookupDevice(deviceAddress)
+	c, dev, err := d.lookupDevice(ctx, deviceAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -93,10 +93,11 @@ func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale strin
 }
 
 // enrichLink fills in the presentation-layer fields (names, labels,
-// direction) using the local registry. Cross-central peer lookups
-// are supported because we walk the whole registry for the peer
-// device.
-func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmproto.LinkDescription, locale string) hmapi.Link {
+// direction) using the local registry. The peer device is looked up on
+// the centrals the request may consult (see [requestUnits]): a request
+// bound to one central resolves the peer there, an unbound one walks the
+// whole registry.
+func (d *LinksDomain) enrichLink(ctx context.Context, dev *device.Device, link hmproto.LinkDescription, locale string) hmapi.Link {
 	senderDevAddr := deviceAddressOf(link.Sender)
 	receiverDevAddr := deviceAddressOf(link.Receiver)
 	isSender := senderDevAddr == dev.Address
@@ -107,7 +108,7 @@ func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmp
 		peerAddr = link.Sender
 		peerDevAddr = senderDevAddr
 	}
-	peerDev := d.findDevice(peerDevAddr)
+	peerDev := d.findDevice(ctx, peerDevAddr)
 
 	senderDev := dev
 	if !isSender {
@@ -199,7 +200,7 @@ func (d *LinksDomain) ListAllLinks(ctx context.Context, centralName, locale stri
 					continue
 				}
 				seen[key] = struct{}{}
-				out = append(out, d.enrichGlobalLink(unit, ifaceID, link, locale))
+				out = append(out, d.enrichGlobalLink(ctx, unit, ifaceID, link, locale))
 			}
 		}
 	}
@@ -233,12 +234,12 @@ func (d *LinksDomain) linkInterfaceIDs(unit *central.Unit) []string {
 // resolves both endpoints symmetrically and leaves Direction /
 // PeerAddress empty; the SPA renders sender→receiver canonically.
 func (d *LinksDomain) enrichGlobalLink(
-	unit *central.Unit, interfaceID string, link hmproto.LinkDescription, locale string,
+	ctx context.Context, unit *central.Unit, interfaceID string, link hmproto.LinkDescription, locale string,
 ) hmapi.Link {
 	senderDevAddr := deviceAddressOf(link.Sender)
 	receiverDevAddr := deviceAddressOf(link.Receiver)
-	senderDev := d.findDevice(senderDevAddr)
-	receiverDev := d.findDevice(receiverDevAddr)
+	senderDev := d.findDevice(ctx, senderDevAddr)
+	receiverDev := d.findDevice(ctx, receiverDevAddr)
 	senderChannel := channelOf(senderDev, link.Sender)
 	receiverChannel := channelOf(receiverDev, link.Receiver)
 
@@ -266,7 +267,7 @@ func (d *LinksDomain) enrichGlobalLink(
 // AddLink creates a link. name is auto-generated when empty.
 func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error {
 	senderDev := deviceAddressOf(senderAddress)
-	c, dev, err := d.lookupDevice(senderDev)
+	c, dev, err := d.lookupDevice(ctx, senderDev)
 	if err != nil {
 		return err
 	}
@@ -285,8 +286,9 @@ func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddres
 	if err := backend.AddLink(ctx, senderAddress, receiverAddress, effectiveName, effectiveDesc); err != nil {
 		return err
 	}
-	d.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkAdd,
+		Central:       c.Name(),
 		DeviceAddress: deviceAddressOf(senderAddress),
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
@@ -303,7 +305,7 @@ func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddres
 // so an operator can also clear either field by passing an empty string.
 func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error {
 	senderDev := deviceAddressOf(senderAddress)
-	c, dev, err := d.lookupDevice(senderDev)
+	c, dev, err := d.lookupDevice(ctx, senderDev)
 	if err != nil {
 		return err
 	}
@@ -314,8 +316,9 @@ func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAd
 	if _, err := backend.SetLinkInfo(ctx, dev.InterfaceID, senderAddress, receiverAddress, name, description); err != nil {
 		return err
 	}
-	d.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkUpdate,
+		Central:       c.Name(),
 		DeviceAddress: deviceAddressOf(senderAddress),
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
@@ -327,7 +330,7 @@ func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAd
 // RemoveLink deletes a link.
 func (d *LinksDomain) RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error {
 	senderDev := deviceAddressOf(senderAddress)
-	c, dev, err := d.lookupDevice(senderDev)
+	c, dev, err := d.lookupDevice(ctx, senderDev)
 	if err != nil {
 		return err
 	}
@@ -338,8 +341,9 @@ func (d *LinksDomain) RemoveLink(ctx context.Context, senderAddress, receiverAdd
 	if err := backend.RemoveLink(ctx, senderAddress, receiverAddress); err != nil {
 		return err
 	}
-	d.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkRemove,
+		Central:       c.Name(),
 		DeviceAddress: deviceAddressOf(senderAddress),
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
@@ -355,7 +359,7 @@ func (d *LinksDomain) RemoveLink(ctx context.Context, senderAddress, receiverAdd
 // sender). longPress selects the LONG_* action group.
 func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error {
 	receiverDev := deviceAddressOf(receiverChannelAddress)
-	c, dev, err := d.lookupDevice(receiverDev)
+	c, dev, err := d.lookupDevice(ctx, receiverDev)
 	if err != nil {
 		return err
 	}
@@ -370,8 +374,9 @@ func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, 
 	if longPress {
 		note = "long"
 	}
-	d.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkActivate,
+		Central:       c.Name(),
 		DeviceAddress: receiverDev,
 		ChannelNo:     channelNumberOf(receiverChannelAddress),
 		Peer:          senderChannelAddress,
@@ -398,7 +403,7 @@ func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, 
 // LINK_SOURCE_ROLES / LINK_TARGET_ROLES — see [channelMatchesRole], which
 // cites the CCU WebUI's own check_role_match.
 func (d *LinksDomain) LinkableChannels(
-	_ context.Context,
+	ctx context.Context,
 	interfaceID, sourceChannelAddress, role, locale string,
 ) ([]hmapi.LinkableChannel, error) {
 	if d.registry == nil {
@@ -408,7 +413,7 @@ func (d *LinksDomain) LinkableChannels(
 	// requested direction: a "sender" source is matched by its
 	// LinkSourceRoles against each candidate's LinkTargetRoles; a
 	// "receiver" source by its LinkTargetRoles against LinkSourceRoles.
-	srcCh := channelOf(d.findDevice(deviceAddressOf(sourceChannelAddress)), sourceChannelAddress)
+	srcCh := channelOf(d.findDevice(ctx, deviceAddressOf(sourceChannelAddress)), sourceChannelAddress)
 	var srcRoles []string
 	if srcCh != nil {
 		switch role {
@@ -419,7 +424,7 @@ func (d *LinksDomain) LinkableChannels(
 		}
 	}
 	out := make([]hmapi.LinkableChannel, 0)
-	for _, u := range d.registry.List() {
+	for _, u := range d.registry.Scoped(ctx) {
 		for _, dev := range u.ModelRegistry.List() {
 			if dev.InterfaceID != interfaceID {
 				continue
@@ -498,11 +503,11 @@ func intersects(a, b []string) bool {
 	return false
 }
 
-func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.Unit, *device.Device, error) {
+func (d *LinksDomain) lookupDevice(ctx context.Context, deviceAddress string) (*central.Unit, *device.Device, error) {
 	if d.registry == nil {
 		return nil, nil, ErrNoLinkBackend
 	}
-	for _, u := range d.registry.List() {
+	for _, u := range d.registry.Scoped(ctx) {
 		if dev, ok := u.ModelRegistry.Get(deviceAddress); ok {
 			return u, dev, nil
 		}
@@ -513,11 +518,11 @@ func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.Unit, *device
 	return nil, nil, fmt.Errorf("%w: device %s", hmerr.ErrDescriptionNotFound, deviceAddress)
 }
 
-func (d *LinksDomain) findDevice(address string) *device.Device {
+func (d *LinksDomain) findDevice(ctx context.Context, address string) *device.Device {
 	if d.registry == nil || address == "" {
 		return nil
 	}
-	for _, u := range d.registry.List() {
+	for _, u := range d.registry.Scoped(ctx) {
 		if dev, ok := u.ModelRegistry.Get(address); ok {
 			return dev
 		}

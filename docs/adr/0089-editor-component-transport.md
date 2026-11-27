@@ -174,8 +174,9 @@ WebSocket instead of going direct.
 - The allow-list is a contract between the two repositories. The daemon publishes the
   set of routes the component uses with the bundle, and a test on the daemon's side
   fails when the editor calls a route outside it.
-- The daemon's audit log shows the entry's token as the actor, not the Home Assistant
-  user.
+- The daemon's audit log shows the entry's token as the actor. Which Home Assistant
+  user the relay acted for is recorded beside it as an assertion (settled below,
+  2026-11-26).
 
 ## Not decided here
 
@@ -210,9 +211,9 @@ The component build (#1067 step 2b) closed four of the open points above.
   stylesheet's `@property` rules on the document (Tailwind's border utilities
   read a variable only those rules give a value), and the hand-rolled dialogs
   resolve focus through the shadow roots instead of `document.activeElement`.
-  The `--ha-*` tokens stay empty inside the root until their `:host` forms ship
-  in go-fabric-ui (SukramJ/go-fabric-ui#72); the component's spec carries that
-  as an expected failure.
+  The `--ha-*` tokens stayed empty inside the root until their `:host` forms
+  shipped in go-fabric-ui (SukramJ/go-fabric-ui#72, released in v0.10.0); the
+  expected failure in the component's spec was removed with that release.
 - **Whether the event relay is needed for the first version.** It is optional:
   without an event source the editor shows what it loaded and what its own
   writes return.
@@ -225,5 +226,63 @@ the daemon answers 423 without it; and the route list is the file
 `assets/ui/src/component/editor-routes.json`, which the component enforces and
 the daemon publishes, so the two cannot differ.
 
-Still open: how the relay names the central, and who the audit log names.
+## Settled by #1119 (2026-11-26)
+
+The owner decided the two points left open, on the issue (2026-11-20) and in
+a decision round on 2026-11-26.
+
+- **How the relay names the central.** The relay maps its entry to the
+  daemon's central (by the CCU's serial) and sends `?central=<name>` with every
+  call. Every `/devices/{addr}` route honours it: a guard in front of the
+  handler answers 404 when the central does not exist or does not hold the
+  address, and otherwise binds the request to that central, so every address
+  lookup on the request's path resolves there and nowhere else. Without the
+  parameter an address resolves on the first central that holds it, as before.
+  The binding travels in the request context as a value of its own
+  (`hmreqctx.WithCentralScope`), separate from the log enrichment's central
+  name, and the registry's `Scoped(ctx)` is the one walk the adapters use. An
+  explicit `…On(central, …)` method on every port was the alternative; it
+  doubles the port surface for some 40 routes and still leaves every route it
+  misses answering from the first central.
+- **Who the audit log names.** The principal stays the entry's credential.
+  The relay names the Home Assistant user in `X-On-Behalf-Of` (an opaque
+  label of at most 128 bytes, e.g. `Alex (ha:<id>)`), and the daemon records
+  it in `on_behalf_of` beside the principal. It is accepted only from an API
+  token or a box API token, the credentials an integration holds for its
+  users, ignored from any other principal, and never used for authorization:
+  the daemon cannot check it. Every row a request writes carries both, the
+  rows written deep in the adapters included, because the actor travels in
+  the request context and every producer records through one function.
+- **The route list names the method.** `routes` is a list of
+  `{method, prefix}`; a `*` segment matches one segment. A path prefix alone
+  could not tell the editor's `POST /devices/{addr}/paramsets/…` from a
+  lifecycle call such as `POST /devices/{addr}/release`, so a relay that
+  enforced `/devices` forwarded both. The retype is API 19.0.0.
+- **The change log in the editor.** `GET /audit` stays admin-only, and a
+  paired token is never admin (an integration pairs as operator). The editor's
+  history reads `GET /devices/{addr}/audit` instead: the device and its
+  channels, matched exactly, for every principal with the operator role. The
+  device filter of `GET /audit` matches a prefix and could not be reused for a
+  scoped read without returning neighbouring devices.
+
+**Better than the comparison targets?** The CCU's WebUI and the aiohomematic
+family serve one CCU per connection and never had to name one; the HA
+integration's own Lit editors record every change as the integration. Here
+one daemon serves several CCUs, and the change log can still say which person
+asked for a change without trusting the relay for anything but the label.
+
+**Better than the state before?** A colliding address (a virtual remote, an
+internal device, a CUxD device) was edited on whichever CCU sorted first; it is
+now edited on the CCU the entry belongs to, or refused. The relay could
+forward any `/devices` call, including unpairing; it now forwards only the
+editor's calls.
+
+**The right cut?** The daemon owns binding, authorization and the change log;
+the relay owns the mapping of its entry to a central, the allow-list it
+enforces and the Home Assistant user; the component owns no network access.
+
+An audit row records the central it was made on (the request's binding, or the
+central the daemon resolved the device on), so the bound history of an address
+that exists on two CCUs lists only that CCU's rows; rows recorded before the
+column existed stay in every bound history (#1182).
 

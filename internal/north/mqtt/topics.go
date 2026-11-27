@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
+	hatopic "sukramj.dev/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"

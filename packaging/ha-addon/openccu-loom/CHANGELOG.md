@@ -1,5 +1,35 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.108.0
+
+- **The Matter bridge's credentials are encrypted in the database** under
+  the master key the daemon already uses for configuration secrets, so a
+  copied database or backup no longer gives them away. The first start
+  seals the existing store; pairings are kept. Without that key, or with
+  another one, the bridge stays off and the `matter.bridge` health entry
+  says why; key rotation and the recovery command are described in the
+  OpenCCU-Loom changelog.
+- **The Matter bridge can be erased from the maintenance page** without a
+  restart: paired controllers, credentials and endpoint numbers go, a
+  fresh unpaired bridge comes up at once. The device selection and the
+  node label are kept.
+- **New setting `north.matter.commissioning.window_on_demand`**: the bridge
+  opens no pairing window by itself and is discoverable only after a
+  window is opened on the pairing page.
+- **Controllers show each bridged device's model and firmware**, updated
+  live after a firmware update, and the bridge reports why it started.
+- **The node label takes effect without a restart**; it is limited to 32
+  bytes. The Matter pages name the devices the bridge could not build and
+  answer only under a known host name.
+- **Breaking for API users (REST API 18.0.0):** the Matter node routes
+  changed; see the OpenCCU-Loom changelog.
+- **One daemon per data directory:** a second daemon on the same directory
+  no longer starts.
+- **Fixed:** a cover command is no longer dropped when only the group
+  channel shows the target, and a blind command for one axis keeps the
+  other axis at the own channel's value. A selected battery level no
+  longer appears in Matter as a device of its own.
+
 ## 0.107.1
 
 - **A sound with a repeat count the MP3 player cannot take is refused**

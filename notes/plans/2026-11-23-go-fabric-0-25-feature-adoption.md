@@ -502,3 +502,258 @@ As built (branch `claude/matter-reachability-3b`):
   e2e phase 1 + pin red; hook capturing the first device → rebuild test red.
 - Open: chip-tool run (composition binding changed → `needs-chiptool`), go-fabric#589 bump, push/PR on
   the owner's word.
+
+## 15. Slice 4: measurements and decisions (2026-11-26)
+
+State before the slice: #1170 and #1172 merged (279bac93); main carries go-fabric v0.26.0 and
+go-fabric-ui v0.14.1. Branch `claude/matter-commissioning-posture` from main 7439a8ea.
+
+Measured (go-fabric v0.26.0, go-fabric-ui v0.14.1, module cache):
+
+- **F4.** `node.Commissioning.WindowOnDemand` (`node/config.go:523-535`): with it a node without a
+  fabric opens no window at `Start` (`node/node.go:1528-1531`, log `commissioning.window_on_demand`),
+  none after its last fabric goes (`node/commissioning.go:509-513`), none when a basic window closes
+  and none when `SetCommissioningBlocked` lifts (`node/node.go:1815-1822`); the host opens it with
+  `OpenOwnWindow` / `OpenBasicWindow` (`node/commissioning.go:741-756`). matter.js
+  `commissioning.enabled: false` (`CommissioningServer.ts:266-273` per the godoc). The node page
+  already opens windows through those two calls (`fabricui.Options.ConfiguredWindow`,
+  `GU/fabricui/options.go:270-281`); `GET /node/status` reports `commissioning_window_open` and
+  `window_kind` (`GU/fabricui/handlers_node.go`), which is what the e2e per value reads.
+- **F5.** `node.Config.BootReason` (`node/config.go:91-102`), values `mattercore.BootReason*`
+  (`cluster/core/general_diagnostics.go:223-229`); a value past SoftwareReset fails `Validate`
+  (`node/config.go:1004-1005`); the node's own OTA record overrides it (`node/root.go:112-125`;
+  loom configures no OTA). go-fabric-ui serves `Status.boot_reason`.
+- loom persists neither the last version a node started with nor a restart marker;
+  `matter_settings` is go-fabric's table (`055_matter_store_v8_to_v12.sql:61`), not a place for
+  loom state. So F5 needs a migration of its own (the case the F5 row named for dropping it).
+- Both restart paths (REST `Restart`, MQTT `RequestRestart`) claim through
+  `handlers.claimRestart` (`internal/north/rest/handlers/system_admin.go:138`), so the shutdown
+  path can ask whether a restart was requested without a new wiring setter.
+
+Owner decisions (wizard):
+
+- F4: `north.matter.commissioning.window_on_demand`, default false (D4), restart-required.
+- F5 adopted with migration 057: a loom-owned single-row boot record with the version the Matter
+  node last started with (a different running version → SoftwareUpdateCompleted) and a cause a
+  graceful shutdown writes after an operator restart (→ SoftwareReset); read and cleared at boot, so
+  a crash or kill reports Unspecified.
+- Both present: SoftwareUpdateCompleted wins.
+- Flow stays Standard; F9 (User-Intent flow, pairing hints) stays "later".
+
+As built (branch `claude/matter-commissioning-posture`):
+
+- F4: `Commissioning.WindowOnDemand` from the config in `startMatterBridge`. Tests per value through
+  `startMatterBridge` (`matter_window_on_demand_test.go`: window at start; basic window closed without
+  a reopen) and e2e `TestE2EMatterWindowOnDemandFollowsTheSetting` (section save → restart-required →
+  restart → no window → pairing page opens one). Bite: root line removed → both unit "on" cases and the
+  e2e red.
+- F5: migration 057 `boot_record` (`stop_requested`, `last_stop_requested`, `matter_started_version`).
+  Boot: `takeStopRecordAtBoot` right after the DB opens (every boot, Matter on or off). Shutdown: the
+  DB teardown writes the marker when `handlers.RestartRequested()` (a claim in this process; REST and
+  MQTT share `claimRestart`). Matter start: `loadMatterBootReason` → `node.Config.BootReason`;
+  `SetMatterStartedVersion` after `Start` succeeded. No new wiring setter, `startMatterBridge`'s
+  signature unchanged (it reads the record through its `db`).
+- Tests: store (`boot_record_test.go`: the marker lives one boot), handlers (`RestartRequested` after a
+  REST and an MQTT claim), derivation table + three cases through `startMatterBridge`, e2e
+  `TestE2EMatterBootReasonStatesWhatTheDaemonKnows` (fresh 0, SIGTERM 0, `POST /system/restart` 6,
+  SIGTERM after it 0, a second binary built with another `build.Version` 5). Harness:
+  `RestartOnRequest`, `RestartWithBinary`, `BuildDaemonWithVersion`, `NodeStatus`, `OpenPairingWindow`.
+- Bite proofs: `BootReason: bootReason * 0` → unit 5/6 cases red (a deleted line fails the build, not
+  the test); started-version write removed → unit red; shutdown marker forced false → e2e step
+  "operator restart" red; boot take removed → same step red.
+
+## 16. Slice 5: measurements (2026-11-26)
+
+State before the slice: #1176 merged (ce8581a2), slice 4 done. Branch `claude/matter-erase-1056`
+from main ce8581a2. D1 = A (section 10).
+
+Measured (go-fabric v0.26.0, go-fabric-ui v0.14.1, module cache; this repo at ce8581a2):
+
+- **go-fabric-ui offers both halves.** `fabricui.NodeSwitch` (`GU/fabricui/nodeswitch.go:42-205`):
+  `NewNodeSwitch(initial)`, `Set(n)` after the new node started, `Current()`; it delegates every
+  `NodeSource` method and `Set` ends every node stream so the page reconnects onto the new node
+  (`:25-32`, `stream.go:38-50,138`). `Options.Erase` (`GU/fabricui/options.go:236-251`): the host
+  erases and brings a node back; run detached, bounded by two minutes; nil answers 501 and
+  `Status.erase` false (`handlers_node.go:151,446-478`, confirm word `erase-node`).
+- **`Node.FactoryReset`** (`GF/node/factory_reset.go:19-96`): removes every fabric, stops the node,
+  erases the credential store and the endpoint records, pins a fresh UniqueID; the node is
+  single-use, the host builds a new one on the same store (`fabrictest/device.go`
+  `Device.FactoryReset`: reset, then `startLocked`). A stop that does not complete erases nothing.
+  A host's own endpoint state is the host's to erase (`:48-49`).
+- **The erase scrubs loom's whole database.** loom hands the node `matterstore.New(db)` on the shared
+  `openccu-loom.db` handle (`daemon_matter.go:351`); `store.Store.Erase` ends with `Scrub`
+  (`GF/store/erase.go:78-97`): `VACUUM` of the whole file and `wal_checkpoint(TRUNCATE)`. The pool is
+  WAL with several connections (`internal/store/sqlite/dsn.go:48`, `store.go:57`), so a reader
+  blocks the checkpoint and the reset returns `ErrScrubIncomplete` (rows gone, bytes may remain in
+  the -wal) — every other step completes (`factory_reset.go:31-37`). The VACUUM duration scales
+  with the whole file (history included); not measured.
+- **loom's endpoint store** (`internal/store/matterendpoint/endpoints.go:93-95`) erases only the
+  go-fabric endpoint records; the exposure allowlist (`matter_exposures`), `matter_host_identity`
+  (root serial, applied label) and `boot_record` are loom's and survive the reset.
+- **Who holds the node or its parts today** (`cmd/openccu-loom/daemon_matter.go` at ce8581a2): the
+  reconciler on `n.Aggregator()` (`:498`) and through it `sync` / `retire` / `forget` / the
+  reachability forward (`:957`, the ready and hot-plug triggers, the live-adopt hook); the RTT
+  gauges over `bridge` (`:573-579`); `SetOnReassembled` (`:988`); `wireMatterNodeEvents`'
+  `Observe` (`:991`, `matter_node_events.go:91`); the status adapter (`:993-1000`,
+  `matter_status_adapter.go:28`) and the health probe on it; the node labeler
+  (`matter_node_label.go:43`); the health-sample listener (`:473`); `Options.Node`
+  (`matterNodeSource{bundle.node}`, `:1017`); the stop closure (`:581-592`). Eighteen test files
+  construct through `startMatterBridge` / `wireMatterRuntime` and read `bundle.node`.
+
+Owner decisions (wizard, 2026-11-26):
+
+- **Scrub:** the erase counts as done when only the scrub is incomplete (`ErrScrubIncomplete`): the
+  new node starts, the log and `Options.Warnings` say the bytes may remain, and a flag in
+  `boot_record` (migration 058) makes the next boot run `store.Scrub` right after the database
+  opens, before any reader exists, clearing the flag on success.
+- **loom's own state survives:** exposure allowlist, `matter_host_identity` (root serial, applied
+  label) and `boot_record` are operator configuration and product identity, not pairing data. The
+  new node comes up with the same selection, unpaired, with a fresh UniqueID.
+- **BootReason of the rebuilt node:** SoftwareReset (6), as slice 4 states for an operator restart.
+
+Approach (to be approved):
+
+- One holder, `matterRuntime` (`cmd/openccu-loom/matter_runtime.go`), owns the current generation
+  (node + reconciler) under an RWMutex; `Sync` / `Retire` / `QueueForget` / `SetReachable` /
+  `Node()` / `Bridge()` read through it, `Erase` and `Stop` swap or end it under the write lock.
+  The node config is built by one function both the first start and the rebuild call, so the
+  rebuilt node cannot drift from the first (only `BootReason` differs).
+- Per-generation attachments re-run on every new node and detach from the old one: the node-event
+  observer (WebSocket + audit), the health-sample listener, `SetOnReassembled`, the labeler's node.
+  The RTT gauges, the status adapter and the stop closure read through the holder.
+- `Options.Node` = `fabricui.NewNodeSwitch(matterNodeSource{first})`, `Set` after the new node
+  started and the first sync ran; `Options.Erase` = `matterRuntime.Erase`. A new node that does
+  not start leaves the switch on the stopped one (go-fabric-ui's contract) and the error reaches the
+  page; a second erase retries.
+- No new `Set*` / `Attach*` setter: everything is constructed inside `wireMatterRuntime`.
+- Tests: unit through `wireMatterRuntime` per attachment (each a pin with a bite); store test for the
+  scrub flag; e2e `TestE2EMatterEraseBringsAFreshNodeBack` (CCU booted not ready; erase → 204,
+  status `erase: true`, window open, same endpoint count, new UniqueID, events stream reconnects);
+  chip-tool: pair → erase → pair again (label `needs-chiptool`). REST contract: the route is
+  go-fabric-ui's and already in `assets/openapi.yaml:6643`. MCP: not extended (destructive,
+  operator-only on the node page) — recorded in the PR.
+
+As built (branch `claude/matter-erase-1056`):
+
+- `cmd/openccu-loom/matter_runtime.go`: `matterRuntime` holds the generation (node + reconciler) under
+  an RWMutex held per call or per swap, never across the reset; `eraseMu` serialises Erase and Stop.
+  While an erase runs, Sync / Retire / QueueForget / SetReachable are skipped (the bus never waits
+  for an erase); the erase syncs the new node from the model after the swap. Attachments
+  (`attach`): health-sample listener, `SetOnReassembled`, the node observer of
+  `wireMatterNodeEvents`; `release` in the closers. Labeler `rebind` sets the last applied label on
+  the new node before Start. A reset error other than `node.ErrScrubIncomplete` returns without a
+  rebuild (the next erase finishes it, go-fabric `node/factory_reset.go:51-55`).
+- `startMatterBridge`: one `nodeConfig(bootReason)` for the first node and the rebuild; gauges and
+  the stop read through the runtime; `fabricui.NewNodeSwitch(matterNodeSource{n})` built with it.
+  `wireMatterRuntime`: `Options.Node` = the switch, `Options.Erase` = `rt.Erase`, `Warnings` =
+  findings + the runtime's `scrub_pending`. Status adapter reads `node func() *node.Node`.
+- Migration 058 `boot_record.scrub_pending`; `sqlite.MarkScrubPending` / `ClearScrubPending`;
+  `runPendingScrub` in `wireAuditOverlay` right after `takeStopRecordAtBoot`.
+- Measured while testing: with a read transaction open the erase's `VACUUM` itself waits the
+  busy timeout (5 s) and fails, so the scrub is deferred (`ErrScrubIncomplete: vacuum`), not only
+  the checkpoint.
+- Tests: `matter_erase_wiring_test.go` (pages, status, UniqueID, BootReason, selection, label,
+  window, node observer, reassembly hook, reconciler; scrub with and without a reader; boot path
+  through `wireAuditOverlay`), store `TestBootRecordScrubPendingLivesUntilCleared`, e2e
+  `TestE2EMatterEraseBringsAFreshNodeBack` (harness `EraseNode`).
+
+## 17. Slice 6: measurements (2026-11-26)
+
+State before the slice: #1177 merged (2e5e3a23), slice 5 done, #1056 closed by it. Branch
+`claude/matter-sealing-at-rest` from main 2e5e3a23. D5 = sealing now, behind an ADR.
+
+Measured (go-fabric v0.26.0 module cache; this repo at 2e5e3a23):
+
+- **go-fabric.** `store.NewSealed(ctx, db, s Sealer)` (`GF/store/seal.go:164`) seals every secret
+  column on the way in, writes a seal canary, scrubs; strict while open (no clear secret written, an
+  unmarked secret row refused with `ErrUnseal`); a store without the sealer reads sealed values as
+  `ErrNoSealer`; "every Store of one database needs the sealer" (`:160-161`). `ScrubOwed`
+  (`:656-664`): an unfinished scrub is no error, retried on every `NewSealed`. `Reseal(ctx, db, old,
+  next)` (`:686-698`): one transaction, then a scrub; "there is no unseal" — back to clear only by
+  restore or factory reset. `node.Store.Sealer` excludes `Store.Credentials`
+  (`GF/node/config.go:823-824`), and loom passes `Credentials`, so loom opens the store with
+  `store.NewSealed` itself. `Erase` drops the canary (`GF/CHANGELOG.md:864`). Protects
+  confidentiality of a copy, not integrity (`GF/docs/security.md` "Sealing at rest").
+- **loom opens the store once:** `matterstore.New(db)` at `cmd/openccu-loom/daemon_matter.go:354`
+  (after `matterstore.Upgrade` at `:346`); no other production open.
+- **Key custody today (ADR 0027, `internal/secret/secret.go:1-130`):** one AES-256 master key,
+  `OPENCCU_LOOM_SECRET_KEY` (base64) or `<data_dir>/secret.key` (auto-created, 0600); without either
+  the config secrets fall back to plaintext ("hardening, not a boot dependency"). `Cipher` keeps
+  only the AEAD, not the raw key. ADR 0027 defers rotation (`:127-129`).
+- **Backup (`cmd/openccu-loom/backup.go`):** the archive never contains `secret.key` (`:233-240`);
+  it is sealed with the master key when one exists (`:271-285`, `secret.LoadExisting`, never minted
+  by the CLI), else written in a loud plaintext mode; restore needs the master key for a sealed
+  archive (`:756-762`). So a Matter key derived from the master key travels with the same custody
+  the archive already requires.
+- **Unverified:** whether a sealed `Store` keeps sealing (and re-marks) after its `Erase` dropped the
+  canary — slice 5 rebuilds the node on the same `Store` instance; to be measured by a test first.
+
+Owner decisions (wizard, 2026-11-26), written up as ADR 0092 (proposed,
+`docs/adr/0092-matter-secrets-sealed-at-rest.md`):
+
+- **Key:** HKDF-SHA256 from ADR 0027's master key, own label; go-fabric's AES-256-GCM sealer.
+- **Activation:** automatic whenever a master key resolves (no switch); without one, clear as today
+  unless the database was sealed before.
+- **Rotation now:** offline `openccu-loom secret rotate` — config secrets re-sealed in one
+  transaction + `store.Reseal`, scrub; both keys kept until every step committed (re-runnable);
+  env-managed key: the command takes or prints the new value.
+- **No/wrong key:** bridge off (`ErrNoSealer` / `ErrUnseal`), health `matter.bridge` names reason and fix;
+  offline `openccu-loom matter reset` erases the Matter store + endpoint records (selection kept).
+- Scrub owed after sealing: page warning while `ScrubOwed`; `NewSealed` retries each start.
+
+Open measurements before code: (1) a sealed `Store` after its `Erase` (slice 5 rebuilds on the same
+instance) — still sealing, canary rewritten?; (2) how a start without a key detects a sealed
+database before `node.New` (canary probe vs. the error `store.New` returns); (3) whether `Erase` of
+a sealed database works through a store opened without the sealer (for `matter reset`); (4) the
+config-secret rows to re-seal (`config_sections` JSON leaves, `centrals.password_plain`) and whether
+`internal/secret` can keep the raw key for HKDF with one derivation method as its only API growth.
+
+ADR 0092 accepted by the owner (2026-11-26). Open measurements, answered:
+
+1. A sealed `Store` seals every write through its `s.sealer` field whatever the canary
+   (`GF/store/seal.go:230-231`); `Erase` drops the canary with every other `matter_settings` row
+   (`:422-427`). The erase rebuild therefore opens a fresh `NewSealed` store, which re-marks at once.
+2. go-fabric exports no "is sealed" probe; the mark is the reserved row `store.seal_canary` in
+   `matter_settings` (`GF/store/seal.go:427`, `readCanary :434-443`). loom probes that row before
+   `node.New` and pins the probe by behaviour (true after `NewSealed`, false after `Erase` and on a
+   fresh database), so a rename upstream turns the pin red. A store without the sealer on a marked
+   database refuses only secret writes (`refuseClearSecretWrite :476-490`), so without the probe the
+   bridge would start and fail later at CASE or commissioning.
+3. `Store.Erase` is DELETEs, seeds and `Scrub` — no sealer (`GF/store/erase.go:78-98`): `matter
+   reset` erases through `store.New(db)` without the key; to be confirmed by its test.
+4. Config secrets to re-seal on rotation: `config_sections` JSON leaves at secret paths
+   (`configstore.TransformSectionJSON`, wired `cmd/openccu-loom/daemon_boot.go:224`,
+   `configcli.go:35`) and `centrals.password_plain` (`internal/store/sqlite/centrals_store.go:67-89`).
+   No other `enc:v1` user; `backup.go` archives use the separate stream format.
+5. No existing guard detects a running daemon for offline commands (`backup.go` has none).
+
+Approach approved (wizard, 2026-11-26): `internal/secret` keeps the raw key and gains one HKDF
+derivation; the boot's cipher is passed explicitly to `startMatterBridge`; with a key the store is
+opened with `NewSealed` (fresh per erase rebuild), an owed scrub is a page warning; without a key a
+canary probe fails closed with a named health reason; offline `secret rotate` (progress through
+`secret.key.next`, re-runnable) and `matter reset`. Running-daemon guard: the daemon holds an
+exclusive lock on `<data_dir>/openccu-loom.lock` (flock, stdlib) while it runs; the offline
+commands take it non-blocking and refuse otherwise.
+
+As built (branch `claude/matter-sealing-at-rest`):
+
+- `internal/secret`: `Cipher` keeps the raw key; `DeriveKey(label)` (HKDF-SHA256), `NewCipher`,
+  `GenerateKey`, `EncodeKey`/`DecodeKey`, `WriteKeyFile` (temp + rename), `ReadKeyFile`,
+  `PendingKeyFileName`.
+- `internal/datalock`: `Acquire(dataDir)` / `Release`, `ErrHeld`; Unix `syscall.Flock`, Windows
+  `syscall.CreateFile` with share mode 0 (no new dependency). `runDaemon` takes it before the serve.
+- `cmd/openccu-loom/matter_seal.go`: label `openccu-loom matter-store seal v1`, canary probe
+  (`store.seal_canary`), `openMatterStore` (sealed / clear / refused), `matterSealRefused` →
+  `matter.bridge` unhealthy, sticky. `startMatterBridge(…, cipher, …)`; the boot cipher travels as
+  `auditOverlay.cipher`. Erase rebuild opens the store anew. Page warning `seal_scrub_owed`.
+- `cmd/openccu-loom/matter_seal_cli.go`: `secret rotate` (config secrets in one tx, then
+  `store.Reseal`, then rename `secret.key.next` → `secret.key`; env mode prints the key) and
+  `matter reset --yes` (endpoint records + `store.Erase` + fresh UniqueID pin, mirroring
+  `node.FactoryReset`), both behind `withOfflineDB` (lock first).
+- e2e: the harness provisions no key, so the daemon creates `secret.key` and **every Matter e2e
+  and chip-tool run now exercises the sealed store**, restarts included.
+  `TestE2EMatterSealedStoreFailsClosedAndResetRecovers` (key removed → another key → bridge off,
+  `matter.bridge` names it; `matter reset` refused while running; reset while down → bridge back
+  with the selection). Harness: `RestartAfter`, `RestartAfterWithoutBridge`, `Offline`.
+- Measured while testing: the health component is `matter.bridge`, not `matter` (ADR text
+  corrected).

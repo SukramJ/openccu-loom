@@ -635,7 +635,7 @@ func (m *multiCentralSnapshotIndex) Devices() []*device.Device {
 	return out
 }
 
-func (m *multiCentralSnapshotIndex) Device(address string) (*device.Device, bool) {
+func (m *multiCentralSnapshotIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	d, ok := m.devices[address]
 	return d, ok
 }
@@ -651,7 +651,7 @@ func (m *multiCentralSnapshotIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (m *multiCentralSnapshotIndex) Released(string) bool { return true }
+func (m *multiCentralSnapshotIndex) Released(context.Context, string) bool { return true }
 
 // TestSnapshot_CentralScope verifies that ?central=<name> scopes devices (and
 // device_channels when included) plus the hub entities (programs, sysvars,

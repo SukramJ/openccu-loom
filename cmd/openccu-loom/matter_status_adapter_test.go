@@ -166,7 +166,7 @@ func revokerBundle(t *testing.T, central string, seed func(context.Context, *mat
 	if seed != nil {
 		seed(ctx, matterstore.New(db))
 	}
-	bundle = startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
+	bundle = startMatterBridge(ctx, cfg, reg, db, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler), nil)
 	if bundle == nil {
 		t.Fatal("startMatterBridge returned nil")
 	}
@@ -175,7 +175,7 @@ func revokerBundle(t *testing.T, central string, seed func(context.Context, *mat
 	// wires it: go-fabric-ui routes no fabric transition through its event
 	// source, so the bridge's own node observer is what reaches the hub.
 	hub := ws.NewHub()
-	t.Cleanup(wireMatterNodeEvents(bundle.events, bundle.node, hub, nil))
+	t.Cleanup(wireMatterNodeEvents(bundle.events, bundle.Node(), hub, nil))
 	return bundle, func() []uint8 {
 		frames := hub.Replay(0, func(topic string) bool { return topic == nodeTopicFabricRemoved }).Events
 		seen := make([]uint8, 0, len(frames))
@@ -210,7 +210,7 @@ func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 		}
 	})
 	ctx := context.Background()
-	if err := bundle.node.RemoveFabric(ctx, idx); err != nil {
+	if err := bundle.Node().RemoveFabric(ctx, idx); err != nil {
 		t.Fatalf("RemoveFabric: %v", err)
 	}
 	if _, err := bundle.store.GetFabric(ctx, idx); err == nil {
@@ -227,7 +227,7 @@ func TestRevokeFabricRunsTheSameFanOutTheWireCommandDoes(t *testing.T) {
 func TestRevokeFabricOfAnUnknownIndexRunsNoFanOut(t *testing.T) {
 	t.Parallel()
 	bundle, removed := revokerBundle(t, "ccu-revoke-missing", nil)
-	if err := bundle.node.RemoveFabric(context.Background(), 7); err == nil {
+	if err := bundle.Node().RemoveFabric(context.Background(), 7); err == nil {
 		t.Fatal("RemoveFabric for an unknown index returned nil; want an error")
 	}
 	if got := removed(); len(got) != 0 {

@@ -176,7 +176,7 @@ func DeleteIncidents(clearer IncidentsClearer, rec audit.Recorder) http.HandlerF
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionIncidentsClear,
 			})

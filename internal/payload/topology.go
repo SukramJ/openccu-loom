@@ -4,7 +4,7 @@
 package payload
 
 import (
-	"github.com/SukramJ/go-hamqtt/model"
+	"sukramj.dev/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )

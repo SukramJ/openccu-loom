@@ -295,7 +295,7 @@ func (p *ExposureProvider) Apply(ctx context.Context, updates []fabricui.Update)
 		applied++
 	}
 	if p.cfg.Audit != nil && applied > 0 {
-		p.cfg.Audit.Record(audit.Entry{
+		audit.RecordFrom(ctx, p.cfg.Audit, audit.Entry{
 			User:   actor,
 			Action: audit.ActionMatterExposureBulk,
 			Note:   fmt.Sprintf("applied=%d", applied),

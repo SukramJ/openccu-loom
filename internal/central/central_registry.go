@@ -8,12 +8,14 @@ import (
 	"errors"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -246,6 +248,69 @@ func (r *Registry) Get(name string) (*Unit, bool) {
 	return c, ok
 }
 
+// Scoped returns the units a request may resolve a device address on: every
+// unit in name order for an unscoped ctx, the one bound unit for a ctx carrying
+// [hmreqctx.CentralScope], and none when that central is not registered. A
+// scoped request never falls back to another CCU — answering from the wrong
+// one is the failure the scope exists to prevent, so "not here" stays empty.
+//
+// Every address lookup on a request path walks this instead of [Registry.List].
+func (r *Registry) Scoped(ctx context.Context) []*Unit {
+	name, scoped := hmreqctx.CentralScope(ctx)
+	if !scoped {
+		return r.List()
+	}
+	if u, ok := r.Get(name); ok && u != nil {
+		return []*Unit{u}
+	}
+	return nil
+}
+
+// HoldsDevice reports whether a central named central is registered and
+// whether it holds the device behind address, which may be a device or a
+// channel address. It is the check the REST device-route guard runs before it
+// binds a request to that central.
+//
+// A central holds a device in three places, and the device routes address
+// all of them: its model (a paired, released device), its inbox (a device the
+// CCU offers for pairing, which POST /devices/{addr}/accept addresses), and
+// the queue of devices this daemon holds back after pairing (which
+// POST /devices/{addr}/release addresses). Counting the model alone would
+// answer 404 to an accept or a release that names its central.
+func (r *Registry) HoldsDevice(central, address string) (known, holds bool) {
+	u, ok := r.Get(central)
+	if !ok || u == nil {
+		return false, false
+	}
+	if address == "" {
+		return true, false
+	}
+	if i := strings.LastIndexByte(address, ':'); i >= 0 {
+		address = address[:i]
+	}
+	if u.ModelRegistry != nil {
+		if _, held := u.ModelRegistry.Get(address); held {
+			return true, true
+		}
+	}
+	if u.HubModel != nil && u.HubModel.Inbox != nil {
+		inbox := u.HubModel.Inbox.List()
+		for i := range inbox {
+			if inbox[i].Address == address {
+				return true, true
+			}
+		}
+	}
+	if u.Devices != nil {
+		for _, p := range u.Devices.PendingDevices() {
+			if p.Address == address {
+				return true, true
+			}
+		}
+	}
+	return true, false
+}
+
 // SerialSuffix returns the routing-key central-id discriminator for the
 // named central: the CCU serial's last-10 lower suffix
 // ([routingkey.SerialSuffix]). It feeds the canonical external
@@ -291,8 +356,13 @@ func (r *Registry) SerialSuffix(name string) string {
 // VCU-prefixed HmIP device addresses are the one space that is device-borne
 // and does not collide, but the caller has only an address and cannot tell the
 // spaces apart, so the combining rule applies to all of them.
-func (r *Registry) Released(address string) bool {
-	for _, u := range r.List() {
+//
+// A request bound to a central (see [Registry.Scoped]) is not in that
+// position: it names the address space, so only that central's hold counts.
+// A device released on one CCU reads released there even while a same-named
+// device on another CCU is still held back.
+func (r *Registry) Released(ctx context.Context, address string) bool {
+	for _, u := range r.Scoped(ctx) {
 		if u == nil || u.ModelRegistry == nil || u.Devices == nil {
 			continue
 		}

@@ -13,7 +13,7 @@ import (
 	"reflect"
 	"testing"
 
-	openccudata "github.com/SukramJ/go-openccu-data"
+	openccudata "sukramj.dev/go-openccu-data"
 )
 
 func TestLoadTranslationsEmptyPathReturnsSentinel(t *testing.T) {

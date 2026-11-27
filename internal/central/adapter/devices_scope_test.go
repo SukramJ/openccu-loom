@@ -28,7 +28,7 @@ func TestDeviceLookupRefusesAnAddressSeveralCentralsShare(t *testing.T) {
 	reg := scopeRigTwoCentrals(t, shared)
 	a := &DevicesAdapter{registry: reg}
 
-	if d, ok := a.Device(shared); ok {
+	if d, ok := a.Device(context.Background(), shared); ok {
 		t.Errorf("shared address resolved to %q on one arbitrary central", d.Model)
 	}
 }
@@ -47,7 +47,7 @@ func TestDeviceLookupStillResolvesAnUnambiguousAddress(t *testing.T) {
 	u.ModelRegistry.Put(newScopeDevice("ONLY-ON-02", "HmIP-PSM"))
 
 	a := &DevicesAdapter{registry: reg}
-	d, ok := a.Device("ONLY-ON-02")
+	d, ok := a.Device(context.Background(), "ONLY-ON-02")
 	if !ok {
 		t.Fatal("unambiguous address must still resolve")
 	}

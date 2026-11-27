@@ -44,10 +44,16 @@ type CentralLister interface {
 // the REST DeviceIndex contract so both adapters project the same data.
 type DeviceLister interface {
 	Devices() []*device.Device
-	Device(address string) (*device.Device, bool)
+	Device(ctx context.Context, address string) (*device.Device, bool)
 	// CentralOf returns the owning CCU name, or "" when the device is
-	// unknown.
+	// unknown. It takes no binding: an address several CCUs repeat is
+	// attributed to the first by name, so it labels listings and never
+	// decides which device a call acts on.
 	CentralOf(address string) string
+	// HoldsDevice reports whether central is configured and whether it
+	// holds the device behind address (device or channel address). It is
+	// the check bindDeviceCentral runs before it binds a call.
+	HoldsDevice(central, address string) (known, holds bool)
 	// Released reports whether a device has finished onboarding.
 	//
 	// An assistant driving the daemon is a device consumer like any
@@ -55,8 +61,9 @@ type DeviceLister interface {
 	// listed here — it has to be, or there would be nothing to configure
 	// — and acting on it as if it were in service is the mistake the
 	// release step exists to prevent. True for a device that never
-	// entered the onboarding wizard.
-	Released(address string) bool
+	// entered the onboarding wizard. A context bound to a central asks
+	// that central alone.
+	Released(ctx context.Context, address string) bool
 }
 
 // ValueWriter pushes a value to the CCU. Same contract as the REST

@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -304,7 +305,7 @@ func TestChannelSummaryEventGroupsMatchTheEndpoint(t *testing.T) {
 		t.Fatalf("fixture produced %d groups, want at least 2 — the guard needs more than one kind to compare", len(fromEndpoint))
 	}
 
-	inline := toChannelSummary(ch, nil, serialSuffixForChannel(idx, ch)).EventGroups
+	inline := toChannelSummary(ch, nil, serialSuffixForChannel(context.Background(), idx, ch)).EventGroups
 	if len(inline) != len(fromEndpoint) {
 		t.Fatalf("channel carries %d groups, endpoint serves %d", len(inline), len(fromEndpoint))
 	}

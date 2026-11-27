@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 568.
+Guards without a doc comment: 8 of 576.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -32,6 +32,10 @@ Guards without a doc comment: 8 of 568.
 | TestAPISurfaceChangesCarryTheRightBump | api_surface_bump_test.go | TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's versioning policy to each other: what [handlers.APIVersion] claims about a change, and what the specification actually did. |
 | TestAPIVersionMatchesTheSpecDocument | api_surface_bump_test.go | TestAPIVersionMatchesTheSpecDocument keeps the constant and the document from drifting: they are two spellings of one number, and a bump applied to only one of them makes every other check here meaningless. |
 | TestValueSemanticsChangesAreWellFormed | api_surface_bump_test.go | TestValueSemanticsChangesAreWellFormed keeps [valueSemanticsChanges] a register rather than a comment block. |
+| TestRouterStampsTheAuditActor | audit_actor_router_test.go | TestRouterStampsTheAuditActor pins that the production router mounts the actor middleware: a change made through it by an entry credential lands in the change log with the principal and the asserted person, and the same header from a browser session is dropped. |
+| TestCentralBoundChangeIsRecordedOnThatCentral | audit_central_binding_test.go | TestCentralBoundChangeIsRecordedOnThatCentral pins the change log's central through the production router, guard and adapter: a change made through a device route bound with `?central=` records that central on its row, and the bound history of the same address on the other CCU leaves the row out. |
+| TestAuditProducersRecordThroughRecordFrom | audit_record_from_test.go | TestAuditProducersRecordThroughRecordFrom pins that every change-log row outside internal/audit is written through audit.RecordFrom, and that no producer sets Entry.OnBehalfOf itself. |
+| TestAuthNeverReadsOnBehalfOf | audit_record_from_test.go | TestAuthNeverReadsOnBehalfOf pins that the asserted actor never reaches an authorization decision: internal/auth must not mention it at all. |
 | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling | auth_subject_canonicalisation_test.go | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling guards the other half of the canonicalisation: the CCU's user database is its own namespace, so folding the subject for Loom-side bookkeeping must not change the name the credential validation and the user-level lookup ask about. |
 | TestEveryUserStoreReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestEveryUserStoreReportsCanonicalSubject pins that every [auth.UserStore] in the daemon reports the canonical subject regardless of the casing the caller typed. |
 | TestOIDCLoginReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestOIDCLoginReportsCanonicalSubject pins the remaining login path. |
@@ -123,6 +127,9 @@ Guards without a doc comment: 8 of 568.
 | TestEveryRegisteredProfileHasConstructor | custom_profile_constructor_resolves_test.go | TestEveryRegisteredProfileHasConstructor walks every profile the process-wide registry maps to at least one CCU device model and asserts a [custom.Constructor] is registered for its name. |
 | TestPinnedChannelGroupSchemasAreUnchanged | custom_profile_constructor_resolves_test.go | TestPinnedChannelGroupSchemasAreUnchanged pins the wrapped generic-DP composition (the Field→Parameter mapping, plus visibility forcing) of four representative profiles — spanning cover, switch, lock and climate — field by field. |
 | TestRealDeviceModelsMaterializeCustomDataPoint | custom_profile_constructor_resolves_test.go | TestRealDeviceModelsMaterializeCustomDataPoint drives custom.CreateCustomDataPoints — the exact function the daemon calls at device-hydration time — against a handful of well-known CCU models and asserts the profile's primary channel receives a non-nil custom data point. |
+| TestEditorRoutesExcludeLifecycle | device_central_binding_test.go | TestEditorRoutesExcludeLifecycle pins what the editor's route list lets a relay forward, measured against the mounted router rather than against the list's own spelling: a prefix that grows by one segment can cover a route nobody meant to hand to the integration. |
+| TestEveryDeviceRouteHonoursCentral | device_central_binding_test.go | TestEveryDeviceRouteHonoursCentral walks every mounted route that addresses a device and asserts the central binding runs in front of its handler: a central that does not exist, and one that does not hold the address, are both refused with 404 before the operation runs. |
+| TestDeviceRouteLandsOnTheNamedCentral | device_central_landing_test.go | TestDeviceRouteLandsOnTheNamedCentral pins the whole binding chain through the router with the production adapter and the production locator: the guard binds the request, the binding reaches the adapter's lookup, and the answer is the named CCU's device. |
 | TestDeviceTypesAreNormalised | device_profile_catalogue_test.go | TestDeviceTypesAreNormalised asserts that every registration's device type is already in the form the registry normalises lookups to. |
 | TestEveryChannelGroupRoleDeclaresItsChannelTypes | device_profile_catalogue_test.go | TestEveryChannelGroupRoleDeclaresItsChannelTypes asserts that every role a registered profile uses names the channel types it accepts (ADR 0087). |
 | TestEveryChannelGroupSchemaIsReferenced | device_profile_catalogue_test.go | TestEveryChannelGroupSchemaIsReferenced asserts that no schema sits in the catalogue unreferenced without saying so. |
@@ -561,6 +568,7 @@ Guards without a doc comment: 8 of 568.
 | TestPin_PendingDevices_StoreConstructedInDaemon | wiring_pins/pending_devices_gate_test.go | TestPin_PendingDevices_StoreConstructedInDaemon pins that the composition root actually builds the durable deferred-creation queue. |
 | TestPin_ReleaseState_OnTheMCPSurface | wiring_pins/pending_devices_gate_test.go | TestPin_ReleaseState_OnTheMCPSurface pins that an assistant driving the daemon sees the onboarding state too. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
+| TestRPCRecordingCapturesSouthboundCallsOfARunningCentral | wiring_pins/rpc_recording_wiring_test.go | TestRPCRecordingCapturesSouthboundCallsOfARunningCentral pins the RPC recording — POST /diagnostics/rpc-recording — through the composition root: once the recorder adapter starts a session, the central's south-bound calls land in its trace, a read (listDevices during the bring-up) as well as a write through the daemon's value writer. |
 | TestEverySeamAttachWrapsItsHandover | wiring_pins/seam_attach_wraps_work_test.go | TestEverySeamAttachWrapsItsHandover pins that a wiring seam's Attach closure actually performs the handover it declares. |
 | TestPin_SectionApplier_WiredIntoTheRESTRouter | wiring_pins/section_applier_test.go | TestPin_SectionApplier_WiredIntoTheRESTRouter pins that the daemon gives the config-save path something to apply a section with. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |

@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"time"
 
-	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
-	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
+	hapublisher "sukramj.dev/go-hamqtt/publisher"
+	hagomqtt "sukramj.dev/go-hamqtt/publisher/gomqtt"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 )

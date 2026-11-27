@@ -6,26 +6,14 @@ package reliability
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-
-func retryKey(parameter string) hmtypes.DataPointKey {
-	return hmtypes.DataPointKey{
-		InterfaceID:    "test-interface",
-		ChannelAddress: "VCU0000001:1",
-		ParamsetKey:    hmenum.ParamsetKeyValues,
-		Parameter:      parameter,
-	}
-}
 
 func fastRetrier(maxAttempts int) *Retrier {
 	return NewRetrier(RetryConfig{
@@ -51,8 +39,7 @@ func TestRetrierEnabledByDefault(t *testing.T) {
 }
 
 // TestRetrierDisabledWhenMaxAttemptsZero verifies that a Retrier constructed
-// with MaxAttempts ≤ 0 is disabled: fn is called exactly once and the retrier
-// does not touch the active-retry map.
+// with MaxAttempts ≤ 0 is disabled: fn is called exactly once.
 func TestRetrierDisabledWhenMaxAttemptsZero(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		r := NewRetrier(RetryConfig{
@@ -70,20 +57,6 @@ func TestRetrierDisabledWhenMaxAttemptsZero(t *testing.T) {
 		}
 		if calls != 1 {
 			t.Fatalf("disabled Retrier: calls=%d, want 1", calls)
-		}
-		if r.ActiveRetryCount() != 0 {
-			t.Fatal("disabled Retrier must not touch active-retry map")
-		}
-	})
-}
-
-// TestRetrierActiveRetryCountInitialZero verifies the retry count starts at
-// zero before any DoForKey call.
-func TestRetrierActiveRetryCountInitialZero(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := fastRetrier(3)
-		if got := r.ActiveRetryCount(); got != 0 {
-			t.Fatalf("ActiveRetryCount initial = %d, want 0", got)
 		}
 	})
 }
@@ -146,138 +119,6 @@ func TestRetrierMetricsInitialZero(t *testing.T) {
 		}
 		if m.RecoveryWaitTimeouts != 0 {
 			t.Errorf("RecoveryWaitTimeouts = %d, want 0", m.RecoveryWaitTimeouts)
-		}
-		if m.CancelledRetries != 0 {
-			t.Errorf("CancelledRetries = %d, want 0", m.CancelledRetries)
-		}
-	})
-}
-
-// ─── Active-retry cleanup ─────────────────────────────────────────────────────
-
-// TestRetrierCleanupAfterExhaustion verifies that the active-retry map is
-// cleared when a DoForKey chain exhausts all attempts.
-func TestRetrierCleanupAfterExhaustion(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := fastRetrier(3)
-		key := retryKey("LEVEL")
-
-		err := r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
-			return errors.New("always fail")
-		})
-		if err == nil {
-			t.Fatal("expected exhaustion error")
-		}
-		if got := r.ActiveRetryCount(); got != 0 {
-			t.Fatalf("ActiveRetryCount after exhaustion = %d, want 0", got)
-		}
-	})
-}
-
-// TestRetrierCleanupAfterSuccess verifies the active-retry map is cleared on
-// eventual success.
-func TestRetrierCleanupAfterSuccess(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := fastRetrier(3)
-		key := retryKey("LEVEL")
-
-		err := r.DoForKey(context.Background(), key, func(_ context.Context, attempt int) error {
-			if attempt < 2 {
-				return errors.New("transient")
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got := r.ActiveRetryCount(); got != 0 {
-			t.Fatalf("ActiveRetryCount after success = %d, want 0", got)
-		}
-	})
-}
-
-// TestRetrierCleanupAfterNonRetryableError verifies the active-retry map is
-// cleared when the first error is non-retryable.
-func TestRetrierCleanupAfterNonRetryableError(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := fastRetrier(3)
-		key := retryKey("LEVEL")
-
-		err := r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
-			return hmerr.ErrAuthFailure
-		})
-		if !errors.Is(err, hmerr.ErrAuthFailure) {
-			t.Fatalf("expected ErrAuthFailure, got %v", err)
-		}
-		if got := r.ActiveRetryCount(); got != 0 {
-			t.Fatalf("ActiveRetryCount after non-retryable = %d, want 0", got)
-		}
-	})
-}
-
-// ─── CancelInterface ─────────────────────────────────────────────────────────
-
-// TestRetrierCancelInterfaceSetsAllEvents verifies that CancelInterface
-// cancels every in-flight chain and returns the correct count.
-func TestRetrierCancelInterfaceSetsAllEvents(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := NewRetrier(RetryConfig{
-			MaxAttempts: 10,
-			Initial:     100 * time.Millisecond,
-			Max:         100 * time.Millisecond,
-			Multiplier:  1,
-			Jitter:      -1,
-		})
-
-		keys := []hmtypes.DataPointKey{
-			retryKey("LEVEL"),
-			retryKey("STATE"),
-		}
-
-		var wg sync.WaitGroup
-		errs := make([]chan error, len(keys))
-		for i := range keys {
-			errs[i] = make(chan error, 1)
-		}
-
-		started := make(chan struct{}, len(keys))
-
-		for i, k := range keys {
-			wg.Go(func() {
-				errs[i] <- r.DoForKey(context.Background(), k, func(_ context.Context, attempt int) error {
-					started <- struct{}{}
-					if attempt == 1 {
-						return errors.New("transient")
-					}
-					time.Sleep(10 * time.Second)
-					return nil
-				})
-			})
-		}
-
-		for range keys {
-			<-started
-		}
-		synctest.Wait()
-
-		cancelled := r.CancelInterface()
-		if cancelled != 2 {
-			t.Fatalf("CancelInterface returned %d, want 2", cancelled)
-		}
-
-		wg.Wait()
-		if r.ActiveRetryCount() != 0 {
-			t.Fatal("ActiveRetryCount must be 0 after CancelInterface")
-		}
-		if got := r.Snapshot().CancelledRetries; got < 2 {
-			t.Fatalf("CancelledRetries = %d, want >= 2", got)
-		}
-
-		for i, ch := range errs {
-			err := <-ch
-			if !errors.Is(err, ErrRetrySuperseded) {
-				t.Errorf("chain %d: expected ErrRetrySuperseded, got %v", i, err)
-			}
 		}
 	})
 }
@@ -370,36 +211,6 @@ func TestShouldWaitForRecovery_RegularError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		if shouldWaitForRecovery(errors.New("generic")) {
 			t.Error("shouldWaitForRecovery(generic) must return false")
-		}
-	})
-}
-
-// --- DoForKey: cancel in-progress retry ---
-
-func TestRetrier_DoForKey_CancelKey(t *testing.T) {
-	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		r := NewRetrier(RetryConfig{
-			MaxAttempts: 10,
-			Initial:     time.Second, // slow retry — CancelKey fires before 2nd attempt
-		})
-		key := hmtypes.DataPointKey{ChannelAddress: "DEV:1", Parameter: "LEVEL"}
-		done := make(chan error, 1)
-		go func() {
-			done <- r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
-				return errors.New("fail")
-			})
-		}()
-		// Let DoForKey start and fail the first attempt.
-		synctest.Wait()
-		r.CancelKey(key)
-		synctest.Wait()
-		select {
-		case err := <-done:
-			// ErrRetrySuperseded or context cancellation are both acceptable.
-			t.Logf("DoForKey after CancelKey: err=%v (accepted)", err)
-		default:
-			t.Error("DoForKey did not return after CancelKey")
 		}
 	})
 }

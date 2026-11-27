@@ -40,7 +40,7 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
+		ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil, nil,
 	)
 	// Cancel here rather than in a t.Cleanup of its own. Cleanups run LIFO, and
@@ -58,7 +58,7 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 			teardown()
 		}
 	})
-	n, ok := wiring.nodeUI.Node.(matterNodeSource)
+	n, ok := pagesNode(wiring.nodeUI)
 	if !ok || n.Node == nil {
 		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}
@@ -131,7 +131,7 @@ func TestMatterNodePagesRevokeTheWindowTheyCloseOrReplace(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-revoke")
 	ctx, cancel := context.WithCancel(context.Background())
 	wiring, closers, teardown := wireMatterRuntime(
-		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, nil, nil,
+		ctx, cfg, reg, openTestLoomDB(t), nil, health.NewTracker(), nil, nil, nil,
 		slog.New(slog.DiscardHandler), nil, nil,
 	)
 	t.Cleanup(func() {
@@ -143,7 +143,7 @@ func TestMatterNodePagesRevokeTheWindowTheyCloseOrReplace(t *testing.T) {
 			teardown()
 		}
 	})
-	n, ok := wiring.nodeUI.Node.(matterNodeSource)
+	n, ok := pagesNode(wiring.nodeUI)
 	if !ok || n.Node == nil {
 		t.Fatalf("matter runtime did not hand the node page family a node (%T); without it this pin asserts nothing", wiring.nodeUI.Node)
 	}

@@ -183,7 +183,7 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionUserCreate,
 				Note:   "subject=" + subject + " role=" + string(body.Role),
@@ -305,7 +305,7 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionUserUpdate,
 				Note:   "subject=" + subject + " role=" + string(newRole),
@@ -360,7 +360,7 @@ func DeleteUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   actor,
 				Action: audit.ActionUserDelete,
 				Note:   "subject=" + subject,

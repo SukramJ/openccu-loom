@@ -801,11 +801,11 @@ func wireInterface(
 	xmlOrderedCaller := client.OrderedCallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
 		return xmlCaller.CallOrdered(ctx, method, params...)
 	})
-	// Build the session-recorder hook that forwards SetValue
-	// PutParamset call traces to the CacheCoordinator recorder.
-	// The hook is nil-safe on both ends: the IC skips the call
-	// when nil and CacheCoordinator.RecordSession is a no-op when
-	// no session recorder is wired.
+	// Build the session-recorder hook that forwards the trace of every
+	// successful InterfaceClient.Call — reads and writes — to the
+	// CacheCoordinator recorder. The hook is nil-safe on both ends: the
+	// IC skips the call when nil and CacheCoordinator.RecordSession is a
+	// no-op when no session recorder is wired or recording is stopped.
 	var sessionHook func(rpcType, method string, params, response any)
 	if unit.Cache != nil {
 		cache := unit.Cache
