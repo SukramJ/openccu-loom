@@ -56,6 +56,42 @@ func nodeAllowedHosts(cfg *config.Config, hostname func() (string, error)) []str
 	return out
 }
 
+// nodeAllowHost is the predicate go-fabric-ui consults for a request under a
+// name nodeAllowedHosts does not list. It admits a request an API token
+// authenticated (nodeTokenAuthenticated) in every deployment, and in the HA
+// add-on also a request the Supervisor's Ingress proxied
+// (nodeSupervisorAllowHost).
+func nodeAllowHost(cfg *config.Config, kind deployment.Kind) func(*http.Request) bool {
+	supervisor := nodeSupervisorAllowHost(cfg, kind)
+	if supervisor == nil {
+		return nodeTokenAuthenticated
+	}
+	return func(r *http.Request) bool {
+		return nodeTokenAuthenticated(r) || supervisor(r)
+	}
+}
+
+// nodeTokenAuthenticated reports whether an API token (`bearer`) or a box
+// API token (`occulite-token`) authenticated r. A reverse proxy that
+// forwards the browser's own Host holds such a token: the Home Assistant
+// remote add-on injects its token and hands on the name Home Assistant is
+// reached under in X-Forwarded-Host, which no loom setting names. Without
+// this every Matter page behind it answers 403 host_not_allowed, and the
+// SPA reads the missing node status as a bridge that is switched off.
+//
+// The Host check defends against DNS rebinding: a foreign page that rebinds
+// its own name to the daemon's address and drives the visitor's browser.
+// That page cannot present a token — a browser attaches none on its own —
+// so admitting a token-authenticated request keeps the defence intact. A
+// session cookie, a Basic header the browser cached or an Ingress identity
+// is still held to the name rules. The identity is resolved before the node
+// routes run (the router's global auth resolver), and a token wins over a
+// session cookie riding along with it ([auth.SessionMiddleware]).
+func nodeTokenAuthenticated(r *http.Request) bool {
+	id, ok := auth.IdentityFrom(r.Context())
+	return ok && (id.Scheme == auth.SchemeBearer || id.Scheme == auth.SchemeOcculiteToken)
+}
+
 // nodeSupervisorAllowHost admits a node request Home Assistant's Ingress
 // proxied when the daemon runs as the HA add-on. Ingress hands on the
 // browser's own Host — the name Home Assistant is reached under, which no

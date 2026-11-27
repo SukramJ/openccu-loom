@@ -48,6 +48,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter is back in the navigation behind the Home Assistant remote
+  add-on.** Opened through the remote add-on, the UI dropped Matter from its
+  menu and the view settings said the bridge was switched off while it ran.
+  The add-on forwards the name Home Assistant is reached under, which no loom
+  setting lists, and the Matter routes refused every request under it with
+  403 `host_not_allowed`. They now admit a request an API token or a box API
+  token authenticated under any name. That is the credential the remote add-on
+  injects, and a page that rebinds a foreign name to the daemon cannot present
+  it. A session cookie or a cached Basic login is still held to the names in
+  `north.rest.public_url` and `<hostname>.local`.
+
 - **A command whose reply the connection dropped is no longer sent again.**
   When the CCU received a call and the connection broke before its answer
   arrived, the retry layer sent it up to twice more — a button press
