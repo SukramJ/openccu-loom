@@ -24,7 +24,7 @@
   "devDependencies": {
     "@fontsource/inter": "^5.3.0",
     "@playwright/test": "^1.65.1",
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.2",
     "@tailwindcss/vite": "^4.3.5",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/svelte": "^5.4.2",
@@ -33,20 +33,20 @@
     "happy-dom": "^21.0.4",
     "openapi-typescript": "^7.13.0",
     "opentype.js": "^2.0.0",
-    "svelte": "^5.57.3",
+    "svelte": "^5.59.2",
     "svelte-check": "^4.7.8",
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
-    "vite": "^8.3.8",
-    "vitest": "^5.1.0"
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.4",
-    "@lucide/svelte": "^1.71.0",
+    "@lucide/svelte": "^1.82.0",
     "@thingfabric/fabric-ui": "0.14.1",
-    "bits-ui": "^2.21.0",
+    "bits-ui": "^2.22.0",
     "clsx": "^2.1.1",
     "qrcode": "^1.5.4",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.1"
   }
 }

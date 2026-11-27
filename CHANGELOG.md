@@ -21,6 +21,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   5.0.9 and `@playwright/test` 1.65.1; the CI Playwright container moves to
   `v1.65.1-noble` with it, since the test runner only finds the browser build
   of its own version. (#1173)
+- **Go dependencies:** `modernc.org/sqlite` 1.63.0,
+  `github.com/pressly/goose/v3` 3.30.2 (which no longer pulls in
+  `github.com/sethvargo/go-retry`), `golang.org/x/net` 0.63.0 and
+  `golang.org/x/tools` 0.53.0. No other direct dependency outside the
+  go-fabric family has a minor or patch release.
+- **SPA dependency round:** `svelte` 5.59.2, `vite` 8.4.0, `bits-ui` 2.22.0,
+  `@lucide/svelte` 1.82.0, `vitest` 5.1.2, `@sveltejs/vite-plugin-svelte`
+  7.3.2 and `tailwind-merge` 3.7.1. `typescript` 7 and
+  `@testing-library/jest-dom` 8 are majors and stay out of this round.
 
 ### Added
 
