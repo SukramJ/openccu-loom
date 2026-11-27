@@ -80,6 +80,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `list_audit` tool reports the recorded central. New column
   `audit_log.central` (migration 060). (#1182)
 
+- **`POST /diagnostics/rpc-recording` records again.** A recording started
+  on a running daemon captured nothing: the hook that feeds it sat in two
+  write methods no production path called. It now records every south-bound
+  call that goes through the interface client's reliability stack — reads
+  and writes, once per successful call however many retries it took, and
+  once per group of identical coalesced writes. JSON-RPC calls,
+  `init`/`deinit` and the order-preserving reads of the device-definition
+  export are not recorded. The unused write methods and the retry
+  supersede-by-data-point machinery only they used are removed. (#1180)
+
 - **Matter is back in the navigation behind the Home Assistant remote
   add-on.** Opened through the remote add-on, the UI dropped Matter from its
   menu and the view settings said the bridge was switched off while it ran.

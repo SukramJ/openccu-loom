@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 575.
+Guards without a doc comment: 8 of 576.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -568,6 +568,7 @@ Guards without a doc comment: 8 of 575.
 | TestPin_PendingDevices_StoreConstructedInDaemon | wiring_pins/pending_devices_gate_test.go | TestPin_PendingDevices_StoreConstructedInDaemon pins that the composition root actually builds the durable deferred-creation queue. |
 | TestPin_ReleaseState_OnTheMCPSurface | wiring_pins/pending_devices_gate_test.go | TestPin_ReleaseState_OnTheMCPSurface pins that an assistant driving the daemon sees the onboarding state too. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
+| TestRPCRecordingCapturesSouthboundCallsOfARunningCentral | wiring_pins/rpc_recording_wiring_test.go | TestRPCRecordingCapturesSouthboundCallsOfARunningCentral pins the RPC recording — POST /diagnostics/rpc-recording — through the composition root: once the recorder adapter starts a session, the central's south-bound calls land in its trace, a read (listDevices during the bring-up) as well as a write through the daemon's value writer. |
 | TestEverySeamAttachWrapsItsHandover | wiring_pins/seam_attach_wraps_work_test.go | TestEverySeamAttachWrapsItsHandover pins that a wiring seam's Attach closure actually performs the handover it declares. |
 | TestPin_SectionApplier_WiredIntoTheRESTRouter | wiring_pins/section_applier_test.go | TestPin_SectionApplier_WiredIntoTheRESTRouter pins that the daemon gives the config-save path something to apply a section with. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |

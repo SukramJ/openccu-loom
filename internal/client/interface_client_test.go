@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 func TestInterfaceClientCoalescesByKey(t *testing.T) {
@@ -163,72 +162,6 @@ func TestInterfaceClientClearJSONRPCSessionHook(t *testing.T) {
 	c.ClearJSONRPCSession()
 	if called != 2 {
 		t.Fatalf("after unset hook called %d times, want still 2", called)
-	}
-}
-
-// TestInterfaceClientCloseCanelsActiveRetries verifies that Close()
-// drains all in-flight DoForKey retry chains so ActiveRetryCount
-// returns 0 after shutdown. This guards against stale retries keeping
-// wire resources alive after an interface disconnect (Task #19).
-func TestInterfaceClientCloseCanelsActiveRetries(t *testing.T) {
-	retrier := reliability.NewRetrier(reliability.RetryConfig{
-		MaxAttempts: 10,
-		Initial:     500 * time.Millisecond,
-		Max:         500 * time.Millisecond,
-		Multiplier:  1,
-	})
-	c, err := New(Config{
-		CentralName: "main",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Caller:      CallerFunc(func(context.Context, string, []any) (any, error) { return nil, nil }),
-		Retrier:     retrier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dpk := hmtypes.DataPointKey{
-		InterfaceID:    "HmIP-RF",
-		ChannelAddress: "VCU1234567:1",
-		ParamsetKey:    hmenum.ParamsetKeyValues,
-		Parameter:      "STATE",
-	}
-
-	// Launch a retry chain that will block on backoff indefinitely.
-	started := make(chan struct{})
-	retryDone := make(chan error, 1)
-	go func() {
-		retryDone <- retrier.DoForKey(context.Background(), dpk, func(_ context.Context, attempt int) error {
-			if attempt == 1 {
-				close(started)
-			}
-			return errors.New("transient")
-		})
-	}()
-
-	// Wait until the chain has registered itself.
-	<-started
-	for range 100 {
-		if retrier.ActiveRetryCount() == 1 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if got := retrier.ActiveRetryCount(); got != 1 {
-		t.Fatalf("ActiveRetryCount before Close = %d, want 1", got)
-	}
-
-	// Close the client — must cancel all in-flight chains.
-	c.Close()
-
-	select {
-	case <-retryDone:
-	case <-time.After(2 * time.Second):
-		t.Fatal("retry chain did not terminate after Close")
-	}
-
-	if got := retrier.ActiveRetryCount(); got != 0 {
-		t.Fatalf("ActiveRetryCount after Close = %d, want 0", got)
 	}
 }
 
