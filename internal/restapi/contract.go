@@ -75,7 +75,7 @@ type DeviceIndex interface {
 	// True for an unknown address and for every device that never went
 	// through the onboarding wizard, which is why an existing
 	// installation reads `released: true` throughout and needs no filter.
-	Released(address string) bool
+	Released(ctx context.Context, address string) bool
 }
 
 // HealthReader is the narrow facade `GET /api/v1/health` needs.

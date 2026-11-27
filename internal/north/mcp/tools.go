@@ -338,7 +338,7 @@ func registerListDevices(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_devices",
 		Description: "List devices, optionally scoped to one central via central_name. Each entry carries `released`: false means an operator accepted the device but has not finished onboarding it, so it is configurable but not yet in service — do not act on it as if it were.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listDevicesIn) (*mcpsdk.CallToolResult, listDevicesOut, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listDevicesIn) (*mcpsdk.CallToolResult, listDevicesOut, error) {
 		out := listDevicesOut{Devices: []deviceSummary{}}
 		if d.Devices == nil {
 			return nil, out, nil
@@ -347,12 +347,19 @@ func registerListDevices(s *mcpsdk.Server, d Deps) {
 		if want != "" && !centralKnown(d, want) {
 			return nil, listDevicesOut{}, errUnknownCentral(d, want)
 		}
+		// The GET /devices?central= rule: with a central the list is that
+		// central's devices, decided by the scoped resolution (identity,
+		// since the unbound list carries one entry per central for a
+		// repeated address), and `released` is that central's hold alone.
+		ctx = hmreqctx.WithCentralScope(ctx, want)
 		for _, dev := range d.Devices.Devices() {
-			central := d.Devices.CentralOf(dev.Address)
-			if want != "" && central != want {
+			central := want
+			if want == "" {
+				central = d.Devices.CentralOf(dev.Address)
+			} else if held, ok := d.Devices.Device(ctx, dev.Address); !ok || held != dev {
 				continue
 			}
-			out.Devices = append(out.Devices, summarize(dev, central, d.Devices.Released(dev.Address)))
+			out.Devices = append(out.Devices, summarize(dev, central, d.Devices.Released(ctx, dev.Address)))
 		}
 		return nil, out, nil
 	})
@@ -370,7 +377,7 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, getDeviceOut{Found: false}, nil
 		}
-		return nil, getDeviceOut{Found: true, Device: summarize(dev, d.Devices.CentralOf(dev.Address), d.Devices.Released(dev.Address))}, nil
+		return nil, getDeviceOut{Found: true, Device: summarize(dev, d.Devices.CentralOf(dev.Address), d.Devices.Released(ctx, dev.Address))}, nil
 	})
 }
 

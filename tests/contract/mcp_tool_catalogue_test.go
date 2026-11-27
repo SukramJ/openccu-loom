@@ -209,7 +209,7 @@ func (mcpNoopWriter) SetValue(context.Context, string, hmenum.Parameter, any, hm
 	return nil
 }
 
-func (emptyDevices) Released(string) bool { return true }
+func (emptyDevices) Released(context.Context, string) bool { return true }
 
 type mcpNoopParamsets struct{}
 

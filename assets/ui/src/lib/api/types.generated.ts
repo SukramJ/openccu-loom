@@ -8592,6 +8592,15 @@ export interface components {
              *     for backends that report no owning central.
              */
             central?: string;
+            /**
+             * @description Whether the device has finished onboarding and may be
+             *     adopted; `false` means accepted and configurable but not yet
+             *     published to the ecosystems. A read bound to a central
+             *     (`?central=`) answers from that central's hold alone; an
+             *     unbound read is `false` when any CCU holding the address
+             *     still withholds it.
+             */
+            released?: boolean;
             interface: string;
             interface_id: string;
             /**
@@ -14559,6 +14568,13 @@ export interface operations {
                  *     (exact match; `central == SystemCCUEntry.name ==
                  *     payload.central`). Omit to list devices across every central
                  *     the daemon manages.
+                 *
+                 *     With it, the list is that central's devices and their answers
+                 *     come from it alone: a device whose address another CCU
+                 *     repeats is listed under its own CCU, and `released` (and
+                 *     `released_only`) reflect that CCU's onboarding hold. Without
+                 *     it, `released` is false when any CCU holding the address
+                 *     still withholds it.
                  */
                 central?: string;
                 /**

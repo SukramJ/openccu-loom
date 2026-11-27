@@ -686,10 +686,26 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		// existing client's list — the failure mode opposite to the one
 		// this filter exists for.
 		releasedOnly := q.Get("released_only") == "true"
+		// With `central`, the list is that central's devices and every
+		// answer about them comes from it: membership is decided by the
+		// scoped resolution, not by the first central holding the address,
+		// so a device whose address another CCU repeats is listed under its
+		// own CCU, and `released` is that CCU's hold alone. The unbound list
+		// keeps the address-keyed answers. An unknown central resolves
+		// nothing and lists nothing, as the filter always did.
+		listCtx := r.Context()
+		if centralFilter != "" {
+			listCtx = hmreqctx.WithCentralScope(listCtx, centralFilter)
+		}
 		filtered := devs[:0:0]
 		for _, d := range devs {
-			if centralFilter != "" && idx.CentralOf(d.Address) != centralFilter {
-				continue
+			// Identity, not mere presence: the unbound device list carries
+			// one entry per central for a repeated address, and only the
+			// entry the scoped lookup resolves to belongs to this central.
+			if centralFilter != "" {
+				if held, ok := idx.Device(listCtx, d.Address); !ok || held != d {
+					continue
+				}
 			}
 			if ifaceFilter != "" && !strings.Contains(strings.ToLower(string(d.Interface)), ifaceFilter) {
 				continue
@@ -703,7 +719,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 			if addrFilter != "" && !strings.Contains(strings.ToLower(d.Address), addrFilter) {
 				continue
 			}
-			if releasedOnly && !idx.Released(d.Address) {
+			if releasedOnly && !idx.Released(listCtx, d.Address) {
 				continue
 			}
 			filtered = append(filtered, d)
@@ -722,7 +738,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		}
 		out := make([]DeviceSummary, 0, end-start)
 		for _, d := range filtered[start:end] {
-			out = append(out, toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)))
+			out = append(out, toDeviceSummary(d, centralOfRequest(listCtx, idx, d.Address), idx.Released(listCtx, d.Address)))
 		}
 		w.Header().Set("X-Total-Count", strconv.Itoa(total))
 		JSON(w, http.StatusOK, map[string]any{
@@ -750,7 +766,7 @@ func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 			summaries = append(summaries, toChannelSummary(ch, labels, serialSuffixForChannel(r.Context(), idx, ch)))
 		}
 		JSON(w, http.StatusOK, DeviceDetail{
-			DeviceSummary: toDeviceSummary(d, centralOfRequest(r.Context(), idx, d.Address), idx.Released(d.Address)),
+			DeviceSummary: toDeviceSummary(d, centralOfRequest(r.Context(), idx, d.Address), idx.Released(r.Context(), d.Address)),
 			Channels:      summaries,
 		})
 	}

@@ -184,7 +184,7 @@ func buildSnapshotEnvelope(ctx context.Context, deps SnapshotDeps, inc snapshotI
 		sort.Slice(devs, func(i, j int) bool { return devs[i].Address < devs[j].Address })
 		env.Devices = make([]DeviceSummary, 0, len(devs))
 		for _, d := range devs {
-			released := deps.Devices.Released(d.Address)
+			released := deps.Devices.Released(ctx, d.Address)
 			// Same opt-in as GET /devices: a snapshot is what an
 			// ecosystem client seeds from, and it is also what the
 			// Config UI reloads. Only the caller knows which it is.

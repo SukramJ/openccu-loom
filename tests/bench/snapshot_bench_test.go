@@ -98,7 +98,7 @@ func benchFleet(devices, channels, dps int) *benchDeviceIndex {
 	return idx
 }
 
-func (b *benchDeviceIndex) Released(string) bool { return true }
+func (b *benchDeviceIndex) Released(context.Context, string) bool { return true }
 
 // runSnapshotBench drives the Snapshot handler with the given query and
 // Accept header b.N times, reporting allocations.

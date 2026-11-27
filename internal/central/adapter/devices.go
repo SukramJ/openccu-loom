@@ -185,12 +185,13 @@ func (a *DevicesAdapter) SerialSuffix(centralName string) string {
 //
 // This surface deliberately still LISTS an unreleased device — the Config
 // UI must see it to configure it — so the state travels as a field rather
-// than as a filter. An unknown address reports released.
-func (a *DevicesAdapter) Released(address string) bool {
+// than as a filter. An unknown address reports released. A request bound to
+// a central asks that central alone; see [central.Registry.Released].
+func (a *DevicesAdapter) Released(ctx context.Context, address string) bool {
 	if a.registry == nil {
 		return true
 	}
-	return a.registry.Released(address)
+	return a.registry.Released(ctx, address)
 }
 
 // DataPointWriterAdapter routes SetValue calls to the right

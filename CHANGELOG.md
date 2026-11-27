@@ -58,6 +58,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with the first CCU holding the address, so a device whose address a second
   CCU repeats could not be reached there. (#1184)
 
+- **REST API 19.1.0: a device read bound to a CCU answers `released` from
+  that CCU.**
+  `GET /devices/{addr}?central=` and `GET /devices?central=` (and the MCP
+  `list_devices` tool with `central_name`) report the onboarding state that
+  central holds, so a device released on one CCU no longer reads unreleased
+  because a same-named device on another CCU is still held back. The
+  central-filtered list now lists a device whose address another CCU repeats
+  under its own CCU; it used to be missing there, because the filter asked
+  which CCU holds the address first. Unbound reads keep the rule that a hold
+  on any CCU wins. `released` is now documented on `DeviceSummary`. (#1183)
+
 - **Matter is back in the navigation behind the Home Assistant remote
   add-on.** Opened through the remote add-on, the UI dropped Matter from its
   menu and the view settings said the bridge was switched off while it ran.

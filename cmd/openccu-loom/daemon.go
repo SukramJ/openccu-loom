@@ -291,8 +291,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// (`released_only:true`). Without this the option is accepted and
 	// filters nothing — the hub falls back to "everything is released",
 	// which is the safe direction: a missing checker must not blank a
-	// subscriber's stream.
-	wsHub.SetReleaseChecker(reg.Released)
+	// subscriber's stream. The hub asks by address alone and the daemon
+	// context is bound to no central, so the answer is the unbound one: a
+	// hold on any central holding the address wins.
+	wsHub.SetReleaseChecker(func(deviceAddress string) bool {
+		return reg.Released(ctx, deviceAddress)
+	})
 	wsHandler := si.wsHandler
 	valueWriter := si.valueWriter
 	mqttCollector := si.mqttCollector

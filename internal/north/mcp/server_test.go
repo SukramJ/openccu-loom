@@ -191,7 +191,12 @@ func (f *fakeDevices) Devices() []*device.Device {
 	return out
 }
 
-func (f *fakeDevices) Device(_ context.Context, address string) (*device.Device, bool) {
+// Device honours a central binding the way the production adapter does: a
+// bound lookup answers only when the bound central holds the address.
+func (f *fakeDevices) Device(ctx context.Context, address string) (*device.Device, bool) {
+	if scope, ok := hmreqctx.CentralScope(ctx); ok && !f.held[scope][address] {
+		return nil, false
+	}
 	d, ok := f.devices[address]
 	return d, ok
 }
@@ -200,7 +205,7 @@ func (f *fakeDevices) CentralOf(address string) string {
 	return f.centrals[address]
 }
 
-func (f *fakeDevices) Released(string) bool { return true }
+func (f *fakeDevices) Released(context.Context, string) bool { return true }
 
 type writeCall struct {
 	address   string

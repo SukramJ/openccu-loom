@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -173,7 +174,7 @@ func TestW2CtrReleasedCombinesEveryHolderOfARepeatedAddress(t *testing.T) {
 			for _, n := range []string{"ccu-alpha", "ccu-zulu"} {
 				w2CtrRegisterBidCosCentral(t, r, n, n == tc.holder)
 			}
-			if r.Released("BidCoS-RF") {
+			if r.Released(context.Background(), "BidCoS-RF") {
 				t.Errorf("Released(%q) = true although %q withholds it: the verdict came "+
 					"from the first central in name order, so a device still in the "+
 					"onboarding wizard on one CCU reaches the ecosystems because another "+
@@ -191,10 +192,32 @@ func TestW2CtrReleasedReportsReleasedWhenNoHolderWithholds(t *testing.T) {
 	for _, n := range []string{"ccu-alpha", "ccu-zulu"} {
 		w2CtrRegisterBidCosCentral(t, r, n, false)
 	}
-	if !r.Released("BidCoS-RF") {
+	if !r.Released(context.Background(), "BidCoS-RF") {
 		t.Error("Released = false although no central withholds BidCoS-RF")
 	}
-	if !r.Released("VCU0000277") {
+	if !r.Released(context.Background(), "VCU0000277") {
 		t.Error("Released = false for an address no central holds; absence of a hold must read as released")
+	}
+}
+
+// TestReleasedBoundToACentralAsksThatCentralAlone pins the bound half of
+// Registry.Released: a context bound to a central names the address space, so
+// only that central's hold counts. The device released on ccu-alpha reads
+// released there although ccu-zulu still withholds its same-named device, and
+// the bound ccu-zulu answer and the unbound answer both stay held.
+func TestReleasedBoundToACentralAsksThatCentralAlone(t *testing.T) {
+	r := NewRegistry()
+	for _, n := range []string{"ccu-alpha", "ccu-zulu"} {
+		w2CtrRegisterBidCosCentral(t, r, n, n == "ccu-zulu")
+	}
+	bg := context.Background()
+	if !r.Released(hmreqctx.WithCentralScope(bg, "ccu-alpha"), "BidCoS-RF") {
+		t.Error("bound to ccu-alpha, Released = false: ccu-zulu's hold leaked into a request that named ccu-alpha")
+	}
+	if r.Released(hmreqctx.WithCentralScope(bg, "ccu-zulu"), "BidCoS-RF") {
+		t.Error("bound to ccu-zulu, Released = true although ccu-zulu withholds BidCoS-RF")
+	}
+	if r.Released(bg, "BidCoS-RF") {
+		t.Error("unbound, Released = true: the combining rule no longer holds")
 	}
 }

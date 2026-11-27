@@ -61,8 +61,9 @@ type DeviceLister interface {
 	// listed here — it has to be, or there would be nothing to configure
 	// — and acting on it as if it were in service is the mistake the
 	// release step exists to prevent. True for a device that never
-	// entered the onboarding wizard.
-	Released(address string) bool
+	// entered the onboarding wizard. A context bound to a central asks
+	// that central alone.
+	Released(ctx context.Context, address string) bool
 }
 
 // ValueWriter pushes a value to the CCU. Same contract as the REST

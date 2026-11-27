@@ -49,7 +49,7 @@ func (f *fakeDeviceIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (f *fakeDeviceIndex) Released(string) bool { return true }
+func (f *fakeDeviceIndex) Released(context.Context, string) bool { return true }
 
 // fakeChannelWriter satisfies [device.ChannelWriter] and records every
 // SetValue / PutParamset call made through the channel's installed writer.

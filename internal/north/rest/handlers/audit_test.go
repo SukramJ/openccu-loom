@@ -415,7 +415,7 @@ func TestListAudit_DurablePath_QueryCalledNotList(t *testing.T) {
 	}
 }
 
-func (s *stubCentralIndex) Released(string) bool { return true }
+func (s *stubCentralIndex) Released(context.Context, string) bool { return true }
 
 func TestListAudit_DurablePath_OpPostFilterApplied(t *testing.T) {
 	t.Parallel()

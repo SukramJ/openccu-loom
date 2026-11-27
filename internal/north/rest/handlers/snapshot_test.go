@@ -651,7 +651,7 @@ func (m *multiCentralSnapshotIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (m *multiCentralSnapshotIndex) Released(string) bool { return true }
+func (m *multiCentralSnapshotIndex) Released(context.Context, string) bool { return true }
 
 // TestSnapshot_CentralScope verifies that ?central=<name> scopes devices (and
 // device_channels when included) plus the hub entities (programs, sysvars,
