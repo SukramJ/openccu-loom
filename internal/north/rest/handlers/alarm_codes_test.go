@@ -128,7 +128,9 @@ func TestCreateAlarmCode_PINHashedAndNeverReturned(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201, body=%s", w.Code, w.Body.String())
 	}
-	if strings.Contains(w.Body.String(), "1234") {
+	// The PIN as a JSON string value: the bare digits also occur in the
+	// random code id and the millisecond timestamps.
+	if strings.Contains(w.Body.String(), `"1234"`) {
 		t.Fatalf("response body leaks the cleartext PIN: %s", w.Body.String())
 	}
 	var raw map[string]any
