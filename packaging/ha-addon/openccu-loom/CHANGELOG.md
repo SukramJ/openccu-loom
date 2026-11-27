@@ -1,5 +1,25 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.109.0
+
+- **Every device route can be bound to one CCU** with `?central=<name>`,
+  so a device whose address repeats on a second CCU is reached there; the
+  MCP device tools bind to the CCU they name the same way.
+- **The change log records the CCU a change was made on and who an
+  integration acted for**, and operators can read one device's change
+  history.
+- **A command whose reply the connection dropped is no longer sent
+  again.** Only reads are repeated after a lost reply, so a button press, a
+  firmware install or a paramset write reaches the CCU once.
+- **Matter:** the bridge runs on go-fabric 0.28: a topology whose rebuild
+  failed is rebuilt by the next sync, and one device the bridge cannot
+  build no longer marks the whole selection "not in effect". Matter is
+  back in the menu behind the Home Assistant remote add-on.
+- **Breaking for API users (REST API 19.1.0):** the editor component's
+  route list names the method; see the OpenCCU-Loom changelog.
+- **Fixed:** `POST /diagnostics/rpc-recording` records again, and a
+  deleted device's Matter endpoint numbers are freed after a store error.
+
 ## 0.108.0
 
 - **The Matter bridge's credentials are encrypted in the database** under

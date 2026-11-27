@@ -857,7 +857,14 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 // naming the request's principal. After an exposure change the ledger
 // therefore shows the exposure batch and the reassembly it caused, in
 // that order.
-func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder) func(context.Context) error {
+//
+// It fails only when the node does not serve the described topology
+// ([matteradapter.ErrNotServed]): go-fabric-ui then answers the selection
+// "stored, not in effect" and withholds endpoints_changed. A device the
+// sync could not bridge costs that device alone — the topology is
+// served, so the reassembly succeeds; the failure is logged and stays in
+// the audit note.
+func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder, logger *slog.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		err := syncModel(ctx)
 		if rec != nil {
@@ -868,6 +875,10 @@ func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder
 				}
 				audit.RecordFrom(ctx, rec, audit.Entry{User: id.Subject, Action: audit.ActionMatterForceSync, Note: note})
 			}
+		}
+		if err != nil && !errors.Is(err, matteradapter.ErrNotServed) {
+			logger.Warn("matter.reassemble.devices_failed", slog.String("err", err.Error()))
+			return nil
 		}
 		return err
 	}
@@ -1094,7 +1105,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			},
 			Audit: auditRec,
 		})},
-		Reassemble:       matterReassembler(bundle.sync, auditRec),
+		Reassemble:       matterReassembler(bundle.sync, auditRec, logger),
 		Events:           bundle.events,
 		Logger:           logger,
 		ConfiguredWindow: bundle.configuredCommissioning && !mcfg.Commissioning.EphemeralWindow,

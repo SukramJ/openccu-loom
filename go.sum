@@ -64,8 +64,8 @@ github.com/ncruces/go-strftime v1.1.0 h1:vtPmPWMkb539RGV9WpWT9EwJGvrOCKvMNI4obWL
 github.com/ncruces/go-strftime v1.1.0/go.mod h1:yVaq7iwCN09vHRrKBrrflXT0M9tTMG2KmZ9Fj7xeG/g=
 github.com/oapi-codegen/nullable v1.2.0 h1:VflFkDW980KhBPiFF7nWSyjg+r4Obqj8lXipV0UkP5w=
 github.com/oapi-codegen/nullable v1.2.0/go.mod h1:KUZ3vUzkmEKY90ksAmit2+5juDIhIZhfDl+0PwOQlFY=
-github.com/oapi-codegen/runtime v1.9.0 h1:YZ9DxX8ZQ8ZmNW1xAtOqa3MQ9AfdcUTcoBakvhQKHno=
-github.com/oapi-codegen/runtime v1.9.0/go.mod h1:jDd+iW9sT//NMDhIne8laRtI2Zq+z1QmUNidsql+M64=
+github.com/oapi-codegen/runtime v1.9.1 h1:77xKS3fIvTBRSCivMyY79002dqH1SMCunGjm/vB9eXY=
+github.com/oapi-codegen/runtime v1.9.1/go.mod h1:jDd+iW9sT//NMDhIne8laRtI2Zq+z1QmUNidsql+M64=
 github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b h1:OzNsuVdSWGwXvWKTtChx9ve89k4cFJ6NxYM4Aw4/f+E=
 github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
@@ -187,7 +187,7 @@ sukramj.dev/go-openccu-data v0.4.0 h1:A9+gl155Z9jXykaGZTxGcFrzsIDLBKKkDWSb3DmBo4
 sukramj.dev/go-openccu-data v0.4.0/go.mod h1:iOI1m3aBiVENNR38ijWUCvKlgN4Bi4yomJJ52he+X78=
 sukramj.dev/godevccu v0.13.0 h1:taH8CzzqngACUdH4NAdrfPemXI4PI4lQ/ZgOpSYJb80=
 sukramj.dev/godevccu v0.13.0/go.mod h1:llI5Zk5Bsh/8aK9e0kLviLVPCqcuLh0nV76vxjR5EtU=
-thingfabric.dev/go-fabric v0.26.0 h1:ukQbH4mXeOUzt9OwMHRxfPFChUGMAeFupCEd+pO+XUw=
-thingfabric.dev/go-fabric v0.26.0/go.mod h1:d4JFdBHtTzEx2dpam9nY9m/W6MaD6c8F3A0vHkfHPS4=
-thingfabric.dev/go-fabric-ui v0.14.1 h1:krtLulAr64/HvJPCQ/eA86RkSITJrKZ2sG7V1nxgVQw=
-thingfabric.dev/go-fabric-ui v0.14.1/go.mod h1:dDaghlo8tRbuKQoz63xshr0YCtSyq+KIRO6rANiekYI=
+thingfabric.dev/go-fabric v0.28.0 h1:I1M4Nu8FTQ4pDN5Hxtv//lHjt2+5I+hlDC9u2HfJI9M=
+thingfabric.dev/go-fabric v0.28.0/go.mod h1:d4JFdBHtTzEx2dpam9nY9m/W6MaD6c8F3A0vHkfHPS4=
+thingfabric.dev/go-fabric-ui v0.16.0 h1:yWc0gu/oyKXnMze+tUN4CC0v8XDmmXUZgxUYJ3rEhWY=
+thingfabric.dev/go-fabric-ui v0.16.0/go.mod h1:FmzKAOiA3OdD1R/BNiXRAd0mcBFT36v+8lQp8juEJ58=
