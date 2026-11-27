@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/deployment"
 )
@@ -71,5 +72,54 @@ func TestNodeSupervisorAllowHostAdmitsOnlyIngress(t *testing.T) {
 	}
 	if allow(req("192.168.1.20:41234", "/api/hassio_ingress/tok")) {
 		t.Error("a request from outside the Supervisor's network is admitted on a forged X-Ingress-Path")
+	}
+}
+
+// TestNodeAllowHostAdmitsTokenAuthenticatedRequests pins which identities
+// the node routes admit under a name they do not list: an API token or a
+// box API token in every deployment (a reverse proxy such as the HA remote
+// add-on injects one and forwards the browser's Host), never a credential a
+// browser attaches on its own, and in the HA add-on still the Supervisor's
+// Ingress requests.
+func TestNodeAllowHostAdmitsTokenAuthenticatedRequests(t *testing.T) {
+	t.Parallel()
+	req := func(scheme auth.Scheme) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/node/status", http.NoBody)
+		r.Host = "homeassistant.local:8123"
+		r.RemoteAddr = "192.168.1.20:41234"
+		if scheme != "" {
+			r = r.WithContext(auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "x", Scheme: scheme}))
+		}
+		return r
+	}
+	cfg := config.Default()
+	kinds := []deployment.Kind{deployment.Standalone, deployment.CCUAddon, deployment.LiteAddon, deployment.HAAddon}
+	for _, kind := range kinds {
+		allow := nodeAllowHost(cfg, kind)
+		if allow == nil {
+			t.Fatalf("%s: no predicate", kind)
+		}
+		for _, scheme := range []auth.Scheme{auth.SchemeBearer, auth.SchemeOcculiteToken} {
+			if !allow(req(scheme)) {
+				t.Errorf("%s: a %s request under an unlisted name is refused", kind, scheme)
+			}
+		}
+		refused := []auth.Scheme{"", auth.SchemeSession, auth.SchemeBasic, auth.SchemeOIDC, auth.SchemeIngress, auth.SchemeOcculite}
+		for _, scheme := range refused {
+			if allow(req(scheme)) {
+				t.Errorf("%s: a %q request under an unlisted name is admitted", kind, scheme)
+			}
+		}
+	}
+
+	ingress := httptest.NewRequest(http.MethodGet, "/api/v1/node/status", http.NoBody)
+	ingress.Host = "homeassistant.local:8123"
+	ingress.RemoteAddr = "172.30.32.2:41234"
+	ingress.Header.Set("X-Ingress-Path", "/api/hassio_ingress/tok")
+	if !nodeAllowHost(cfg, deployment.HAAddon)(ingress) {
+		t.Error("the HA add-on no longer admits the Supervisor's Ingress requests")
+	}
+	if nodeAllowHost(cfg, deployment.Standalone)(ingress) {
+		t.Error("outside the HA add-on an Ingress-looking request without a token is admitted")
 	}
 }
