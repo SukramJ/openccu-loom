@@ -14,7 +14,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mfridman/interpolate v0.2.0 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/oapi-codegen/runtime v1.9.0 // indirect
+	github.com/oapi-codegen/runtime v1.9.1 // indirect
 	github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
@@ -62,6 +62,6 @@ require (
 	sukramj.dev/go-mqtt v1.8.0
 	sukramj.dev/go-openccu-data v0.4.0
 	sukramj.dev/godevccu v0.13.0
-	thingfabric.dev/go-fabric v0.26.0
-	thingfabric.dev/go-fabric-ui v0.14.1
+	thingfabric.dev/go-fabric v0.28.0
+	thingfabric.dev/go-fabric-ui v0.16.0
 )
