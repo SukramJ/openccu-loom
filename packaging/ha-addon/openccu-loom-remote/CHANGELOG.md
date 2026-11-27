@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.109.0
+
+- **Version follows OpenCCU-Loom 0.109.0**, which binds device routes to one
+  CCU, stops repeating a command whose reply was lost and brings Matter
+  back into the menu behind this add-on; see the OpenCCU-Loom changelog.
+  The proxy itself is unchanged.
+
 # 0.108.0
 
 - **Version follows OpenCCU-Loom 0.108.0**, which seals the Matter

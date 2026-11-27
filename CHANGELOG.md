@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.109.0] - 2026-11-27
+
 ### Changed
 
 - **REST API 19.0.0: the editor component's route list names the method.**
@@ -30,6 +32,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `@lucide/svelte` 1.82.0, `vitest` 5.1.2, `@sveltejs/vite-plugin-svelte`
   7.3.2 and `tailwind-merge` 3.7.1. `typescript` 7 and
   `@testing-library/jest-dom` 8 are majors and stay out of this round.
+- **Matter: go-fabric 0.28.0 and go-fabric-ui 0.16.0** (Go module and the
+  `@thingfabric/fabric-ui` npm package, from 0.26.0 / 0.14.1). A bridge
+  topology whose rebuild failed is now rebuilt by the next sync of the
+  central, even when nothing changed — before, the endpoints a failed
+  rebuild added stayed off the wire until an unrelated change; the devices
+  it removed stay bound and their stored records wait until a rebuild
+  succeeds. A value encoder that fails costs its own attribute, event or
+  command instead of the whole Read or subscription. The reconciler now
+  reads which of its changes a batch refused from go-fabric's per-call
+  result instead of inferring it from the partition's set. go-fabric-ui's
+  contract changes are on `/controller/...` routes this daemon does not
+  mount.
 
 ### Added
 
@@ -60,6 +74,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   — reads it, so the tab no longer answers 403 there. (#1119)
 
 ### Fixed
+
+- **A Matter selection is no longer reported "not in effect" because one
+  device could not be bridged.** The node page's rebuild failed whenever
+  the sync returned any error, so a single refused device showed the whole
+  selection as stored but not in effect and the page never reloaded its
+  endpoint list. It now fails only when the node does not serve the
+  described topology (the rebuild or the device walk failed); a refused
+  device is logged and stays in the audit note.
+- **A deleted device's Matter endpoint numbers are freed after a store
+  error.** When the stored keys of a device the CCU deleted could not be
+  read, or its erasure could not be recorded, the device left the queue
+  and kept its numbers until the next restart; it now stays queued for the
+  next sync.
 
 - **The MCP device tools act on the CCU they name.** `set_datapoint`,
   `write_paramset`, `write_link_paramset`, `list_paramset_apply_targets`,
