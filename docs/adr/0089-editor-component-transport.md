@@ -281,6 +281,8 @@ editor's calls.
 the relay owns the mapping of its entry to a central, the allow-list it
 enforces and the Home Assistant user; the component owns no network access.
 
-What stays open: an audit row carries no central of its own, so the history of
-an address that exists on two CCUs lists the rows of both.
+An audit row records the central it was made on (the request's binding, or the
+central the daemon resolved the device on), so the bound history of an address
+that exists on two CCUs lists only that CCU's rows; rows recorded before the
+column existed stay in every bound history (#1182).
 

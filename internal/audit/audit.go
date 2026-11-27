@@ -306,8 +306,17 @@ type Entry struct {
 	// X-On-Behalf-Of header of an entry credential); see [Actor]. Recorded,
 	// never checked or used for authorization. Producers do not set it:
 	// [RecordFrom] takes it from the request.
-	OnBehalfOf    string `json:"on_behalf_of,omitempty"`
-	Action        Action `json:"action"`
+	OnBehalfOf string `json:"on_behalf_of,omitempty"`
+	Action     Action `json:"action"`
+	// Central is the CCU the change was made on, recorded with the row.
+	// Device addresses repeat across CCUs (virtual remotes, internal
+	// devices, CUxD devices), so the address alone cannot say which CCU's
+	// device a row is about. A producer that resolved the device on a
+	// central sets it from that central; [RecordFrom] fills it from the
+	// request's binding when the producer left it empty. Empty for a
+	// daemon-wide change and for every row recorded before the column
+	// existed.
+	Central       string `json:"central,omitempty"`
 	DeviceAddress string `json:"device_address,omitempty"`
 	ChannelNo     int    `json:"channel_no,omitempty"`
 	Paramset      string `json:"paramset,omitempty"`

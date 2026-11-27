@@ -69,6 +69,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which CCU holds the address first. Unbound reads keep the rule that a hold
   on any CCU wins. `released` is now documented on `DeviceSummary`. (#1183)
 
+- **The change log records the CCU a change was made on.** Every row now
+  stores its central: the one the request was bound to with `?central=`, or
+  the one the daemon resolved the device on. It used to be derived from the
+  device address when the log was read, so the history of an address that
+  exists on two CCUs (a virtual remote, an internal device, a CUxD device)
+  listed both CCUs' rows under one of them. `GET /devices/{addr}/audit?central=`
+  now leaves out rows recorded on the other CCU; rows written before this
+  release carry no central and are still attributed from the address. The MCP
+  `list_audit` tool reports the recorded central. New column
+  `audit_log.central` (migration 060). (#1182)
+
 - **Matter is back in the navigation behind the Home Assistant remote
   add-on.** Opened through the remote add-on, the UI dropped Matter from its
   menu and the view settings said the bridge was switched off while it ran.

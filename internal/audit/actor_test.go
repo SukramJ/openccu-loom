@@ -6,6 +6,8 @@ package audit
 import (
 	"context"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // TestRecordFromStampsTheRequestActor pins the three rules RecordFrom applies:
@@ -66,5 +68,33 @@ func TestActorFromWithoutRequest(t *testing.T) {
 	}
 	if a, ok := ActorFrom(context.Background()); ok || a != (Actor{}) {
 		t.Errorf("background context: got %+v, %v; want zero actor, false", a, ok)
+	}
+}
+
+// TestRecordFromStampsTheBoundCentral pins how a row gets its central: the
+// central the producer resolved the device on wins, an empty one takes the
+// request's central binding, and an unbound request with no producer central
+// leaves the row central-less (a daemon-wide change).
+func TestRecordFromStampsTheBoundCentral(t *testing.T) {
+	bound := hmreqctx.WithCentralScope(context.Background(), "ccu-02")
+	buf := NewBuffer(10)
+
+	RecordFrom(bound, buf, Entry{Action: ActionParamsetWrite})
+	RecordFrom(bound, buf, Entry{Action: ActionParamsetWrite, Central: "ccu-01"})
+	RecordFrom(context.Background(), buf, Entry{Action: ActionParamsetWrite})
+
+	got := buf.List(10)
+	if len(got) != 3 {
+		t.Fatalf("recorded %d rows, want 3", len(got))
+	}
+	// Head is most recent.
+	if got[2].Central != "ccu-02" {
+		t.Errorf("bound request, empty producer central: got %q, want ccu-02", got[2].Central)
+	}
+	if got[1].Central != "ccu-01" {
+		t.Errorf("producer central: got %q, want ccu-01", got[1].Central)
+	}
+	if got[0].Central != "" {
+		t.Errorf("unbound request: got %q, want empty", got[0].Central)
 	}
 }

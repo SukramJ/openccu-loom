@@ -4952,6 +4952,11 @@ export interface paths {
          *     principal with the operator role, where the whole log is
          *     admin-only, because one device's history exposes only what an
          *     operator of that device already acts on.
+         *
+         *     Bound with `?central=`, it lists the rows recorded on that central
+         *     and the rows recorded before the central was (attributed to the
+         *     bound central); rows recorded on another CCU that repeats the
+         *     address are left out.
          */
         get: operations["listDeviceAudit"];
         put?: never;
@@ -9619,8 +9624,14 @@ export interface components {
              */
             id: number;
             /**
-             * @description CCU this entry belongs to, derived best-effort from the device
-             *     address. Omitted for daemon-wide entries (e.g. CCU management).
+             * @description CCU this entry belongs to: the central the change was made on,
+             *     recorded with the row (the central the request was bound to,
+             *     or the one the daemon resolved the device on). Device addresses
+             *     repeat across CCUs, so the address alone cannot say which.
+             *     A row recorded before the central was is attributed best-effort
+             *     from its device address — on a central-bound device history, to
+             *     the bound central. Omitted for daemon-wide entries (e.g. CCU
+             *     management).
              */
             central?: string;
             /**

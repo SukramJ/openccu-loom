@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 574.
+Guards without a doc comment: 8 of 575.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -33,6 +33,7 @@ Guards without a doc comment: 8 of 574.
 | TestAPIVersionMatchesTheSpecDocument | api_surface_bump_test.go | TestAPIVersionMatchesTheSpecDocument keeps the constant and the document from drifting: they are two spellings of one number, and a bump applied to only one of them makes every other check here meaningless. |
 | TestValueSemanticsChangesAreWellFormed | api_surface_bump_test.go | TestValueSemanticsChangesAreWellFormed keeps [valueSemanticsChanges] a register rather than a comment block. |
 | TestRouterStampsTheAuditActor | audit_actor_router_test.go | TestRouterStampsTheAuditActor pins that the production router mounts the actor middleware: a change made through it by an entry credential lands in the change log with the principal and the asserted person, and the same header from a browser session is dropped. |
+| TestCentralBoundChangeIsRecordedOnThatCentral | audit_central_binding_test.go | TestCentralBoundChangeIsRecordedOnThatCentral pins the change log's central through the production router, guard and adapter: a change made through a device route bound with `?central=` records that central on its row, and the bound history of the same address on the other CCU leaves the row out. |
 | TestAuditProducersRecordThroughRecordFrom | audit_record_from_test.go | TestAuditProducersRecordThroughRecordFrom pins that every change-log row outside internal/audit is written through audit.RecordFrom, and that no producer sets Entry.OnBehalfOf itself. |
 | TestAuthNeverReadsOnBehalfOf | audit_record_from_test.go | TestAuthNeverReadsOnBehalfOf pins that the asserted actor never reaches an authorization decision: internal/auth must not mention it at all. |
 | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling | auth_subject_canonicalisation_test.go | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling guards the other half of the canonicalisation: the CCU's user database is its own namespace, so folding the subject for Loom-side bookkeeping must not change the name the credential validation and the user-level lookup ask about. |

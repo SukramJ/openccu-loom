@@ -211,7 +211,7 @@ func (p *ParamsetsDomain) PutParamsetOn(
 	if err := p.checkVisibilityOn(ctx, centralName, deviceAddress, key, values); err != nil {
 		return nil, err
 	}
-	b, err := p.resolveOn(ctx, centralName, deviceAddress)
+	b, resolvedOn, err := p.resolveUnitOn(ctx, centralName, deviceAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func (p *ParamsetsDomain) PutParamsetOn(
 	if key != hmenum.ParamsetKeyValues {
 		report = paramsetWriteReport(sent, descs, stored, readErr)
 	}
-	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
+	p.recordParamsetWrite(ctx, resolvedOn, deviceAddress, string(key), before, values)
 	return report, nil
 }
 
@@ -410,7 +410,7 @@ func auditRedacted(before any) any {
 // without it the log cannot tell a paramset an operator edited in the UI
 // from one an assistant wrote over MCP — which is the first question
 // asked of an unexplained configuration change.
-func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddress, paramset string, before, after map[string]any) {
+func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, centralName, channelAddress, paramset string, before, after map[string]any) {
 	if p.audit == nil {
 		return
 	}
@@ -424,6 +424,7 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 	_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
 	audit.RecordFrom(ctx, p.audit, audit.Entry{
 		Action:        audit.ActionParamsetWrite,
+		Central:       centralName,
 		DeviceAddress: deviceAddressOf(channelAddress),
 		ChannelNo:     auditChannelNo,
 		Paramset:      paramset,
@@ -629,7 +630,7 @@ func (p *ParamsetsDomain) PutLinkParamset(
 	if err := p.checkVisibility(ctx, channelAddress, hmenum.ParamsetKeyLink, values); err != nil {
 		return nil, err
 	}
-	b, err := p.resolve(ctx, channelAddress)
+	b, resolvedOn, err := p.resolveUnitOn(ctx, "", channelAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -653,6 +654,7 @@ func (p *ParamsetsDomain) PutLinkParamset(
 		_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
 		audit.RecordFrom(ctx, p.audit, audit.Entry{
 			Action:        audit.ActionLinkParamsetWrite,
+			Central:       resolvedOn,
 			DeviceAddress: deviceAddressOf(channelAddress),
 			ChannelNo:     auditChannelNo,
 			Peer:          peerAddress,
@@ -828,8 +830,15 @@ func (p *ParamsetsDomain) resolve(ctx context.Context, deviceOrChannel string) (
 // resolveOn is [ParamsetsDomain.resolve] scoped to one central; see
 // [ParamsetsDomain.unitsFor] for what an empty name means.
 func (p *ParamsetsDomain) resolveOn(ctx context.Context, centralName, deviceOrChannel string) (paramsetBackend, error) {
+	b, _, err := p.resolveUnitOn(ctx, centralName, deviceOrChannel)
+	return b, err
+}
+
+// resolveUnitOn is [ParamsetsDomain.resolveOn] plus the name of the central
+// the device resolved on, which a write records with its change-log row.
+func (p *ParamsetsDomain) resolveUnitOn(ctx context.Context, centralName, deviceOrChannel string) (paramsetBackend, string, error) {
 	if p.registry == nil || p.writer == nil {
-		return nil, ErrNoParamsetBackend
+		return nil, "", ErrNoParamsetBackend
 	}
 	addr := deviceAddressOf(deviceOrChannel)
 	for _, u := range p.unitsFor(ctx, centralName) {
@@ -839,11 +848,11 @@ func (p *ParamsetsDomain) resolveOn(ctx context.Context, centralName, deviceOrCh
 		}
 		b, ok := p.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, u.Name(), dev.InterfaceID)
+			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, u.Name(), dev.InterfaceID)
 		}
-		return b, nil
+		return b, u.Name(), nil
 	}
-	return nil, fmt.Errorf("%w: device %s", ErrNoParamsetBackend, addr)
+	return nil, "", fmt.Errorf("%w: device %s", ErrNoParamsetBackend, addr)
 }
 
 // resolveChannel walks the registry and returns the [device.Channel]

@@ -83,6 +83,7 @@ type auditSummary struct {
 	User          string `json:"user,omitempty"`
 	OnBehalfOf    string `json:"on_behalf_of,omitempty" jsonschema:"who the principal in user asserted it acted for; recorded, never verified"`
 	Action        string `json:"action"`
+	Central       string `json:"central,omitempty" jsonschema:"the CCU the change was recorded on; empty for a daemon-wide change and for rows recorded before the central was"`
 	DeviceAddress string `json:"device_address,omitempty"`
 	Parameter     string `json:"parameter,omitempty"`
 	Note          string `json:"note,omitempty"`
@@ -438,6 +439,7 @@ func registerListAudit(s *mcpsdk.Server, d Deps) {
 				User:          e.User,
 				OnBehalfOf:    e.OnBehalfOf,
 				Action:        string(e.Action),
+				Central:       e.Central,
 				DeviceAddress: e.DeviceAddress,
 				Parameter:     e.Parameter,
 				Note:          e.Note,

@@ -546,7 +546,7 @@ func (s *SchedulesDomain) CopySchedule(
 func (s *SchedulesDomain) GetClimateSchedule(
 	ctx context.Context, deviceAddress string, channelNo int,
 ) (*hmapi.ClimateSchedule, error) {
-	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
+	backend, channelAddr, _, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return nil, err
 	}
@@ -1098,7 +1098,7 @@ func isCCUScheduleFalsePositive(err error) bool {
 func (s *SchedulesDomain) PutClimateSchedule(
 	ctx context.Context, deviceAddress string, channelNo int, sched *hmapi.ClimateSchedule,
 ) ([]hmapi.ClimateTimeCorrection, error) {
-	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
+	backend, channelAddr, resolvedOn, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return nil, err
 	}
@@ -1181,6 +1181,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	}
 	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionScheduleWrite,
+		Central:       resolvedOn,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     channelNo,
 		Note:          sched.Kind,
@@ -1221,7 +1222,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 		return fmt.Errorf("%w: %q exceeds device cap P1..P%d for %s",
 			ErrInvalidProfileID, profile, maxProfiles, deviceAddress)
 	}
-	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
+	backend, channelAddr, resolvedOn, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return err
 	}
@@ -1243,6 +1244,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 	}
 	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionActiveProfile,
+		Central:       resolvedOn,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     channelNo,
 		Note:          profile,
@@ -1318,13 +1320,14 @@ func (s *SchedulesDomain) profilePointerFor(ctx context.Context, deviceAddress s
 }
 
 // resolve locates the backend and returns the fully-qualified channel
-// address. Mirrors ParamsetsDomain.resolve but scoped to a channel
-// number so the caller doesn't have to synthesise "addr:no" itself.
+// address and the name of the central the device resolved on (what a
+// change-log row records). Mirrors ParamsetsDomain.resolve but scoped to a
+// channel number so the caller doesn't have to synthesise "addr:no" itself.
 func (s *SchedulesDomain) resolve(
 	ctx context.Context, deviceAddress string, channelNo int,
-) (paramsetBackend, string, error) {
+) (backend paramsetBackend, channelAddress, centralName string, err error) {
 	if s.registry == nil || s.writer == nil {
-		return nil, "", ErrNoScheduleBackend
+		return nil, "", "", ErrNoScheduleBackend
 	}
 	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
@@ -1333,13 +1336,13 @@ func (s *SchedulesDomain) resolve(
 		}
 		b, ok := s.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
-			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
+			return nil, "", "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
-		return b, scheduleChannelAddress(deviceAddress, channelNo), nil
+		return b, scheduleChannelAddress(deviceAddress, channelNo), u.Name(), nil
 	}
 	// Device exists in no central — see FindScheduleChannel for the
 	// rationale; mapped to 404 by the REST handler.
-	return nil, "", fmt.Errorf("%w: device %s", hmerr.ErrDescriptionNotFound, deviceAddress)
+	return nil, "", "", fmt.Errorf("%w: device %s", hmerr.ErrDescriptionNotFound, deviceAddress)
 }
 
 // scheduleChannelAddress builds the paramset address for a schedule
