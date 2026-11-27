@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"sync"
 
 	fabricdevice "thingfabric.dev/go-fabric/device"
@@ -303,30 +304,44 @@ func (r *Reconciler) takeForget() map[string]map[string]struct{} {
 // again in the same sync is then added under a fresh number rather than
 // erased after it was added. A key comes from the store and from what the
 // reconciler holds, so a device forgotten before it was ever stored is
-// dropped as well. r.mu is held.
+// dropped as well.
+//
+// A device stays queued for the next sync when its stored keys could not
+// be read, or when a Forget of it applied but its erasure could not be
+// recorded — go-fabric's answer to that is to make the Forget again
+// (node.BatchCallError.Applied). A Forget the batch refused after fn — a
+// key another endpoint still serves — is not queued again, and a key the
+// reconciler held under it stays held. The erasures a failed reassembly
+// leaves are go-fabric's: recorded, and run by the next batch. r.mu is
+// held.
 func (r *Reconciler) forgetDevices(ctx context.Context, scope string, devs map[string]struct{}) error {
 	held := r.held[scope]
 	keys := map[string]endpoint.SourceKey{}
+	owner := map[string]string{} // key → device address
 	var errs []error
 	for addr := range devs {
 		if r.keys != nil {
 			stored, err := r.keys.DeviceKeys(ctx, scope, addr)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("stored keys of %s: %w", addr, err))
+				r.QueueForget(scope, addr)
 			}
 			for _, k := range stored {
 				keys[k.String()] = k
+				owner[k.String()] = addr
 			}
 		}
 		for key, h := range held {
 			if h.address == addr {
 				keys[key] = h.key
+				owner[key] = addr
 			}
 		}
 	}
 	if len(keys) == 0 {
 		return errors.Join(errs...)
 	}
+	forgotten := map[string]*heldEndpoint{}
 	err := r.agg.Partition(scope).Batch(ctx, func(b *node.Batch) error {
 		var errs []error
 		for key, k := range keys {
@@ -334,12 +349,26 @@ func (r *Reconciler) forgetDevices(ctx context.Context, scope string, devs map[s
 				errs = append(errs, fmt.Errorf("forget %s: %w", key, err))
 				continue
 			}
-			delete(held, key)
+			if h, ok := held[key]; ok {
+				forgotten[key] = h
+				delete(held, key)
+			}
 		}
 		return errors.Join(errs...)
 	})
 	if err != nil {
-		errs = append(errs, err)
+		errs = append(errs, batchFailure(err))
+		undone, unfinished := batchCalls(err)
+		for key := range undone {
+			if h, ok := forgotten[key]; ok {
+				held[key] = h
+			}
+		}
+		for key := range unfinished {
+			if addr, ok := owner[key]; ok {
+				r.QueueForget(scope, addr)
+			}
+		}
 	}
 	r.reachMu.Lock()
 	r.reindex(scope, devs)
@@ -352,8 +381,10 @@ func (r *Reconciler) forgetDevices(ctx context.Context, scope string, devs map[s
 // Sync describes snapshots and applies the changes to the Aggregator, one
 // batch per central. Every change that applies stays applied whatever
 // else fails; the result joins the errors of the walk, the Aggregator and
-// the reassemblies. Before the node starts a sync only changes the set;
-// after it, each changed central reassembles once.
+// the reassemblies, and is [ErrNotServed] where the node does not serve
+// the described topology. Before the node starts a sync only changes the
+// set; after it, each changed central reassembles once, and a central
+// whose earlier reassembly failed reassembles even without a change.
 func (r *Reconciler) Sync(ctx context.Context, snapshots []DeviceSnapshot) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -365,7 +396,7 @@ func (r *Reconciler) Sync(ctx context.Context, snapshots []DeviceSnapshot) error
 	}
 	described, err := r.asm.DescribeDevices(ctx, snapshots)
 	if err != nil {
-		return errors.Join(append(errs, err)...)
+		return errors.Join(append(errs, fmt.Errorf("%w: %w", ErrNotServed, err))...)
 	}
 	for _, d := range described {
 		if err := r.syncCentral(ctx, d); err != nil {
@@ -437,11 +468,26 @@ func (r *Reconciler) forgetSuperseded(ctx context.Context, d Described) error {
 			return errors.Join(errs...)
 		})
 		if err != nil {
-			// Settle nothing: the next sync asks the store again.
-			return errors.Join(append(errs, err)...)
+			errs = append(errs, batchFailure(err))
+			be, ok := errors.AsType[*node.BatchError](err)
+			if !ok || be.Fn != nil {
+				// A Forget refused at the call, or no batch ran: settle
+				// nothing, the next sync asks the store again.
+				return errors.Join(errs...)
+			}
+			// Every Forget the result does not name stands — after a
+			// failed reassembly too, whose erasures go-fabric records and
+			// runs with the next batch; a named one is tried again.
+			undone, unfinished := batchCalls(err)
+			settled = slices.DeleteFunc(settled, func(key string) bool {
+				_, u := undone[key]
+				_, f := unfinished[key]
+				return u || f
+			})
+		} else {
+			r.logger.Info("matter.reconciler.forget_superseded",
+				slog.String("central", d.Scope), slog.Int("keys", len(forget)))
 		}
-		r.logger.Info("matter.reconciler.forget_superseded",
-			slog.String("central", d.Scope), slog.Int("keys", len(forget)))
 	}
 	for _, key := range settled {
 		r.pruned[key] = struct{}{}
@@ -504,8 +550,7 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 	}
 	var raise []fabricdevice.SourceKey
 	before := maps.Clone(held)
-	part := r.agg.Partition(d.Scope)
-	err := part.Batch(ctx, func(b *node.Batch) error {
+	err := r.agg.Partition(d.Scope).Batch(ctx, func(b *node.Batch) error {
 		var errs []error
 		for _, c := range changes {
 			if c.replace {
@@ -536,13 +581,13 @@ func (r *Reconciler) syncCentral(ctx context.Context, d Described) error {
 		return errors.Join(errs...)
 	})
 	if err != nil {
-		raise = r.resettle(d.Scope, part, before, changes, raise)
+		raise = r.resettle(d.Scope, err, before, raise)
 	}
 	r.reindex(d.Scope, touched)
 	r.reachMu.Unlock()
 	var errs []error
 	if err != nil {
-		errs = append(errs, err)
+		errs = append(errs, batchFailure(err))
 	}
 	for i, h := range renames {
 		name := names[i]
@@ -569,53 +614,35 @@ type syncChange struct {
 	raise   bool
 }
 
-// resettle sets what the reconciler holds for scope to the partition's
-// set, after a batch returned an error. A batch refusal may arrive at the
-// commit, after the call that changed the key returned nil, and the commit
-// undoes what it refuses — an Add leaves the set, a Replace puts the
-// replaced device back, and an undone Replace has the batch's other takes
-// judged again (node.Batch, go-fabric 0.26) — so which changes stayed is
-// known from the set alone. A key is held with the device the partition
-// holds under it: the new one, the one held before the batch, or none, in
-// which case the next sync adds it again. A ConfigurationVersion is raised
-// only for a replacement the partition holds. r.mu and r.reachMu are
-// held.
-func (r *Reconciler) resettle(scope string, part *node.Partition, before map[string]*heldEndpoint, changes []syncChange, raise []fabricdevice.SourceKey) []fabricdevice.SourceKey {
-	served := map[node.Endpoint]struct{}{}
-	for _, ep := range part.Endpoints() {
-		served[ep] = struct{}{}
-	}
-	isServed := func(d *fabricdevice.Device) bool {
-		_, ok := served[node.Endpoint(d)]
-		return ok
+// resettle corrects what the reconciler holds for scope after a batch
+// returned err. Every call that answered nil set held at the call; a call
+// the batch refused or undid after fn returned is named, not applied, in
+// node.BatchError.Calls (go-fabric 0.28) and is taken back: an Add is not
+// held, a Replace or a Remove keeps the device held before the batch — the
+// one the partition still holds — so the next sync tries the key again. An
+// applied call whose store work failed stands, and so does every call of
+// a batch whose reassembly failed: the set holds them, and the next batch
+// serves them. Any other result — fn's own error, which names only calls
+// refused at the call and never held, or a stopped node, which ran no fn —
+// leaves held as fn left it. A ConfigurationVersion is raised only for a
+// replacement that stands. r.mu and r.reachMu are held.
+func (r *Reconciler) resettle(scope string, err error, before map[string]*heldEndpoint, raise []fabricdevice.SourceKey) []fabricdevice.SourceKey {
+	undone, _ := batchCalls(err)
+	if len(undone) == 0 {
+		return raise
 	}
 	held := r.held[scope]
-	keys := make(map[string]struct{}, len(before)+len(changes))
-	next := make(map[string]*heldEndpoint, len(changes))
-	for k := range before {
-		keys[k] = struct{}{}
-	}
-	for _, c := range changes {
-		keys[c.key] = struct{}{}
-		next[c.key] = c.next
-	}
-	for k := range keys {
-		switch {
-		case next[k] != nil && isServed(next[k].dev):
-			held[k] = next[k]
-		case before[k] != nil && isServed(before[k].dev):
-			held[k] = before[k]
-		default:
-			delete(held, k)
+	for key := range undone {
+		if h := before[key]; h != nil {
+			held[key] = h
+		} else {
+			delete(held, key)
 		}
 	}
-	kept := raise[:0]
-	for _, k := range raise {
-		if h := held[k.String()]; h != nil && next[k.String()] == h {
-			kept = append(kept, k)
-		}
-	}
-	return kept
+	return slices.DeleteFunc(raise, func(k fabricdevice.SourceKey) bool {
+		_, u := undone[k.String()]
+		return u
+	})
 }
 
 // Retire drops every endpoint of the central scope and retires its

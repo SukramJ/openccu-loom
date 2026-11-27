@@ -28,8 +28,8 @@ func WithCentralScope(ctx context.Context, central string) context.Context {
 }
 
 // CentralScope reports the central ctx is bound to. The second value is false
-// for an unscoped context, in which an address resolves on the first central
-// that holds it.
+// for an unscoped context, in which a lookup walks every central in name
+// order.
 func CentralScope(ctx context.Context) (string, bool) {
 	if ctx == nil {
 		return "", false

@@ -35,7 +35,7 @@ func TestNodePageFamilyIsWiredThroughTheCompositionRoot(t *testing.T) {
 		{"the candidate walk", "Candidates: candidates.MatterCandidates,"},
 		{"the allowlist store", "Store: mids,"},
 		{"the audit ledger", "Audit: auditRec,"},
-		{"the reassemble hook", "Reassemble: matterReassembler(bundle.sync, auditRec),"},
+		{"the reassemble hook", "Reassemble: matterReassembler(bundle.sync, auditRec, logger),"},
 		{"the event source", "Events: bundle.events,"},
 		{"the configuration the status page shows", "NodeConfig: matterNodeConfigView(mcfg),"},
 		{"the assembler's findings as host warnings", "findings := matterWarnings(bundle.assembler, catalogs, cfg.Locale)"},

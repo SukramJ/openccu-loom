@@ -254,7 +254,8 @@ func (r *Registry) Get(name string) (*Unit, bool) {
 // scoped request never falls back to another CCU — answering from the wrong
 // one is the failure the scope exists to prevent, so "not here" stays empty.
 //
-// Every address lookup on a request path walks this instead of [Registry.List].
+// An address lookup that holds the request's ctx walks this instead of
+// [Registry.List].
 func (r *Registry) Scoped(ctx context.Context) []*Unit {
 	name, scoped := hmreqctx.CentralScope(ctx)
 	if !scoped {

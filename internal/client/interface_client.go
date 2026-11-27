@@ -176,8 +176,8 @@ type Config struct {
 	// SessionRecorderHook, when non-nil, is called once for every call
 	// [InterfaceClient.Call] completes successfully, so the session
 	// recorder behind the diagnostics RPC recording can capture the
-	// CCU-communication trace — reads and writes alike, because Call is the
-	// one path every south-bound RPC of this client takes. It fires after
+	// CCU-communication trace — reads and writes alike, as far as they go
+	// through Call. It fires after
 	// the reliability stack has finished: once per logical call however many
 	// attempts the retrier needed, only for the leader of a coalesced group,
 	// and never for a failed call. [InterfaceClient.CallOrdered] does not
