@@ -46,3 +46,26 @@ func TestPutParamsetWithOptionsRecordsEverySentValue(t *testing.T) {
 		t.Fatalf("tracker hook saw %+v, want one call per parameter under VALUES", got)
 	}
 }
+
+// paramsetDispatchBackend counts which of the two paramset writes reached
+// it. It embeds orchBackend for the rest of the backends.Operations surface.
+type paramsetDispatchBackend struct {
+	*orchBackend
+	plain int
+	link  int
+}
+
+func (b *paramsetDispatchBackend) PutParamset(
+	context.Context, string, hmenum.ParamsetKey, map[string]any,
+	hmenum.CommandPriority, hmenum.CommandRxMode,
+) error {
+	b.plain++
+	return nil
+}
+
+func (b *paramsetDispatchBackend) PutLinkParamset(
+	context.Context, string, string, map[string]any,
+) error {
+	b.link++
+	return nil
+}

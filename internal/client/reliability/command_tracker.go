@@ -52,10 +52,11 @@ type CommandTrackerConfig struct {
 	// RetryConfig.DutyCycleDelay is 40 s and a three-attempt chain waits it
 	// twice, so a TTL of 60 s would look far too short. It is not, because
 	// the entry is stamped only after the reliability stack has returned
-	// success — InterfaceClient.SetValue calls WriteUnconfirmedValue below
-	// the Circuit/Retrier call and after its error check, and
-	// ValueWriter.SetValueWithOptions calls its command-tracker hook after
-	// the wire write. Every backoff is therefore spent BEFORE sentAt
+	// success — ValueWriter.SetValueWithOptions and PutParamsetWithOptions
+	// call their command-tracker hook (which the daemon routes to
+	// InterfaceClient.WriteUnconfirmedValue) only after the backend write
+	// has returned, and that write runs the whole Circuit/Retrier chain
+	// inside InterfaceClient.Call. Every backoff is therefore spent BEFORE sentAt
 	// exists, not against it, and a write that exhausts its attempts
 	// records nothing at all.
 	// [TestW2CliCommandTrackerRecordsAfterTheRetryWindow] and

@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
-// retry_dispatch_test.go — IC.SetValue retry behaviour: with maxAttempts=3
-// the backend is called up to 3 times on a persistent transient error.
+// retry_dispatch_test.go — countingBackend, a backends.Operations stub that
+// counts SetValue invocations, shared by the write-path tests.
 
 package client
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
-	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
-	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -24,12 +20,11 @@ import (
 // All other methods are no-ops that satisfy backends.Operations.
 type countingBackend struct {
 	setCallCount atomic.Int64
-	setErr       error
 }
 
 func (b *countingBackend) incSet() error {
 	b.setCallCount.Add(1)
-	return b.setErr
+	return nil
 }
 
 func (b *countingBackend) SetCallCount() int { return int(b.setCallCount.Load()) }
@@ -258,48 +253,3 @@ func (b *countingBackend) GetMetadata(_ context.Context, _, _ string) (any, erro
 func (b *countingBackend) SetMetadata(_ context.Context, _, _ string, _ any) error { return nil }
 
 var _ backends.Operations = (*countingBackend)(nil)
-
-// newCountingIC returns an InterfaceClient wired with a fast-retrier
-// (maxAttempts=3, no sleep) and a counting backend. The IC uses the
-// counting backend; callers pass the same backend to IC.SetValue.
-func newCountingIC(t *testing.T, setErr error) (*InterfaceClient, *countingBackend) {
-	t.Helper()
-	retrier := reliability.NewRetrier(reliability.RetryConfig{
-		MaxAttempts: 3,
-		// NewRetrier normalises a non-positive Initial/Max back to the
-		// production 2s/30s backoff, so the shortest expressible delay is a
-		// positive one. These tests count backend calls; the wait between
-		// attempts is not part of any assertion.
-		Initial: time.Microsecond,
-		Max:     time.Microsecond,
-	})
-	ic, err := New(Config{
-		CentralName: "test-skip",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Caller:      CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) { return nil, nil }),
-		Retrier:     retrier,
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	b := &countingBackend{setErr: setErr}
-	return ic, b
-}
-
-// TestSetValueWithRetryCallsBackendMultipleTimes verifies that the retrier
-// retries transient errors, up to maxAttempts.
-func TestSetValueWithRetryCallsBackendMultipleTimes(t *testing.T) {
-	t.Parallel()
-
-	transientErr := errors.New("transient network error")
-	ic, b := newCountingIC(t, transientErr)
-
-	_ = ic.SetValue(
-		context.Background(), b,
-		"VCU001:1", hmenum.ParameterLevel, 0.5,
-		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset,
-	)
-	if count := b.SetCallCount(); count <= 1 {
-		t.Errorf("backend.SetValue called %d times, want >1 (retried)", count)
-	}
-}

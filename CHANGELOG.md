@@ -48,6 +48,48 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The MCP device tools act on the CCU they name.** `set_datapoint`,
+  `write_paramset`, `write_link_paramset`, `list_paramset_apply_targets`,
+  `apply_paramset_to_channels`, `repair_device_config`,
+  `clear_device_config_cache` and `assign_rf_interface` bind the call to
+  `central_name` the way `?central=` binds a REST device route: an unknown
+  central, or one that does not hold the address, is refused, and otherwise
+  the address resolves on that central alone. They used to compare the name
+  with the first CCU holding the address, so a device whose address a second
+  CCU repeats could not be reached there. (#1184)
+
+- **REST API 19.1.0: a device read bound to a CCU answers `released` from
+  that CCU.**
+  `GET /devices/{addr}?central=` and `GET /devices?central=` (and the MCP
+  `list_devices` tool with `central_name`) report the onboarding state that
+  central holds, so a device released on one CCU no longer reads unreleased
+  because a same-named device on another CCU is still held back. The
+  central-filtered list now lists a device whose address another CCU repeats
+  under its own CCU; it used to be missing there, because the filter asked
+  which CCU holds the address first. Unbound reads keep the rule that a hold
+  on any CCU wins. `released` is now documented on `DeviceSummary`. (#1183)
+
+- **The change log records the CCU a change was made on.** Every row now
+  stores its central: the one the request was bound to with `?central=`, or
+  the one the daemon resolved the device on. It used to be derived from the
+  device address when the log was read, so the history of an address that
+  exists on two CCUs (a virtual remote, an internal device, a CUxD device)
+  listed both CCUs' rows under one of them. `GET /devices/{addr}/audit?central=`
+  now leaves out rows recorded on the other CCU; rows written before this
+  release carry no central and are still attributed from the address. The MCP
+  `list_audit` tool reports the recorded central. New column
+  `audit_log.central` (migration 060). (#1182)
+
+- **`POST /diagnostics/rpc-recording` records again.** A recording started
+  on a running daemon captured nothing: the hook that feeds it sat in two
+  write methods no production path called. It now records every south-bound
+  call that goes through the interface client's reliability stack — reads
+  and writes, once per successful call however many retries it took, and
+  once per group of identical coalesced writes. JSON-RPC calls,
+  `init`/`deinit` and the order-preserving reads of the device-definition
+  export are not recorded. The unused write methods and the retry
+  supersede-by-data-point machinery only they used are removed. (#1180)
+
 - **Matter is back in the navigation behind the Home Assistant remote
   add-on.** Opened through the remote add-on, the UI dropped Matter from its
   menu and the view settings said the bridge was switched off while it ran.

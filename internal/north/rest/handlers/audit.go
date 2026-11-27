@@ -105,10 +105,24 @@ func parseAuditFilter(r *http.Request) (f auditFilter, errMsg string) { //nolint
 	return f, ""
 }
 
-// applyAuditFilter runs the in-memory filter pass over entries, derives each
-// entry's CCU via centralOf (best-effort, from the device address), applies the
-// central filter, and returns the filtered, limit-capped DTO slice. centralOf
-// may be nil (central derivation skipped → all entries are daemon-wide).
+// auditCentral names the CCU a row is attributed to: the central recorded
+// with it, or, for a row recorded without one (every row older than the
+// column, and a daemon-wide change), the central centralOf derives from its
+// device address. centralOf may be nil (no derivation: such a row stays
+// central-less).
+func auditCentral(e *audit.Entry, centralOf func(address string) string) string {
+	if e.Central != "" {
+		return e.Central
+	}
+	if centralOf != nil && e.DeviceAddress != "" {
+		return centralOf(e.DeviceAddress)
+	}
+	return ""
+}
+
+// applyAuditFilter runs the in-memory filter pass over entries, attributes
+// each to a CCU (see [auditCentral]), applies the central filter, and returns
+// the filtered, limit-capped DTO slice.
 func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(address string) string) []AuditEntryDTO {
 	deviceLo := strings.ToLower(f.device)
 	opLo := strings.ToLower(f.op)
@@ -132,10 +146,7 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 		if !f.until.IsZero() && !e.Timestamp.Before(f.until) {
 			continue
 		}
-		centralName := ""
-		if centralOf != nil && e.DeviceAddress != "" {
-			centralName = centralOf(e.DeviceAddress)
-		}
+		centralName := auditCentral(e, centralOf)
 		if f.centralName != "" && centralName != f.centralName {
 			continue
 		}
@@ -158,8 +169,9 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 //	?central=<name>           only entries belonging to the named CCU
 //	?limit=<int>              max results, default 1000, max 10000
 //
-// idx is optional: when non-nil, each entry's CCU is derived best-effort from
-// its device address (idx.CentralOf); daemon-wide entries stay central-less.
+// An entry belongs to the CCU recorded with it. A row recorded without one
+// is attributed best-effort from its device address when idx is non-nil
+// (idx.CentralOf); daemon-wide entries stay central-less.
 func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 	return listAudit(svc, idx, nil)
 }
@@ -173,11 +185,14 @@ func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 //
 // It takes the query parameters of [ListAudit] except `device` and
 // `central`: the path names the device, and `?central=` is the route's
-// binding ([middleware.DeviceCentral]), not a filter.
+// binding ([middleware.DeviceCentral]). A bound read lists the rows recorded
+// on that central and the rows recorded without a central (older than the
+// column), which it attributes to the bound central as before; rows
+// recorded on another CCU that repeats the address are left out.
 func ListDeviceAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 	return listAudit(svc, idx, func(r *http.Request, f *auditFilter) {
 		f.device = ""
-		f.centralName = ""
+		f.centralName, _ = hmreqctx.CentralScope(r.Context())
 		f.deviceExact = chi.URLParam(r, "addr")
 	})
 }
@@ -208,9 +223,10 @@ func listAudit(svc AuditService, idx DeviceIndex, scope func(*http.Request, *aud
 			centralOf = idx.CentralOf
 		}
 		if bound, ok := hmreqctx.CentralScope(r.Context()); ok && scope != nil {
-			// The rows carry no central of their own; on a bound device read
-			// the route's central is the one the caller asked about, where
-			// the address lookup would name the first CCU holding it.
+			// A row recorded without a central has only its address; on a
+			// bound device read the route's central is the one the caller
+			// asked about, where the address lookup would name the first CCU
+			// holding it. A row that recorded its central keeps it.
 			centralOf = func(string) string { return bound }
 		}
 
@@ -257,10 +273,7 @@ func applyAuditPostFilter(entries []audit.Entry, f auditFilter, centralOf func(a
 		if opLo != "" && !strings.Contains(strings.ToLower(string(e.Action)), opLo) {
 			continue
 		}
-		centralName := ""
-		if centralOf != nil && e.DeviceAddress != "" {
-			centralName = centralOf(e.DeviceAddress)
-		}
+		centralName := auditCentral(e, centralOf)
 		if f.centralName != "" && centralName != f.centralName {
 			continue
 		}

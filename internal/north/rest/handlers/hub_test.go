@@ -56,7 +56,7 @@ func (t *testHubIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (t *testHubIndex) Released(string) bool { return true }
+func (t *testHubIndex) Released(context.Context, string) bool { return true }
 
 func newTestHubWithProgram(t *testing.T) (*testHubIndex, *hub.Hub) {
 	t.Helper()
@@ -2822,7 +2822,7 @@ func (m *multiHubIndex) SerialSuffix(central string) string {
 	return ""
 }
 
-func (m *multiHubIndex) Released(string) bool { return true }
+func (m *multiHubIndex) Released(context.Context, string) bool { return true }
 
 // TestGetSysvar_SingleCentralUnambiguous verifies that GetSysvar resolves
 // the correct hub without ?central= when exactly one central owns the sysvar.

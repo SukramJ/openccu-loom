@@ -221,18 +221,19 @@ func (c *ConfigRepairDomain) repairChannel(
 	if hasForeign {
 		outcome.Status = interfaces.RepairForeignParameters
 	}
-	c.recordRepair(ctx, address, stored, plan.write)
+	c.recordRepair(ctx, centralName, address, stored, plan.write)
 	return outcome
 }
 
 // recordRepair appends one change-log row for a written channel.
-func (c *ConfigRepairDomain) recordRepair(ctx context.Context, address string, before, after map[string]any) {
+func (c *ConfigRepairDomain) recordRepair(ctx context.Context, centralName, address string, before, after map[string]any) {
 	if c.audit == nil {
 		return
 	}
 	_, channelNo, _ := hmtypes.SplitChannelAddress(address)
 	audit.RecordFrom(ctx, c.audit, audit.Entry{
 		Action:        audit.ActionParamsetWrite,
+		Central:       centralName,
 		DeviceAddress: deviceAddressOf(address),
 		ChannelNo:     channelNo,
 		Paramset:      string(hmenum.ParamsetKeyMaster),

@@ -3,7 +3,11 @@
 
 package audit
 
-import "context"
+import (
+	"context"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
+)
 
 // Actor is who a request acts as, as far as the change log is concerned.
 //
@@ -41,7 +45,10 @@ func ActorFrom(ctx context.Context) (Actor, bool) {
 // producer set itself wins — a few producers record on behalf of a system
 // task or name the account an action targets — while OnBehalfOf always comes
 // from ctx, so no producer can attach an assertion the request did not carry.
-// A nil rec records nothing.
+// A Central the producer set (the central it resolved the device on) wins
+// too; otherwise the row takes the central the request is bound to
+// ([hmreqctx.CentralScope]), so a change made through a central-bound route
+// is recorded against that central. A nil rec records nothing.
 //
 // Every producer outside this package records through here rather than
 // calling [Recorder.Record] directly, so the "on behalf of" column cannot be
@@ -56,6 +63,9 @@ func RecordFrom(ctx context.Context, rec Recorder, entry Entry) {
 			entry.User = a.User
 		}
 		entry.OnBehalfOf = a.OnBehalfOf
+	}
+	if entry.Central == "" {
+		entry.Central, _ = hmreqctx.CentralScope(ctx)
 	}
 	rec.Record(entry)
 }

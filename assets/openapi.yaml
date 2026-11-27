@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 19.0.0
+  version: 19.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -446,6 +446,13 @@ paths:
             (exact match; `central == SystemCCUEntry.name ==
             payload.central`). Omit to list devices across every central
             the daemon manages.
+
+            With it, the list is that central's devices and their answers
+            come from it alone: a device whose address another CCU
+            repeats is listed under its own CCU, and `released` (and
+            `released_only`) reflect that CCU's onboarding hold. Without
+            it, `released` is false when any CCU holding the address
+            still withholds it.
         - name: released_only
           in: query
           required: false
@@ -5361,6 +5368,11 @@ paths:
         principal with the operator role, where the whole log is
         admin-only, because one device's history exposes only what an
         operator of that device already acts on.
+
+        Bound with `?central=`, it lists the rows recorded on that central
+        and the rows recorded before the central was (attributed to the
+        bound central); rows recorded on another CCU that repeats the
+        address are left out.
       tags: [audit]
       parameters:
         - $ref: "#/components/parameters/Address"
@@ -10662,6 +10674,15 @@ components:
           description: |
             CCU this device belongs to (multi-central grouping). Omitted
             for backends that report no owning central.
+        released:
+          type: boolean
+          description: |
+            Whether the device has finished onboarding and may be
+            adopted; `false` means accepted and configurable but not yet
+            published to the ecosystems. A read bound to a central
+            (`?central=`) answers from that central's hold alone; an
+            unbound read is `false` when any CCU holding the address
+            still withholds it.
         interface: { type: string }
         interface_id: { type: string }
         ise_id:
@@ -11778,8 +11799,14 @@ components:
         central:
           type: string
           description: |
-            CCU this entry belongs to, derived best-effort from the device
-            address. Omitted for daemon-wide entries (e.g. CCU management).
+            CCU this entry belongs to: the central the change was made on,
+            recorded with the row (the central the request was bound to,
+            or the one the daemon resolved the device on). Device addresses
+            repeat across CCUs, so the address alone cannot say which.
+            A row recorded before the central was is attributed best-effort
+            from its device address — on a central-bound device history, to
+            the bound central. Omitted for daemon-wide entries (e.g. CCU
+            management).
         timestamp:
           type: string
           format: date-time

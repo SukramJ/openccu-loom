@@ -13,12 +13,11 @@ import (
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 type listParamsetApplyTargetsIn struct {
-	CentralName   string `json:"central_name" jsonschema:"the CCU that owns the source channel (required; must match its central)"`
+	CentralName   string `json:"central_name" jsonschema:"the CCU that holds the source channel (required; the call acts on that CCU's channel)"`
 	SourceChannel string `json:"source_channel" jsonschema:"the channel whose MASTER values would be applied, e.g. 0001D3C99C1234:1"`
 }
 
@@ -36,7 +35,7 @@ type listParamsetApplyTargetsOut struct {
 }
 
 type applyParamsetToChannelsIn struct {
-	CentralName   string `json:"central_name" jsonschema:"the CCU that owns the source channel (required; must match its central)"`
+	CentralName   string `json:"central_name" jsonschema:"the CCU that holds the source channel (required; the call acts on that CCU's channel)"`
 	SourceChannel string `json:"source_channel" jsonschema:"the channel whose MASTER description the targets must match, e.g. 0001D3C99C1234:1"`
 	// Values is decoded JSON; each value is coerced against every
 	// target's own stored description before its write.
@@ -59,17 +58,14 @@ type applyParamsetToChannelsOut struct {
 	Outcomes []paramsetApplyOutcomeOut `json:"outcomes" jsonschema:"one outcome per target, in request order"`
 }
 
-// requireSourceOwner applies the multi-CCU ownership check the paramset-apply
-// tools perform: central_name is explicit and authoritative, never a
-// fallback.
-func requireSourceOwner(d Deps, central, source string) error {
+// bindSourceCentral binds a paramset-apply call to its required central:
+// central_name is explicit and authoritative, never a fallback, and the
+// call acts on that central's source channel (see bindDeviceCentral).
+func bindSourceCentral(ctx context.Context, d Deps, central, source string) (context.Context, error) {
 	if central == "" || source == "" {
-		return errors.New("central_name and source_channel are required")
+		return ctx, errors.New("central_name and source_channel are required")
 	}
-	if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(source)); owner != central {
-		return fmt.Errorf("device %s belongs to central %q, not %q", source, owner, central)
-	}
-	return nil
+	return bindDeviceCentral(ctx, d, central, source)
 }
 
 func registerListParamsetApplyTargets(s *mcpsdk.Server, d Deps) {
@@ -81,7 +77,8 @@ func registerListParamsetApplyTargets(s *mcpsdk.Server, d Deps) {
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listParamsetApplyTargetsIn) (*mcpsdk.CallToolResult, listParamsetApplyTargetsOut, error) {
 		central := strings.TrimSpace(in.CentralName)
 		source := strings.TrimSpace(in.SourceChannel)
-		if err := requireSourceOwner(d, central, source); err != nil {
+		ctx, err := bindSourceCentral(ctx, d, central, source)
+		if err != nil {
 			return nil, listParamsetApplyTargetsOut{}, err
 		}
 		targets, err := d.ParamsetApply.ApplyTargets(ctx, source)
@@ -116,7 +113,8 @@ func registerApplyParamsetToChannels(s *mcpsdk.Server, d Deps) {
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in applyParamsetToChannelsIn) (*mcpsdk.CallToolResult, applyParamsetToChannelsOut, error) {
 		central := strings.TrimSpace(in.CentralName)
 		source := strings.TrimSpace(in.SourceChannel)
-		if err := requireSourceOwner(d, central, source); err != nil {
+		ctx, err := bindSourceCentral(ctx, d, central, source)
+		if err != nil {
 			return nil, applyParamsetToChannelsOut{}, err
 		}
 		if len(in.Values) == 0 || len(in.Targets) == 0 {

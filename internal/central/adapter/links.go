@@ -288,6 +288,7 @@ func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddres
 	}
 	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkAdd,
+		Central:       c.Name(),
 		DeviceAddress: deviceAddressOf(senderAddress),
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
@@ -317,6 +318,7 @@ func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAd
 	}
 	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkUpdate,
+		Central:       c.Name(),
 		DeviceAddress: deviceAddressOf(senderAddress),
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
@@ -341,6 +343,7 @@ func (d *LinksDomain) RemoveLink(ctx context.Context, senderAddress, receiverAdd
 	}
 	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkRemove,
+		Central:       c.Name(),
 		DeviceAddress: deviceAddressOf(senderAddress),
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
@@ -373,6 +376,7 @@ func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, 
 	}
 	audit.RecordFrom(ctx, d.audit, audit.Entry{
 		Action:        audit.ActionLinkActivate,
+		Central:       c.Name(),
 		DeviceAddress: receiverDev,
 		ChannelNo:     channelNumberOf(receiverChannelAddress),
 		Peer:          senderChannelAddress,

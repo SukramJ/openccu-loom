@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 33383bad
-HEAD: 33383bad
+Generated: ef3c697f
+HEAD: ef3c697f
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6100 |
-| Reachable | 4048 |
-| Whitelisted | 1996 |
+| Total Exported | 6299 |
+| Reachable | 4239 |
+| Whitelisted | 2004 |
 | **Unreachable** | **56** |
 
 ## What these numbers cannot see

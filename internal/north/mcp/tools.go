@@ -83,6 +83,7 @@ type auditSummary struct {
 	User          string `json:"user,omitempty"`
 	OnBehalfOf    string `json:"on_behalf_of,omitempty" jsonschema:"who the principal in user asserted it acted for; recorded, never verified"`
 	Action        string `json:"action"`
+	Central       string `json:"central,omitempty" jsonschema:"the CCU the change was recorded on; empty for a daemon-wide change and for rows recorded before the central was"`
 	DeviceAddress string `json:"device_address,omitempty"`
 	Parameter     string `json:"parameter,omitempty"`
 	Note          string `json:"note,omitempty"`
@@ -338,7 +339,7 @@ func registerListDevices(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_devices",
 		Description: "List devices, optionally scoped to one central via central_name. Each entry carries `released`: false means an operator accepted the device but has not finished onboarding it, so it is configurable but not yet in service — do not act on it as if it were.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listDevicesIn) (*mcpsdk.CallToolResult, listDevicesOut, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listDevicesIn) (*mcpsdk.CallToolResult, listDevicesOut, error) {
 		out := listDevicesOut{Devices: []deviceSummary{}}
 		if d.Devices == nil {
 			return nil, out, nil
@@ -347,12 +348,19 @@ func registerListDevices(s *mcpsdk.Server, d Deps) {
 		if want != "" && !centralKnown(d, want) {
 			return nil, listDevicesOut{}, errUnknownCentral(d, want)
 		}
+		// The GET /devices?central= rule: with a central the list is that
+		// central's devices, decided by the scoped resolution (identity,
+		// since the unbound list carries one entry per central for a
+		// repeated address), and `released` is that central's hold alone.
+		ctx = hmreqctx.WithCentralScope(ctx, want)
 		for _, dev := range d.Devices.Devices() {
-			central := d.Devices.CentralOf(dev.Address)
-			if want != "" && central != want {
+			central := want
+			if want == "" {
+				central = d.Devices.CentralOf(dev.Address)
+			} else if held, ok := d.Devices.Device(ctx, dev.Address); !ok || held != dev {
 				continue
 			}
-			out.Devices = append(out.Devices, summarize(dev, central, d.Devices.Released(dev.Address)))
+			out.Devices = append(out.Devices, summarize(dev, central, d.Devices.Released(ctx, dev.Address)))
 		}
 		return nil, out, nil
 	})
@@ -370,7 +378,7 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, getDeviceOut{Found: false}, nil
 		}
-		return nil, getDeviceOut{Found: true, Device: summarize(dev, d.Devices.CentralOf(dev.Address), d.Devices.Released(dev.Address))}, nil
+		return nil, getDeviceOut{Found: true, Device: summarize(dev, d.Devices.CentralOf(dev.Address), d.Devices.Released(ctx, dev.Address))}, nil
 	})
 }
 
@@ -431,6 +439,7 @@ func registerListAudit(s *mcpsdk.Server, d Deps) {
 				User:          e.User,
 				OnBehalfOf:    e.OnBehalfOf,
 				Action:        string(e.Action),
+				Central:       e.Central,
 				DeviceAddress: e.DeviceAddress,
 				Parameter:     e.Parameter,
 				Note:          e.Note,
@@ -557,7 +566,7 @@ func registerGetHealth(s *mcpsdk.Server, d Deps) {
 // --- write tools (gated by AllowWrites) -------------------------------
 
 type setDatapointIn struct {
-	CentralName string `json:"central_name" jsonschema:"the CCU that owns the device (required; must match the device's central)"`
+	CentralName string `json:"central_name" jsonschema:"the CCU that holds the device (required; the call acts on that CCU's device)"`
 	Address     string `json:"address" jsonschema:"the channel address to write, e.g. 0001D3C99C1234:4"`
 	Parameter   string `json:"parameter" jsonschema:"the parameter name, e.g. STATE or LEVEL"`
 	Value       any    `json:"value" jsonschema:"the value to write (boolean, number, or string as the parameter expects)"`
@@ -568,7 +577,7 @@ type setDatapointOut struct {
 }
 
 type writeParamsetIn struct {
-	CentralName string         `json:"central_name" jsonschema:"the CCU that owns the device (required; must match the device's central)"`
+	CentralName string         `json:"central_name" jsonschema:"the CCU that holds the device (required; the call acts on that CCU's device)"`
 	Address     string         `json:"address" jsonschema:"the channel address, e.g. 0001D3C99C1234:1"`
 	Key         string         `json:"key" jsonschema:"the paramset key: MASTER or VALUES"`
 	Values      map[string]any `json:"values" jsonschema:"the parameter→value map to write"`
@@ -622,7 +631,7 @@ func writeReportOut(report *interfaces.ParamsetWriteReport) *paramsetWriteReport
 }
 
 type writeLinkParamsetIn struct {
-	CentralName            string         `json:"central_name" jsonschema:"the CCU that owns the receiver channel (required; must match its central)"`
+	CentralName            string         `json:"central_name" jsonschema:"the CCU that holds the receiver channel (required; the call acts on that CCU's channel)"`
 	ReceiverChannelAddress string         `json:"receiver_channel_address" jsonschema:"the channel address the link terminates on, e.g. 0001D3C99C1234:1"`
 	SenderChannelAddress   string         `json:"sender_channel_address" jsonschema:"the peer channel address on the other end of the link"`
 	Values                 map[string]any `json:"values" jsonschema:"the parameter→value map to write to the LINK paramset"`
@@ -731,13 +740,13 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 		if central == "" || address == "" || parameter == "" {
 			return nil, setDatapointOut{}, errors.New("central_name, address and parameter are required")
 		}
-		// Multi-CCU safety: refuse to write to a device the named
-		// central does not own (ADR 0002 — central_name is explicit and
-		// authoritative, never an implicit fallback). Ownership is
-		// tracked per device, so the channel suffix must be stripped
-		// before the lookup — writes always target channels.
-		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(address)); owner != central {
-			return nil, setDatapointOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
+		// Multi-CCU safety: central_name is explicit and authoritative,
+		// never an implicit fallback (ADR 0002). The call is bound to it,
+		// so the descriptor lookup and the write both act on that
+		// central's device even when another CCU repeats the address.
+		ctx, err := bindDeviceCentral(ctx, d, central, address)
+		if err != nil {
+			return nil, setDatapointOut{}, err
 		}
 		// Coerce the JSON value against the parameter descriptor before it
 		// reaches the wire — the same first step the REST PUT /value handler
@@ -796,8 +805,9 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, writeParamsetOut{}, fmt.Errorf("key must be MASTER or VALUES, got %q", in.Key)
 		}
-		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(address)); owner != central {
-			return nil, writeParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
+		ctx, err := bindDeviceCentral(ctx, d, central, address)
+		if err != nil {
+			return nil, writeParamsetOut{}, err
 		}
 		// Strict edit-lock enforcement for MASTER configuration writes,
 		// mirroring the REST enforceEditLock gate and the WS paramset.put
@@ -857,11 +867,12 @@ func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
 		if len(in.Values) == 0 {
 			return nil, writeLinkParamsetOut{}, errors.New("values must not be empty")
 		}
-		// Same multi-CCU ownership check write_paramset performs, on the
-		// receiver channel — the peer may live behind a different
-		// interface, but the write itself targets the receiver's backend.
-		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(receiver)); owner != central {
-			return nil, writeLinkParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", receiver, owner, central)
+		// Same central binding write_paramset performs, on the receiver
+		// channel — the peer may live behind a different interface, but
+		// the write itself targets the receiver's backend.
+		ctx, err := bindDeviceCentral(ctx, d, central, receiver)
+		if err != nil {
+			return nil, writeLinkParamsetOut{}, err
 		}
 		// A LINK write is configuration and holds the same per-pair lock
 		// links.put_paramset enforces over WS and PUT

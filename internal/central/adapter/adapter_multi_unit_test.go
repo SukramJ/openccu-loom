@@ -2410,7 +2410,7 @@ func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
 func TestResolveCustomDP_NilRegistry_ReturnsError(t *testing.T) {
 	t.Parallel()
 	d := &CustomDPDispatcher{registry: nil}
-	_, _, err := d.resolveCustomDP(context.Background(), "", "DEV001", "LEVEL")
+	_, _, _, err := d.resolveCustomDP(context.Background(), "", "DEV001", "LEVEL")
 	if err == nil {
 		t.Error("expected error for nil registry")
 	}
@@ -3640,7 +3640,7 @@ func TestRecordParamsetWrite_NilAudit(t *testing.T) {
 		audit: nil, // deliberately nil, bypassing NewParamsetsDomain's NoopRecorder
 	}
 	// Must not panic — the nil guard returns immediately.
-	p.recordParamsetWrite(t.Context(), "DEV001:1", "VALUES",
+	p.recordParamsetWrite(t.Context(), "ccu1", "DEV001:1", "VALUES",
 		map[string]any{"PARAM": "before"},
 		map[string]any{"PARAM": "after"})
 }

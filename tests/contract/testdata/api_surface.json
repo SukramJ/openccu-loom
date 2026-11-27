@@ -1,5 +1,5 @@
 {
- "api_version": "19.0.0",
+ "api_version": "19.1.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1235,6 +1235,7 @@
    "model_label:string",
    "name:string",
    "product_group:string",
+   "released:boolean",
    "rooms:array\u003cstring\u003e",
    "rx_mode:$ref:RxMode",
    "sub_model:string",

@@ -111,7 +111,7 @@ func (fakeDeviceIndex) Device(context.Context, string) (*device.Device, bool) { 
 func (fakeDeviceIndex) CentralOf(string) string                               { return "" }
 func (fakeDeviceIndex) SerialSuffix(string) string                            { return "" }
 
-func (fakeDeviceIndex) Released(string) bool { return true }
+func (fakeDeviceIndex) Released(context.Context, string) bool { return true }
 
 type fakeUISchemaService struct{}
 
@@ -492,7 +492,7 @@ func (fakeInterfaceIndex) Interface(string) (handlers.InterfaceState, bool) {
 	return handlers.InterfaceState{}, false
 }
 
-func (f fakeHubIndex) Released(string) bool                        { return true }
+func (f fakeHubIndex) Released(context.Context, string) bool       { return true }
 func (fakeInterfaceIndex) Reconnect(context.Context, string) error { return nil }
 
 type fakeConfigAdminService struct{}

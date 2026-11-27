@@ -356,8 +356,13 @@ func (r *Registry) SerialSuffix(name string) string {
 // VCU-prefixed HmIP device addresses are the one space that is device-borne
 // and does not collide, but the caller has only an address and cannot tell the
 // spaces apart, so the combining rule applies to all of them.
-func (r *Registry) Released(address string) bool {
-	for _, u := range r.List() {
+//
+// A request bound to a central (see [Registry.Scoped]) is not in that
+// position: it names the address space, so only that central's hold counts.
+// A device released on one CCU reads released there even while a same-named
+// device on another CCU is still held back.
+func (r *Registry) Released(ctx context.Context, address string) bool {
+	for _, u := range r.Scoped(ctx) {
 		if u == nil || u.ModelRegistry == nil || u.Devices == nil {
 			continue
 		}

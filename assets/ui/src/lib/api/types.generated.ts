@@ -4952,6 +4952,11 @@ export interface paths {
          *     principal with the operator role, where the whole log is
          *     admin-only, because one device's history exposes only what an
          *     operator of that device already acts on.
+         *
+         *     Bound with `?central=`, it lists the rows recorded on that central
+         *     and the rows recorded before the central was (attributed to the
+         *     bound central); rows recorded on another CCU that repeats the
+         *     address are left out.
          */
         get: operations["listDeviceAudit"];
         put?: never;
@@ -8592,6 +8597,15 @@ export interface components {
              *     for backends that report no owning central.
              */
             central?: string;
+            /**
+             * @description Whether the device has finished onboarding and may be
+             *     adopted; `false` means accepted and configurable but not yet
+             *     published to the ecosystems. A read bound to a central
+             *     (`?central=`) answers from that central's hold alone; an
+             *     unbound read is `false` when any CCU holding the address
+             *     still withholds it.
+             */
+            released?: boolean;
             interface: string;
             interface_id: string;
             /**
@@ -9610,8 +9624,14 @@ export interface components {
              */
             id: number;
             /**
-             * @description CCU this entry belongs to, derived best-effort from the device
-             *     address. Omitted for daemon-wide entries (e.g. CCU management).
+             * @description CCU this entry belongs to: the central the change was made on,
+             *     recorded with the row (the central the request was bound to,
+             *     or the one the daemon resolved the device on). Device addresses
+             *     repeat across CCUs, so the address alone cannot say which.
+             *     A row recorded before the central was is attributed best-effort
+             *     from its device address — on a central-bound device history, to
+             *     the bound central. Omitted for daemon-wide entries (e.g. CCU
+             *     management).
              */
             central?: string;
             /**
@@ -14559,6 +14579,13 @@ export interface operations {
                  *     (exact match; `central == SystemCCUEntry.name ==
                  *     payload.central`). Omit to list devices across every central
                  *     the daemon manages.
+                 *
+                 *     With it, the list is that central's devices and their answers
+                 *     come from it alone: a device whose address another CCU
+                 *     repeats is listed under its own CCU, and `released` (and
+                 *     `released_only`) reflect that CCU's onboarding hold. Without
+                 *     it, `released` is false when any CCU holding the address
+                 *     still withholds it.
                  */
                 central?: string;
                 /**
