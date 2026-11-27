@@ -26,6 +26,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `github.com/sethvargo/go-retry`), `golang.org/x/net` 0.63.0 and
   `golang.org/x/tools` 0.53.0. No other direct dependency outside the
   go-fabric family has a minor or patch release.
+- **SPA dependency round:** `svelte` 5.59.2, `vite` 8.4.0, `bits-ui` 2.22.0,
+  `@lucide/svelte` 1.82.0, `vitest` 5.1.2, `@sveltejs/vite-plugin-svelte`
+  7.3.2 and `tailwind-merge` 3.7.1. `typescript` 7 and
+  `@testing-library/jest-dom` 8 are majors and stay out of this round.
 
 ### Added
 
