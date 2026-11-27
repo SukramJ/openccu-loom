@@ -55,8 +55,17 @@ func TestOnWithTimedOffExpiryTurnsTheLightOffAtTheCCU(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
-		t.Fatalf("OnOff after the countdown = %v, want false", v)
+	// The stack tells the Sink before it stores the change, so the CCU
+	// write can be seen while OnOff still reads true; wait for the store.
+	for {
+		v, _ := srv.MatterRead(onoff.AttrOnOff)
+		if v == false {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("OnOff after the countdown = %v, want false", v)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
