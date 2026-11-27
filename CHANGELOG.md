@@ -17,6 +17,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   forwarded both. `GET /measurements/recording` and its `PUT`, which the
   editor's recording toggle calls, joined the list; `GET /audit` left it.
   This retypes a field, hence the major. (#1119)
+- **SPA dependencies:** `bits-ui` 2.21.0, `vite` 8.3.8, `@tsconfig/svelte`
+  5.0.9 and `@playwright/test` 1.65.1; the CI Playwright container moves to
+  `v1.65.1-noble` with it, since the test runner only finds the browser build
+  of its own version. (#1173)
 
 ### Added
 
