@@ -61,13 +61,18 @@ func loadEditorComponent(fsys fs.FS) (*EditorComponent, error) {
 		return nil, fmt.Errorf("editor component routes: %w", err)
 	}
 	var routes struct {
-		Prefixes []string `json:"prefixes"`
+		Routes []hmapi.EditorRoute `json:"routes"`
 	}
 	if err := json.Unmarshal(raw, &routes); err != nil {
 		return nil, fmt.Errorf("editor component routes: %w", err)
 	}
-	if len(routes.Prefixes) == 0 {
+	if len(routes.Routes) == 0 {
 		return nil, errors.New("editor component routes: empty list")
+	}
+	for _, r := range routes.Routes {
+		if err := validEditorRoute(r); err != nil {
+			return nil, fmt.Errorf("editor component routes: %w", err)
+		}
 	}
 	sum := sha256.Sum256(module)
 	hash := hex.EncodeToString(sum[:])
@@ -75,7 +80,7 @@ func loadEditorComponent(fsys fs.FS) (*EditorComponent, error) {
 		manifest: hmapi.EditorComponentManifest{
 			ModuleURL: "/app/" + editorModulePrefix + hash + ".js",
 			Hash:      hash,
-			Routes:    routes.Prefixes,
+			Routes:    routes.Routes,
 		},
 		module: module,
 	}, nil
@@ -84,8 +89,35 @@ func loadEditorComponent(fsys fs.FS) (*EditorComponent, error) {
 // Manifest returns the manifest. The Routes slice is a copy.
 func (c *EditorComponent) Manifest() hmapi.EditorComponentManifest {
 	m := c.manifest
-	m.Routes = append([]string(nil), c.manifest.Routes...)
+	m.Routes = append([]hmapi.EditorRoute(nil), c.manifest.Routes...)
 	return m
+}
+
+// editorRouteMethods are the methods a relay may be told to forward. HEAD,
+// OPTIONS and anything else stay out: the editor never sends them, and a
+// relay that forwards whatever the list names must not learn new verbs from
+// a build mistake.
+var editorRouteMethods = map[string]bool{
+	http.MethodGet: true, http.MethodPut: true, http.MethodPost: true,
+	http.MethodPatch: true, http.MethodDelete: true,
+}
+
+// validEditorRoute rejects an entry a relay could read more widely than the
+// editor needs: an unknown method, a relative or slash-terminated prefix, an
+// empty segment, or a `*` that is only part of a segment.
+func validEditorRoute(r hmapi.EditorRoute) error {
+	if !editorRouteMethods[r.Method] {
+		return fmt.Errorf("route %q %q: method must be one of GET, PUT, POST, PATCH, DELETE", r.Method, r.Prefix)
+	}
+	if !strings.HasPrefix(r.Prefix, "/") || strings.HasSuffix(r.Prefix, "/") {
+		return fmt.Errorf("route %s %q: prefix must start and must not end with /", r.Method, r.Prefix)
+	}
+	for _, seg := range strings.Split(r.Prefix[1:], "/") {
+		if seg == "" || (seg != "*" && strings.Contains(seg, "*")) {
+			return fmt.Errorf("route %s %q: empty segment or partial wildcard", r.Method, r.Prefix)
+		}
+	}
+	return nil
 }
 
 // serveModule answers a request for the hashed module name. It reports

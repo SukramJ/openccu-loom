@@ -56,7 +56,7 @@ func RestoreDeviceConfig(svc DeviceConfigRestorePort, rec audit.Recorder) http.H
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceConfigRestore,
 				DeviceAddress: addr,
@@ -106,7 +106,7 @@ func ClearDeviceConfigCache(svc DeviceConfigCachePort, rec audit.Recorder) http.
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceConfigCacheClear,
 				DeviceAddress: addr,

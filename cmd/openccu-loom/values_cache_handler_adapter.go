@@ -8,6 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -83,11 +84,13 @@ func newDeviceLookupAdapter(reg *central.Registry) handlers.DeviceLookup {
 	return &deviceLookupAdapter{reg: reg}
 }
 
-func (l *deviceLookupAdapter) LocateDevice(addr string) (centralName, interfaceID string, ok bool) {
+func (l *deviceLookupAdapter) LocateDevice(ctx context.Context, addr string) (centralName, interfaceID string, ok bool) {
 	if l == nil || l.reg == nil {
 		return "", "", false
 	}
-	for _, unit := range l.reg.List() {
+	// Scoped, not List: a request bound to one central resets that central's
+	// cache entries even when another CCU holds a device at the same address.
+	for _, unit := range l.reg.Scoped(ctx) {
 		if unit == nil || unit.ModelRegistry == nil {
 			continue
 		}
@@ -96,4 +99,15 @@ func (l *deviceLookupAdapter) LocateDevice(addr string) (centralName, interfaceI
 		}
 	}
 	return "", "", false
+}
+
+// deviceCentralsOf hands the registry to the device-route central binding.
+// It returns the interface type so a nil registry stays a nil interface: a
+// typed nil pointer boxed into it would pass the guard's nil check and panic
+// on the first `?central=` request instead of answering 503.
+func deviceCentralsOf(reg *central.Registry) middleware.DeviceCentralLocator {
+	if reg == nil {
+		return nil
+	}
+	return reg
 }

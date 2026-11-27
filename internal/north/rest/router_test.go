@@ -70,7 +70,7 @@ func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.
 
 func (*fakeAdmin) ReleaseDevice(context.Context, string) error                  { return nil }
 func (f *fakeAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
-func (f *fakeAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
+func (f *fakeAdmin) InterfaceDutyCycle(_ context.Context, _ string) (int, bool) { return 0, false }
 func (f *fakeAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (f *fakeAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
 func (f *fakeAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
@@ -282,7 +282,7 @@ func (fakeValuesCacheService) Metrics() handlers.ValuesCacheMetrics {
 
 type fakeDeviceLookup struct{}
 
-func (fakeDeviceLookup) LocateDevice(addr string) (centralName, interfaceID string, ok bool) {
+func (fakeDeviceLookup) LocateDevice(_ context.Context, addr string) (centralName, interfaceID string, ok bool) {
 	if addr == "A" {
 		return "home", "HmIP-RF", true
 	}
@@ -347,7 +347,7 @@ func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfac
 
 func (fakeDeviceAdmin) ReleaseDevice(context.Context, string) error                { return nil }
 func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
-func (fakeDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
+func (fakeDeviceAdmin) InterfaceDutyCycle(_ context.Context, _ string) (int, bool) { return 0, false }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
 func (fakeDeviceAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {

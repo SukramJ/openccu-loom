@@ -106,10 +106,10 @@ func (fakeAreaAdmin) ReplaceRooms(context.Context, string, []sqlite.RoomAreaRow)
 
 type fakeDeviceIndex struct{}
 
-func (fakeDeviceIndex) Devices() []*device.Device            { return nil }
-func (fakeDeviceIndex) Device(string) (*device.Device, bool) { return nil, false }
-func (fakeDeviceIndex) CentralOf(string) string              { return "" }
-func (fakeDeviceIndex) SerialSuffix(string) string           { return "" }
+func (fakeDeviceIndex) Devices() []*device.Device                             { return nil }
+func (fakeDeviceIndex) Device(context.Context, string) (*device.Device, bool) { return nil, false }
+func (fakeDeviceIndex) CentralOf(string) string                               { return "" }
+func (fakeDeviceIndex) SerialSuffix(string) string                            { return "" }
 
 func (fakeDeviceIndex) Released(string) bool { return true }
 
@@ -210,11 +210,11 @@ func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string, interfaces.Acc
 	return nil
 }
 
-func (fakeDeviceAdmin) ReleaseDevice(context.Context, string) error          { return nil }
-func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { return nil }
-func (fakeDeviceAdmin) InterfaceDutyCycle(string) (int, bool)                { return 0, false }
-func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
-func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }
+func (fakeDeviceAdmin) ReleaseDevice(context.Context, string) error            { return nil }
+func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error           { return nil }
+func (fakeDeviceAdmin) InterfaceDutyCycle(context.Context, string) (int, bool) { return 0, false }
+func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error       { return nil }
+func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error   { return nil }
 func (fakeDeviceAdmin) SetChannelRooms(context.Context, string, int, []string) error {
 	return nil
 }
@@ -409,7 +409,7 @@ func (fakeValuesCacheService) Metrics() handlers.ValuesCacheMetrics {
 
 type fakeDeviceLookup struct{}
 
-func (fakeDeviceLookup) LocateDevice(string) (central, address string, found bool) {
+func (fakeDeviceLookup) LocateDevice(context.Context, string) (central, address string, found bool) {
 	return "", "", false
 }
 
@@ -656,7 +656,7 @@ func (fakeDeviceProjector) ProjectDevice(context.Context, string, string) (proje
 type fakeEditorComponent struct{}
 
 func (fakeEditorComponent) Manifest() hmapi.EditorComponentManifest {
-	return hmapi.EditorComponentManifest{ModuleURL: "/app/component/editor-00.js", Hash: "00", Routes: []string{"/devices"}}
+	return hmapi.EditorComponentManifest{ModuleURL: "/app/component/editor-00.js", Hash: "00", Routes: []hmapi.EditorRoute{{Method: "GET", Prefix: "/devices"}}}
 }
 
 func fullyWiredRouterDeps() rest.Deps {
@@ -713,6 +713,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Metrics:                 metrics.NewRegistry(),
 		ValuesCache:             fakeValuesCacheService{},
 		DeviceLookup:            fakeDeviceLookup{},
+		DeviceCentrals:          fakeDeviceCentrals{},
 		Backup:                  fakeBackupService{},
 		Paramsets:               fakeParamsetService{},
 		ParamsetApply:           fakeParamsetApplyService{},
@@ -982,3 +983,10 @@ func (fakeOnboarding) CancelPairing(context.Context, string) error { return nil 
 func (fakeOnboarding) PairingToken(string) (token, fingerprint string, err error) { return "", "", nil }
 
 func (fakeOnboarding) ForgetPairing(string) {}
+
+// fakeDeviceCentrals knows every central and finds every device in it, so a
+// request that names a central passes the device-route guard and reaches the
+// handler the walk is about.
+type fakeDeviceCentrals struct{}
+
+func (fakeDeviceCentrals) HoldsDevice(string, string) (known, holds bool) { return true, true }

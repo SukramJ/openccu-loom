@@ -62,21 +62,31 @@ func (a *DevicesAdapter) Devices() []*device.Device {
 // installation's data under a bare address, and the later CCUs unreachable
 // through every address-keyed surface.
 //
-// Resolving them correctly needs the central alongside the address, which the
-// callers of this facade do not carry. Until they do, an ambiguous address
-// resolves to nothing: answering "not found" is wrong in a way the caller can
-// see, while answering with an arbitrary CCU's device is wrong in a way it
-// cannot. Single-CCU installations are unaffected, and so is every address
-// only one central holds.
-func (a *DevicesAdapter) Device(address string) (*device.Device, bool) {
+// Resolving them correctly needs the central alongside the address. A request
+// bound to a central (see [central.Registry.Scoped]) carries it, and the
+// lookup consults that central only. An unbound caller does not, so an
+// ambiguous address resolves to nothing: answering "not found" is wrong in a
+// way the caller can see, while answering with an arbitrary CCU's device is
+// wrong in a way it cannot. Single-CCU installations are unaffected, and so is
+// every address only one central holds.
+func (a *DevicesAdapter) Device(ctx context.Context, address string) (*device.Device, bool) {
+	d, _, ok := a.Resolve(ctx, address)
+	return d, ok
+}
+
+// Resolve is [DevicesAdapter.Device] plus the name of the central the device
+// was resolved on, so a caller that goes on to read that central's state does
+// not have to look the address up a second time — a second, unbound lookup
+// could name a different CCU than the one the device came from.
+func (a *DevicesAdapter) Resolve(ctx context.Context, address string) (dev *device.Device, centralName string, ok bool) {
 	if a.registry == nil {
-		return nil, false
+		return nil, "", false
 	}
-	d, _, err := resolveUniqueDevice(a.registry, address)
-	if err != nil {
-		return nil, false
+	d, name, err := resolveUniqueDevice(ctx, a.registry, address)
+	if err != nil || d == nil {
+		return nil, "", false
 	}
-	return d, d != nil
+	return d, name, true
 }
 
 // RefreshDevices triggers a fresh ListDevices on every wired backend
@@ -113,10 +123,10 @@ func (a *DevicesAdapter) RefreshDevices(ctx context.Context) error {
 }
 
 // CentralOf returns the name of the central that owns the device.
-// Empty string when the device is unknown. It resolves by address and
-// therefore carries the same multi-CCU limitation as [DevicesAdapter.Device]:
-// an address that exists on several CCUs is attributed to the first one by
-// name.
+// Empty string when the device is unknown. It resolves by address alone and
+// takes no request binding, so an address that exists on several CCUs is
+// attributed to the first one by name; a caller that serves a request bound to
+// a central resolves through [DevicesAdapter.Resolve] instead.
 func (a *DevicesAdapter) CentralOf(address string) string {
 	if a.registry == nil {
 		return ""
@@ -132,26 +142,22 @@ func (a *DevicesAdapter) CentralOf(address string) string {
 // ChannelMeta implements handlers.ChannelInfoReader: it resolves the
 // device address, model, channel type and owning central for a channel
 // address, so the config-export endpoint can stamp them onto the
-// exported snapshot. Reports false when no central holds the channel.
-func (a *DevicesAdapter) ChannelMeta(channelAddress string) (deviceAddress, model, channelType, centralName string, ok bool) {
-	if a.registry == nil {
+// exported snapshot. Reports false when no central the request may consult
+// (see [requestUnits]) holds the channel.
+func (a *DevicesAdapter) ChannelMeta(
+	ctx context.Context, channelAddress string,
+) (deviceAddress, model, channelType, centralName string, ok bool) {
+	u, dev, found := unitHolding(ctx, a.registry, deviceAddressOf(channelAddress))
+	if !found {
 		return "", "", "", "", false
 	}
-	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range a.registry.List() {
-		dev, found := u.ModelRegistry.Get(devAddr)
-		if !found {
-			continue
-		}
-		ch := dev.Channel(channelAddress)
-		if ch == nil {
-			// The device exists but not that channel number — the export
-			// would name a channel the CCU does not have.
-			return "", "", "", "", false
-		}
-		return dev.Address, dev.Model, ch.Type, u.Name(), true
+	ch := dev.Channel(channelAddress)
+	if ch == nil {
+		// The device exists but not that channel number — the export
+		// would name a channel the CCU does not have.
+		return "", "", "", "", false
 	}
-	return "", "", "", "", false
+	return dev.Address, dev.Model, ch.Type, u.Name(), true
 }
 
 // SerialSuffix delegates to the registry's central → serial-suffix mapping
@@ -220,8 +226,9 @@ var ErrNoWriter = errors.New("adapter: no value writer wired")
 // channelAddress and dispatches through that central's writer.
 //
 // The lookup is address-keyed, so it carries the constraint documented on
-// [DevicesAdapter.Device]: a channel whose address exists on several CCUs is
-// refused rather than written on an arbitrary one. Delivering a command to
+// [DevicesAdapter.Device]: unless ctx binds the request to one central, a
+// channel whose address exists on several CCUs is refused rather than written
+// on an arbitrary one. Delivering a command to
 // the wrong installation's hardware is the one outcome that cannot be
 // noticed from the outside.
 func (a *DataPointWriterAdapter) SetValue(
@@ -232,7 +239,7 @@ func (a *DataPointWriterAdapter) SetValue(
 		return ErrNoWriter
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	dev, centralName, err := resolveUniqueDevice(a.registry, deviceAddr)
+	dev, centralName, err := resolveUniqueDevice(ctx, a.registry, deviceAddr)
 	if err != nil {
 		return err
 	}
@@ -266,22 +273,21 @@ func (a *DataPointWriterAdapter) SetValue(
 }
 
 // resolveUniqueDevice finds the device with the given address and the name of
-// the central that holds it.
+// the central that holds it, among the centrals ctx may consult (see
+// [requestUnits]).
 //
-// Returns (nil, "", nil) when no central holds the address, and an error
+// Returns (nil, "", nil) when no such central holds the address, and an error
 // naming every candidate when more than one does — the caller has not said
 // which installation it means, and picking one silently routes reads and
-// writes to a foreign CCU.
-func resolveUniqueDevice(reg *central.Registry, deviceAddress string) (*device.Device, string, error) {
-	if reg == nil {
-		return nil, "", nil
-	}
+// writes to a foreign CCU. A request bound to a central consults that central
+// only, so it never sees more than one candidate.
+func resolveUniqueDevice(ctx context.Context, reg *central.Registry, deviceAddress string) (*device.Device, string, error) {
 	var (
 		found      *device.Device
 		foundOn    string
 		candidates []string
 	)
-	for _, u := range reg.List() {
+	for _, u := range requestUnits(ctx, reg) {
 		d, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue

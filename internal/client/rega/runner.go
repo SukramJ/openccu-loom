@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -63,6 +64,17 @@ func NewRunner(cfg Config) (*Runner, error) {
 // owner.
 func (r *Runner) Client() *jsonrpc.Client { return r.client }
 
+// callOptions marks a script run as safe to resend after a lost reply
+// when the script only reads. ReGa.runScript is one JSON-RPC method for
+// every script, so the method name cannot decide it; the script identity
+// does, through [reliability.RepeatableScriptAfterLostReply].
+func callOptions(script hmenum.RegaScript) []jsonrpc.CallOption {
+	if reliability.RepeatableScriptAfterLostReply(script) {
+		return []jsonrpc.CallOption{jsonrpc.RepeatAfterLostReply()}
+	}
+	return nil
+}
+
 // Run executes script with the given params and returns its raw stdout.
 // Placeholder keys missing from params cause an error before any
 // network activity — this catches typos fast.
@@ -86,7 +98,7 @@ func (r *Runner) Run(ctx context.Context, script hmenum.RegaScript, params map[s
 	)
 
 	var out string
-	err = r.client.Call(ctx, regaRunScriptMethod, map[string]any{"script": substituted}, &out)
+	err = r.client.Call(ctx, regaRunScriptMethod, map[string]any{"script": substituted}, &out, callOptions(script)...)
 	if err != nil {
 		return "", fmt.Errorf("rega: %s: %w", script, err)
 	}
@@ -132,7 +144,7 @@ func (r *Runner) RunLists(
 		return "", fmt.Errorf("rega: %s: %w", script, err)
 	}
 	var out string
-	if err := r.client.Call(ctx, regaRunScriptMethod, map[string]any{"script": substituted}, &out); err != nil {
+	if err := r.client.Call(ctx, regaRunScriptMethod, map[string]any{"script": substituted}, &out, callOptions(script)...); err != nil {
 		return "", fmt.Errorf("rega: %s: %w", script, err)
 	}
 	return out, nil

@@ -55,7 +55,7 @@ func PostCCUReboot(svc CCURebootPort, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionSystemCCUReboot,
 				Note:   centralName,
@@ -136,7 +136,7 @@ func ccuHostActionHandler(svc CCUHostActionPort, rec audit.Recorder, act ccuHost
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: act.audit,
 				Note:   centralName,
@@ -236,7 +236,7 @@ func PutCCUPosition(svc CCUPositionPort, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionSystemCCUPosition,
 				Note:   centralName,
@@ -317,7 +317,7 @@ func PostSystemFirmwareDownload(svc FirmwareDownloadPort, rec audit.Recorder) ht
 			// The note carries the central, not the request's url field:
 			// the url is ignored, and recording it would make the audit
 			// trail claim an image was fetched that never was.
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionSystemFirmwareDownload,
 				Note:   req.Central,

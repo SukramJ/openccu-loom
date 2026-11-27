@@ -249,7 +249,37 @@ var nonRetryable = []error{
 // actually means on the wire. The shape of the two special paths
 // follows the Python reference implementation's
 // `client/command_retry.py`.
+//
+// Do does not know which call fn makes, so it repeats a lost reply
+// ([hmerr.ErrReplyLost]) like any other transient failure. A caller that
+// sends a named RPC method uses [Retrier.DoMethod] instead.
 func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt int) error) error {
+	return r.do(ctx, nil, fn)
+}
+
+// DoMethod is [Retrier.Do] for one call of the RPC method method. It
+// repeats a lost reply only when [RepeatableAfterLostReply] allows it for
+// method: the request was sent and the CCU may already have executed it,
+// so a state-changing call is answered with the lost-reply error instead
+// of being sent again. Every other failure keeps the policy of Do — a dial
+// that never reached the CCU and a fault the CCU answered with
+// (DUTY_CYCLE, TRANSMISSION_PENDING) are retried for writes too, because
+// the CCU did not act on them.
+func (r *Retrier) DoMethod(ctx context.Context, method string, fn func(ctx context.Context, attempt int) error) error {
+	if RepeatableAfterLostReply(method) {
+		return r.do(ctx, nil, fn)
+	}
+	return r.do(ctx, isLostReply, fn)
+}
+
+// isLostReply is the extra stop condition [Retrier.DoMethod] applies to a
+// method that is not safe to repeat.
+func isLostReply(err error) bool { return errors.Is(err, hmerr.ErrReplyLost) }
+
+// do is the retry loop behind [Retrier.Do] and [Retrier.DoMethod]. stop,
+// when non-nil, ends the chain on an error the configured policy would
+// otherwise retry.
+func (r *Retrier) do(ctx context.Context, stop func(error) bool, fn func(ctx context.Context, attempt int) error) error {
 	// enabled kill-switch — single attempt when disabled.
 	// retry=false fast-path (same semantic).
 	r.mu.Lock()
@@ -274,6 +304,9 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 			return err
 		}
 		if r.isNonRetryableUnderConfig(err) {
+			return err
+		}
+		if stop != nil && stop(err) {
 			return err
 		}
 		if attempt == r.cfg.MaxAttempts {

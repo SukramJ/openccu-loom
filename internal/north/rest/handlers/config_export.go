@@ -39,7 +39,7 @@ type ConfigExportService interface {
 type ChannelInfoReader interface {
 	// ChannelMeta returns (deviceAddress, model, channelType, centralName)
 	// for the given channelAddress, and false when the channel is unknown.
-	ChannelMeta(channelAddress string) (deviceAddress, model, channelType, centralName string, ok bool)
+	ChannelMeta(ctx context.Context, channelAddress string) (deviceAddress, model, channelType, centralName string, ok bool)
 }
 
 // ExportChannelConfig handles
@@ -83,7 +83,7 @@ func ExportChannelConfig(svc ConfigExportService, meta ChannelInfoReader) http.H
 		var deviceAddr, model, channelType, centralName string
 		if meta != nil {
 			var ok bool
-			deviceAddr, model, channelType, centralName, ok = meta.ChannelMeta(channelAddr)
+			deviceAddr, model, channelType, centralName, ok = meta.ChannelMeta(r.Context(), channelAddr)
 			if !ok {
 				problem.Write(w, http.StatusNotFound,
 					problem.New(problem.TypeNotFound, r, "Channel not found", channelAddr))

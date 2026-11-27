@@ -866,7 +866,7 @@ func matterReassembler(syncModel func(context.Context) error, rec audit.Recorder
 				if err != nil {
 					note = "error: " + err.Error()
 				}
-				rec.Record(audit.Entry{User: id.Subject, Action: audit.ActionMatterForceSync, Note: note})
+				audit.RecordFrom(ctx, rec, audit.Entry{User: id.Subject, Action: audit.ActionMatterForceSync, Note: note})
 			}
 		}
 		return err
@@ -1047,10 +1047,10 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		})
 		return nil
 	})
-	bundle.rt.attach(func(n *node.Node) func() {
-		return wireMatterNodeEvents(nil, n, wsHub, auditRec)
+	bundle.rt.attach(func(n *node.Node) func() { //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
+		return wireMatterNodeEvents(nil, n, wsHub, auditRec) //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
 	})
-	closers = append(closers, wireMatterNodeEvents(bundle.events, nil, wsHub, auditRec), bundle.rt.release)
+	closers = append(closers, wireMatterNodeEvents(bundle.events, nil, wsHub, auditRec), bundle.rt.release) //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
 
 	wiring.status = &matterStatusReaderAdapter{
 		enabled:   mcfg.Enabled,
@@ -1081,7 +1081,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	wiring.nodeUI = fabricui.Options{
 		Node:  bundle.rt.nodes,
 		Erase: bundle.rt.Erase,
-		Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec), ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{
+		Exposure: exposureEvents{sink: matterNodeEventSink(wsHub, auditRec), ExposureProvider: matteradapter.NewExposureProvider(matteradapter.ExposureProviderConfig{ //nolint:contextcheck // a fabric node event is pushed by the node, not by a request
 			Candidates: candidates.MatterCandidates,
 			Store:      mids,
 			Labels:     matterParameterLabels{labels},

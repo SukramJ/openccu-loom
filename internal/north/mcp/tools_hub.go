@@ -607,12 +607,12 @@ func registerListChannels(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_channels",
 		Description: "List the channels of a device by its address, so an agent can discover channel addresses (<device>:<n>) before calling read_paramset. Returns each channel's address, number, type, name, room, data-point count, and its direct-link source/target roles.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listChannelsIn) (*mcpsdk.CallToolResult, listChannelsOut, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listChannelsIn) (*mcpsdk.CallToolResult, listChannelsOut, error) {
 		out := listChannelsOut{Channels: []channelSummary{}}
 		if d.Devices == nil {
 			return nil, out, nil
 		}
-		dev, ok := d.Devices.Device(strings.TrimSpace(in.Address))
+		dev, ok := d.Devices.Device(ctx, strings.TrimSpace(in.Address))
 		if !ok {
 			return nil, out, nil
 		}
@@ -681,12 +681,12 @@ func registerGetDeviceSchedule(s *mcpsdk.Server, d Deps) {
 		Description: "Read a device's weekly schedule (week profile): schedule type (climate/default), " +
 			"active/available profiles, entry counts, and per-channel schedule-enabled state. " +
 			"One entry per channel that carries a schedule; empty when the device has none.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getDeviceScheduleIn) (*mcpsdk.CallToolResult, getDeviceScheduleOut, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getDeviceScheduleIn) (*mcpsdk.CallToolResult, getDeviceScheduleOut, error) {
 		out := getDeviceScheduleOut{Channels: []channelScheduleSummary{}}
 		if d.Devices == nil {
 			return nil, out, nil
 		}
-		dev, ok := d.Devices.Device(strings.TrimSpace(in.Address))
+		dev, ok := d.Devices.Device(ctx, strings.TrimSpace(in.Address))
 		if !ok {
 			return nil, out, nil
 		}

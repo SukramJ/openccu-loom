@@ -49,7 +49,10 @@ type HubIndex interface {
 // lookups into model.Device access.
 type DeviceIndex interface {
 	Devices() []*device.Device
-	Device(address string) (*device.Device, bool)
+	// Device resolves an address. A ctx bound to a central (the device-route
+	// guard binds `?central=`) resolves on that central only; an unbound one
+	// consults every central.
+	Device(ctx context.Context, address string) (*device.Device, bool)
 	// CentralOf returns the name of the central unit owning the
 	// device. Empty string when the device is unknown — handlers
 	// surface that as an empty `central` field rather than an error.

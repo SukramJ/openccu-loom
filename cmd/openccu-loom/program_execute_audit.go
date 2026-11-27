@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -76,7 +77,8 @@ func subscribeProgramExecuteAudit(u *central.Unit, rec audit.Recorder, logger *s
 			slog.String("program", e.ProgramID),
 			slog.String("source", source),
 			slog.Bool("success", e.Success))
-		rec.Record(audit.Entry{
+		// no request: the bus event carries no actor; the trigger is in the note.
+		audit.RecordFrom(context.Background(), rec, audit.Entry{
 			Action: audit.ActionProgramExecute,
 			Note: fmt.Sprintf("central=%s program=%s trigger=%s source=%s success=%t",
 				e.CentralName, e.ProgramID, e.Trigger, source, e.Success),

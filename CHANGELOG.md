@@ -6,6 +6,65 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **REST API 19.0.0: the editor component's route list names the method.**
+  `GET /api/v1/ui/editor-component` answers `routes` as a list of
+  `{method, prefix}` (schema `EditorRoute`) instead of path prefixes; a `*`
+  segment matches one path segment. A prefix alone could not tell an edit
+  (`POST /devices/{addr}/paramsets/…`) from a lifecycle call
+  (`POST /devices/{addr}/release`), so a relay that enforced `/devices`
+  forwarded both. `GET /measurements/recording` and its `PUT`, which the
+  editor's recording toggle calls, joined the list; `GET /audit` left it.
+  This retypes a field, hence the major. (#1119)
+
+### Added
+
+- **Every device route can be bound to one CCU.** `?central=<name>` on any
+  `/api/v1/devices/{addr}…` route resolves the address on that central alone:
+  a central that does not exist or does not hold the address answers 404
+  before the operation runs, and nothing falls back to another CCU. Device
+  addresses repeat across CCUs (virtual remotes, internal devices, CUxD
+  devices), and an editor opened from one CCU's Home Assistant entry edited
+  whichever CCU sorted first. Without the parameter nothing changes. A
+  `POST /devices/{addr}/replace` whose body names another central than
+  `?central=` is refused with 422 before anything is unpaired. (#1119)
+- **The change log records who an integration acted for.** An API token or
+  a box API token may send `X-On-Behalf-Of` (at most 128 bytes, e.g.
+  `Alex (ha:<id>)`); every row the request writes carries it as
+  `on_behalf_of` beside the authenticated principal — in the REST answer,
+  the CSV export (last column), the MCP `list_audit` tool and the SPA's
+  change log ("on behalf of …"). It is recorded as asserted and never used
+  for authorization; from a browser session or a password login the header
+  is ignored, and a malformed value answers 400. Paramset, link, schedule,
+  configuration-repair and custom-data-point writes recorded no principal at
+  all before; they now name it. (#1119)
+- **A device's change history for operators.** `GET
+  /api/v1/devices/{addr}/audit` lists the entries of exactly that device and
+  its channels to every principal with the operator role; `GET /audit`
+  stays admin-only. The device page's history tab — in the SPA and in the
+  editor component inside Home Assistant, whose paired token is an operator
+  — reads it, so the tab no longer answers 403 there. (#1119)
+
+### Fixed
+
+- **A command whose reply the connection dropped is no longer sent again.**
+  When the CCU received a call and the connection broke before its answer
+  arrived, the retry layer sent it up to twice more — a button press
+  (`PRESS_SHORT`), a firmware install, a device deletion or a paramset write
+  could reach the CCU three times. The transports now tell a dial that
+  never reached the CCU apart from a reply lost after the call went out
+  (`hmerr.ErrReplyLost`), and only a read is repeated after a lost reply; a
+  refused dial and a CCU fault such as DUTY_CYCLE are still retried for
+  writes, because the CCU did not act on them. JSON-RPC reads — sysvar and
+  program refreshes, device details, read-only ReGa scripts — are now sent
+  once more after a lost reply (the CCU's web server closes idle keep-alive
+  connections after 60 s), where they failed outright before; writes,
+  `Session.*` and state-changing scripts are sent once. Which methods and
+  scripts count as reads is decided in one place
+  (`internal/client/reliability/classifier.go`), and every ReGa script
+  carries an explicit verdict. (#1157)
+
 ## [0.108.0] - 2026-11-26
 
 ### Added

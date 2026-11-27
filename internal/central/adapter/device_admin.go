@@ -44,22 +44,23 @@ func NewDeviceAdminDomain(r *central.Registry, w *client.ValueWriter) *DeviceAdm
 // even attempted.
 var ErrNoDeviceBackend = errors.New("device-admin: no backend for device")
 
-// resolve walks every central, finds the owning device + backend.
+// resolve walks the centrals ctx may consult (see [requestUnits]) and finds
+// the owning device + backend.
 // Returns the backend so callers can issue XML-RPC operations
 // against the device's interface.
-func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, error) {
-	backend, _, err := a.resolveWithDevice(deviceAddress)
+func (a *DeviceAdminDomain) resolve(ctx context.Context, deviceAddress string) (backends.Operations, error) {
+	backend, _, err := a.resolveWithDevice(ctx, deviceAddress)
 	return backend, err
 }
 
 // resolveWithDevice is [DeviceAdminDomain.resolve] plus the model device the
 // backend was resolved for, so an operation can consult the interface's own
 // capability set before it puts a call on the wire.
-func (a *DeviceAdminDomain) resolveWithDevice(deviceAddress string) (backends.Operations, *device.Device, error) {
+func (a *DeviceAdminDomain) resolveWithDevice(ctx context.Context, deviceAddress string) (backends.Operations, *device.Device, error) {
 	if a.registry == nil || a.writer == nil {
 		return nil, nil, ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -97,7 +98,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 	if force {
 		flags |= backends.DeleteFlagForce
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -144,7 +145,7 @@ func (a *DeviceAdminDomain) RenameDevice(ctx context.Context, address, name stri
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		if _, ok := u.ModelRegistry.Get(address); !ok {
 			continue
 		}
@@ -162,7 +163,7 @@ func (a *DeviceAdminDomain) RenameChannel(ctx context.Context, deviceAddr string
 		return ErrNoDeviceBackend
 	}
 	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		if _, ok := u.ModelRegistry.Get(deviceAddr); !ok {
 			continue
 		}
@@ -200,7 +201,7 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 		return ErrNoDeviceBackend
 	}
 	var notInInbox bool
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		if u.HubModel == nil {
 			continue
 		}
@@ -261,13 +262,15 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 // ReleaseDevice finishes onboarding on whichever central withholds the
 // address, publishing it to the ecosystems.
 //
-// Walking every central mirrors AcceptInboxDevice: an address is unique
-// per CCU, and the operator surface does not carry which one holds it.
+// Walking the centrals ctx may consult mirrors AcceptInboxDevice: an address
+// is unique per CCU, so an unbound request tries each central in name order,
+// while a request bound to one central (see [requestUnits]) tries only that
+// one.
 func (a *DeviceAdminDomain) ReleaseDevice(ctx context.Context, address string) error {
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		if ReleaseDevice(ctx, u, address) {
 			return nil
 		}
@@ -374,7 +377,7 @@ func applyInitialConfig(
 // op does — a VirtualDevices device otherwise reached the CCU's XML-RPC
 // updateFirmware for an aggregated group with no radio behind it.
 func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) error {
-	backend, dev, err := a.resolveWithDevice(address)
+	backend, dev, err := a.resolveWithDevice(ctx, address)
 	if err != nil {
 		return err
 	}
@@ -394,7 +397,7 @@ func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address str
 	if a.registry == nil || a.writer == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -420,7 +423,7 @@ func (a *DeviceAdminDomain) ClearConfigCache(ctx context.Context, address string
 	if a.registry == nil || a.writer == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -448,7 +451,7 @@ func (a *DeviceAdminDomain) AssignRFInterface(ctx context.Context, address, inte
 	if a.registry == nil || a.writer == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -472,11 +475,11 @@ func (a *DeviceAdminDomain) AssignRFInterface(ctx context.Context, address, inte
 // is unknown, the central has no hub coordinator, the interface carries
 // no BidCos gateway (HmIP), or the poll has not run yet. It performs no
 // CCU round trip so the firmware-update handler can gate on it inline.
-func (a *DeviceAdminDomain) InterfaceDutyCycle(address string) (int, bool) {
+func (a *DeviceAdminDomain) InterfaceDutyCycle(ctx context.Context, address string) (int, bool) {
 	if a.registry == nil {
 		return 0, false
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -515,7 +518,7 @@ func (a *DeviceAdminDomain) InterfaceDutyCycle(address string) (int, bool) {
 // for it: VirtualDevices aggregates groups and has no radio, and CUxD's
 // backend answers ErrUnsupported after a pointless round trip.
 func (a *DeviceAdminDomain) SetInstallMode(ctx context.Context, address string, durationSecs int) error {
-	backend, dev, err := a.resolveWithDevice(address)
+	backend, dev, err := a.resolveWithDevice(ctx, address)
 	if err != nil {
 		return err
 	}
@@ -533,7 +536,7 @@ func (a *DeviceAdminDomain) SetRooms(
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -559,7 +562,7 @@ func (a *DeviceAdminDomain) SetFunctions(
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
@@ -626,7 +629,7 @@ func (a *DeviceAdminDomain) setChannelAssignment(
 		return ErrNoDeviceBackend
 	}
 	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
@@ -690,7 +693,7 @@ func (a *DeviceAdminDomain) SetTaxonomyPaths(ctx context.Context, address, enum 
 		refs = append(refs, r)
 	}
 	devAddr := hmtypes.DeviceAddress(address)
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue

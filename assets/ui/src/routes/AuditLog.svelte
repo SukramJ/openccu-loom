@@ -16,9 +16,9 @@
   import { prefs } from "$lib/stores/preferences.svelte";
 
   type Props = {
-    /** When set, only entries that match this device address are
-     *  displayed. Used by the device-detail "Verlauf" tab to scope
-     *  the global change history to one device. */
+    /** When set, the log shows this device's own history (the device
+     *  and its channels) through the device route, which an operator may
+     *  read. Used by the device-detail "Verlauf" tab. */
     deviceFilter?: string;
     /** When true, drops the section header (the device-detail page
      *  already provides one) and tightens the outer padding. */
@@ -62,13 +62,15 @@
     loading = true;
     loadError = null;
     try {
-      const next = await api.listAudit({
+      const range = {
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
-        device: deviceFilter,
         since: toRFC3339(sinceLocal),
         until: toRFC3339(untilLocal),
-      });
+      };
+      const next = deviceFilter
+        ? await api.listDeviceAudit(deviceFilter, range)
+        : await api.listAudit(range);
       if (generation !== loadGeneration) return;
       entries = next;
     } catch (err) {
@@ -105,13 +107,12 @@
     if (page > 0) page -= 1;
   }
 
-  const downloadUrl = $derived(
-    api.auditDownloadUrl({
-      device: deviceFilter,
-      since: toRFC3339(sinceLocal),
-      until: toRFC3339(untilLocal),
-    }),
-  );
+  const downloadUrl = $derived.by(() => {
+    const range = { since: toRFC3339(sinceLocal), until: toRFC3339(untilLocal) };
+    return deviceFilter
+      ? api.deviceAuditDownloadUrl(deviceFilter, range)
+      : api.auditDownloadUrl(range);
+  });
 
   // The daemon documents `action` as an open tag set ("new values may be
   // added"), so the catalogue can lag behind the audit writers. Resolve
@@ -206,7 +207,7 @@
       key: "user",
       label: t("audit.col.user"),
       sortable: true,
-      get: (e) => e.user ?? "",
+      get: (e) => [e.user, e.on_behalf_of].filter(Boolean).join(" "),
     },
     {
       key: "target",
@@ -341,6 +342,13 @@
           {:else if col.key === "user"}
             {#if entry.user}
               <Badge variant="muted">{entry.user}</Badge>
+            {/if}
+            {#if entry.on_behalf_of}
+              <!-- Asserted by the credential, not verified: shown beside the
+                   principal, never in its place. -->
+              <span class="block text-xs text-slate-500 dark:text-slate-400"
+                >{t("audit.on_behalf_of", { name: entry.on_behalf_of })}</span
+              >
             {/if}
             {#if centrals.length > 0 && entry.central}
               <Badge variant="muted">{entry.central}</Badge>

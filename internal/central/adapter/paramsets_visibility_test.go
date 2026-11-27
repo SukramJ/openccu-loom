@@ -92,7 +92,7 @@ func TestParamsetsDomainVisibilityGateBlocksHiddenParam(t *testing.T) {
 	// Use ParamsetKeyValues — HideGlobal is enforced on the VALUES path.
 	// (For MASTER, channel-whitelist gating takes precedence and the
 	// Rules.Evaluate hidden-flag is skipped by design.)
-	err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyValues,
+	err := domain.checkVisibility(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues,
 		map[string]any{"TEMPERATURE_OFFSET": 0.5})
 	if err == nil {
 		t.Fatal("expected ErrParameterHidden, got nil")
@@ -112,7 +112,7 @@ func TestParamsetsDomainVisibilityGateAllowsVisibleParam(t *testing.T) {
 	gate := visibility.NewRegistry()
 	domain.SetVisibilityGate(gate)
 
-	err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyValues,
+	err := domain.checkVisibility(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues,
 		map[string]any{"TEMPERATURE": 21.5})
 	if err != nil {
 		t.Fatalf("expected nil error for visible parameter, got: %v", err)
@@ -129,7 +129,7 @@ func TestParamsetsDomainNilGateIsNoOp(t *testing.T) {
 
 	// ParameterPartyModeSubmit is globally hidden by NewRules(). Without
 	// a gate the check must be a no-op.
-	err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyValues,
+	err := domain.checkVisibility(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues,
 		map[string]any{string(hmenum.ParameterPartyModeSubmit): "2025-01-01 12:00"})
 	if err != nil {
 		t.Fatalf("nil gate must not block anything; got: %v", err)
@@ -150,7 +150,7 @@ func TestParamsetsDomainVisibilityGateBuiltInHides(t *testing.T) {
 	domain.SetVisibilityGate(gate)
 
 	// PARTY_MODE_SUBMIT is in builtInGlobalHides.
-	err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyValues,
+	err := domain.checkVisibility(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues,
 		map[string]any{string(hmenum.ParameterPartyModeSubmit): "submit"})
 	if err == nil {
 		t.Fatal("builtInGlobalHide parameter must be blocked; got nil error")
@@ -173,7 +173,7 @@ func TestParamsetsDomainCheckVisibilityUnknownDeviceIsLenient(t *testing.T) {
 	domain.SetVisibilityGate(gate)
 
 	// Unknown address — should not block.
-	err := domain.checkVisibility("UNKNOWN:1", hmenum.ParamsetKeyMaster,
+	err := domain.checkVisibility(context.Background(), "UNKNOWN:1", hmenum.ParamsetKeyMaster,
 		map[string]any{"TEMPERATURE_OFFSET": 0.5})
 	if err != nil {
 		t.Fatalf("unknown device must not be blocked by gate; got: %v", err)
@@ -190,7 +190,7 @@ func TestParamsetsDomainEmptyValuesSkipsGate(t *testing.T) {
 	gate.Rules().HideGlobal(hmenum.ParameterTemperatureOffset)
 	domain.SetVisibilityGate(gate)
 
-	err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyMaster, map[string]any{})
+	err := domain.checkVisibility(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, map[string]any{})
 	if err != nil {
 		t.Fatalf("empty values must not trigger gate; got: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestParamsetsDomainVisibleValuesDropsHiddenParam(t *testing.T) {
 	domain.SetVisibilityGate(gate)
 
 	in := map[string]any{"TEMPERATURE_OFFSET": 0.5, "LEVEL": 1.0}
-	out := domain.VisibleValues("0001ABCD:1", hmenum.ParamsetKeyValues, in)
+	out := domain.VisibleValues(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, in)
 
 	if _, still := out["TEMPERATURE_OFFSET"]; still {
 		t.Error("a hidden parameter survived the filter")
@@ -218,7 +218,7 @@ func TestParamsetsDomainVisibleValuesDropsHiddenParam(t *testing.T) {
 	if _, kept := out["LEVEL"]; !kept {
 		t.Error("a visible parameter was dropped")
 	}
-	if err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyValues, out); err != nil {
+	if err := domain.checkVisibility(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, out); err != nil {
 		t.Fatalf("the filtered set must pass the write gate, got %v", err)
 	}
 }
@@ -246,11 +246,11 @@ func TestParamsetsDomainMasterWriteIsNotGatedByTheCreationWhitelist(t *testing.T
 	domain.SetVisibilityGate(visibility.NewRegistry())
 
 	offered := map[string]any{"POWERUP_JUMPTARGET": 1, "LOGIC_COMBINATION": 2}
-	if err := domain.checkVisibility("0001ABCD:4", hmenum.ParamsetKeyMaster, offered); err != nil {
+	if err := domain.checkVisibility(context.Background(), "0001ABCD:4", hmenum.ParamsetKeyMaster, offered); err != nil {
 		t.Fatalf("MASTER write rejected: %v — the read surfaces offer these parameters, so the write "+
 			"surface has to accept them", err)
 	}
-	if out := domain.VisibleValues("0001ABCD:4", hmenum.ParamsetKeyMaster, offered); len(out) != len(offered) {
+	if out := domain.VisibleValues(context.Background(), "0001ABCD:4", hmenum.ParamsetKeyMaster, offered); len(out) != len(offered) {
 		t.Errorf("VisibleValues dropped %d of %d MASTER parameters — the read side must offer exactly "+
 			"what the write side accepts", len(offered)-len(out), len(offered))
 	}
@@ -259,7 +259,7 @@ func TestParamsetsDomainMasterWriteIsNotGatedByTheCreationWhitelist(t *testing.T
 	gate := visibility.NewRegistry()
 	gate.Rules().HideGlobal(hmenum.ParameterTemperatureOffset)
 	domain.SetVisibilityGate(gate)
-	err := domain.checkVisibility("0001ABCD:4", hmenum.ParamsetKeyValues,
+	err := domain.checkVisibility(context.Background(), "0001ABCD:4", hmenum.ParamsetKeyValues,
 		map[string]any{"TEMPERATURE_OFFSET": 0.5})
 	if !errors.Is(err, hmerr.ErrParameterHidden) {
 		t.Fatalf("VALUES write of a hidden parameter: got %v, want ErrParameterHidden", err)
@@ -273,7 +273,7 @@ func TestParamsetsDomainVisibleValuesWithoutGate(t *testing.T) {
 
 	domain, _ := registryWithDeviceAndChannel(t, "HmIP-STH", "0001ABCD:1", "CLIMATE_TRANSCEIVER")
 	in := map[string]any{"TEMPERATURE_OFFSET": 0.5}
-	if out := domain.VisibleValues("0001ABCD:1", hmenum.ParamsetKeyValues, in); len(out) != 1 {
+	if out := domain.VisibleValues(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, in); len(out) != 1 {
 		t.Fatalf("out = %v, want the input unchanged", out)
 	}
 }

@@ -579,6 +579,12 @@ type Deps struct {
 	// multi-CCU deployments. Nil leaves that one endpoint returning 503;
 	// the global reset still works.
 	DeviceLookup handlers.DeviceLookup
+	// DeviceCentrals backs the `?central=` binding of every
+	// `/devices/{addr}` route ([middleware.DeviceCentral]):
+	// `(*central.Registry)` satisfies it. Nil answers 503 to a request
+	// that names a central instead of serving it from whichever CCU holds
+	// the address first.
+	DeviceCentrals middleware.DeviceCentralLocator
 	// KnownCentrals returns the CCU scope names whose per-central health
 	// score the diagnostics dump should publish. It is a func rather than
 	// a slice because the router is built once and the CCU set is not
@@ -637,6 +643,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	if d.AuthResolve != nil {
 		r.Use(d.AuthResolve)
 	}
+	// After the identity resolver, before any handler: every change-log row a
+	// request writes names its principal and the X-On-Behalf-Of assertion.
+	r.Use(middleware.AuditActor(d.Logger))
 	if d.Idempotent {
 		// Mounted after AuthResolve so the cache key can incorporate the
 		// resolved identity (see middleware.Idempotency doc comment) —
@@ -837,6 +846,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		if admin == nil {
 			admin = func(h http.Handler) http.Handler { return h }
 		}
+		// Every `/devices/{addr}` route takes the central binding; it runs
+		// after the role check so a caller without the role learns nothing
+		// about which CCU holds an address.
+		dc := middleware.DeviceCentral(d.DeviceCentrals)
 
 		// Protected routes require auth when the dependency is wired.
 		// The pairing admin card: the list carries the codes to compare,
@@ -888,7 +901,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// authenticates with; a bearer-only client has to fetch the
 			// image itself rather than hand the URL to the browser.
 			// Nil proxy → 404 (SPA falls back to a generic glyph).
-			pr.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
+			pr.With(dc).Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
 			// UI telemetry — fire-and-forget endpoint the SPA uses to
 			// log toggle / view-selector events (ADR 0016). It sits in
 			// this authenticated group: the payload is
@@ -920,101 +933,101 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/taxonomy", handlers.GetTaxonomy(d.Taxonomy))
 				pr.Get("/functions", handlers.ListFunctions(d.Devices))
 				pr.Get("/devices", handlers.ListDevices(d.Devices))
-				pr.Get("/devices/{addr}", handlers.GetDevice(d.Devices, d.Labels))
+				pr.With(dc).Get("/devices/{addr}", handlers.GetDevice(d.Devices, d.Labels))
 				if d.Projection != nil {
-					pr.Get("/devices/{addr}/projection", handlers.GetDeviceProjection(d.Projection))
+					pr.With(dc).Get("/devices/{addr}/projection", handlers.GetDeviceProjection(d.Projection))
 				}
-				pr.Get("/devices/{addr}/channels", handlers.ListChannels(d.Devices, d.Labels))
-				pr.Get("/devices/{addr}/channels/{no}", handlers.GetChannel(d.Devices, d.Labels))
-				pr.Get("/devices/{addr}/channels/{no}/event-groups", handlers.ListEventGroups(d.Devices))
-				pr.Get("/devices/{addr}/channels/{no}/data-points", handlers.ListDataPoints(d.Devices, d.Labels, d.DataPointVis))
-				pr.Get("/devices/{addr}/channels/{no}/data-points/{param}", handlers.GetDataPoint(d.Devices, d.Labels))
-				pr.With(op).Put("/devices/{addr}/channels/{no}/data-points/{param}/value",
+				pr.With(dc).Get("/devices/{addr}/channels", handlers.ListChannels(d.Devices, d.Labels))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}", handlers.GetChannel(d.Devices, d.Labels))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/event-groups", handlers.ListEventGroups(d.Devices))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/data-points", handlers.ListDataPoints(d.Devices, d.Labels, d.DataPointVis))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/data-points/{param}", handlers.GetDataPoint(d.Devices, d.Labels))
+				pr.With(op, dc).Put("/devices/{addr}/channels/{no}/data-points/{param}/value",
 					handlers.PutDataPointValue(d.Devices, d.DPWriter))
 				// Per-channel operator overrides (G12): hidden / locked. Always
 				// mounted; PutChannelFlags returns 503 when there is no durable
 				// store/overlay, GetChannelFlags reads the live channel.
-				pr.Get("/devices/{addr}/channels/{no}/flags",
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/flags",
 					handlers.GetChannelFlags(d.Devices))
-				pr.With(op).Put("/devices/{addr}/channels/{no}/flags",
+				pr.With(op, dc).Put("/devices/{addr}/channels/{no}/flags",
 					handlers.PutChannelFlags(d.Devices, d.ChannelFlags, d.ChannelFlagsOverlay, d.AuditRecorder))
 				// Custom data points (Phase C).
-				pr.Get("/devices/{addr}/cdps",
+				pr.With(dc).Get("/devices/{addr}/cdps",
 					handlers.ListCustomDataPoints(d.Devices, d.Labels))
-				pr.Get("/devices/{addr}/cdps/{name}",
+				pr.With(dc).Get("/devices/{addr}/cdps/{name}",
 					handlers.GetCustomDataPoint(d.Devices))
-				pr.With(op).Post("/devices/{addr}/cdps/{name}/{operation}",
+				pr.With(op, dc).Post("/devices/{addr}/cdps/{name}/{operation}",
 					handlers.InvokeCustomDataPoint(d.Devices, d.CustomDPWriter))
 				// Calculated data points (Phase C).
-				pr.Get("/devices/{addr}/channels/{no}/calc-dps",
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/calc-dps",
 					handlers.ListCalculatedDataPoints(d.Devices, d.Labels))
-				pr.Get("/devices/{addr}/channels/{no}/calc-dps/{name}",
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/calc-dps/{name}",
 					handlers.GetCalculatedDataPoint(d.Devices, d.Labels))
 				// Week-profile metadata (read-only; full schedule data via schedule routes).
-				pr.Get("/devices/{addr}/channels/{no}/week_profile",
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/week_profile",
 					handlers.GetWeekProfile(d.Devices))
 				// Write half of the schedule_enabled map: toggle one target
 				// channel's week-program participation.
-				pr.With(op).Put("/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}",
+				pr.With(op, dc).Put("/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}",
 					handlers.PutWeekProfileChannelLock(d.Devices))
 			}
 			if d.ParameterDeterminer != nil {
 				// Read one parameter's live value from the device (the MASTER
 				// editor's "Determine" button). A read, so no edit-lock token —
 				// but it triggers a device round-trip all the same.
-				pr.Post("/devices/{addr}/channels/{no}/paramsets/{key}/determine",
+				pr.With(dc).Post("/devices/{addr}/channels/{no}/paramsets/{key}/determine",
 					handlers.DetermineParameter(d.ParameterDeterminer))
 			}
 			if d.UISchema != nil {
-				pr.Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))
 			}
 			// Export and import are always mounted so the spec-documented
 			// 503 service_unready response is reachable when the backend
 			// is not wired. A nil ConfigExport makes both handlers return
 			// 503 via their internal nil-guard.
-			pr.Get("/devices/{addr}/channels/{no}/config/export",
+			pr.With(dc).Get("/devices/{addr}/channels/{no}/config/export",
 				handlers.ExportChannelConfig(d.ConfigExport, d.ConfigChannelMeta))
-			pr.With(op).Post("/devices/{addr}/channels/{no}/config/import",
+			pr.With(op, dc).Post("/devices/{addr}/channels/{no}/config/import",
 				handlers.ImportChannelConfig(d.ConfigExport, d.EditSessions))
 			// A nil DefinitionExport makes the handler return 503 via its
 			// internal nil-guard.
-			pr.Get("/devices/{addr}/export-definition",
+			pr.With(dc).Get("/devices/{addr}/export-definition",
 				handlers.ExportDeviceDefinition(d.DefinitionExport))
 			if d.Links != nil {
 				pr.Get("/links", handlers.ListAllLinks(d.Links))
-				pr.Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
-				pr.With(op).Post("/devices/{addr}/links/test", handlers.TestLinkAtDevice(d.Links))
-				pr.With(op).Post("/devices/{addr}/links", handlers.AddLink(d.Links))
-				pr.With(op).Patch("/devices/{addr}/links", handlers.UpdateLink(d.Links))
-				pr.With(op).Delete("/devices/{addr}/links", handlers.RemoveLink(d.Links))
-				pr.Get("/devices/{addr}/channels/{no}/linkable-channels",
+				pr.With(dc).Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
+				pr.With(op, dc).Post("/devices/{addr}/links/test", handlers.TestLinkAtDevice(d.Links))
+				pr.With(op, dc).Post("/devices/{addr}/links", handlers.AddLink(d.Links))
+				pr.With(op, dc).Patch("/devices/{addr}/links", handlers.UpdateLink(d.Links))
+				pr.With(op, dc).Delete("/devices/{addr}/links", handlers.RemoveLink(d.Links))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/linkable-channels",
 					handlers.LinkableChannels(d.Links))
 			}
 			if d.Schedules != nil {
-				pr.Get("/devices/{addr}/channels/{no}/schedule",
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/schedule",
 					handlers.GetSchedule(d.Schedules))
-				pr.With(op).Put("/devices/{addr}/channels/{no}/schedule",
+				pr.With(op, dc).Put("/devices/{addr}/channels/{no}/schedule",
 					handlers.PutSchedule(d.Schedules))
-				pr.With(op).Post("/devices/{addr}/channels/{no}/schedule/active-profile",
+				pr.With(op, dc).Post("/devices/{addr}/channels/{no}/schedule/active-profile",
 					handlers.PostActiveProfile(d.Schedules))
 				// Device-level convenience routes resolve the schedule
 				// Channel automatically.
-				pr.Get("/devices/{addr}/schedule",
+				pr.With(dc).Get("/devices/{addr}/schedule",
 					handlers.GetScheduleAuto(d.Schedules))
-				pr.With(op).Put("/devices/{addr}/schedule",
+				pr.With(op, dc).Put("/devices/{addr}/schedule",
 					handlers.PutScheduleAuto(d.Schedules))
-				pr.With(op).Post("/devices/{addr}/schedule/active-profile",
+				pr.With(op, dc).Post("/devices/{addr}/schedule/active-profile",
 					handlers.PostActiveProfileAuto(d.Schedules))
 				// Fleet-wide schedule overview — the counterpart to
 				// GET /links. Read-only, so no operator gate.
 				pr.Get("/schedules", handlers.ListSchedules(d.Schedules))
 				// Copy the whole device schedule to another device
 				// (channels auto-resolved on both sides).
-				pr.With(op).Post("/devices/{addr}/schedules/copy",
+				pr.With(op, dc).Post("/devices/{addr}/schedules/copy",
 					handlers.PostCopySchedule(d.Schedules))
 				// Copy a single climate profile from the source channel /
 				// profile to a target channel / profile.
-				pr.With(op).Post("/devices/{addr}/channels/{no}/week_profile/copy",
+				pr.With(op, dc).Post("/devices/{addr}/channels/{no}/week_profile/copy",
 					handlers.PostCopyProfile(d.Schedules))
 			}
 			if d.Audit != nil {
@@ -1022,42 +1035,44 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// operator actions across every central, so it is admin-only —
 				// a viewer / operator identity must not read it.
 				pr.With(admin).Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
+				// One device's history, for whoever may change the device.
+				pr.With(op, dc).Get("/devices/{addr}/audit", handlers.ListDeviceAudit(d.Audit, d.Devices))
 			}
 			if d.RecordingOverrides != nil {
 				pr.Get("/measurements/recording", handlers.GetRecordingOverride(d.RecordingOverrides))
 				pr.With(op).Put("/measurements/recording", handlers.PutRecordingOverride(d.RecordingOverrides, d.AuditRecorder))
 			}
 			if d.DeviceAdmin != nil {
-				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
-				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin, d.AuditRecorder))
-				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin, d.AuditRecorder))
-				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
-				pr.With(op).Post("/devices/{addr}/release", handlers.ReleaseDevice(d.DeviceAdmin))
-				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
-				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
-				pr.With(admin).Post("/devices/{addr}/config/cache-clear", handlers.ClearDeviceConfigCache(d.DeviceAdmin, d.AuditRecorder))
-				pr.With(admin).Post("/devices/{addr}/rf-interface", handlers.AssignRFInterface(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin, dc).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
+				pr.With(op, dc).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(op, dc).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(op, dc).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
+				pr.With(op, dc).Post("/devices/{addr}/release", handlers.ReleaseDevice(d.DeviceAdmin))
+				pr.With(op, dc).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
+				pr.With(admin, dc).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin, dc).Post("/devices/{addr}/config/cache-clear", handlers.ClearDeviceConfigCache(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin, dc).Post("/devices/{addr}/rf-interface", handlers.AssignRFInterface(d.DeviceAdmin, d.AuditRecorder))
 			}
 			// Mounted on its own dep, not DeviceAdmin: the handler answers
 			// 503 for a nil service, and gating it on an unrelated facade
 			// would silently drop the route when only DeviceAdmin is absent.
-			pr.With(admin).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
+			pr.With(admin, dc).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
 			if d.DeviceReplacer != nil {
-				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
-				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
+				pr.With(dc).Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
+				pr.With(admin, dc).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
 			}
 			if d.DeviceCommunicationTest != nil {
-				pr.With(op).Post("/devices/{addr}/test", handlers.TestDeviceCommunication(d.DeviceCommunicationTest, d.AuditRecorder))
+				pr.With(op, dc).Post("/devices/{addr}/test", handlers.TestDeviceCommunication(d.DeviceCommunicationTest, d.AuditRecorder))
 			}
 			if d.DeviceTeam != nil {
-				pr.Get("/devices/{addr}/channels/{no}/team-candidates", handlers.GetDeviceTeamCandidates(d.DeviceTeam))
-				pr.With(op).Put("/devices/{addr}/channels/{no}/team", handlers.SetDeviceChannelTeam(d.DeviceTeam, d.AuditRecorder))
+				pr.With(dc).Get("/devices/{addr}/channels/{no}/team-candidates", handlers.GetDeviceTeamCandidates(d.DeviceTeam))
+				pr.With(op, dc).Put("/devices/{addr}/channels/{no}/team", handlers.SetDeviceChannelTeam(d.DeviceTeam, d.AuditRecorder))
 			}
 			if d.FirmwareRefresher != nil {
 				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))
 			}
 			if d.DeviceInstallMode != nil {
-				pr.With(op).Post("/devices/{addr}/install-mode", handlers.PostDeviceInstallMode(d.DeviceInstallMode, d.AuditRecorder))
+				pr.With(op, dc).Post("/devices/{addr}/install-mode", handlers.PostDeviceInstallMode(d.DeviceInstallMode, d.AuditRecorder))
 			}
 			// Always mounted (admin): when TLS is not configured the
 			// handler returns the documented 503 "TLS not enabled" via its
@@ -1092,14 +1107,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/devices/refresh", handlers.RefreshDevices(d.RefreshDevices))
 			}
 			if d.Reloader != nil {
-				pr.With(op).Post("/devices/{addr}/reload", handlers.ReloadDevice(d.Reloader))
-				pr.With(op).Post("/devices/{addr}/channels/{no}/reload",
+				pr.With(op, dc).Post("/devices/{addr}/reload", handlers.ReloadDevice(d.Reloader))
+				pr.With(op, dc).Post("/devices/{addr}/channels/{no}/reload",
 					handlers.ReloadChannel(d.Reloader))
 			}
 			if d.CentralLinks != nil {
-				pr.Get("/devices/{addr}/central-links", handlers.GetCentralLinksStatus(d.CentralLinks))
-				pr.With(op).Post("/devices/{addr}/central-links", handlers.CreateCentralLinks(d.CentralLinks))
-				pr.With(op).Delete("/devices/{addr}/central-links", handlers.DeleteCentralLinks(d.CentralLinks))
+				pr.With(dc).Get("/devices/{addr}/central-links", handlers.GetCentralLinksStatus(d.CentralLinks))
+				pr.With(op, dc).Post("/devices/{addr}/central-links", handlers.CreateCentralLinks(d.CentralLinks))
+				pr.With(op, dc).Delete("/devices/{addr}/central-links", handlers.DeleteCentralLinks(d.CentralLinks))
 			}
 			if d.Incidents != nil {
 				pr.Get("/incidents", handlers.ListIncidents(d.Incidents))
@@ -1288,7 +1303,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// from a wrong URL. Same rationale as the Matter block below.
 			pr.With(admin).Get("/admin/values-cache/stats", handlers.GetValuesCacheStats(d.ValuesCache))
 			pr.With(admin).Post("/admin/values-cache/reset", handlers.ResetValuesCacheGlobal(d.ValuesCache))
-			pr.With(admin).Post("/devices/{addr}/values-cache/reset", handlers.ResetValuesCacheDevice(d.ValuesCache, d.DeviceLookup))
+			pr.With(admin, dc).Post("/devices/{addr}/values-cache/reset", handlers.ResetValuesCacheDevice(d.ValuesCache, d.DeviceLookup))
 
 			// The node page family's API (go-fabric-ui): status, fabrics,
 			// pairing, endpoints, sessions, mDNS, compatibility, the trace,
@@ -1332,12 +1347,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(admin).Post("/backups/{id}/restore", handlers.RestoreBackup(d.Backup))
 			}
 			if d.Paramsets != nil {
-				pr.Get("/devices/{addr}/paramsets/{key}", handlers.GetParamset(d.Paramsets))
-				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets, d.EditSessions))
-				pr.Get("/devices/{addr}/paramsets/{key}/apply-targets", handlers.GetParamsetApplyTargets(d.ParamsetApply))
-				pr.With(op).Post("/devices/{addr}/paramsets/{key}/apply-to", handlers.ApplyParamsetToChannels(d.ParamsetApply, d.EditSessions))
-				pr.Get("/devices/{addr}/link-ps/{peer}", handlers.GetLinkParamset(d.Paramsets))
-				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets, d.EditSessions))
+				pr.With(dc).Get("/devices/{addr}/paramsets/{key}", handlers.GetParamset(d.Paramsets))
+				pr.With(op, dc).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets, d.EditSessions))
+				pr.With(dc).Get("/devices/{addr}/paramsets/{key}/apply-targets", handlers.GetParamsetApplyTargets(d.ParamsetApply))
+				pr.With(op, dc).Post("/devices/{addr}/paramsets/{key}/apply-to", handlers.ApplyParamsetToChannels(d.ParamsetApply, d.EditSessions))
+				pr.With(dc).Get("/devices/{addr}/link-ps/{peer}", handlers.GetLinkParamset(d.Paramsets))
+				pr.With(op, dc).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets, d.EditSessions))
 			}
 			if d.Hub != nil {
 				pr.Get("/programs", handlers.ListPrograms(d.Hub))

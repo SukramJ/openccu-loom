@@ -255,7 +255,7 @@ func TestLinksDomainChannelTypeLabel_NilTranslations(t *testing.T) {
 func TestLinksDomainFindDevice_NilRegistry(t *testing.T) {
 	t.Parallel()
 	d := NewLinksDomain(nil, nil, nil)
-	if got := d.findDevice("DEV001"); got != nil {
+	if got := d.findDevice(context.Background(), "DEV001"); got != nil {
 		t.Errorf("findDevice nil registry = %v, want nil", got)
 	}
 }
@@ -263,7 +263,7 @@ func TestLinksDomainFindDevice_NilRegistry(t *testing.T) {
 func TestLinksDomainFindDevice_EmptyAddress(t *testing.T) {
 	t.Parallel()
 	d := NewLinksDomain(central.NewRegistry(), nil, nil)
-	if got := d.findDevice(""); got != nil {
+	if got := d.findDevice(context.Background(), ""); got != nil {
 		t.Errorf("findDevice empty address = %v, want nil", got)
 	}
 }
@@ -271,7 +271,7 @@ func TestLinksDomainFindDevice_EmptyAddress(t *testing.T) {
 func TestLinksDomainFindDevice_NotFound(t *testing.T) {
 	t.Parallel()
 	d := NewLinksDomain(central.NewRegistry(), nil, nil)
-	if got := d.findDevice("NOSUCHDEV"); got != nil {
+	if got := d.findDevice(context.Background(), "NOSUCHDEV"); got != nil {
 		t.Errorf("findDevice not found = %v, want nil", got)
 	}
 }
@@ -698,7 +698,7 @@ func TestLinkClientAdapterNilReceiver(t *testing.T) {
 func TestSchedulesDomainNilRegistryDetectDomain(t *testing.T) {
 	t.Parallel()
 	s := NewSchedulesDomain(nil, nil)
-	got := s.detectScheduleDomain("DEV001", 1)
+	got := s.detectScheduleDomain(context.Background(), "DEV001", 1)
 	if got != "" {
 		t.Errorf("detectScheduleDomain nil registry = %q, want empty", got)
 	}

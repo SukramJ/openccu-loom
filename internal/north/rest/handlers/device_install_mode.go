@@ -63,7 +63,7 @@ func PostDeviceInstallMode(svc DeviceInstallModePort, rec audit.Recorder) http.H
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceInstallMode,
 				DeviceAddress: addr,

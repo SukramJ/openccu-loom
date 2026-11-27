@@ -223,7 +223,7 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, centrals CentralC
 		// for everyone, and when" is a question a shared daemon has to be
 		// able to answer.
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				Timestamp: row.UpdatedAt,
 				User:      updatedBy,
 				Action:    audit.ActionConfigSectionUpdate,

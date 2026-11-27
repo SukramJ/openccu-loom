@@ -35,7 +35,7 @@ type crossPlaneDeviceIndex struct {
 
 func (s crossPlaneDeviceIndex) Devices() []*device.Device { return []*device.Device{s.d} }
 
-func (s crossPlaneDeviceIndex) Device(address string) (*device.Device, bool) {
+func (s crossPlaneDeviceIndex) Device(_ context.Context, address string) (*device.Device, bool) {
 	if address == s.d.Address {
 		return s.d, true
 	}

@@ -54,7 +54,7 @@ type ValuesCacheStatsResponse struct {
 // The handler depends on this so the values-cache reset never has to
 // guess which central a device belongs to in a multi-CCU deployment.
 type DeviceLookup interface {
-	LocateDevice(addr string) (centralName, interfaceID string, ok bool)
+	LocateDevice(ctx context.Context, addr string) (centralName, interfaceID string, ok bool)
 }
 
 // GetValuesCacheStats serves
@@ -120,7 +120,7 @@ func ResetValuesCacheDevice(svc ValuesCacheService, lookup DeviceLookup) http.Ha
 				problem.New(problem.TypeBadRequest, r, "missing address", ""))
 			return
 		}
-		centralName, iface, ok := lookup.LocateDevice(addr)
+		centralName, iface, ok := lookup.LocateDevice(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "device not found", ""))

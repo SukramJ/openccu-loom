@@ -1708,7 +1708,7 @@ func TestRefreshAfterPut_NilRegistry_NoPanic(t *testing.T) {
 	// Must return without panicking.
 	current, getErr := fake.GetParamset(context.Background(), "DEV:1", hmenum.ParamsetKeyValues)
 	if getErr == nil {
-		p.applyStoredValuesOn("", "DEV:1", hmenum.ParamsetKeyValues, current)
+		p.applyStoredValuesOn(context.Background(), "", "DEV:1", hmenum.ParamsetKeyValues, current)
 	}
 }
 
@@ -1731,7 +1731,7 @@ func TestRefreshAfterPut_BackendError_NoPanic(t *testing.T) {
 	}
 	current, getErr := fake.GetParamset(context.Background(), "DEV:1", hmenum.ParamsetKeyValues)
 	if getErr == nil {
-		p.applyStoredValuesOn("", "DEV:1", hmenum.ParamsetKeyValues, current)
+		p.applyStoredValuesOn(context.Background(), "", "DEV:1", hmenum.ParamsetKeyValues, current)
 	}
 }
 
@@ -1753,7 +1753,7 @@ func TestRefreshAfterPut_DeviceNotInRegistry_NoPanic(t *testing.T) {
 	// Device "NOTFOUND" is not in the registry — must not panic.
 	current, getErr := fake.GetParamset(context.Background(), "NOTFOUND:1", hmenum.ParamsetKeyValues)
 	if getErr == nil {
-		p.applyStoredValuesOn("", "NOTFOUND:1", hmenum.ParamsetKeyValues, current)
+		p.applyStoredValuesOn(context.Background(), "", "NOTFOUND:1", hmenum.ParamsetKeyValues, current)
 	}
 }
 
@@ -2311,7 +2311,7 @@ func buildResolveChannelInfoFixture(t *testing.T) (domain *ParamsetsDomain, cent
 func TestResolveChannelInfo_ChannelFound(t *testing.T) {
 	t.Parallel()
 	p, chAddr := buildResolveChannelInfoFixture(t)
-	model, chType := p.resolveChannelInfo(chAddr)
+	model, chType := p.resolveChannelInfo(context.Background(), chAddr)
 	if model == "" {
 		t.Error("expected non-empty model")
 	}
@@ -2324,7 +2324,7 @@ func TestResolveChannelInfo_DeviceFoundChannelNil(t *testing.T) {
 	t.Parallel()
 	// Use device-level address (no colon-N suffix): device found but no matching channel.
 	p, _ := buildResolveChannelInfoFixture(t)
-	model, chType := p.resolveChannelInfo("RCI100:99")
+	model, chType := p.resolveChannelInfo(context.Background(), "RCI100:99")
 	// Channel :99 doesn't exist — returns model, "" (device found, channel nil).
 	if model == "" {
 		t.Error("expected non-empty model when device found but channel nil")
@@ -2388,7 +2388,7 @@ func TestRefreshAfterPut_WithChannelHasNoDataPoints(t *testing.T) {
 	// Drive the post-write refresh directly — must not panic.
 	current, getErr := fake.GetParamset(context.Background(), chAddr, hmenum.ParamsetKeyValues)
 	if getErr == nil {
-		p.applyStoredValuesOn("", chAddr, hmenum.ParamsetKeyValues, current)
+		p.applyStoredValuesOn(context.Background(), "", chAddr, hmenum.ParamsetKeyValues, current)
 	}
 }
 
@@ -2399,7 +2399,7 @@ func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
 	fake.paramsetData = map[string]any{"STATE": false, "POWER": 1.2}
 	current, getErr := fake.GetParamset(context.Background(), chAddr, hmenum.ParamsetKeyValues)
 	if getErr == nil {
-		p.applyStoredValuesOn("", chAddr, hmenum.ParamsetKeyValues, current)
+		p.applyStoredValuesOn(context.Background(), "", chAddr, hmenum.ParamsetKeyValues, current)
 	}
 }
 
@@ -2410,7 +2410,7 @@ func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
 func TestResolveCustomDP_NilRegistry_ReturnsError(t *testing.T) {
 	t.Parallel()
 	d := &CustomDPDispatcher{registry: nil}
-	_, _, err := d.resolveCustomDP("", "DEV001", "LEVEL")
+	_, _, err := d.resolveCustomDP(context.Background(), "", "DEV001", "LEVEL")
 	if err == nil {
 		t.Error("expected error for nil registry")
 	}
@@ -3714,7 +3714,7 @@ func TestRefreshAfterPut_OnWireValueCalled(t *testing.T) {
 	// paramset and calls dp.OnWireValue(0.7) → setter.OnWireValue path.
 	current, getErr := fake.GetParamset(context.Background(), "RAP1DEV01B19:1", hmenum.ParamsetKeyValues)
 	if getErr == nil {
-		p.applyStoredValuesOn("", "RAP1DEV01B19:1", hmenum.ParamsetKeyValues, current)
+		p.applyStoredValuesOn(context.Background(), "", "RAP1DEV01B19:1", hmenum.ParamsetKeyValues, current)
 	}
 	// Must not panic.
 }
@@ -3938,7 +3938,7 @@ func TestResolveChannelInfo_DeviceNotFound(t *testing.T) {
 	// No devices in the registry.
 	w := client.NewValueWriter()
 	p := NewParamsetsDomain(reg, w)
-	model, chType := p.resolveChannelInfo("NOTEXIST:1")
+	model, chType := p.resolveChannelInfo(context.Background(), "NOTEXIST:1")
 	if model != "" || chType != "" {
 		t.Errorf("expected empty strings, got model=%q chType=%q", model, chType)
 	}
@@ -6585,7 +6585,7 @@ func TestSetScheduleEnabled_ResolveOpsError(t *testing.T) {
 	// for resolveOps. They both use the same writer, so this is symmetrical.
 	// We can test resolveOps directly:
 	s := &SchedulesDomain{registry: reg, writer: client.NewValueWriter()}
-	_, _, resolveErr := s.resolveOps("SSE5DEV01B27", 1)
+	_, _, resolveErr := s.resolveOps(context.Background(), "SSE5DEV01B27", 1)
 	if !errors.Is(resolveErr, ErrNoScheduleBackend) {
 		t.Errorf("expected ErrNoScheduleBackend from resolveOps no-backend, got %v", resolveErr)
 	}
@@ -6615,7 +6615,7 @@ func TestResolveOps_NilWriter(t *testing.T) {
 
 	// nil writer
 	s := &SchedulesDomain{registry: reg, writer: nil}
-	_, _, resolveErr := s.resolveOps("RO1DEV01B27", 1)
+	_, _, resolveErr := s.resolveOps(context.Background(), "RO1DEV01B27", 1)
 	if !errors.Is(resolveErr, ErrNoScheduleBackend) {
 		t.Errorf("expected ErrNoScheduleBackend from resolveOps, got %v", resolveErr)
 	}
@@ -7146,7 +7146,7 @@ func TestResolveOps_DeviceNotFound(t *testing.T) {
 	}
 	// Do NOT add the device to any central.
 	s := &SchedulesDomain{registry: reg, writer: client.NewValueWriter()}
-	_, _, err = s.resolveOps("NOSUCHDEV01B28", 1)
+	_, _, err = s.resolveOps(context.Background(), "NOSUCHDEV01B28", 1)
 	if !errors.Is(err, ErrNoScheduleBackend) {
 		t.Errorf("expected ErrNoScheduleBackend, got %v", err)
 	}
@@ -7610,7 +7610,7 @@ func TestEnrichLinkParameter_LongPress_SetsGroupID(t *testing.T) {
 func TestDeviceAdminDomain_Resolve_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	a := &DeviceAdminDomain{registry: nil, writer: nil}
-	_, err := a.resolve("DEV001")
+	_, err := a.resolve(context.Background(), "DEV001")
 	if err == nil {
 		t.Error("expected error for nil registry")
 	}
@@ -7622,7 +7622,7 @@ func TestDeviceAdminDomain_Resolve_EmptyRegistry_ReturnsErr(t *testing.T) {
 	a := &DeviceAdminDomain{registry: reg, writer: nil}
 	// writer is nil but registry is not — resolve will loop over empty list
 	// and return ErrNoDeviceBackend for unknown device.
-	_, err := a.resolve("UNKNOWN001")
+	_, err := a.resolve(context.Background(), "UNKNOWN001")
 	if err == nil {
 		t.Error("expected error for unknown device")
 	}
@@ -8556,7 +8556,7 @@ func TestDetectScheduleDomain_DeviceNotFound(t *testing.T) {
 	// indirectly through GetClimateSchedule with a device that has
 	// simpleScheduleParams. We use buildSchedulesDomainNoBackend which has no backend.
 	// Instead: call the internal method via the domain (it's package-private).
-	domain := s.detectScheduleDomain("NON_EXISTENT_DEVICE", 1)
+	domain := s.detectScheduleDomain(context.Background(), "NON_EXISTENT_DEVICE", 1)
 	if domain != "" {
 		t.Errorf("expected empty domain for unknown device, got %q", domain)
 	}
@@ -12319,7 +12319,7 @@ func TestLinkClientAdapter_GetLinks_HappyPath(t *testing.T) {
 func TestDeviceAdminDomain_Resolve_HappyPath(t *testing.T) {
 	t.Parallel()
 	_, _, admin, _, _ := buildLinksFixture(t)
-	b, err := admin.resolve("DEV001")
+	b, err := admin.resolve(context.Background(), "DEV001")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -14843,7 +14843,7 @@ func TestLinksDomainLookupDeviceFound(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	d := NewLinksDomain(reg, nil, nil)
-	cu, found, err := d.lookupDevice("LDEV001")
+	cu, found, err := d.lookupDevice(context.Background(), "LDEV001")
 	if err != nil {
 		t.Fatalf("lookupDevice: %v", err)
 	}
@@ -14856,7 +14856,7 @@ func TestLinksDomainLookupDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	d := NewLinksDomain(reg, nil, nil)
-	_, _, err := d.lookupDevice("NOSUCHDEV")
+	_, _, err := d.lookupDevice(context.Background(), "NOSUCHDEV")
 	if err == nil {
 		t.Fatal("lookupDevice not found must error")
 	}
@@ -14878,7 +14878,7 @@ func TestLinksDomainFindDeviceFound(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	d := NewLinksDomain(reg, nil, nil)
-	if got := d.findDevice("FDEV001"); got == nil {
+	if got := d.findDevice(context.Background(), "FDEV001"); got == nil {
 		t.Error("findDevice found = nil, want device")
 	}
 }
@@ -14887,7 +14887,7 @@ func TestLinksDomainFindDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	d := NewLinksDomain(reg, nil, nil)
-	if got := d.findDevice("NOSUCHDEV"); got != nil {
+	if got := d.findDevice(context.Background(), "NOSUCHDEV"); got != nil {
 		t.Errorf("findDevice not found = %v, want nil", got)
 	}
 }
@@ -14896,7 +14896,7 @@ func TestLinksDomainFindDeviceEmptyAddress(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	d := NewLinksDomain(reg, nil, nil)
-	if got := d.findDevice(""); got != nil {
+	if got := d.findDevice(context.Background(), ""); got != nil {
 		t.Errorf("findDevice empty address = %v, want nil", got)
 	}
 }
@@ -15086,7 +15086,7 @@ func TestFindCentralForDeviceFound(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	a := &UISchemaAdapter{registry: reg}
-	got := a.findCentralFor("DEV-FIND")
+	got := a.findCentralFor(context.Background(), "DEV-FIND")
 	if got == nil {
 		t.Error("findCentralFor device found: must return non-nil central")
 	}
@@ -15102,7 +15102,7 @@ func TestFindCentralForDeviceNotFound(t *testing.T) {
 	_ = reg.Register(c)
 
 	a := &UISchemaAdapter{registry: reg}
-	if got := a.findCentralFor("NOSUCHDEV"); got != nil {
+	if got := a.findCentralFor(context.Background(), "NOSUCHDEV"); got != nil {
 		t.Errorf("findCentralFor not found = %v, want nil", got)
 	}
 }
@@ -15181,7 +15181,7 @@ func TestLinksDomainLinkableChannelsNilWriter(t *testing.T) {
 func TestFindCentralForNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := nilAdapter()
-	if got := a.findCentralFor("DEV001"); got != nil {
+	if got := a.findCentralFor(context.Background(), "DEV001"); got != nil {
 		t.Errorf("findCentralFor nil registry = %v, want nil", got)
 	}
 }
@@ -15189,7 +15189,7 @@ func TestFindCentralForNilRegistry(t *testing.T) {
 func TestFindCentralForEmptyRegistry(t *testing.T) {
 	t.Parallel()
 	a := &UISchemaAdapter{registry: central.NewRegistry()}
-	if got := a.findCentralFor("NOSUCHDEV"); got != nil {
+	if got := a.findCentralFor(context.Background(), "NOSUCHDEV"); got != nil {
 		t.Errorf("findCentralFor empty registry = %v, want nil", got)
 	}
 }

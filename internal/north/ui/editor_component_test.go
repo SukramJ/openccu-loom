@@ -11,12 +11,14 @@ import (
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 func componentFS(module string) fstest.MapFS {
 	return fstest.MapFS{
 		"component/editor.js":   {Data: []byte(module)},
-		"component/routes.json": {Data: []byte(`{"prefixes":["/devices","/audit"]}`)},
+		"component/routes.json": {Data: []byte(`{"routes":[{"method":"GET","prefix":"/devices"},{"method":"POST","prefix":"/devices/*/paramsets"}]}`)},
 	}
 }
 
@@ -34,7 +36,8 @@ func TestEditorComponentManifestCarriesTheModuleHashAndRoutes(t *testing.T) {
 	if m.ModuleURL != "/app/component/editor-"+want+".js" {
 		t.Fatalf("module_url = %q", m.ModuleURL)
 	}
-	if len(m.Routes) != 2 || m.Routes[0] != "/devices" || m.Routes[1] != "/audit" {
+	if len(m.Routes) != 2 || m.Routes[0] != (hmapi.EditorRoute{Method: "GET", Prefix: "/devices"}) ||
+		m.Routes[1] != (hmapi.EditorRoute{Method: "POST", Prefix: "/devices/*/paramsets"}) {
 		t.Fatalf("routes = %v", m.Routes)
 	}
 	// A different module is a different hash: the URL must follow the content.
@@ -56,9 +59,28 @@ func TestEditorComponentAbsentIsNotBuilt(t *testing.T) {
 
 func TestEditorComponentWithoutRoutesIsRejected(t *testing.T) {
 	fsys := componentFS("x")
-	fsys["component/routes.json"] = &fstest.MapFile{Data: []byte(`{"prefixes":[]}`)}
+	fsys["component/routes.json"] = &fstest.MapFile{Data: []byte(`{"routes":[]}`)}
 	if _, err := loadEditorComponent(fsys); err == nil || errors.Is(err, ErrEditorComponentNotBuilt) {
 		t.Fatalf("err = %v, want a routes error", err)
+	}
+}
+
+// TestEditorComponentRejectsAWideRoute pins the loader's refusal of an entry a
+// relay could read more widely than the editor needs.
+func TestEditorComponentRejectsAWideRoute(t *testing.T) {
+	for _, entry := range []string{
+		`{"method":"HEAD","prefix":"/devices"}`,
+		`{"method":"get","prefix":"/devices"}`,
+		`{"method":"GET","prefix":"devices"}`,
+		`{"method":"GET","prefix":"/devices/"}`,
+		`{"method":"GET","prefix":"/devices//x"}`,
+		`{"method":"POST","prefix":"/devices/a*"}`,
+	} {
+		fsys := componentFS("x")
+		fsys["component/routes.json"] = &fstest.MapFile{Data: []byte(`{"routes":[` + entry + `]}`)}
+		if _, err := loadEditorComponent(fsys); err == nil {
+			t.Errorf("%s: accepted, want a routes error", entry)
+		}
 	}
 }
 

@@ -277,7 +277,7 @@ func heatingGroupAudit(rec audit.Recorder, r *http.Request, op, central, target 
 	if central != "" {
 		note = central + ": " + note
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(r.Context(), rec, audit.Entry{
 		User:   identityFromCtx(r.Context()),
 		Action: audit.ActionGroupAdmin,
 		Note:   note,

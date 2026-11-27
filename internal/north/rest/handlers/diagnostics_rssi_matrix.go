@@ -212,7 +212,7 @@ func AssignRFInterface(svc DeviceRFInterfacePort, rec audit.Recorder) http.Handl
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceRFInterfaceAssign,
 				DeviceAddress: addr,

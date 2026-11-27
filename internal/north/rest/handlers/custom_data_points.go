@@ -272,13 +272,13 @@ func cdpName(r *http.Request) string {
 func ListCustomDataPoints(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
-		d, ok := idx.Device(addr)
+		d, ok := idx.Device(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
 			return
 		}
-		serial := idx.SerialSuffix(idx.CentralOf(d.Address))
+		serial := idx.SerialSuffix(centralOfRequest(r.Context(), idx, d.Address))
 		out := make([]CustomDPSummary, 0)
 		for _, ch := range d.Channels() {
 			dp := ch.CustomDataPoint()
@@ -321,7 +321,7 @@ func ListCustomDataPoints(idx DeviceIndex, labels ParameterLabeler) http.Handler
 func GetCustomDataPoint(idx DeviceIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
-		d, ok := idx.Device(addr)
+		d, ok := idx.Device(r.Context(), addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
@@ -359,7 +359,7 @@ func InvokeCustomDataPoint(idx DeviceIndex, writer CustomDPWriter) http.HandlerF
 			return
 		}
 		addr := chi.URLParam(r, "addr")
-		if _, ok := idx.Device(addr); !ok {
+		if _, ok := idx.Device(r.Context(), addr); !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
 			return

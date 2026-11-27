@@ -40,7 +40,7 @@ func (s *stubCustomDPIndex) Devices() []*device.Device {
 	return out
 }
 
-func (s *stubCustomDPIndex) Device(addr string) (*device.Device, bool) {
+func (s *stubCustomDPIndex) Device(_ context.Context, addr string) (*device.Device, bool) {
 	d, ok := s.devices[addr]
 	return d, ok
 }

@@ -493,8 +493,11 @@ func (c *InterfaceClient) Call(
 		// command that is backing off — e.g. a CCU DUTY_CYCLE fault parking a
 		// write for tens of seconds — does not hold the pool permit hostage
 		// while unrelated reads/writes wait.
+		// DoMethod, not Do: a reply lost after the call went out is
+		// repeated only for a read, so an ACTION press or a firmware
+		// install whose answer the connection dropped is not sent twice.
 		err := c.cfg.Circuit.DoWithPriority(ctx, method, priority, func(ctx context.Context) error {
-			return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
+			return c.cfg.Retrier.DoMethod(ctx, method, func(ctx context.Context, _ int) error {
 				if err := throttle.Acquire(ctx, priority); err != nil {
 					return err
 				}
@@ -572,7 +575,7 @@ func (c *InterfaceClient) CallOrdered(
 
 	var result any
 	err := c.cfg.Circuit.DoWithPriority(ctx, method, priority, func(ctx context.Context) error {
-		return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
+		return c.cfg.Retrier.DoMethod(ctx, method, func(ctx context.Context, _ int) error {
 			if err := throttle.Acquire(ctx, priority); err != nil {
 				return err
 			}

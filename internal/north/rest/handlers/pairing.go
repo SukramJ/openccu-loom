@@ -198,7 +198,7 @@ func ApprovePairing(svc PairingService, rec audit.Recorder) http.HandlerFunc {
 			if err != nil {
 				action, note = audit.ActionPairingReject, "reason="+err.Error()
 			}
-			rec.Record(audit.Entry{User: by, Action: action, Note: note})
+			audit.RecordFrom(r.Context(), rec, audit.Entry{User: by, Action: action, Note: note})
 		}
 		if err != nil {
 			writePairingError(w, r, err)
@@ -222,7 +222,7 @@ func RejectPairing(svc PairingService, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User: by, Action: audit.ActionPairingReject,
 				Note: "app=" + view.App + " instance=" + view.Instance + " address=" + view.Address,
 			})

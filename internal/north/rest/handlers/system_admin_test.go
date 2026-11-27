@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -399,13 +400,13 @@ func TestRequestRestart_SharesTheLatchWithTheRESTHandler(t *testing.T) {
 	env := newRestartTestEnv(t)
 	rec := audit.NewBuffer(10)
 
-	if !RequestRestart(rec, "mqtt:maintenance/set/restart") {
+	if !RequestRestart(context.Background(), rec, "mqtt:maintenance/set/restart") {
 		t.Fatal("the first restart request did not claim the signal")
 	}
 	if got := env.post(t, Restart(rec)); got != "shutdown_in_progress" {
 		t.Fatalf("REST status after an MQTT restart = %q, want shutdown_in_progress", got)
 	}
-	if RequestRestart(rec, "mqtt:maintenance/set/restart") {
+	if RequestRestart(context.Background(), rec, "mqtt:maintenance/set/restart") {
 		t.Fatal("a second restart request inside the grace window claimed the signal again")
 	}
 	env.awaitSignals(t, 1)
@@ -437,7 +438,9 @@ func TestRestartRequested_FollowsTheClaim(t *testing.T) {
 		request func(t *testing.T, env *restartTestEnv)
 	}{
 		{name: "rest", request: func(t *testing.T, env *restartTestEnv) { t.Helper(); env.post(t, Restart(nil)) }},
-		{name: "mqtt", request: func(*testing.T, *restartTestEnv) { RequestRestart(nil, "mqtt:maintenance/set/restart") }},
+		{name: "mqtt", request: func(*testing.T, *restartTestEnv) {
+			RequestRestart(context.Background(), nil, "mqtt:maintenance/set/restart")
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := newRestartTestEnv(t)

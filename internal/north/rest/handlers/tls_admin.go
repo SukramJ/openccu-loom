@@ -52,7 +52,7 @@ func UploadTLSCertificate(svc TLSCertService, rec audit.Recorder) http.HandlerFu
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionTLSCertUpload,
 				Note:   "tls certificate replaced",

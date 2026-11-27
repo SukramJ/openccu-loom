@@ -90,7 +90,7 @@ func PutChannelFlags(idx DeviceIndex, store ChannelFlagsWriter, overlay *channel
 		overlay.Set(central, ch.Address, channelflags.Flags{Hidden: hidden, Locked: locked})
 		ch.SetOperatorFlags(hidden, locked)
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          subject,
 				Action:        audit.ActionChannelFlags,
 				DeviceAddress: ch.Address,

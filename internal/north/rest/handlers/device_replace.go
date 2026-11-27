@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // DeviceReplacePort drives the guided device-replace workflow.
@@ -92,12 +93,25 @@ func PostDeviceReplace(svc DeviceReplacePort, rec audit.Recorder) http.HandlerFu
 				problem.New(problem.TypeValidation, r, "old_address is required", ""))
 			return
 		}
+		// A request bound with ?central= has had that central checked to
+		// hold the new device. A body naming another one would unpair the old
+		// device on a CCU the binding never looked at, so the two must agree;
+		// a body without one takes the binding's.
+		if bound, ok := hmreqctx.CentralScope(r.Context()); ok {
+			if body.Central != "" && body.Central != bound {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "central disagrees with the route",
+						"the body names central "+body.Central+" but ?central= binds the request to "+bound))
+				return
+			}
+			body.Central = bound
+		}
 		if err := svc.ReplaceDevice(r.Context(), body.Central, body.OldAddress, newAddr); err != nil {
 			writeReplaceError(w, r, err, "Replace failed")
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:          identityFromCtx(r.Context()),
 				Action:        audit.ActionDeviceReplace,
 				DeviceAddress: body.OldAddress,

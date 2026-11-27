@@ -233,7 +233,7 @@ func recordTokenAudit(rec audit.Recorder, r *http.Request, action audit.Action, 
 	default:
 		note = "id=" + id
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(r.Context(), rec, audit.Entry{
 		Timestamp: time.Now().UTC(),
 		User:      user,
 		Action:    action,

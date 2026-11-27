@@ -30,7 +30,7 @@ func (a *DeviceAdminDomain) TestDeviceCommunication(ctx context.Context, address
 	if a.registry == nil || a.writer == nil {
 		return hmapi.CommunicationTestResult{}, ErrNoDeviceBackend
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue

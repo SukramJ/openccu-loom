@@ -373,7 +373,7 @@ func hydrateAuditBuffer(ctx context.Context, buf *audit.Buffer, store *sqlitesto
 		return
 	}
 	for i := range slices.Backward(entries) {
-		buf.Record(entries[i])
+		buf.Replay(entries[i])
 	}
 	if len(entries) > 0 {
 		logger.Info("audit.buffer.hydrated", slog.Int("entries", len(entries)))

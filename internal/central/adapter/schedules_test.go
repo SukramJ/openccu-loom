@@ -402,7 +402,7 @@ func TestDetectScheduleDomainWithSwitchWeekProfile(t *testing.T) {
 	reg := central.NewRegistry()
 	addDeviceWithChannelType(reg, "DEV001", "DEV001:1", "SWITCH_WEEK_PROFILE")
 	s := NewSchedulesDomain(reg, nil)
-	got := s.detectScheduleDomain("DEV001", 1)
+	got := s.detectScheduleDomain(context.Background(), "DEV001", 1)
 	if got != "switch" {
 		t.Errorf("detectScheduleDomain SWITCH_WEEK_PROFILE = %q, want switch", got)
 	}
@@ -414,7 +414,7 @@ func TestDetectScheduleDomainFallbackActorType(t *testing.T) {
 	// Use a non-week-profile type → falls through to actor type scan.
 	addDeviceWithChannelType(reg, "DEV002", "DEV002:1", "SWITCH_VIRTUAL_RECEIVER")
 	s := NewSchedulesDomain(reg, nil)
-	got := s.detectScheduleDomain("DEV002", 99) // scheduleChannelNo=99 → no channel at that number
+	got := s.detectScheduleDomain(context.Background(), "DEV002", 99) // scheduleChannelNo=99 → no channel at that number
 	// The actor scan will find SWITCH_VIRTUAL_RECEIVER which starts with "SWITCH"
 	if got != "switch" {
 		t.Errorf("detectScheduleDomain actor fallback = %q, want switch", got)
@@ -427,7 +427,7 @@ func TestDetectScheduleDomainNoMatchingChannel(t *testing.T) {
 	// Use a type that matches neither week profile nor actor.
 	addDeviceWithChannelType(reg, "DEV003", "DEV003:1", "UNKNOWN_TYPE_XYZ")
 	s := NewSchedulesDomain(reg, nil)
-	got := s.detectScheduleDomain("DEV003", 99)
+	got := s.detectScheduleDomain(context.Background(), "DEV003", 99)
 	if got != "" {
 		t.Errorf("detectScheduleDomain no match = %q, want empty", got)
 	}
@@ -510,7 +510,7 @@ func TestDetectScheduleDomainLockPrecedence(t *testing.T) {
 			addr := "DEV_" + tc.model
 			addDeviceWithChannelTypes(reg, addr, tc.model, tc.channels)
 			s := NewSchedulesDomain(reg, nil)
-			if got := s.detectScheduleDomain(addr, tc.schedCh); got != tc.want {
+			if got := s.detectScheduleDomain(context.Background(), addr, tc.schedCh); got != tc.want {
 				t.Errorf("detectScheduleDomain(%s) = %q, want %q", tc.model, got, tc.want)
 			}
 		})

@@ -205,7 +205,7 @@ func registerAssignRFInterface(s *mcpsdk.Server, d Deps) {
 			return nil, assignRFInterfaceOut{}, fmt.Errorf("assign rf interface: %w", err)
 		}
 		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
+			audit.RecordFrom(ctx, d.Audit, audit.Entry{
 				Timestamp:     time.Now().UTC(),
 				User:          callerSubject(ctx),
 				Action:        audit.ActionDeviceRFInterfaceAssign,

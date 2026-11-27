@@ -71,12 +71,12 @@ const defaultProfileCap = 6
 // Mirrors `schedule_profile_nos` derived from `_dp_active_profile.max`
 // / `_dp_week_program_pointer.max`.
 func (s *SchedulesDomain) MaxProfilesForDevice(
-	_ context.Context, deviceAddress string,
+	ctx context.Context, deviceAddress string,
 ) (int, error) {
 	if s.registry == nil {
 		return defaultProfileCap, nil
 	}
-	for _, u := range s.registry.List() {
+	for _, u := range s.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
@@ -276,7 +276,7 @@ func (s *SchedulesDomain) SetSchedule(
 				ErrInvalidProfileID, profileID, maxProfiles, deviceAddress)
 		}
 	}
-	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
+	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (s *SchedulesDomain) SetSchedule(
 	}
 	// Invalidate cache; the next GetSchedule call will re-fetch.
 	s.climateCache().invalidate(channelAddr)
-	s.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionScheduleWrite,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     channelNo,
@@ -319,7 +319,7 @@ func (s *SchedulesDomain) ReloadAndCacheSchedule(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
+	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +448,7 @@ func (s *SchedulesDomain) SetProfile(
 	if len(values) == 0 {
 		return errors.New("schedules.SetProfile: empty profile payload")
 	}
-	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
+	backend, channelAddr, err := s.resolve(ctx, deviceAddress, channelNo)
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func (s *SchedulesDomain) SetProfile(
 		return err
 	}
 	s.climateCache().invalidate(channelAddr)
-	s.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionScheduleWrite,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     channelNo,
@@ -555,7 +555,7 @@ func (s *SchedulesDomain) CopyProfileTo(
 	if len(values) == 0 {
 		return errors.New("schedules: empty profile payload")
 	}
-	backend, channelAddr, err := s.resolve(dstDeviceAddress, dstChannelNo)
+	backend, channelAddr, err := s.resolve(ctx, dstDeviceAddress, dstChannelNo)
 	if err != nil {
 		return err
 	}
@@ -564,7 +564,7 @@ func (s *SchedulesDomain) CopyProfileTo(
 		return err
 	}
 	s.climateCache().invalidate(channelAddr)
-	s.audit.Record(audit.Entry{
+	audit.RecordFrom(ctx, s.audit, audit.Entry{
 		Action:        audit.ActionScheduleWrite,
 		DeviceAddress: dstDeviceAddress,
 		ChannelNo:     dstChannelNo,

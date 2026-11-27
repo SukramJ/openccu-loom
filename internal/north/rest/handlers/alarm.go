@@ -678,7 +678,7 @@ func recordAlarm(rec audit.Recorder, r *http.Request, action audit.Action, note 
 	if rec == nil {
 		return
 	}
-	rec.Record(audit.Entry{
+	audit.RecordFrom(r.Context(), rec, audit.Entry{
 		User:   identityFromCtx(r.Context()),
 		Action: action,
 		Note:   note,

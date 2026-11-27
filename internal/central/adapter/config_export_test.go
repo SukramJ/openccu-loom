@@ -44,7 +44,7 @@ func TestDevicesAdapterChannelMeta(t *testing.T) {
 	t.Parallel()
 	a := NewDevicesAdapter(registryWithChannel(t))
 
-	devAddr, model, chType, centralName, ok := a.ChannelMeta("0001ABCD:1")
+	devAddr, model, chType, centralName, ok := a.ChannelMeta(context.Background(), "0001ABCD:1")
 	if !ok {
 		t.Fatal("ChannelMeta reported the known channel as unknown")
 	}
@@ -53,10 +53,10 @@ func TestDevicesAdapterChannelMeta(t *testing.T) {
 		t.Fatalf("meta = %q/%q/%q/%q", devAddr, model, chType, centralName)
 	}
 
-	if _, _, _, _, ok := a.ChannelMeta("0001ABCD:9"); ok {
+	if _, _, _, _, ok := a.ChannelMeta(context.Background(), "0001ABCD:9"); ok {
 		t.Error("a channel the device does not have must not resolve")
 	}
-	if _, _, _, _, ok := a.ChannelMeta("MISSING:1"); ok {
+	if _, _, _, _, ok := a.ChannelMeta(context.Background(), "MISSING:1"); ok {
 		t.Error("an unknown device must not resolve")
 	}
 }

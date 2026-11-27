@@ -54,7 +54,7 @@ func NewConfigExportDomain(r *central.Registry, p *ParamsetsDomain) *ConfigExpor
 func (c *ConfigExportDomain) ReadParamset(
 	ctx context.Context, centralName, channelAddress, paramsetKey string,
 ) (map[string]any, error) {
-	key, err := c.resolve(centralName, channelAddress, paramsetKey)
+	key, err := c.resolve(ctx, centralName, channelAddress, paramsetKey)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (c *ConfigExportDomain) ReadParamset(
 	if err != nil {
 		return nil, err
 	}
-	return c.paramsets.VisibleValues(channelAddress, key, values), nil
+	return c.paramsets.VisibleValues(ctx, channelAddress, key, values), nil
 }
 
 // WriteParamset applies values to the named paramset of channelAddress
@@ -71,7 +71,7 @@ func (c *ConfigExportDomain) ReadParamset(
 func (c *ConfigExportDomain) WriteParamset(
 	ctx context.Context, centralName, channelAddress, paramsetKey string, values map[string]any,
 ) error {
-	key, err := c.resolve(centralName, channelAddress, paramsetKey)
+	key, err := c.resolve(ctx, centralName, channelAddress, paramsetKey)
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (c *ConfigExportDomain) WriteParamset(
 // resolve validates the paramset key and the central scope. An empty
 // centralName means "whichever central owns the channel", which is what
 // a single-CCU export payload carries.
-func (c *ConfigExportDomain) resolve(centralName, channelAddress, paramsetKey string) (hmenum.ParamsetKey, error) {
+func (c *ConfigExportDomain) resolve(ctx context.Context, centralName, channelAddress, paramsetKey string) (hmenum.ParamsetKey, error) {
 	if c == nil || c.paramsets == nil {
 		return "", ErrNoParamsetBackend
 	}
@@ -98,7 +98,7 @@ func (c *ConfigExportDomain) resolve(centralName, channelAddress, paramsetKey st
 	if centralName == "" {
 		return key, nil
 	}
-	if owner := c.centralOf(channelAddress); owner != "" && owner != centralName {
+	if owner := c.centralOf(ctx, channelAddress); owner != "" && owner != centralName {
 		return "", fmt.Errorf("%w: %s owns %s", ErrConfigExportCentralMismatch, owner, channelAddress)
 	}
 	return key, nil
@@ -106,12 +106,12 @@ func (c *ConfigExportDomain) resolve(centralName, channelAddress, paramsetKey st
 
 // centralOf names the central that owns the channel's device, or "" when
 // no central has it in its model.
-func (c *ConfigExportDomain) centralOf(channelAddress string) string {
+func (c *ConfigExportDomain) centralOf(ctx context.Context, channelAddress string) string {
 	if c.registry == nil {
 		return ""
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range c.registry.List() {
+	for _, u := range c.registry.Scoped(ctx) {
 		if _, ok := u.ModelRegistry.Get(devAddr); ok {
 			return u.Name()
 		}

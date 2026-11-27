@@ -81,6 +81,7 @@ type listAuditIn struct {
 type auditSummary struct {
 	Timestamp     string `json:"timestamp"`
 	User          string `json:"user,omitempty"`
+	OnBehalfOf    string `json:"on_behalf_of,omitempty" jsonschema:"who the principal in user asserted it acted for; recorded, never verified"`
 	Action        string `json:"action"`
 	DeviceAddress string `json:"device_address,omitempty"`
 	Parameter     string `json:"parameter,omitempty"`
@@ -154,11 +155,11 @@ type getHealthOut struct {
 // the write path uses to reach a parameter's descriptor so it can coerce
 // the incoming value against it, exactly as the REST PUT /value handler
 // does.
-func resolveDataPoint(devices DeviceLister, channelAddress, parameterName string) device.ParameterDataPoint {
+func resolveDataPoint(ctx context.Context, devices DeviceLister, channelAddress, parameterName string) device.ParameterDataPoint {
 	if devices == nil {
 		return nil
 	}
-	dev, ok := devices.Device(hmtypes.DeviceAddress(channelAddress))
+	dev, ok := devices.Device(ctx, hmtypes.DeviceAddress(channelAddress))
 	if !ok || dev == nil {
 		return nil
 	}
@@ -361,11 +362,11 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "get_device",
 		Description: "Look up a single device by address, with its owning central.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getDeviceIn) (*mcpsdk.CallToolResult, getDeviceOut, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getDeviceIn) (*mcpsdk.CallToolResult, getDeviceOut, error) {
 		if d.Devices == nil {
 			return nil, getDeviceOut{}, nil
 		}
-		dev, ok := d.Devices.Device(strings.TrimSpace(in.Address))
+		dev, ok := d.Devices.Device(ctx, strings.TrimSpace(in.Address))
 		if !ok {
 			return nil, getDeviceOut{Found: false}, nil
 		}
@@ -428,6 +429,7 @@ func registerListAudit(s *mcpsdk.Server, d Deps) {
 			out.Entries = append(out.Entries, auditSummary{
 				Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
 				User:          e.User,
+				OnBehalfOf:    e.OnBehalfOf,
 				Action:        string(e.Action),
 				DeviceAddress: e.DeviceAddress,
 				Parameter:     e.Parameter,
@@ -746,7 +748,7 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 		// not carry (unhydrated channel, unknown parameter) falls through
 		// with the raw value, preserving the prior best-effort behaviour.
 		writeValue := in.Value
-		if dp := resolveDataPoint(d.Devices, address, parameter); dp != nil {
+		if dp := resolveDataPoint(ctx, d.Devices, address, parameter); dp != nil {
 			pv, cerr := paramcoerce.Coerce(dp.ParameterData(), in.Value)
 			if cerr != nil {
 				return nil, setDatapointOut{}, fmt.Errorf("coerce value: %w", cerr)
@@ -759,7 +761,7 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 			return nil, setDatapointOut{}, fmt.Errorf("set value: %w", err)
 		}
 		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
+			audit.RecordFrom(ctx, d.Audit, audit.Entry{
 				Timestamp:     time.Now().UTC(),
 				User:          callerSubject(ctx),
 				Action:        audit.ActionDataPointWrite,

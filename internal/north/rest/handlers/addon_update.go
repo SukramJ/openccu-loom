@@ -128,7 +128,7 @@ func PostAddonUpdateInstall(svc AddonUpdateService, rec audit.Recorder) http.Han
 				if st := svc.Status(); st.LatestVersion != "" {
 					note = st.LatestVersion
 				}
-				rec.Record(audit.Entry{
+				audit.RecordFrom(r.Context(), rec, audit.Entry{
 					User:   identityFromCtx(r.Context()),
 					Action: audit.ActionAddonUpdateInstall,
 					Note:   note,

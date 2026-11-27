@@ -71,7 +71,7 @@ installHost({
   async request(req: HostRequest): Promise<HostResponse> {
     if (!transport) throw new Error("loom-device-editor: no transport set");
     const url = new URL(req.path, "http://relay.invalid");
-    if (!routeAllowed(url.pathname)) {
+    if (!routeAllowed(req.method, url.pathname)) {
       // Logged as well as thrown: a caller that turns the error into an
       // error state would otherwise hide which route is missing.
       const message = `loom-device-editor: ${req.method} ${url.pathname} is outside the editor's route list`;

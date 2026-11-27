@@ -57,7 +57,7 @@ func NewUISchemaAdapter(
 // UISchema implements [interfaces.UISchemaService].
 func (a *UISchemaAdapter) UISchema(ctx context.Context, req hmapi.UISchemaRequest) (*hmapi.UISchema, error) { //nolint:funlen // single-purpose UI schema assembly with many paramset branches
 	address, channelNo, paramset, peer, locale := req.Address, req.Channel, req.Paramset, req.Peer, req.Locale
-	dev, ch := a.lookupChannel(address, channelNo)
+	dev, ch := a.lookupChannel(ctx, address, channelNo)
 	if dev == nil || ch == nil {
 		return nil, hmapi.ErrUISchemaNotFound
 	}
@@ -590,11 +590,11 @@ func (a *UISchemaAdapter) applyOrder(params []hmapi.UISchemaParameter, meta *ccu
 	})
 }
 
-func (a *UISchemaAdapter) lookupChannel(address string, channelNo int) (*device.Device, *device.Channel) {
+func (a *UISchemaAdapter) lookupChannel(ctx context.Context, address string, channelNo int) (*device.Device, *device.Channel) {
 	if a.registry == nil {
 		return nil, nil
 	}
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue

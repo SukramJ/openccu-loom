@@ -3981,6 +3981,7 @@ const EN: Catalog = {
   "audit.col.time": "Time",
   "audit.col.action": "Action",
   "audit.col.user": "User",
+  "audit.on_behalf_of": "on behalf of {name}",
   "audit.col.target": "Target",
   "audit.col.changes": "Changes",
   // --- Fleet (read-only cross-CCU overview) ---
@@ -8205,6 +8206,7 @@ const DE: Catalog = {
   "audit.col.time": "Zeit",
   "audit.col.action": "Aktion",
   "audit.col.user": "Benutzer",
+  "audit.on_behalf_of": "im Auftrag von {name}",
   "audit.col.target": "Ziel",
   "audit.col.changes": "Änderungen",
   // --- CCU-Flotte (schreibgeschützte CCU-übergreifende Übersicht) ---

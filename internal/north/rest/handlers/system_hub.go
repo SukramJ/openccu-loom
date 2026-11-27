@@ -158,7 +158,7 @@ func PostSystemUpdateInstall(idx HubIndex, backup PreUpdateBackupPort, rec audit
 				return
 			}
 			if rec != nil {
-				rec.Record(audit.Entry{
+				audit.RecordFrom(r.Context(), rec, audit.Entry{
 					User:   identityFromCtx(r.Context()),
 					Action: audit.ActionBackupPreUpdate,
 					Note:   target + " " + id,
@@ -415,5 +415,5 @@ func recordInstallMode(r *http.Request, rec audit.Recorder, central string, req 
 	default:
 		entry.Note = fmt.Sprintf("disable central=%s interface=%s", central, req.Interface)
 	}
-	rec.Record(entry)
+	audit.RecordFrom(r.Context(), rec, entry)
 }

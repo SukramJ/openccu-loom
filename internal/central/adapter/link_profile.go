@@ -4,6 +4,7 @@
 package adapter
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"strconv"
@@ -290,12 +291,12 @@ func decodeFloat(raw json.RawMessage) (float64, bool) {
 // the receiver via _receiver_type_aliases.json, never the sender).
 // Applying aliases here would break the filter because the keys
 // inside the JSON stay at their raw CCU names.
-func (a *UISchemaAdapter) peerChannelType(peerAddress string) string {
+func (a *UISchemaAdapter) peerChannelType(ctx context.Context, peerAddress string) string {
 	if a.registry == nil || peerAddress == "" {
 		return ""
 	}
 	devAddr := deviceAddressOf(peerAddress)
-	for _, u := range a.registry.List() {
+	for _, u := range a.registry.Scoped(ctx) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue

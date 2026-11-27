@@ -63,7 +63,7 @@ func PostInstallModeSearch(svc DeviceSearchPort, rec audit.Recorder) http.Handle
 			return
 		}
 		if rec != nil {
-			rec.Record(audit.Entry{
+			audit.RecordFrom(r.Context(), rec, audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionDeviceSearch,
 				Note:   "wired bus scan on " + body.Interface,
