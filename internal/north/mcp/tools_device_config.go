@@ -14,7 +14,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ConfigCacheClearer discards an interface process's cached configuration of
@@ -25,7 +24,7 @@ type ConfigCacheClearer interface {
 }
 
 type repairDeviceConfigIn struct {
-	CentralName string   `json:"central_name,omitempty" jsonschema:"the CCU that owns the device; when given it must match the device's central"`
+	CentralName string   `json:"central_name,omitempty" jsonschema:"the CCU that holds the device; when given, the call acts on that CCU's device and fails if it holds none"`
 	Address     string   `json:"address" jsonschema:"the device address, e.g. 0001D3C99C1234"`
 	Channels    []string `json:"channels,omitempty" jsonschema:"restrict the repair to these channel addresses; every MASTER-bearing channel of the device otherwise"`
 	// DryRun is a pointer so an omitted argument keeps the safe default.
@@ -55,7 +54,7 @@ type repairDeviceConfigOut struct {
 }
 
 type clearDeviceConfigCacheIn struct {
-	CentralName string `json:"central_name,omitempty" jsonschema:"the CCU that owns the device; when given it must match the device's central"`
+	CentralName string `json:"central_name,omitempty" jsonschema:"the CCU that holds the device; when given, the call acts on that CCU's device and fails if it holds none"`
 	Address     string `json:"address" jsonschema:"the device address"`
 }
 
@@ -63,18 +62,32 @@ type clearDeviceConfigCacheOut struct {
 	OK bool `json:"ok"`
 }
 
-// requireDeviceOwner checks an optional central_name against the device's
-// owning central. The domain services behind these tools resolve the device
-// themselves; a caller that names a central must not reach a device of
-// another one.
-func requireDeviceOwner(d Deps, central, address string) error {
-	if central == "" || d.Devices == nil {
-		return nil
+// bindDeviceCentral binds a tool call to the central it names, with the
+// semantics of the REST device routes (middleware.DeviceCentral): an unknown
+// central, or one that does not hold the address, is refused; otherwise the
+// returned context carries [hmreqctx.WithCentralScope], which every address
+// lookup of the domain services behind these tools honours.
+//
+// Checking the name against the first central that holds the address is not
+// enough: device addresses repeat across CCUs, so such a check refuses the
+// second CCU's device and lets the call through to the first one's. An empty
+// central leaves the call unbound. A nil device lister refuses a call that
+// names a central rather than serving it unbound.
+func bindDeviceCentral(ctx context.Context, d Deps, central, address string) (context.Context, error) {
+	if central == "" {
+		return ctx, nil
 	}
-	if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(address)); owner != central {
-		return fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
+	if d.Devices == nil {
+		return ctx, errors.New("central binding unavailable: no device model")
 	}
-	return nil
+	known, holds := d.Devices.HoldsDevice(central, address)
+	switch {
+	case !known:
+		return ctx, fmt.Errorf("no central named %q", central)
+	case !holds:
+		return ctx, fmt.Errorf("central %q holds no device %s", central, address)
+	}
+	return hmreqctx.WithCentralScope(ctx, central), nil
 }
 
 // registerRepairDeviceConfig exposes the stored-configuration repair. Its
@@ -94,7 +107,8 @@ func registerRepairDeviceConfig(s *mcpsdk.Server, d Deps) {
 		if address == "" {
 			return nil, repairDeviceConfigOut{}, errors.New("address is required")
 		}
-		if err := requireDeviceOwner(d, strings.TrimSpace(in.CentralName), address); err != nil {
+		ctx, err := bindDeviceCentral(ctx, d, strings.TrimSpace(in.CentralName), address)
+		if err != nil {
 			return nil, repairDeviceConfigOut{}, err
 		}
 		channels := make([]string, 0, len(in.Channels))
@@ -147,7 +161,8 @@ func registerClearDeviceConfigCache(s *mcpsdk.Server, d Deps) {
 		if address == "" {
 			return nil, clearDeviceConfigCacheOut{}, errors.New("address is required")
 		}
-		if err := requireDeviceOwner(d, strings.TrimSpace(in.CentralName), address); err != nil {
+		ctx, err := bindDeviceCentral(ctx, d, strings.TrimSpace(in.CentralName), address)
+		if err != nil {
 			return nil, clearDeviceConfigCacheOut{}, err
 		}
 		if err := d.ConfigCache.ClearConfigCache(ctx, address); err != nil {

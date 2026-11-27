@@ -48,6 +48,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The MCP device tools act on the CCU they name.** `set_datapoint`,
+  `write_paramset`, `write_link_paramset`, `list_paramset_apply_targets`,
+  `apply_paramset_to_channels`, `repair_device_config`,
+  `clear_device_config_cache` and `assign_rf_interface` bind the call to
+  `central_name` the way `?central=` binds a REST device route: an unknown
+  central, or one that does not hold the address, is refused, and otherwise
+  the address resolves on that central alone. They used to compare the name
+  with the first CCU holding the address, so a device whose address a second
+  CCU repeats could not be reached there. (#1184)
+
 - **Matter is back in the navigation behind the Home Assistant remote
   add-on.** Opened through the remote add-on, the UI dropped Matter from its
   menu and the view settings said the bridge was switched off while it ran.

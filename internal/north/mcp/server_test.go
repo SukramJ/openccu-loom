@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -48,6 +49,7 @@ type putParamsetCall struct {
 	address string
 	key     hmenum.ParamsetKey
 	values  map[string]any
+	scope   string // the central the call's context was bound to
 }
 
 type putLinkParamsetCall struct {
@@ -73,12 +75,13 @@ func (f *fakeParamsets) GetParamset(_ context.Context, address string, key hmenu
 }
 
 func (f *fakeParamsets) PutParamset(
-	_ context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
 ) (*interfaces.ParamsetWriteReport, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
-	f.putCalls = append(f.putCalls, putParamsetCall{address: address, key: key, values: values})
+	scope, _ := hmreqctx.CentralScope(ctx)
+	f.putCalls = append(f.putCalls, putParamsetCall{address: address, key: key, values: values, scope: scope})
 	return f.putReport, nil
 }
 
@@ -142,19 +145,42 @@ func (f *fakeCentrals) Names() []string { return f.names }
 
 type fakeDevices struct {
 	devices  map[string]*device.Device
-	centrals map[string]string // address → central name
+	centrals map[string]string          // address → first central by name, what CentralOf answers
+	held     map[string]map[string]bool // central → device addresses it holds
 }
 
 func newFakeDevices() *fakeDevices {
 	return &fakeDevices{
 		devices:  make(map[string]*device.Device),
 		centrals: make(map[string]string),
+		held:     make(map[string]map[string]bool),
 	}
 }
 
 func (f *fakeDevices) add(d *device.Device, central string) {
 	f.devices[d.Address] = d
 	f.centrals[d.Address] = central
+	f.alsoOn(d.Address, central)
+}
+
+// alsoOn records that central holds a device at address too — the repeated
+// address of a second CCU, which CentralOf never names.
+func (f *fakeDevices) alsoOn(address, central string) {
+	if f.held[central] == nil {
+		f.held[central] = make(map[string]bool)
+	}
+	f.held[central][address] = true
+}
+
+func (f *fakeDevices) HoldsDevice(central, address string) (known, holds bool) {
+	addrs, known := f.held[central]
+	if !known {
+		return false, false
+	}
+	if i := strings.LastIndexByte(address, ':'); i >= 0 {
+		address = address[:i]
+	}
+	return true, addrs[address]
 }
 
 func (f *fakeDevices) Devices() []*device.Device {
@@ -181,6 +207,7 @@ type writeCall struct {
 	parameter hmenum.Parameter
 	value     any
 	priority  hmenum.CommandPriority
+	scope     string // the central the call's context was bound to
 }
 
 type fakeWriter struct {
@@ -189,13 +216,14 @@ type fakeWriter struct {
 }
 
 func (fw *fakeWriter) SetValue(
-	_ context.Context,
+	ctx context.Context,
 	address string,
 	parameter hmenum.Parameter,
 	value any,
 	priority hmenum.CommandPriority,
 ) error {
-	fw.last = writeCall{address: address, parameter: parameter, value: value, priority: priority}
+	scope, _ := hmreqctx.CentralScope(ctx)
+	fw.last = writeCall{address: address, parameter: parameter, value: value, priority: priority, scope: scope}
 	return fw.err
 }
 

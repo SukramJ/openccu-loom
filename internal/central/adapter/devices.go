@@ -139,6 +139,16 @@ func (a *DevicesAdapter) CentralOf(address string) string {
 	return ""
 }
 
+// HoldsDevice reports whether a central of that name is registered and
+// whether it holds the device behind address; see
+// [central.Registry.HoldsDevice]. A nil registry knows no central.
+func (a *DevicesAdapter) HoldsDevice(centralName, address string) (known, holds bool) {
+	if a.registry == nil {
+		return false, false
+	}
+	return a.registry.HoldsDevice(centralName, address)
+}
+
 // ChannelMeta implements handlers.ChannelInfoReader: it resolves the
 // device address, model, channel type and owning central for a channel
 // address, so the config-export endpoint can stamp them onto the

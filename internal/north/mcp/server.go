@@ -46,8 +46,14 @@ type DeviceLister interface {
 	Devices() []*device.Device
 	Device(ctx context.Context, address string) (*device.Device, bool)
 	// CentralOf returns the owning CCU name, or "" when the device is
-	// unknown.
+	// unknown. It takes no binding: an address several CCUs repeat is
+	// attributed to the first by name, so it labels listings and never
+	// decides which device a call acts on.
 	CentralOf(address string) string
+	// HoldsDevice reports whether central is configured and whether it
+	// holds the device behind address (device or channel address). It is
+	// the check bindDeviceCentral runs before it binds a call.
+	HoldsDevice(central, address string) (known, holds bool)
 	// Released reports whether a device has finished onboarding.
 	//
 	// An assistant driving the daemon is a device consumer like any
