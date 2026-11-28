@@ -195,6 +195,28 @@ test.describe('Device editor web component — embedding contract', () => {
     expect(page.url()).toBe(before);
   });
 
+  test('the HA skin and its dark palette reach the theme tokens', async ({ page }) => {
+    // The tokens select on the shadow host (`:host([data-skin="ha"])`,
+    // `:host([data-skin="ha"].dark)`), so the element itself has to carry
+    // `data-skin` and `dark`. The test host defines none of Home Assistant's
+    // variables, so the HA skin resolves to its literal defaults; the
+    // standalone palette would give #ffffff in both modes.
+    const token = (p: Page) =>
+      offsetLabel(p).evaluate((n) =>
+        getComputedStyle(n).getPropertyValue('--ha-primary-background-color').trim(),
+      );
+    await page.goto(
+      `http://localhost:5173/app/tests/e2e/component-host/index.html?address=${DEVICE_ADDRESS}`,
+    );
+    await expect(offsetLabel(page)).toBeVisible();
+    expect(await token(page)).toBe('#fafafa');
+    await page.goto(
+      `http://localhost:5173/app/tests/e2e/component-host/index.html?address=${DEVICE_ADDRESS}&dark=1`,
+    );
+    await expect(offsetLabel(page)).toBeVisible();
+    expect(await token(page)).toBe('#111111');
+  });
+
   test('dark mode reaches the editor inside the shadow root', async ({ page }) => {
     await page.goto(
       `http://localhost:5173/app/tests/e2e/component-host/index.html?address=${DEVICE_ADDRESS}&dark=1`,

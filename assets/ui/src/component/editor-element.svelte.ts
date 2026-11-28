@@ -49,6 +49,7 @@ export class LoomDeviceEditor extends HTMLElement {
   #transport: EditorTransport | null = null;
   #dark = false;
   #skin: "loom" | "ha" = "ha";
+  #constructed = false;
 
   constructor() {
     super();
@@ -73,6 +74,7 @@ export class LoomDeviceEditor extends HTMLElement {
       e.preventDefault();
       this.#navigate(a.getAttribute("href") ?? "");
     });
+    this.#constructed = true;
   }
 
   set transport(t: EditorTransport) {
@@ -110,6 +112,7 @@ export class LoomDeviceEditor extends HTMLElement {
   }
 
   connectedCallback(): void {
+    this.#applyLook();
     registerPropertyRules();
     configureHost({ root: this.#shadow, navigate: (r) => this.#navigate(r) });
     this.#start();
@@ -122,10 +125,21 @@ export class LoomDeviceEditor extends HTMLElement {
     }
   }
 
+  /**
+   * The look goes on two nodes. The theme tokens of @thingfabric/fabric-ui
+   * select on the shadow host (`:host(.dark)`, `:host([data-skin="ha"])`),
+   * so the element itself carries `dark` and `data-skin`; Tailwind's `dark:`
+   * variant (`.dark *`) cannot see the host from inside the shadow root, so
+   * the frame carries `dark` as well. A custom element must not give itself
+   * attributes in its constructor, so the host's share waits until then.
+   */
   #applyLook(): void {
     this.#frame.classList.toggle("dark", this.#dark);
     this.#frame.dataset.skin = this.#skin;
     this.#frame.style.colorScheme = this.#dark ? "dark" : "light";
+    if (!this.#constructed) return;
+    this.classList.toggle("dark", this.#dark);
+    if (this.dataset.skin !== this.#skin) this.dataset.skin = this.#skin;
   }
 
   #navigate(route: string): void {
