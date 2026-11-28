@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.109.1
+
+- **The device editor inside Home Assistant's Homematic panel follows
+  Home Assistant's theme and dark mode.** It showed light fields and cards
+  on the dark panel before.
+
 ## 0.109.0
 
 - **Every device route can be bound to one CCU** with `?central=<name>`,
