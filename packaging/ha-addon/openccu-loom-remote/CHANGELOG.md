@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.109.1
+
+- **Version follows OpenCCU-Loom 0.109.1**, whose device editor inside
+  Home Assistant's Homematic panel now follows Home Assistant's theme and
+  dark mode; see the OpenCCU-Loom changelog. The proxy itself is unchanged.
+
 # 0.109.0
 
 - **Version follows OpenCCU-Loom 0.109.0**, which binds device routes to one

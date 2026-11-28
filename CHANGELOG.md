@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.109.1] - 2026-11-28
+
 ### Fixed
 
 - **The editor component follows the host's dark mode and Home Assistant's
