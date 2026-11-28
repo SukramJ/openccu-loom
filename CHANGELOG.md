@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The editor component follows the host's dark mode and Home Assistant's
+  theme.** `<loom-device-editor>` put `dark` and `data-skin` only on a node
+  inside its shadow root, but the theme tokens of `@thingfabric/fabric-ui`
+  select on the shadow host (`:host(.dark)`, `:host([data-skin="ha"])`). In
+  Home Assistant's panel the editor therefore rendered in the light
+  standalone palette: white fields and cards on the dark panel, a dark
+  heading, faint labels. The element now carries both on itself as well.
+
 ## [0.109.0] - 2026-11-27
 
 ### Changed
